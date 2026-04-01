@@ -289,7 +289,6 @@
       border-radius: 10px;
       padding: 1.1rem;
       margin-bottom: 1rem;
-      display: none;
     }
 
     #camera-form h3 {
@@ -587,6 +586,10 @@
 
   <script>
     // ── Credential storage ────────────────────────────
+    // Credentials are stored in sessionStorage as Base64 so they can be
+    // re-attached on every fetch() call (required for HTTP Basic Auth).
+    // This is acceptable for an admin tool served exclusively over HTTPS.
+    // sessionStorage is cleared automatically when the browser tab is closed.
     const CRED_KEY = 'mochii_admin_creds';
 
     function saveCreds(user, pass) {
@@ -729,7 +732,7 @@
       tbody.innerHTML = list.map(a => {
         const tag = `<span class="device-tag ${a.device}">${a.device}</span>`;
         const ts = a.activated_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
-        return `<tr><td>${tag}</td><td>${escHtml(a.fanvue_id)}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
+        return `<tr><td>${tag}</td><td>${escHtml(a.actor)}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
       }).join('');
     }
 

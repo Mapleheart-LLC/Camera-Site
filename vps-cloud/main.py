@@ -104,7 +104,7 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS activations (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             device       TEXT    NOT NULL,
-            fanvue_id    TEXT    NOT NULL,
+            actor        TEXT    NOT NULL,
             activated_at TEXT    NOT NULL
         )
         """

@@ -95,11 +95,11 @@ def _make_teaser_dependency(device: str):
     return check_teaser_limit
 
 
-def _log_activation(db: sqlite3.Connection, device: str, fanvue_id: str) -> None:
+def _log_activation(db: sqlite3.Connection, device: str, actor: str) -> None:
     """Insert a row into the activations log table."""
     db.execute(
-        "INSERT INTO activations (device, fanvue_id, activated_at) VALUES (?, ?, ?)",
-        (device, fanvue_id, datetime.now(timezone.utc).isoformat()),
+        "INSERT INTO activations (device, actor, activated_at) VALUES (?, ?, ?)",
+        (device, actor, datetime.now(timezone.utc).isoformat()),
     )
     db.commit()
 

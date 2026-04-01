@@ -82,8 +82,9 @@ def get_current_user(
 # ---------------------------------------------------------------------------
 
 # Override via environment variables in docker-compose / .env.
-# ADMIN_PASSWORD must be set (non-empty) or all admin endpoints return 503.
-ADMIN_USERNAME: str = os.environ.get("ADMIN_USERNAME", "admin")
+# Both ADMIN_USERNAME and ADMIN_PASSWORD must be set (non-empty) or all admin
+# endpoints return 503. This prevents any insecure open-access defaults.
+ADMIN_USERNAME: str = os.environ.get("ADMIN_USERNAME", "")
 ADMIN_PASSWORD: str = os.environ.get("ADMIN_PASSWORD", "")
 
 _http_basic = HTTPBasic(auto_error=False)
@@ -108,7 +109,7 @@ def get_admin_user(
     Raises 503 if ADMIN_PASSWORD is not configured (prevents open access).
     Raises 401 with ``WWW-Authenticate: Basic`` if credentials are missing or wrong.
     """
-    if not ADMIN_PASSWORD:
+    if not ADMIN_PASSWORD or not ADMIN_USERNAME:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Admin authentication is not configured on this server.",

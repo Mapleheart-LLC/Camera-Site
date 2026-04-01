@@ -167,7 +167,7 @@ def admin_stats(
     total_cameras = db.execute("SELECT COUNT(*) FROM cameras").fetchone()[0]
     recent = db.execute(
         """
-        SELECT device, fanvue_id, activated_at
+        SELECT device, actor, activated_at
         FROM activations
         ORDER BY id DESC
         LIMIT 20
@@ -203,7 +203,7 @@ def admin_control_device(
             detail=f"Unknown device '{device}'. Valid options: {sorted(_VALID_DEVICES)}",
         )
     db.execute(
-        "INSERT INTO activations (device, fanvue_id, activated_at) VALUES (?, ?, ?)",
+        "INSERT INTO activations (device, actor, activated_at) VALUES (?, ?, ?)",
         (device, f"admin:{admin_user}", datetime.now(timezone.utc).isoformat()),
     )
     db.commit()
