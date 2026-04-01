@@ -47,6 +47,11 @@ FANVUE_PROFILE_URL: str = os.environ.get(
 # Optional: restrict access checks to a specific creator's subscriber list.
 FANVUE_CREATOR_ID: str = os.environ.get("FANVUE_CREATOR_ID", "")
 
+# Set MOCK_AUTH=true to bypass Fanvue OAuth and issue a fake access_level=3 JWT.
+# Useful for demos when the Fanvue API keys are not yet available.
+# NEVER enable this in production.
+MOCK_AUTH: bool = os.environ.get("MOCK_AUTH", "").lower() == "true"
+
 # OAuth CSRF state tokens live in memory; entries expire after STATE_TTL seconds.
 STATE_TTL: int = 600
 _oauth_states: dict[str, datetime] = {}
@@ -168,6 +173,11 @@ async def lifespan(app: FastAPI):
             "SECRET_KEY is set to the default development value. "
             "Set a strong SECRET_KEY environment variable before deploying to production."
         )
+    if MOCK_AUTH:
+        logger.warning(
+            "MOCK_AUTH is enabled. /auth/login will issue a fake access_level=3 token "
+            "without any Fanvue authentication. Do NOT use this in production."
+        )
     if not FANVUE_CLIENT_ID or not FANVUE_CLIENT_SECRET:
         logger.warning(
             "FANVUE_CLIENT_ID and/or FANVUE_CLIENT_SECRET are not set. "
@@ -198,7 +208,19 @@ class CameraResponse(BaseModel):
 
 @app.get("/auth/login")
 def auth_login():
-    """Redirect the browser to Fanvue's OAuth 2.0 authorization page."""
+    """Redirect the browser to Fanvue's OAuth 2.0 authorization page.
+
+    If MOCK_AUTH is enabled, skip the Fanvue redirect entirely and issue a
+    fake JWT with access_level=3 so the site's features can be demoed without
+    real Fanvue API credentials.
+    """
+    if MOCK_AUTH:
+        mock_token = create_access_token(
+            {"sub": "mock-user", "access_level": 3},
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        return RedirectResponse(url=f"/#token={mock_token}", status_code=302)
+
     if not FANVUE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
