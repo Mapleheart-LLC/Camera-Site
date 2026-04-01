@@ -8,19 +8,22 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from dependencies import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    SECRET_KEY,
+    create_access_token,
+    get_current_user,
+)
+from routers.interactive import router as interactive_router
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
 # ---------------------------------------------------------------------------
-SECRET_KEY: str = os.environ.get("SECRET_KEY", "changeme-replace-in-production!!")
-ALGORITHM: str = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 DATABASE_PATH: str = os.environ.get("DATABASE_PATH", "camera_site.db")
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
@@ -94,45 +97,6 @@ def get_db():
         yield conn
     finally:
         conn.close()
-
-
-# ---------------------------------------------------------------------------
-# JWT helpers
-# ---------------------------------------------------------------------------
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    to_encode["exp"] = expire
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-bearer_scheme = HTTPBearer(auto_error=False)
-
-
-def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
-) -> dict:
-    """Decode the JWT and return a dict with 'fanvue_id' and 'access_level'."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    if not credentials:
-        raise credentials_exception
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        fanvue_id: Optional[str] = payload.get("sub")
-        access_level: int = int(payload.get("access_level", 0))
-        if fanvue_id is None:
-            raise credentials_exception
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        raise credentials_exception
-    return {"fanvue_id": fanvue_id, "access_level": access_level}
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +355,10 @@ def get_my_cameras(
 
 
 # ---------------------------------------------------------------------------
-# Serve the static frontend (mount last so API routes take priority)
+# Routers and static files (registered last so API routes take priority)
 # ---------------------------------------------------------------------------
 
+app.include_router(interactive_router)
+
+# Serve the static frontend (mount last so API routes take priority)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

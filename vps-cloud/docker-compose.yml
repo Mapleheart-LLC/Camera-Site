@@ -44,5 +44,27 @@ services:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
     restart: unless-stopped
 
+  # ── Tailscale – secure site-to-site VPN ─────────────
+  # Placeholder: enables encrypted connectivity between this VPS and the
+  # local-edge agent (Tapo switches, AI camera routing) without exposing
+  # any edge ports to the public internet.
+  # Before enabling, set TS_AUTHKEY to a Tailscale auth key:
+  #   https://login.tailscale.com/admin/settings/keys
+  tailscale:
+    image: tailscale/tailscale
+    hostname: vps-cloud
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY:-}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - tailscale_state:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    restart: unless-stopped
+
 volumes:
   camera_data:
+  tailscale_state:
