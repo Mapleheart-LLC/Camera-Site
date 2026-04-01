@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
@@ -47,10 +48,13 @@ FANVUE_PROFILE_URL: str = os.environ.get(
 # Optional: restrict access checks to a specific creator's subscriber list.
 FANVUE_CREATOR_ID: str = os.environ.get("FANVUE_CREATOR_ID", "")
 
-# Set MOCK_AUTH=true to bypass Fanvue OAuth and issue a fake access_level=3 JWT.
+# Set MOCK_AUTH=true to bypass Fanvue OAuth and issue a fake token.
 # Useful for demos when the Fanvue API keys are not yet available.
 # NEVER enable this in production.
-MOCK_AUTH: bool = os.environ.get("MOCK_AUTH", "").lower() == "true"
+_mock_auth_raw = os.environ.get("MOCK_AUTH", "")
+MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool/str check
+    isinstance(_mock_auth_raw, str) and _mock_auth_raw.lower() == "true"
+)
 
 # OAuth CSRF state tokens live in memory; entries expire after STATE_TTL seconds.
 STATE_TTL: int = 600
@@ -59,6 +63,13 @@ _oauth_states: dict[str, datetime] = {}
 _DEFAULT_KEY = "changeme-replace-in-production!!"
 
 logger = logging.getLogger(__name__)
+
+# Route all log output to stderr so messages appear in Komodo / container logs.
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -174,11 +185,12 @@ async def lifespan(app: FastAPI):
             "Set a strong SECRET_KEY environment variable before deploying to production."
         )
     if MOCK_AUTH:
+        print("MOCK MODE IS ENABLED")
         logger.warning(
-            "MOCK_AUTH is enabled. /auth/login will issue a fake access_level=3 token "
+            "MOCK_AUTH is enabled. /auth/login will redirect to /#token=FAKE_TOKEN "
             "without any Fanvue authentication. Do NOT use this in production."
         )
-    if not FANVUE_CLIENT_ID or not FANVUE_CLIENT_SECRET:
+    elif not FANVUE_CLIENT_ID or not FANVUE_CLIENT_SECRET:
         logger.warning(
             "FANVUE_CLIENT_ID and/or FANVUE_CLIENT_SECRET are not set. "
             "OAuth login will not work until these are configured."
@@ -215,11 +227,7 @@ def auth_login():
     real Fanvue API credentials.
     """
     if MOCK_AUTH:
-        mock_token = create_access_token(
-            {"sub": "mock-user", "access_level": 3},
-            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-        )
-        return RedirectResponse(url=f"/#token={mock_token}", status_code=302)
+        return RedirectResponse(url="/#token=FAKE_TOKEN", status_code=302)
 
     if not FANVUE_CLIENT_ID:
         raise HTTPException(
