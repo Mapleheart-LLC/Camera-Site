@@ -16,6 +16,7 @@
       color: #f0e6e8;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
@@ -356,6 +357,136 @@
       border-radius: 2px;
       transition: width 1s linear;
     }
+
+    /* ── Drop a Note (Puppy Pouch) ──────────────────── */
+    #drop-a-note-section {
+      display: none;
+      width: 100%;
+      max-width: 480px;
+      margin-top: 1.5rem;
+    }
+
+    #drop-a-note-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 1.5rem 1.5rem 1.25rem;
+      box-shadow: 0 4px 24px rgba(232,174,183,0.08);
+    }
+
+    #drop-a-note-card h2 {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .35rem;
+    }
+
+    #drop-a-note-card p.note-tagline {
+      font-size: .8rem;
+      color: #9e7e82;
+      margin-bottom: 1rem;
+    }
+
+    #note-textarea {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .92rem;
+      padding: .65rem .85rem;
+      resize: vertical;
+      min-height: 80px;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    #note-textarea:focus { border-color: #c49a9f; }
+
+    .note-footer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: .5rem;
+      gap: .75rem;
+    }
+
+    #note-char-count {
+      font-size: .75rem;
+      color: #6a4a4e;
+      white-space: nowrap;
+    }
+
+    #note-char-count.warn { color: #f0b040; }
+    #note-char-count.over { color: #f87171; }
+
+    #note-submit-btn {
+      padding: .5rem 1.2rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+
+    #note-submit-btn:hover:not(:disabled) { background: #e8aeb7; color: #1a1a1a; }
+    #note-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    #note-msg {
+      font-size: .8rem;
+      min-height: 1em;
+      margin-top: .4rem;
+    }
+
+    #note-msg.success { color: #67d399; }
+    #note-msg.error   { color: #f87171; }
+
+    /* Public Q&A feed */
+    #public-qa-section {
+      margin-top: 1.25rem;
+      border-top: 1px solid #2a1a1d;
+      padding-top: 1rem;
+    }
+
+    #public-qa-section h3 {
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #9e7e82;
+      margin-bottom: .75rem;
+    }
+
+    .qa-item {
+      margin-bottom: .9rem;
+    }
+
+    .qa-bubble {
+      border-radius: 10px;
+      padding: .65rem .9rem;
+      font-size: .88rem;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .qa-bubble-q {
+      background: #3d2028;
+      border: 1px solid #c49a9f;
+      color: #f5d5da;
+      margin-bottom: .3rem;
+    }
+
+    .qa-bubble-a {
+      background: #2c2c2c;
+      border: 1px solid #4a4a4a;
+      color: #d0c4c6;
+    }
   </style>
 </head>
 <body>
@@ -381,6 +512,26 @@
     <footer style="margin-top:2rem;font-size:.7rem;">
       <a href="/admin.html" style="color:#2a1a1d;text-decoration:none;" tabindex="-1" aria-hidden="true">🐾</a>
     </footer>
+  </section>
+
+  <!-- ── Drop a Note (Puppy Pouch) ───────────────────── -->
+  <section id="drop-a-note-section" aria-label="Drop a note">
+    <div id="drop-a-note-card">
+      <h2>Drop a Note 🐾</h2>
+      <p class="note-tagline">Ask anything anonymously – no sign-in needed.</p>
+      <textarea id="note-textarea" maxlength="280" placeholder="What's on your mind? 🐾" aria-label="Your question"></textarea>
+      <div class="note-footer-row">
+        <span id="note-char-count">0 / 280</span>
+        <button id="note-submit-btn">Send 🐾</button>
+      </div>
+      <p id="note-msg" role="alert" aria-live="polite"></p>
+
+      <!-- Public answered questions feed -->
+      <div id="public-qa-section" style="display:none">
+        <h3>Answered Notes 🐾</h3>
+        <div id="public-qa-list"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ── Dashboard Section ─────────────────────────── -->
@@ -438,15 +589,19 @@
     // ── UI toggles ────────────────────────────────────
     function showDashboard() {
       document.getElementById('login-section').style.display     = 'none';
+      document.getElementById('drop-a-note-section').style.display = 'none';
       const dash = document.getElementById('dashboard-section');
       dash.style.display = 'flex';
       document.body.style.alignItems = 'stretch';
+      document.body.style.justifyContent = 'flex-start';
     }
 
     function showLogin(msg, msgClass) {
       document.getElementById('login-section').style.display     = 'block';
+      document.getElementById('drop-a-note-section').style.display = 'block';
       document.getElementById('dashboard-section').style.display = 'none';
       document.body.style.alignItems = 'center';
+      document.body.style.justifyContent = 'center';
 
       const msgEl = document.getElementById('login-message');
       if (msg) {
@@ -785,6 +940,89 @@
       clearToken();
       showLogin();
     });
+
+    // ── Drop a Note (Puppy Pouch) ─────────────────────
+    const _NOTE_MAX = 280;
+
+    (function initDropANote() {
+      const textarea  = document.getElementById('note-textarea');
+      const charCount = document.getElementById('note-char-count');
+      const submitBtn = document.getElementById('note-submit-btn');
+      const noteMsg   = document.getElementById('note-msg');
+
+      textarea.addEventListener('input', () => {
+        const len = textarea.value.length;
+        charCount.textContent = `${len} / ${_NOTE_MAX}`;
+        charCount.className = len >= _NOTE_MAX ? 'over' : len >= _NOTE_MAX * 0.85 ? 'warn' : '';
+        submitBtn.disabled = len === 0 || len > _NOTE_MAX;
+      });
+
+      submitBtn.addEventListener('click', async () => {
+        const text = textarea.value.trim();
+        if (!text || text.length > _NOTE_MAX) return;
+        submitBtn.disabled = true;
+        noteMsg.textContent = '';
+        noteMsg.className = '';
+        try {
+          const resp = await fetch('/api/questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          if (resp.ok) {
+            textarea.value = '';
+            charCount.textContent = `0 / ${_NOTE_MAX}`;
+            charCount.className = '';
+            noteMsg.textContent = '🐾 Your note was sent!';
+            noteMsg.className = 'success';
+            setTimeout(() => { noteMsg.textContent = ''; noteMsg.className = ''; }, 3500);
+          } else {
+            const data = await resp.json().catch(() => ({}));
+            noteMsg.textContent = data.detail || 'Something went wrong. Please try again.';
+            noteMsg.className = 'error';
+          }
+        } catch {
+          noteMsg.textContent = 'Could not send. Please try again.';
+          noteMsg.className = 'error';
+        } finally {
+          submitBtn.disabled = textarea.value.trim().length === 0;
+        }
+      });
+
+      // Load and display public answered questions
+      loadPublicQA();
+    })();
+
+    async function loadPublicQA() {
+      try {
+        const resp = await fetch('/api/questions/public');
+        if (!resp.ok) return;
+        const questions = await resp.json();
+        const section = document.getElementById('public-qa-section');
+        const list    = document.getElementById('public-qa-list');
+        if (!questions.length) return;
+        list.innerHTML = '';
+        questions.forEach(q => {
+          const item = document.createElement('div');
+          item.className = 'qa-item';
+          item.innerHTML =
+            `<div class="qa-bubble qa-bubble-q">${escHtmlNote(q.text)}</div>` +
+            `<div class="qa-bubble qa-bubble-a">${escHtmlNote(q.answer)}</div>`;
+          list.appendChild(item);
+        });
+        section.style.display = 'block';
+      } catch {
+        // Silently ignore if public feed fails to load
+      }
+    }
+
+    function escHtmlNote(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
 
     // ── Handle OAuth callback (token or error in URL) ─
     (function handleOAuthCallback() {

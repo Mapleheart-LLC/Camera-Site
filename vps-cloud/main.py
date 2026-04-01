@@ -23,6 +23,7 @@ from dependencies import (
 )
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
+from routers.questions import router as questions_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -78,7 +79,7 @@ logging.basicConfig(
 
 
 def init_db() -> None:
-    """Create the users, cameras, and activations tables if they do not already exist."""
+    """Create the users, cameras, activations, and questions tables if they do not already exist."""
     conn = get_db_connection()
     conn.execute(
         """
@@ -106,6 +107,17 @@ def init_db() -> None:
             device       TEXT    NOT NULL,
             actor        TEXT    NOT NULL,
             activated_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS questions (
+            id         TEXT    PRIMARY KEY,
+            text       TEXT    NOT NULL,
+            answer     TEXT,
+            is_public  INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    NOT NULL
         )
         """
     )
@@ -391,6 +403,177 @@ def get_my_cameras(
 
 app.include_router(interactive_router)
 app.include_router(admin_router)
+app.include_router(questions_router)
 
-# Serve the static frontend (mount last so API routes take priority)
+
+# ---------------------------------------------------------------------------
+# Puppy Pouch share page
+# ---------------------------------------------------------------------------
+
+def _html_escape(text: str) -> str:
+    """Minimal HTML escaping to prevent XSS in the share page."""
+    return (
+        text
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+
+
+@app.get("/q/{question_id}", response_class=None)
+def question_share_page(question_id: str, db: sqlite3.Connection = Depends(get_db)):
+    """Render a standalone pretty HTML card for a public answered question.
+
+    Includes OpenGraph / Twitter Card meta tags so sharing on social media
+    generates a rich preview.
+    """
+    from fastapi.responses import HTMLResponse
+
+    row = db.execute(
+        "SELECT id, text, answer, is_public FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+
+    if not row or not row["is_public"] or not row["answer"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found or not yet answered.",
+        )
+
+    q_text = _html_escape(row["text"])
+    a_text = _html_escape(row["answer"])
+    page_url = f"https://mochii.live/q/{question_id}"
+    og_title = "Puppy Pouch 🐾 – mochii.live"
+    # Truncate for OG description
+    og_q = row["text"][:120] + ("…" if len(row["text"]) > 120 else "")
+    og_a = row["answer"][:120] + ("…" if len(row["answer"]) > 120 else "")
+    og_description = _html_escape(f"Q: {og_q}  A: {og_a}")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Puppy Pouch 🐾 – mochii.live</title>
+
+  <!-- OpenGraph / Twitter Card -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="{page_url}" />
+  <meta property="og:title"       content="{og_title}" />
+  <meta property="og:description" content="{og_description}" />
+  <meta property="og:site_name"   content="mochii.live" />
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="{og_title}" />
+  <meta name="twitter:description" content="{og_description}" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    body {{
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }}
+
+    .card {{
+      width: 100%;
+      max-width: 560px;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 20px;
+      padding: 2rem 1.75rem 1.5rem;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.14);
+    }}
+
+    .card-title {{
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #9e7e82;
+      margin-bottom: 1.25rem;
+    }}
+
+    .bubble {{
+      border-radius: 14px;
+      padding: 1rem 1.25rem;
+      font-size: 1rem;
+      line-height: 1.55;
+      margin-bottom: 1rem;
+      word-break: break-word;
+    }}
+
+    .bubble-q {{
+      background: #3d2028;
+      border: 1px solid #c49a9f;
+      color: #f5d5da;
+    }}
+
+    .bubble-q::before {{
+      content: "🐾 Question";
+      display: block;
+      font-size: .7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #c49a9f;
+      margin-bottom: .5rem;
+    }}
+
+    .bubble-a {{
+      background: #2c2c2c;
+      border: 1px solid #4a4a4a;
+      color: #e0d4d6;
+    }}
+
+    .bubble-a::before {{
+      content: "💬 Answer";
+      display: block;
+      font-size: .7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #9e7e82;
+      margin-bottom: .5rem;
+    }}
+
+    .card-footer {{
+      margin-top: .5rem;
+      text-align: center;
+      font-size: .8rem;
+      color: #6a4a4e;
+      font-weight: 700;
+    }}
+
+    .card-footer a {{
+      color: #c49a9f;
+      text-decoration: none;
+    }}
+
+    .card-footer a:hover {{ text-decoration: underline; }}
+  </style>
+</head>
+<body>
+  <div class="card" role="main">
+    <p class="card-title">Puppy Pouch 🐾 Anonymous Q&amp;A</p>
+    <div class="bubble bubble-q">{q_text}</div>
+    <div class="bubble bubble-a">{a_text}</div>
+    <p class="card-footer">Ask me anything at <a href="https://mochii.live">mochii.live</a> 🐾</p>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
