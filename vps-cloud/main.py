@@ -26,7 +26,10 @@ from redis_client import close_redis
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
 # ---------------------------------------------------------------------------
-DATABASE_PATH: str = os.environ.get("DATABASE_PATH", "camera_site.db")
+_BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
+DATABASE_PATH: str = os.environ.get(
+    "DATABASE_PATH", os.path.join(_BASE_DIR, "camera_site.db")
+)
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
@@ -184,6 +187,7 @@ async def lifespan(app: FastAPI):
             "SECRET_KEY is set to the default development value. "
             "Set a strong SECRET_KEY environment variable before deploying to production."
         )
+    logger.info("Startup config: MOCK_AUTH=%s  DATABASE_PATH=%s", MOCK_AUTH, DATABASE_PATH)
     if MOCK_AUTH:
         print("MOCK MODE IS ENABLED")
         logger.warning(
