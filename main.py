@@ -41,7 +41,7 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the users table if it does not already exist."""
+    """Create the users and cameras tables if they do not already exist."""
     conn = get_db_connection()
     conn.execute(
         """
@@ -51,6 +51,15 @@ def init_db() -> None:
             secret_code     TEXT    NOT NULL,
             has_paid        INTEGER NOT NULL DEFAULT 0,
             allowed_cameras TEXT    NOT NULL DEFAULT ''
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cameras (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            display_name TEXT    NOT NULL,
+            stream_slug  TEXT    NOT NULL UNIQUE
         )
         """
     )
@@ -124,6 +133,11 @@ class LoginRequest(BaseModel):
     secret_code: str
 
 
+class CameraResponse(BaseModel):
+    display_name: str
+    stream_slug: str
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -191,6 +205,39 @@ def get_stream_urls(
         for cam in cameras
     }
     return JSONResponse({"streams": streams})
+
+
+@app.get("/api/my-cameras", response_model=list[CameraResponse])
+def get_my_cameras(
+    current_user: str = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the list of cameras the authenticated user is allowed to access."""
+    user = db.execute(
+        "SELECT allowed_cameras FROM users WHERE username = ?",
+        (current_user,),
+    ).fetchone()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    allowed_slugs = [s.strip() for s in user["allowed_cameras"].split(",") if s.strip()]
+    if not allowed_slugs:
+        return JSONResponse([])
+
+    # Build the IN clause with one '?' placeholder per slug.
+    # The placeholders string contains only literal '?' characters; all values
+    # are passed as query parameters, so this is safe from SQL injection.
+    placeholders = ",".join("?" * len(allowed_slugs))
+    rows = db.execute(
+        f"SELECT display_name, stream_slug FROM cameras WHERE stream_slug IN ({placeholders})",
+        allowed_slugs,
+    ).fetchall()
+
+    return JSONResponse([{"display_name": row["display_name"], "stream_slug": row["stream_slug"]} for row in rows])
 
 
 # ---------------------------------------------------------------------------
