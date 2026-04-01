@@ -12,7 +12,7 @@ COPY . .
 # Create static directory in case it was not present
 RUN mkdir -p static
 
-# Seed the database with an initial test user
+# Seed the database with camera data
 RUN python seed.py
 
 EXPOSE 8000

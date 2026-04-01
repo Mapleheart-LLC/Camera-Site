@@ -13,6 +13,19 @@ services:
       # go2rtc service name so the backend can build WebRTC URLs for the client
       - GO2RTC_HOST=go2rtc
       - GO2RTC_PORT=1984
+      # ── Fanvue OAuth 2.0 ──────────────────────────────
+      # Register your app at https://app.fanvue.com/developer and paste the
+      # credentials below (or export them as environment variables).
+      - FANVUE_CLIENT_ID=${FANVUE_CLIENT_ID:-}
+      - FANVUE_CLIENT_SECRET=${FANVUE_CLIENT_SECRET:-}
+      # Must match the redirect URI registered with Fanvue.
+      - FANVUE_REDIRECT_URI=${FANVUE_REDIRECT_URI:-http://localhost:8000/auth/callback}
+      # Fanvue OAuth endpoints (defaults match the production Fanvue API)
+      - FANVUE_AUTH_URL=${FANVUE_AUTH_URL:-https://app.fanvue.com/oauth/authorize}
+      - FANVUE_TOKEN_URL=${FANVUE_TOKEN_URL:-https://api.fanvue.com/oauth/token}
+      - FANVUE_PROFILE_URL=${FANVUE_PROFILE_URL:-https://api.fanvue.com/profile}
+      # Optional: your Fanvue creator UUID (used for subscription checks)
+      - FANVUE_CREATOR_ID=${FANVUE_CREATOR_ID:-}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
