@@ -6,12 +6,12 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote as _url_quote
 
 import httpx
 import html as _html_lib
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -407,6 +407,14 @@ app.include_router(admin_router)
 app.include_router(questions_router)
 
 
+@app.get("/admin", include_in_schema=False)
+def admin_page_redirect(request: Request):
+    """Redirect /admin (and /admin?q=...) to the static admin.html page."""
+    qs = request.url.query
+    target = f"/admin.html?{qs}" if qs else "/admin.html"
+    return RedirectResponse(url=target, status_code=301)
+
+
 # ---------------------------------------------------------------------------
 # Puppy Pouch share page
 # ---------------------------------------------------------------------------
@@ -414,6 +422,47 @@ app.include_router(questions_router)
 def _html_escape(text: str) -> str:
     """Escape HTML special characters to prevent XSS in the share page."""
     return _html_lib.escape(text, quote=True)
+
+
+def _render_404_html(heading: str, message: str) -> str:
+    """Return a styled 404 HTML page using the site's dark pink theme."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 – Not Found 🐾 mochii.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: 'Nunito', system-ui, sans-serif; background: #1a1a1a; color: #f0e6e8;
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }}
+    .card {{ width: 100%; max-width: 420px; background: #242424; border: 1px solid #3d2a2e;
+            border-radius: 20px; padding: 2.5rem 2rem 2rem; box-shadow: 0 8px 40px rgba(232,174,183,0.14);
+            text-align: center; }}
+    .paw {{ font-size: 3rem; margin-bottom: 1rem; display: block; }}
+    .error-code {{ font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em;
+                  color: #9e7e82; margin-bottom: .6rem; }}
+    h1 {{ font-size: 1.5rem; font-weight: 800; color: #e8aeb7; margin-bottom: .75rem; }}
+    p {{ font-size: .92rem; color: #9e7e82; line-height: 1.55; margin-bottom: 1.75rem; }}
+    a.btn {{ display: inline-block; padding: .65rem 1.5rem; background: #3d2028; border: 1px solid #e8aeb7;
+            border-radius: 10px; color: #e8aeb7; font-family: inherit; font-size: .95rem; font-weight: 700;
+            text-decoration: none; transition: background .15s, color .15s; }}
+    a.btn:hover {{ background: #e8aeb7; color: #1a1a1a; }}
+  </style>
+</head>
+<body>
+  <div class="card" role="main">
+    <span class="paw" aria-hidden="true">🐾</span>
+    <p class="error-code">404 – Not Found</p>
+    <h1>{_html_escape(heading)}</h1>
+    <p>{_html_escape(message)}</p>
+    <a class="btn" href="/">Back to mochii.live 🐾</a>
+  </div>
+</body>
+</html>"""
 
 
 @app.get("/q/{question_id}", response_class=None)
@@ -427,17 +476,18 @@ def question_share_page(
     Includes OpenGraph / Twitter Card meta tags so sharing on social media
     generates a rich preview.
     """
-    from fastapi.responses import HTMLResponse
-
     row = db.execute(
         "SELECT id, text, answer, is_public FROM questions WHERE id = ?",
         (question_id,),
     ).fetchone()
 
     if not row or not row["is_public"] or not row["answer"]:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found or not yet answered.",
+        return HTMLResponse(
+            content=_render_404_html(
+                "This note isn't here.",
+                "That question hasn't been answered yet, doesn't exist, or isn't public.",
+            ),
+            status_code=404,
         )
 
     q_text = _html_escape(row["text"])
@@ -445,7 +495,6 @@ def question_share_page(
     base_url = str(request.base_url).rstrip("/")
     # URL-encode the question_id for the share URL, then HTML-escape the full URL
     # to safely embed it in HTML attributes.
-    from urllib.parse import quote as _url_quote
     page_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}")
     og_title = "Puppy Pouch 🐾 – mochii.live"
     # Truncate for OG description (keep within typical 155-char limit after joining)

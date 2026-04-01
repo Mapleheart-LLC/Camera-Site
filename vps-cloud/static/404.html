@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 – Page Not Found 🐾 mochii.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 20px;
+      padding: 2.5rem 2rem 2rem;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.14);
+      text-align: center;
+    }
+
+    .paw {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+
+    .error-code {
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: #9e7e82;
+      margin-bottom: .6rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .75rem;
+    }
+
+    p {
+      font-size: .92rem;
+      color: #9e7e82;
+      line-height: 1.55;
+      margin-bottom: 1.75rem;
+    }
+
+    a.btn {
+      display: inline-block;
+      padding: .65rem 1.5rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .95rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: background .15s, color .15s;
+    }
+
+    a.btn:hover { background: #e8aeb7; color: #1a1a1a; }
+  </style>
+</head>
+<body>
+  <div class="card" role="main">
+    <span class="paw" aria-hidden="true">🐾</span>
+    <p class="error-code">404 – Not Found</p>
+    <h1>Lost in the yard?</h1>
+    <p>That page doesn't exist, or was moved.<br>Head back home and we'll sort you out.</p>
+    <a class="btn" href="/">Back to mochii.live 🐾</a>
+  </div>
+</body>
+</html>
