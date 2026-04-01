@@ -1,0 +1,17 @@
+# go2rtc configuration
+# Replace the sample RTSP URLs with your real camera streams.
+# Documentation: https://github.com/AlexxIT/go2rtc
+
+streams:
+  cam1: rtsp://user:password@192.168.1.10:554/stream
+  cam2: rtsp://user:password@192.168.1.11:554/stream
+
+api:
+  listen: ":1984"
+  # Restrict to the hostname/port where the FastAPI frontend is served.
+  # Replace with your actual domain in production (e.g. "https://example.com").
+  # Using "*" is convenient for local development but should not be used in production.
+  cors_origin: "http://localhost:8000"
+
+webrtc:
+  listen: ":8555/tcp"
