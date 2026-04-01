@@ -17,7 +17,7 @@ from db import get_db
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
-_MAX_QUESTION_LENGTH = 280
+_MAX_QUESTION_LENGTH = 280  # Must stay in sync with _NOTE_MAX in static/index.html
 
 
 # ---------------------------------------------------------------------------

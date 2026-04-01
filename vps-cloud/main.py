@@ -9,7 +9,8 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException, status
+import html as _html_lib
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -411,19 +412,16 @@ app.include_router(questions_router)
 # ---------------------------------------------------------------------------
 
 def _html_escape(text: str) -> str:
-    """Minimal HTML escaping to prevent XSS in the share page."""
-    return (
-        text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#x27;")
-    )
+    """Escape HTML special characters to prevent XSS in the share page."""
+    return _html_lib.escape(text, quote=True)
 
 
 @app.get("/q/{question_id}", response_class=None)
-def question_share_page(question_id: str, db: sqlite3.Connection = Depends(get_db)):
+def question_share_page(
+    question_id: str,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+):
     """Render a standalone pretty HTML card for a public answered question.
 
     Includes OpenGraph / Twitter Card meta tags so sharing on social media
@@ -444,11 +442,16 @@ def question_share_page(question_id: str, db: sqlite3.Connection = Depends(get_d
 
     q_text = _html_escape(row["text"])
     a_text = _html_escape(row["answer"])
-    page_url = f"https://mochii.live/q/{question_id}"
+    base_url = str(request.base_url).rstrip("/")
+    # URL-encode the question_id for the share URL, then HTML-escape the full URL
+    # to safely embed it in HTML attributes.
+    from urllib.parse import quote as _url_quote
+    page_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}")
     og_title = "Puppy Pouch 🐾 – mochii.live"
-    # Truncate for OG description
-    og_q = row["text"][:120] + ("…" if len(row["text"]) > 120 else "")
-    og_a = row["answer"][:120] + ("…" if len(row["answer"]) > 120 else "")
+    # Truncate for OG description (keep within typical 155-char limit after joining)
+    _OG_PREVIEW_LEN = 120
+    og_q = row["text"][:_OG_PREVIEW_LEN] + ("…" if len(row["text"]) > _OG_PREVIEW_LEN else "")
+    og_a = row["answer"][:_OG_PREVIEW_LEN] + ("…" if len(row["answer"]) > _OG_PREVIEW_LEN else "")
     og_description = _html_escape(f"Q: {og_q}  A: {og_a}")
 
     html = f"""<!DOCTYPE html>
