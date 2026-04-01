@@ -28,6 +28,15 @@ services:
       - FANVUE_CREATOR_ID=${FANVUE_CREATOR_ID:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
+      # ── Edge relay – Tailscale connectivity ───────────
+      # Tailscale IP of the local Raspberry Pi edge agent.
+      # Find it at https://login.tailscale.com/admin/machines
+      - EDGE_TAILSCALE_IP=${EDGE_TAILSCALE_IP:-}
+      # Shared secret used to authenticate VPS ↔ edge traffic.
+      # Generate with: openssl rand -hex 32
+      - EDGE_API_KEY=${EDGE_API_KEY:-}
+      # Port the edge agent listens on (default: 8001)
+      - EDGE_PORT=${EDGE_PORT:-8001}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data

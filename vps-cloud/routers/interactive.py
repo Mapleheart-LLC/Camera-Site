@@ -17,17 +17,48 @@ Access rules
 Both endpoints require a valid Fanvue JWT (Bearer token).
 """
 
+import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from redis.asyncio import Redis
 
 from dependencies import get_current_user
+from edge_relay import send_to_edge
+from models.commands import DeviceCommand
 from redis_client import get_redis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/control", tags=["interactive"])
 
 _PREMIUM_LEVEL = 3
 _COOLDOWN_SECONDS = 3600        # 1 hour
 _TEASER_DURATION_SECONDS = 5    # IoT activation window for teaser users
+
+
+async def _relay_to_edge(device_type: str, action: str, duration: int | None) -> None:
+    """Forward a DeviceCommand to the edge, mapping exceptions to HTTPExceptions."""
+    command = DeviceCommand(device_type=device_type, action=action, duration=duration)
+    try:
+        await send_to_edge(command)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+    except httpx.RequestError as exc:
+        logger.error("Edge relay request failed for %s: %s", device_type, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach the edge agent.",
+        )
+    except httpx.HTTPStatusError as exc:
+        logger.error("Edge relay returned error for %s: %s", device_type, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Edge agent returned an error.",
+        )
 
 
 def _cooldown_key(fanvue_id: str, device: str) -> str:
@@ -95,15 +126,17 @@ async def control_pishock(
     Premium users (level 3+) receive an unlimited activation.  Teaser users
     (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
 
-    Currently returns a mock success response; the real implementation will
-    forward the command to the local-edge agent over the Tailscale VPN.
+    Forwards the command to the local-edge agent over the Tailscale VPN.
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
+    duration = _TEASER_DURATION_SECONDS if is_teaser else None
+
+    await _relay_to_edge("pishock", "shock", duration)
+
     response: dict = {
         "status": "ok",
         "device": "pishock",
-        "message": "Command accepted (mock response).",
         "user": current_user["fanvue_id"],
     }
     if is_teaser:
@@ -122,15 +155,17 @@ async def control_lovense(
     Premium users (level 3+) receive an unlimited activation.  Teaser users
     (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
 
-    Currently returns a mock success response; the real implementation will
-    forward the command to the local-edge agent over the Tailscale VPN.
+    Forwards the command to the local-edge agent over the Tailscale VPN.
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
+    duration = _TEASER_DURATION_SECONDS if is_teaser else None
+
+    await _relay_to_edge("lovense", "vibrate", duration)
+
     response: dict = {
         "status": "ok",
         "device": "lovense",
-        "message": "Command accepted (mock response).",
         "user": current_user["fanvue_id"],
     }
     if is_teaser:

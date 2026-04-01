@@ -20,6 +20,7 @@ from dependencies import (
     get_current_user,
 )
 from routers.interactive import router as interactive_router
+from routers.internal import router as internal_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -172,6 +173,12 @@ async def lifespan(app: FastAPI):
         logger.warning(
             "FANVUE_CLIENT_ID and/or FANVUE_CLIENT_SECRET are not set. "
             "OAuth login will not work until these are configured."
+        )
+    if not os.environ.get("EDGE_API_KEY"):
+        logger.warning(
+            "EDGE_API_KEY is not set. "
+            "The /internal/relay-command endpoint and edge relay will not function "
+            "until EDGE_API_KEY is configured."
         )
     init_db()
     yield
@@ -362,6 +369,7 @@ def get_my_cameras(
 # ---------------------------------------------------------------------------
 
 app.include_router(interactive_router)
+app.include_router(internal_router)
 
 # Serve the static frontend (mount last so API routes take priority)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
