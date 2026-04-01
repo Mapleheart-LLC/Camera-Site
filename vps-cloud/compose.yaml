@@ -54,6 +54,19 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
 
+  # ── Cloudflare Tunnel – VPS to public web ───────────
+  # Exposes the backend through a Cloudflare Tunnel without opening inbound
+  # firewall ports.  Create a tunnel in the Cloudflare Zero Trust dashboard,
+  # then set CLFD_TOKEN in the Komodo stack environment.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLFD_TOKEN}
+    environment:
+      - CLFD_TOKEN=${CLFD_TOKEN}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   # ── Tailscale – secure site-to-site VPN ─────────────
   # Placeholder: enables encrypted connectivity between this VPS and the
   # local-edge agent (Tapo switches, AI camera routing) without exposing
