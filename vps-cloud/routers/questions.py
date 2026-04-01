@@ -10,10 +10,11 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from db import get_db
+from discord_webhook import send_discord_notification
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
@@ -42,7 +43,7 @@ class PublicQuestion(BaseModel):
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def submit_question(
+async def submit_question(
     payload: QuestionSubmit,
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -57,6 +58,15 @@ def submit_question(
         (question_id, payload.text, created_at),
     )
     db.commit()
+
+    # Notify via Discord webhook.  Failures are silently logged; the question
+    # has already been persisted so the user always receives a success response.
+    await send_discord_notification(
+        content="🐾 A new note has been dropped in the Puppy Pouch!",
+        question_text=payload.text,
+        is_embed=True,
+    )
+
     return {"id": question_id, "message": "Your question has been submitted 🐾"}
 
 
