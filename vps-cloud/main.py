@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
@@ -62,6 +63,13 @@ _oauth_states: dict[str, datetime] = {}
 _DEFAULT_KEY = "changeme-replace-in-production!!"
 
 logger = logging.getLogger(__name__)
+
+# Route all log output to stderr so messages appear in Komodo / container logs.
+logging.basicConfig(
+    stream=sys.stderr,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 # ---------------------------------------------------------------------------
 # Database helpers
