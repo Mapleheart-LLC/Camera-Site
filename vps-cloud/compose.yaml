@@ -26,6 +26,8 @@ services:
       - FANVUE_PROFILE_URL=${FANVUE_PROFILE_URL:-https://api.fanvue.com/profile}
       # Optional: your Fanvue creator UUID (used for subscription checks)
       - FANVUE_CREATOR_ID=${FANVUE_CREATOR_ID:-}
+      # Set MOCK_AUTH=true to bypass Fanvue OAuth (demo/testing only – never in production)
+      - MOCK_AUTH=${MOCK_AUTH:-false}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
     volumes:
