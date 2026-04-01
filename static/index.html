@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera Site</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Login card ─────────────────────────────────── */
+    #login-section {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+
+    #login-section h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.75rem;
+      color: #93c5fd;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      font-size: .85rem;
+      color: #94a3b8;
+      margin-bottom: .4rem;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: .6rem .8rem;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    input:focus { border-color: #3b82f6; }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: .75rem;
+      background: #3b82f6;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+
+    button[type="submit"]:hover { background: #2563eb; }
+    button[type="submit"]:disabled { background: #4b5563; cursor: not-allowed; }
+
+    #login-error {
+      margin-top: .75rem;
+      font-size: .85rem;
+      color: #f87171;
+      text-align: center;
+      min-height: 1.2em;
+    }
+
+    /* ── Dashboard ──────────────────────────────────── */
+    #dashboard-section {
+      display: none;
+      width: 100%;
+      max-width: 960px;
+      padding: 1.5rem;
+    }
+
+    #dashboard-section header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    #dashboard-section header h1 {
+      font-size: 1.4rem;
+      color: #93c5fd;
+    }
+
+    #logout-btn {
+      background: transparent;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: .4rem .9rem;
+      cursor: pointer;
+      font-size: .875rem;
+      transition: border-color .2s, color .2s;
+    }
+
+    #logout-btn:hover { border-color: #f87171; color: #f87171; }
+
+    #streams-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .stream-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .stream-card h2 {
+      padding: .75rem 1rem;
+      font-size: 1rem;
+      color: #94a3b8;
+      border-bottom: 1px solid #2d3148;
+    }
+
+    video.stream-video {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      display: block;
+    }
+
+    .stream-status {
+      padding: .5rem 1rem;
+      font-size: .8rem;
+      color: #64748b;
+    }
+
+    .stream-status.connecting { color: #f59e0b; }
+    .stream-status.live       { color: #34d399; }
+    .stream-status.error      { color: #f87171; }
+
+    #streams-message {
+      color: #64748b;
+      font-size: .95rem;
+      padding: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Login Section ─────────────────────────────── -->
+  <section id="login-section">
+    <h1>🎥 Camera Site</h1>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input id="username" type="text" name="username"
+               autocomplete="username" required placeholder="testuser" />
+      </div>
+      <div class="form-group">
+        <label for="secret_code">Secret Code</label>
+        <input id="secret_code" type="password" name="secret_code"
+               autocomplete="current-password" required placeholder="••••••••••" />
+      </div>
+      <button type="submit" id="login-btn">Sign In</button>
+      <p id="login-error" role="alert" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <!-- ── Dashboard Section ─────────────────────────── -->
+  <section id="dashboard-section" aria-label="Camera Dashboard">
+    <header>
+      <h1>🎥 Live Cameras</h1>
+      <button id="logout-btn">Log out</button>
+    </header>
+    <div id="streams-container">
+      <p id="streams-message">Loading streams…</p>
+    </div>
+  </section>
+
+  <script>
+    // ── Storage helpers ───────────────────────────────
+    const TOKEN_KEY = 'camera_site_token';
+
+    function saveToken(token) { sessionStorage.setItem(TOKEN_KEY, token); }
+    function getToken()       { return sessionStorage.getItem(TOKEN_KEY); }
+    function clearToken()     { sessionStorage.removeItem(TOKEN_KEY); }
+
+    // ── UI toggles ────────────────────────────────────
+    function showDashboard() {
+      document.getElementById('login-section').style.display    = 'none';
+      document.getElementById('dashboard-section').style.display = 'block';
+      document.body.style.alignItems = 'flex-start';
+    }
+
+    function showLogin() {
+      document.getElementById('login-section').style.display    = 'block';
+      document.getElementById('dashboard-section').style.display = 'none';
+      document.body.style.alignItems = 'center';
+    }
+
+    // ── WebRTC stream using go2rtc API ────────────────
+    /**
+     * Connects to go2rtc's WebRTC API and attaches the stream to a <video>.
+     * go2rtc expects a POST with the SDP offer body and returns the SDP answer.
+     */
+    async function startWebRTCStream(videoEl, statusEl, webrtcApiUrl) {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
+      pc.ontrack = (ev) => {
+        if (ev.streams && ev.streams[0]) {
+          videoEl.srcObject = ev.streams[0];
+          statusEl.textContent = '● Live';
+          statusEl.className = 'stream-status live';
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
+          statusEl.textContent = 'Connection lost – reload to retry';
+          statusEl.className = 'stream-status error';
+        }
+      };
+
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Wait for ICE gathering to complete before sending the offer.
+        // ICE_GATHERING_TIMEOUT_MS: safety limit in case the browser never fires
+        // 'complete' (e.g. no STUN server, all candidates are host-only).
+        const ICE_GATHERING_TIMEOUT_MS = 3000;
+        await new Promise((resolve) => {
+          if (pc.iceGatheringState === 'complete') { resolve(); return; }
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+          };
+          setTimeout(resolve, ICE_GATHERING_TIMEOUT_MS);
+        });
+
+        const response = await fetch(webrtcApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ data: pc.localDescription.sdp }),
+        });
+
+        if (!response.ok) throw new Error(`go2rtc returned ${response.status}`);
+
+        const answerSdp = await response.text();
+        await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+      } catch (err) {
+        console.error('WebRTC error:', err);
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.className = 'stream-status error';
+      }
+    }
+
+    // ── Render streams ────────────────────────────────
+    function renderStreams(streams) {
+      const container = document.getElementById('streams-container');
+      container.innerHTML = '';
+
+      const cameraNames = Object.keys(streams);
+      if (cameraNames.length === 0) {
+        container.innerHTML = '<p id="streams-message">No cameras assigned to your account.</p>';
+        return;
+      }
+
+      cameraNames.forEach((cam) => {
+        const { webrtc_api } = streams[cam];
+
+        const card = document.createElement('div');
+        card.className = 'stream-card';
+
+        const title = document.createElement('h2');
+        title.textContent = cam;
+
+        const video = document.createElement('video');
+        video.className = 'stream-video';
+        video.autoplay = true;
+        video.muted    = true;
+        video.playsInline = true;
+        video.controls = true;
+
+        const statusEl = document.createElement('p');
+        statusEl.className = 'stream-status connecting';
+        statusEl.textContent = 'Connecting…';
+
+        card.appendChild(title);
+        card.appendChild(video);
+        card.appendChild(statusEl);
+        container.appendChild(card);
+
+        startWebRTCStream(video, statusEl, webrtc_api);
+      });
+    }
+
+    // ── Load stream URLs from the protected API ───────
+    async function loadStreams() {
+      const token = getToken();
+      if (!token) { showLogin(); return; }
+
+      try {
+        const resp = await fetch('/api/stream', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (resp.status === 401) { clearToken(); showLogin(); return; }
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const data = await resp.json();
+        renderStreams(data.streams);
+      } catch (err) {
+        document.getElementById('streams-message').textContent =
+          `Failed to load streams: ${err.message}`;
+      }
+    }
+
+    // ── Login form handler ────────────────────────────
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('login-error');
+      const btn     = document.getElementById('login-btn');
+
+      errorEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+
+      const username    = document.getElementById('username').value.trim();
+      const secret_code = document.getElementById('secret_code').value;
+
+      try {
+        const resp = await fetch('/login', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ username, secret_code }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          errorEl.textContent = data.detail || 'Login failed. Please try again.';
+          return;
+        }
+
+        saveToken(data.access_token);
+        showDashboard();
+        loadStreams();
+
+      } catch (err) {
+        errorEl.textContent = 'Network error – please try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    });
+
+    // ── Logout ────────────────────────────────────────
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      clearToken();
+      showLogin();
+      document.getElementById('login-form').reset();
+    });
+
+    // ── Auto-login if token already exists ────────────
+    if (getToken()) {
+      showDashboard();
+      loadStreams();
+    }
+  </script>
+</body>
+</html>

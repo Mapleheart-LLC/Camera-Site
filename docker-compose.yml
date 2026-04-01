@@ -1,0 +1,35 @@
+services:
+  # ── FastAPI backend ──────────────────────────────────
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Set SECRET_KEY in your shell or a .env file before running docker-compose.
+      # Example: export SECRET_KEY=$(openssl rand -hex 32)
+      - SECRET_KEY=${SECRET_KEY:-changeme-replace-in-production!!}
+      # Persist DB in the named volume mount path
+      - DATABASE_PATH=/app/data/camera_site.db
+      # go2rtc service name so the backend can build WebRTC URLs for the client
+      - GO2RTC_HOST=go2rtc
+      - GO2RTC_PORT=1984
+    volumes:
+      # Persist the SQLite database across container restarts
+      - camera_data:/app/data
+    depends_on:
+      - go2rtc
+    restart: unless-stopped
+
+  # ── go2rtc – RTSP → WebRTC bridge ───────────────────
+  go2rtc:
+    image: alexxit/go2rtc
+    ports:
+      - "1984:1984"   # HTTP API / web UI
+      - "8554:8554"   # RTSP server (re-stream)
+      - "8555:8555"   # WebRTC/ICE TCP
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    restart: unless-stopped
+
+volumes:
+  camera_data:
