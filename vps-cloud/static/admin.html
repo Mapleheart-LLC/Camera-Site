@@ -403,6 +403,8 @@
 
     /* ── Puppy Pouch ─────────────────────────────────── */
     .question-row td { vertical-align: top; }
+    .question-row.deep-linked { outline: 2px solid #E8AEB7; background: rgba(232,174,183,.08); animation: pulsePink 1.6s ease-out 3; }
+    @keyframes pulsePink { 0%,100% { background: rgba(232,174,183,.08); } 50% { background: rgba(232,174,183,.18); } }
 
     .q-text {
       font-size: .9rem;
@@ -1034,6 +1036,33 @@
       }
     }
 
+    // ── Deep-link: /admin/questions/<id> ─────────────
+    const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    function getDeepLinkedId() {
+      // Support both ?q=<id> query param and /admin/questions/<id> path segments.
+      const params = new URLSearchParams(window.location.search);
+      const fromParam = params.get('q');
+      if (fromParam && _UUID_RE.test(fromParam)) return fromParam;
+      const pathMatch = window.location.pathname.match(/\/admin\/questions\/([^/]+)/);
+      const fromPath = pathMatch ? pathMatch[1] : null;
+      if (fromPath && _UUID_RE.test(fromPath)) return fromPath;
+      return null;
+    }
+
+    function scrollToDeepLinkedQuestion() {
+      const targetId = getDeepLinkedId();
+      if (!targetId) return;
+      const row = document.querySelector(`.question-row[data-id="${CSS.escape(targetId)}"]`);
+      if (!row) return;
+      // Remove any previous highlight so re-renders re-trigger the animation.
+      row.classList.remove('deep-linked');
+      // Force a reflow so removing+adding the class restarts the animation.
+      void row.offsetWidth;
+      row.classList.add('deep-linked');
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     function renderQuestions(questions) {
       const tbody = document.getElementById('questions-body');
       if (!questions.length) {
@@ -1056,6 +1085,8 @@
       tbody.querySelectorAll('.reply-btn').forEach(btn => {
         btn.addEventListener('click', () => openAnswerForm(btn.dataset.id, btn.dataset.text));
       });
+
+      scrollToDeepLinkedQuestion();
     }
 
     function openAnswerForm(id, text) {

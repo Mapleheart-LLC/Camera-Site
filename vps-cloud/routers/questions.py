@@ -65,6 +65,7 @@ async def submit_question(
         content="🐾 A new note has been dropped in the Puppy Pouch!",
         question_text=payload.text,
         is_embed=True,
+        question_id=question_id,
     )
 
     return {"id": question_id, "message": "Your question has been submitted 🐾"}

@@ -10,6 +10,9 @@ Configuration
 Set the ``DISCORD_WEBHOOK_URL`` environment variable to a valid Discord
 Incoming Webhook URL.  If the variable is absent or empty, all calls to
 ``send_discord_notification`` silently no-op.
+
+Set ``BASE_URL`` to the public root of the site (e.g. ``https://mochii.live``)
+so that deep-link URLs included in embed titles resolve correctly.
 """
 
 import logging
@@ -19,6 +22,7 @@ from typing import Optional
 import httpx
 
 DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
+BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 
 # Discord color for mochii.live muted pink (0xE8AEB7 → decimal).
 _MOCHII_PINK: int = 0xE8AEB7
@@ -32,6 +36,7 @@ async def send_discord_notification(
     content: str,
     question_text: str = "",
     is_embed: bool = True,
+    question_id: Optional[str] = None,
 ) -> None:
     """Post a notification to the configured Discord webhook.
 
@@ -46,6 +51,10 @@ async def send_discord_notification(
     is_embed:
         When ``True`` (default), attach a rich Discord embed with a
         truncated preview of *question_text*.
+    question_id:
+        Optional UUID of the question.  When provided (and ``BASE_URL`` is
+        set), the embed title becomes a clickable deep-link to the admin
+        panel, and an "Action" field is added to the embed.
 
     The function swallows all exceptions and logs a warning on failure so
     that a Discord outage can never crash the application or fail a user's
@@ -60,14 +69,26 @@ async def send_discord_notification(
         preview = question_text[:_OG_PREVIEW_LEN]
         if len(question_text) > _OG_PREVIEW_LEN:
             preview += "…"
-        payload["embeds"] = [
-            {
-                "title": "New Question Received! 🐾",
-                "description": preview,
-                "color": _MOCHII_PINK,
-                "footer": {"text": "Log into the Alpha Kennel to reply."},
-            }
-        ]
+
+        embed: dict = {
+            "title": "New Question Received! 🐾",
+            "description": preview,
+            "color": _MOCHII_PINK,
+            "footer": {"text": "Log into the Alpha Kennel to reply."},
+        }
+
+        if question_id and BASE_URL:
+            reply_url = f"{BASE_URL}/admin/questions/{question_id}"
+            embed["url"] = reply_url
+            embed["fields"] = [
+                {
+                    "name": "Action",
+                    "value": f"[🐾 Click here to reply and share to Twitter]({reply_url})",
+                    "inline": False,
+                }
+            ]
+
+        payload["embeds"] = [embed]
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
