@@ -407,6 +407,14 @@ app.include_router(admin_router)
 app.include_router(questions_router)
 
 
+@app.get("/admin", include_in_schema=False)
+def admin_page_redirect(request: Request):
+    """Redirect /admin (and /admin?q=...) to the static admin.html page."""
+    qs = request.url.query
+    target = f"/admin.html?{qs}" if qs else "/admin.html"
+    return RedirectResponse(url=target, status_code=301)
+
+
 # ---------------------------------------------------------------------------
 # Puppy Pouch share page
 # ---------------------------------------------------------------------------
