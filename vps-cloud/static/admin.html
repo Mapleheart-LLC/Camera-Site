@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🐾 The Alpha Kennel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+    }
+
+    /* ── Login panel ────────────────────────────────── */
+    #login-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    #login-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.12);
+      text-align: center;
+    }
+
+    #login-card h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .5rem;
+    }
+
+    #login-card p.subtitle {
+      font-size: .85rem;
+      color: #9e7e82;
+      margin-bottom: 1.75rem;
+    }
+
+    .field-group {
+      text-align: left;
+      margin-bottom: 1rem;
+    }
+
+    .field-group label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 700;
+      color: #c49a9f;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .field-group input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .95rem;
+      padding: .6rem .85rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .field-group input:focus { border-color: #e8aeb7; }
+
+    #login-error {
+      font-size: .82rem;
+      color: #f87171;
+      min-height: 1.2em;
+      margin-bottom: .75rem;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: .7rem 1rem;
+      background: #e8aeb7;
+      border: none;
+      border-radius: 10px;
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background .2s, box-shadow .2s, transform .1s;
+    }
+
+    .btn-primary:hover { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,.3); }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── Admin dashboard ────────────────────────────── */
+    #admin-panel { display: none; }
+
+    header.admin-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      background: #202020;
+      border-bottom: 1px solid #3d2a2e;
+    }
+
+    header.admin-header h1 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    header.admin-header .admin-badge {
+      padding: .2rem .65rem;
+      border-radius: 20px;
+      background: rgba(232,174,183,.12);
+      border: 1px solid #e8aeb7;
+      color: #e8aeb7;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+    }
+
+    #logout-admin-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid #4b3538;
+      border-radius: 8px;
+      color: #9e7e82;
+      padding: .35rem .85rem;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    #logout-admin-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    .admin-body {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    /* ── Section cards ──────────────────────────────── */
+    .card {
+      background: #202020;
+      border: 1px solid #3d2a2e;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.25rem;
+      border-bottom: 1px solid #3d2a2e;
+      background: #262626;
+    }
+
+    .card-header h2 {
+      font-size: .9rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .card-body { padding: 1.25rem; }
+
+    /* ── Stats row ──────────────────────────────────── */
+    .stats-row {
+      display: flex;
+      gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-tile {
+      flex: 1;
+      min-width: 140px;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+
+    .stat-tile .stat-value {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      line-height: 1;
+    }
+
+    .stat-tile .stat-label {
+      font-size: .78rem;
+      color: #9e7e82;
+      margin-top: .35rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    /* ── Table ──────────────────────────────────────── */
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+
+    .admin-table th {
+      text-align: left;
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9e7e82;
+      padding: .6rem .85rem;
+      border-bottom: 1px solid #3d2a2e;
+    }
+
+    .admin-table td {
+      padding: .65rem .85rem;
+      border-bottom: 1px solid #2a1e20;
+      vertical-align: middle;
+    }
+
+    .admin-table tr:last-child td { border-bottom: none; }
+    .admin-table tr:hover td { background: #2a1a1d; }
+
+    .badge-level {
+      display: inline-block;
+      padding: .15rem .55rem;
+      border-radius: 6px;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .badge-level.l1 { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
+    .badge-level.l2 { background: rgba(216,167,177,.12); color: #d8a7b1; border: 1px solid #d8a7b1; }
+    .badge-level.l3 { background: rgba(240,176,192,.15); color: #f0b0c0; border: 1px solid #f0b0c0; }
+
+    .btn-sm {
+      padding: .3rem .7rem;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: .8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+
+    .btn-edit {
+      background: transparent;
+      border: 1px solid #e8aeb7;
+      color: #e8aeb7;
+    }
+    .btn-edit:hover { background: #e8aeb7; color: #1a1a1a; }
+
+    .btn-delete {
+      background: transparent;
+      border: 1px solid #f87171;
+      color: #f87171;
+    }
+    .btn-delete:hover { background: #f87171; color: #1a1a1a; }
+
+    .action-cell { display: flex; gap: .4rem; }
+
+    /* ── Add/edit camera form ───────────────────────── */
+    #camera-form {
+      display: none;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    #camera-form h3 {
+      font-size: .85rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .85rem;
+    }
+
+    .form-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+
+    .form-field { flex: 1; min-width: 140px; }
+
+    .form-field label {
+      display: block;
+      font-size: .72rem;
+      font-weight: 700;
+      color: #9e7e82;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .3rem;
+    }
+
+    .form-field input,
+    .form-field select {
+      width: 100%;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 7px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .88rem;
+      padding: .5rem .75rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-field input:focus,
+    .form-field select:focus { border-color: #e8aeb7; }
+    .form-field select option { background: #242424; }
+
+    .form-actions { display: flex; gap: .5rem; align-items: flex-end; padding-bottom: 1px; }
+
+    #form-error {
+      font-size: .8rem;
+      color: #f87171;
+      margin-top: .5rem;
+      min-height: 1em;
+    }
+
+    /* ── IoT control board ──────────────────────────── */
+    .iot-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+    .iot-card {
+      flex: 1;
+      min-width: 180px;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      padding: 1.1rem 1.25rem;
+      text-align: center;
+    }
+
+    .iot-card .iot-name {
+      font-size: .8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9e7e82;
+      margin-bottom: .75rem;
+    }
+
+    .btn-iot {
+      width: 100%;
+      padding: .6rem 1rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .btn-iot:hover:not(:disabled) { background: #e8aeb7; color: #1a1a1a; }
+    .btn-iot:disabled { opacity: .5; cursor: not-allowed; }
+
+    .iot-result {
+      margin-top: .6rem;
+      font-size: .78rem;
+      color: #9e7e82;
+      min-height: 1em;
+    }
+
+    /* ── Activations list ───────────────────────────── */
+    #activations-body td:first-child { font-size: .82rem; }
+    .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
+    .device-tag {
+      display: inline-block;
+      padding: .1rem .45rem;
+      border-radius: 5px;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .device-tag.pishock { background: rgba(240,176,64,.1); color: #f0b040; border: 1px solid #f0b040; }
+    .device-tag.lovense { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
+
+    /* ── Misc ───────────────────────────────────────── */
+    .empty-row td { color: #5a3a3e; text-align: center; padding: 1.25rem; }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      padding: .65rem 1.1rem;
+      font-size: .85rem;
+      color: #e8aeb7;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .25s, transform .25s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Login panel ──────────────────────────────────── -->
+  <div id="login-panel">
+    <div id="login-card">
+      <h1 aria-label="The Alpha Kennel">🐾 The Alpha Kennel</h1>
+      <p class="subtitle">Authorized Paws Only</p>
+
+      <div class="field-group">
+        <label for="admin-username">Username</label>
+        <input id="admin-username" type="text" autocomplete="username" placeholder="Enter username" />
+      </div>
+      <div class="field-group">
+        <label for="admin-password">Password</label>
+        <input id="admin-password" type="password" autocomplete="current-password" placeholder="Enter password" />
+      </div>
+
+      <p id="login-error" role="alert" aria-live="polite"></p>
+
+      <button id="login-btn" class="btn-primary">🐾 Enter the Kennel</button>
+    </div>
+  </div>
+
+  <!-- ── Admin panel ──────────────────────────────────── -->
+  <div id="admin-panel">
+    <header class="admin-header">
+      <h1 aria-label="The Alpha Kennel – Authorized Paws Only">🐾 The Alpha Kennel</h1>
+      <span class="admin-badge">Authorized Paws Only</span>
+      <button id="logout-admin-btn">Leave Kennel 🐾</button>
+    </header>
+
+    <div class="admin-body">
+
+      <!-- Stats -->
+      <section class="card" aria-label="Stats">
+        <div class="card-header">
+          <h2>📊 Stats</h2>
+          <button id="refresh-btn" class="btn-sm btn-edit">↻ Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="stats-row">
+            <div class="stat-tile">
+              <div id="stat-users" class="stat-value">—</div>
+              <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-tile">
+              <div id="stat-cameras" class="stat-value">—</div>
+              <div class="stat-label">Total Cameras</div>
+            </div>
+            <div class="stat-tile">
+              <div id="stat-activations" class="stat-value">—</div>
+              <div class="stat-label">Recent Activations</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Camera Management -->
+      <section class="card" aria-label="Camera management">
+        <div class="card-header">
+          <h2>📷 Camera Management</h2>
+          <button id="add-camera-btn" class="btn-sm btn-edit">+ Add Camera</button>
+        </div>
+        <div class="card-body">
+          <!-- Inline add/edit form (hidden by default) -->
+          <div id="camera-form">
+            <h3 id="form-title">Add Camera</h3>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="f-name">Display Name</label>
+                <input id="f-name" type="text" placeholder="e.g. Lobby" />
+              </div>
+              <div class="form-field">
+                <label for="f-slug">Stream Slug</label>
+                <input id="f-slug" type="text" placeholder="e.g. cam_lobby" />
+              </div>
+              <div class="form-field" style="max-width:150px">
+                <label for="f-level">Min Access Level</label>
+                <select id="f-level">
+                  <option value="1">1 – Good Pupil</option>
+                  <option value="2">2 – Loyal Doggo</option>
+                  <option value="3">3 – Alpha Pack</option>
+                </select>
+              </div>
+              <div class="form-actions">
+                <button id="form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
+                <button id="form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+              </div>
+            </div>
+            <p id="form-error"></p>
+          </div>
+
+          <!-- Camera table -->
+          <div style="overflow-x:auto">
+            <table class="admin-table" aria-label="Cameras">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Stream Slug</th>
+                  <th>Min Level</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cameras-body">
+                <tr class="empty-row"><td colspan="5">Loading cameras…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Manual IoT Control -->
+      <section class="card" aria-label="Manual device control">
+        <div class="card-header">
+          <h2>🎮 Manual Control</h2>
+        </div>
+        <div class="card-body">
+          <div class="iot-grid">
+            <div class="iot-card">
+              <div class="iot-name">PiShock</div>
+              <button id="admin-pishock-btn" class="btn-iot">⚡ Trigger PiShock</button>
+              <p id="pishock-result" class="iot-result"></p>
+            </div>
+            <div class="iot-card">
+              <div class="iot-name">Lovense</div>
+              <button id="admin-lovense-btn" class="btn-iot">💜 Trigger Lovense</button>
+              <p id="lovense-result" class="iot-result"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recent Activations -->
+      <section class="card" aria-label="Recent activations">
+        <div class="card-header">
+          <h2>📋 Recent Activations</h2>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div style="overflow-x:auto">
+            <table class="admin-table" aria-label="Recent activations">
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>User / Actor</th>
+                  <th>Timestamp (UTC)</th>
+                </tr>
+              </thead>
+              <tbody id="activations-body">
+                <tr class="empty-row"><td colspan="3">No activations yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /.admin-body -->
+  </div><!-- /#admin-panel -->
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    // ── Credential storage ────────────────────────────
+    // Credentials are stored in sessionStorage as Base64 so they can be
+    // re-attached on every fetch() call (required for HTTP Basic Auth).
+    // This is acceptable for an admin tool served exclusively over HTTPS.
+    // sessionStorage is cleared automatically when the browser tab is closed.
+    const CRED_KEY = 'mochii_admin_creds';
+
+    function saveCreds(user, pass) {
+      sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`));
+    }
+    function getCreds() { return sessionStorage.getItem(CRED_KEY); }
+    function clearCreds() { sessionStorage.removeItem(CRED_KEY); }
+
+    function authHeader() {
+      const creds = getCreds();
+      return creds ? { 'Authorization': `Basic ${creds}` } : {};
+    }
+
+    // ── Toast helper ──────────────────────────────────
+    let _toastTimer = null;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
+    // ── Panel toggling ────────────────────────────────
+    function showAdminPanel() {
+      document.getElementById('login-panel').style.display = 'none';
+      document.getElementById('admin-panel').style.display = 'block';
+      loadAll();
+    }
+
+    function showLoginPanel(msg) {
+      document.getElementById('login-panel').style.display = 'flex';
+      document.getElementById('admin-panel').style.display = 'none';
+      if (msg) {
+        const el = document.getElementById('login-error');
+        el.textContent = msg;
+      }
+      clearCreds();
+    }
+
+    // ── API helpers ───────────────────────────────────
+    async function apiGet(path) {
+      const resp = await fetch(path, { headers: authHeader() });
+      if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+
+    async function apiPost(path, body) {
+      const resp = await fetch(path, {
+        method: 'POST',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
+      return resp;
+    }
+
+    async function apiPut(path, body) {
+      const resp = await fetch(path, {
+        method: 'PUT',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
+      return resp;
+    }
+
+    async function apiDelete(path) {
+      const resp = await fetch(path, { method: 'DELETE', headers: authHeader() });
+      if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
+      return resp;
+    }
+
+    // ── Login ─────────────────────────────────────────
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const user = document.getElementById('admin-username').value.trim();
+      const pass = document.getElementById('admin-password').value;
+      const errEl = document.getElementById('login-error');
+      const btn = document.getElementById('login-btn');
+
+      errEl.textContent = '';
+      if (!user || !pass) { errEl.textContent = 'Please enter your username and password.'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Sniffing credentials…';
+      saveCreds(user, pass);
+
+      try {
+        await apiGet('/api/admin/stats');
+        showAdminPanel();
+      } catch {
+        clearCreds();
+        errEl.textContent = '🐾 Bad Dog! Invalid credentials.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🐾 Enter the Kennel';
+      }
+    });
+
+    // Allow Enter key to submit login form
+    ['admin-username', 'admin-password'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
+      });
+    });
+
+    // ── Logout ────────────────────────────────────────
+    document.getElementById('logout-admin-btn').addEventListener('click', () => {
+      showLoginPanel('');
+      document.getElementById('login-error').textContent = '';
+    });
+
+    // ── Load everything ───────────────────────────────
+    async function loadAll() {
+      await Promise.all([loadStats(), loadCameras()]);
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', loadAll);
+
+    // ── Stats ─────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const data = await apiGet('/api/admin/stats');
+        document.getElementById('stat-users').textContent       = data.total_users;
+        document.getElementById('stat-cameras').textContent     = data.total_cameras;
+        document.getElementById('stat-activations').textContent = data.recent_activations.length;
+        renderActivations(data.recent_activations);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load stats.');
+      }
+    }
+
+    function renderActivations(list) {
+      const tbody = document.getElementById('activations-body');
+      if (!list.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No activations yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(a => {
+        const tag = `<span class="device-tag ${a.device}">${a.device}</span>`;
+        const ts = a.activated_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
+        return `<tr><td>${tag}</td><td>${escHtml(a.actor)}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
+      }).join('');
+    }
+
+    // ── Cameras ───────────────────────────────────────
+    let _editingId = null;
+
+    async function loadCameras() {
+      try {
+        const cameras = await apiGet('/api/admin/cameras');
+        renderCameras(cameras);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load cameras.');
+      }
+    }
+
+    function tierLabel(level) {
+      if (level >= 3) return 'Alpha Pack';
+      if (level >= 2) return 'Loyal Doggo';
+      return 'Good Pupil';
+    }
+    function tierClass(level) {
+      if (level >= 3) return 'l3';
+      if (level >= 2) return 'l2';
+      return 'l1';
+    }
+
+    function renderCameras(cameras) {
+      const tbody = document.getElementById('cameras-body');
+      if (!cameras.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No cameras configured yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = cameras.map(cam => `
+        <tr data-id="${cam.id}">
+          <td>${cam.id}</td>
+          <td>${escHtml(cam.display_name)}</td>
+          <td><code>${escHtml(cam.stream_slug)}</code></td>
+          <td>
+            <span class="badge-level ${tierClass(cam.minimum_access_level)}">
+              ${cam.minimum_access_level} – ${tierLabel(cam.minimum_access_level)}
+            </span>
+          </td>
+          <td>
+            <div class="action-cell">
+              <button class="btn-sm btn-edit edit-cam-btn" data-id="${cam.id}">✏️ Edit</button>
+              <button class="btn-sm btn-delete del-cam-btn" data-id="${cam.id}">🗑️ Delete</button>
+            </div>
+          </td>
+        </tr>`).join('');
+
+      tbody.querySelectorAll('.edit-cam-btn').forEach(btn => {
+        btn.addEventListener('click', () => startEdit(parseInt(btn.dataset.id)));
+      });
+      tbody.querySelectorAll('.del-cam-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteCamera(parseInt(btn.dataset.id)));
+      });
+    }
+
+    // ── Camera form ───────────────────────────────────
+    const cameraForm = document.getElementById('camera-form');
+
+    function openForm(title, name = '', slug = '', level = 1) {
+      document.getElementById('form-title').textContent = title;
+      document.getElementById('f-name').value  = name;
+      document.getElementById('f-slug').value  = slug;
+      document.getElementById('f-level').value = level;
+      document.getElementById('form-error').textContent = '';
+      cameraForm.style.display = 'block';
+      document.getElementById('f-name').focus();
+    }
+
+    function closeForm() {
+      cameraForm.style.display = 'none';
+      _editingId = null;
+    }
+
+    document.getElementById('add-camera-btn').addEventListener('click', () => {
+      _editingId = null;
+      openForm('Add Camera');
+    });
+    document.getElementById('form-cancel-btn').addEventListener('click', closeForm);
+
+    document.getElementById('form-save-btn').addEventListener('click', async () => {
+      const name  = document.getElementById('f-name').value.trim();
+      const slug  = document.getElementById('f-slug').value.trim();
+      const level = parseInt(document.getElementById('f-level').value);
+      const errEl = document.getElementById('form-error');
+
+      if (!name || !slug) { errEl.textContent = 'Name and slug are required.'; return; }
+      errEl.textContent = '';
+
+      try {
+        let resp;
+        if (_editingId !== null) {
+          resp = await apiPut(`/api/admin/cameras/${_editingId}`, {
+            display_name: name, stream_slug: slug, minimum_access_level: level,
+          });
+        } else {
+          resp = await apiPost('/api/admin/cameras', {
+            display_name: name, stream_slug: slug, minimum_access_level: level,
+          });
+        }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        closeForm();
+        await loadCameras();
+        await loadStats();
+        showToast(_editingId !== null ? '🐾 Camera updated!' : '🐾 Camera added!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      }
+    });
+
+    async function startEdit(id) {
+      try {
+        const cameras = await apiGet('/api/admin/cameras');
+        const cam = cameras.find(c => c.id === id);
+        if (!cam) { showToast('Camera not found.'); return; }
+        _editingId = id;
+        openForm('Edit Camera', cam.display_name, cam.stream_slug, cam.minimum_access_level);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load camera.');
+      }
+    }
+
+    async function deleteCamera(id) {
+      if (!confirm(`Delete camera #${id}? This cannot be undone.`)) return;
+      try {
+        const resp = await apiDelete(`/api/admin/cameras/${id}`);
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadCameras();
+        await loadStats();
+        showToast('🗑️ Camera deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    // ── Manual IoT control ────────────────────────────
+    async function triggerDevice(device, btn, resultEl) {
+      btn.disabled = true;
+      resultEl.textContent = 'Sending command…';
+      try {
+        const resp = await apiPost(`/api/admin/control/${device}`);
+        if (resp.ok) {
+          resultEl.textContent = '✓ Activated';
+          await loadStats();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          resultEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') resultEl.textContent = 'Request failed.';
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          resultEl.textContent = '';
+        }, 2500);
+      }
+    }
+
+    document.getElementById('admin-pishock-btn').addEventListener('click', () => {
+      triggerDevice('pishock',
+        document.getElementById('admin-pishock-btn'),
+        document.getElementById('pishock-result'));
+    });
+    document.getElementById('admin-lovense-btn').addEventListener('click', () => {
+      triggerDevice('lovense',
+        document.getElementById('admin-lovense-btn'),
+        document.getElementById('lovense-result'));
+    });
+
+    // ── HTML escape ───────────────────────────────────
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── Auto-restore session ──────────────────────────
+    (function init() {
+      if (getCreds()) {
+        // Validate existing credentials silently; fall back to login on failure.
+        fetch('/api/admin/stats', { headers: authHeader() })
+          .then(r => {
+            if (r.ok) {
+              showAdminPanel();
+            } else {
+              clearCreds();
+              document.getElementById('login-panel').style.display = 'flex';
+            }
+          })
+          .catch(() => {
+            clearCreds();
+            document.getElementById('login-panel').style.display = 'flex';
+          });
+      } else {
+        document.getElementById('login-panel').style.display = 'flex';
+      }
+    })();
+  </script>
+</body>
+</html>

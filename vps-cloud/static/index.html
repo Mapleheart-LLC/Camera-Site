@@ -3,41 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Camera Site</title>
+  <title>mochii.live 🐾</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: system-ui, sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
+      font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
+    /* ── Pulsing paw loading animation ─────────────── */
+    @keyframes pawPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.35; transform: scale(1.2); }
+    }
+    .paw-loading { display: inline-block; animation: pawPulse 1.1s ease-in-out infinite; }
+
     /* ── Login card ─────────────────────────────────── */
     #login-section {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 12px;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
       padding: 2.5rem 2rem;
       width: 100%;
       max-width: 380px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      box-shadow: 0 8px 40px rgba(232,174,183,0.12);
       text-align: center;
     }
 
     #login-section h1 {
-      font-size: 1.5rem;
+      font-size: 1.8rem;
+      font-weight: 800;
       margin-bottom: .75rem;
-      color: #93c5fd;
+      color: #e8aeb7;
     }
 
     #login-section p.tagline {
       font-size: .9rem;
-      color: #64748b;
+      color: #9e7e82;
       margin-bottom: 2rem;
     }
 
@@ -47,19 +58,20 @@
       align-items: center;
       gap: .6rem;
       padding: .75rem 1.5rem;
-      background: #7c3aed;
+      background: #e8aeb7;
       border: none;
-      border-radius: 8px;
-      color: #fff;
+      border-radius: 10px;
+      color: #1a1a1a;
       font-size: 1rem;
-      font-weight: 600;
+      font-weight: 700;
+      font-family: inherit;
       cursor: pointer;
       text-decoration: none;
-      transition: background .2s, transform .1s;
+      transition: background .2s, transform .1s, box-shadow .2s;
     }
 
-    #fanvue-login-btn:hover  { background: #6d28d9; }
-    #fanvue-login-btn:active { transform: scale(.98); }
+    #fanvue-login-btn:hover  { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,0.35); }
+    #fanvue-login-btn:active { transform: scale(.97); }
 
     #fanvue-login-btn svg {
       width: 20px;
@@ -75,8 +87,8 @@
     }
 
     #login-message.error   { color: #f87171; }
-    #login-message.info    { color: #94a3b8; }
-    #login-message.upgrade { color: #f59e0b; }
+    #login-message.info    { color: #9e7e82; }
+    #login-message.upgrade { color: #e8aeb7; }
 
     /* ── Dashboard ──────────────────────────────────── */
     #dashboard-section {
@@ -89,29 +101,48 @@
     #dashboard-section header {
       display: flex;
       align-items: center;
+      gap: .75rem;
       justify-content: space-between;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid #2d3148;
+      border-bottom: 1px solid #3d2a2e;
       flex-shrink: 0;
     }
 
     #dashboard-section header h1 {
       font-size: 1.4rem;
-      color: #93c5fd;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    /* Tier badge pill */
+    #tier-badge {
+      padding: .25rem .75rem;
+      border-radius: 20px;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      background: rgba(232,174,183,0.12);
+      border: 1px solid #e8aeb7;
+      color: #e8aeb7;
+      white-space: nowrap;
+      display: none;
     }
 
     #logout-btn {
       background: transparent;
-      border: 1px solid #4b5563;
-      border-radius: 6px;
-      color: #94a3b8;
+      border: 1px solid #4b3538;
+      border-radius: 8px;
+      color: #9e7e82;
       padding: .4rem .9rem;
       cursor: pointer;
       font-size: .875rem;
+      font-family: inherit;
+      font-weight: 700;
       transition: border-color .2s, color .2s;
+      margin-left: auto;
     }
 
-    #logout-btn:hover { border-color: #f87171; color: #f87171; }
+    #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
     /* ── Main layout: sidebar + viewer ─────────────── */
     #main-layout {
@@ -124,8 +155,8 @@
     #camera-sidebar {
       width: 220px;
       flex-shrink: 0;
-      background: #1a1d27;
-      border-right: 1px solid #2d3148;
+      background: #202020;
+      border-right: 1px solid #3d2a2e;
       padding: 1rem .75rem;
       overflow-y: auto;
       display: flex;
@@ -137,59 +168,63 @@
       font-size: .75rem;
       text-transform: uppercase;
       letter-spacing: .08em;
-      color: #64748b;
+      color: #9e7e82;
       padding: 0 .25rem .5rem;
-      border-bottom: 1px solid #2d3148;
+      border-bottom: 1px solid #3d2a2e;
       margin-bottom: .25rem;
     }
 
     .cam-btn {
       width: 100%;
       background: transparent;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
-      color: #94a3b8;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #c49a9f;
       padding: .6rem .75rem;
       text-align: left;
       cursor: pointer;
       font-size: .9rem;
+      font-family: inherit;
+      font-weight: 600;
       transition: background .15s, border-color .15s, color .15s;
     }
 
     .cam-btn:hover {
-      background: #252840;
-      border-color: #3b82f6;
-      color: #e2e8f0;
+      background: #2d1f22;
+      border-color: #d8a7b1;
+      color: #f0e6e8;
     }
 
     .cam-btn.active {
-      background: #1e3a5f;
-      border-color: #3b82f6;
-      color: #93c5fd;
-      font-weight: 600;
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
+      font-weight: 700;
     }
 
     #sidebar-message {
       font-size: .85rem;
-      color: #64748b;
+      color: #9e7e82;
       padding: .25rem;
+      text-align: center;
     }
 
     #upgrade-prompt {
       display: none;
       margin-top: .5rem;
       padding: .75rem;
-      background: #1f1a00;
-      border: 1px solid #78350f;
-      border-radius: 6px;
+      background: #2a1a1d;
+      border: 1px solid #5c2a32;
+      border-radius: 8px;
       font-size: .82rem;
-      color: #fbbf24;
+      color: #e8aeb7;
       line-height: 1.4;
     }
 
     #upgrade-prompt a {
-      color: #f59e0b;
-      font-weight: 600;
+      color: #f0b8c1;
+      font-weight: 700;
+      text-decoration: underline;
     }
 
     /* ── Video viewer ───────────────────────────────── */
@@ -200,13 +235,14 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
-      background: #0f1117;
+      background: #1a1a1a;
       overflow: hidden;
     }
 
     #viewer-title {
       font-size: 1.1rem;
-      color: #94a3b8;
+      font-weight: 700;
+      color: #c49a9f;
       margin-bottom: .75rem;
       align-self: flex-start;
     }
@@ -216,24 +252,31 @@
       max-width: 960px;
       aspect-ratio: 16/9;
       background: #000;
-      border-radius: 8px;
+      border-radius: 10px;
       display: block;
+      transition: box-shadow .4s;
+    }
+
+    #stream-video.live-glow {
+      box-shadow: 0 0 28px rgba(232,174,183,0.35), 0 0 8px rgba(232,174,183,0.15);
     }
 
     #stream-status {
       margin-top: .5rem;
       font-size: .85rem;
-      color: #64748b;
+      color: #9e7e82;
       align-self: flex-start;
+      font-weight: 600;
     }
 
-    #stream-status.connecting { color: #f59e0b; }
-    #stream-status.live       { color: #34d399; }
+    #stream-status.connecting { color: #f0b040; }
+    #stream-status.live       { color: #67d399; }
     #stream-status.error      { color: #f87171; }
 
     #viewer-placeholder {
-      color: #4b5563;
+      color: #5a3a3e;
       font-size: 1rem;
+      font-weight: 600;
     }
 
     /* ── IoT Controls bar ───────────────────────────── */
@@ -242,8 +285,8 @@
       align-items: center;
       gap: 1rem;
       padding: .75rem 1.5rem;
-      border-top: 1px solid #2d3148;
-      background: #1a1d27;
+      border-top: 1px solid #3d2a2e;
+      background: #202020;
       flex-shrink: 0;
       flex-wrap: wrap;
     }
@@ -252,7 +295,7 @@
       font-size: .75rem;
       text-transform: uppercase;
       letter-spacing: .08em;
-      color: #64748b;
+      color: #9e7e82;
       white-space: nowrap;
       margin: 0;
     }
@@ -263,29 +306,55 @@
       flex-wrap: wrap;
     }
 
-    .control-btn {
-      padding: .5rem 1.25rem;
-      background: #1e3a5f;
-      border: 1px solid #3b82f6;
-      border-radius: 6px;
-      color: #93c5fd;
-      font-size: .9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background .15s, border-color .15s, color .15s;
-      white-space: nowrap;
+    /* Wrapper for button + cooldown progress bar */
+    .control-btn-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
       min-width: 130px;
     }
 
+    .control-btn {
+      width: 100%;
+      padding: .5rem 1.25rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      color: #e8aeb7;
+      font-size: .9rem;
+      font-family: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      white-space: nowrap;
+    }
+
     .control-btn:hover:not(:disabled) {
-      background: #1d4ed8;
-      border-color: #60a5fa;
-      color: #fff;
+      background: #e8aeb7;
+      border-color: #e8aeb7;
+      color: #1a1a1a;
     }
 
     .control-btn:disabled {
       opacity: .6;
       cursor: not-allowed;
+    }
+
+    /* Pink cooldown progress bar */
+    .cooldown-bar {
+      width: 100%;
+      height: 3px;
+      background: #3d2a2e;
+      border-radius: 2px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .cooldown-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #d8a7b1, #e8aeb7);
+      border-radius: 2px;
+      transition: width 1s linear;
     }
   </style>
 </head>
@@ -293,33 +362,41 @@
 
   <!-- ── Login Section ─────────────────────────────── -->
   <section id="login-section">
-    <h1>🎥 Camera Site</h1>
-    <p class="tagline">Sign in with your Fanvue account to access live streams.</p>
+    <h1 aria-label="mochii.live">🐾 mochii.live</h1>
+    <p class="tagline">Sign in to join the pack and access live streams.</p>
 
     <a id="fanvue-login-btn" href="/auth/login">
       <!-- Fanvue-style F icon -->
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M3 3h18v3H9v3h9v3H9v9H6V9H3V3z"/>
       </svg>
-      Login with Fanvue
+      Get Treats with Fanvue 🐾
     </a>
 
     <p id="login-message" role="alert" aria-live="polite"></p>
+
+    <!-- Intentionally invisible to screen readers and keyboard navigation:
+         this link is security-through-obscurity only. Anyone who discovers /admin.html
+         still needs valid admin credentials to access any protected functionality. -->
+    <footer style="margin-top:2rem;font-size:.7rem;">
+      <a href="/admin.html" style="color:#2a1a1d;text-decoration:none;" tabindex="-1" aria-hidden="true">🐾</a>
+    </footer>
   </section>
 
   <!-- ── Dashboard Section ─────────────────────────── -->
   <section id="dashboard-section" aria-label="Camera Dashboard">
     <header>
-      <h1>🎥 Live Cameras</h1>
-      <button id="logout-btn">Log out</button>
+      <h1 aria-label="mochii.live">🐾 mochii.live</h1>
+      <span id="tier-badge"></span>
+      <button id="logout-btn">Go for a Walk 🐾</button>
     </header>
     <div id="main-layout">
       <!-- Sidebar -->
       <nav id="camera-sidebar" aria-label="Camera list">
-        <h2>Cameras</h2>
-        <p id="sidebar-message">Loading…</p>
+        <h2>The Yard</h2>
+        <p id="sidebar-message"><span class="paw-loading" role="status" aria-label="Loading cameras">🐾</span></p>
         <div id="upgrade-prompt">
-          🔒 No cameras are available at your current subscription tier.<br>
+          🐾 Bad Dog! No treats here.<br>
           <a href="https://fanvue.com" target="_blank" rel="noopener noreferrer">
             Upgrade your Fanvue subscription
           </a>
@@ -328,7 +405,7 @@
       </nav>
       <!-- Viewer -->
       <div id="viewer">
-        <p id="viewer-placeholder">Select a camera from the sidebar.</p>
+        <p id="viewer-placeholder">🐾 Pick a spot in The Yard.</p>
         <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
         <p id="stream-status" class="stream-status" style="display:none;"></p>
         <p id="viewer-title" style="display:none;"></p>
@@ -338,8 +415,14 @@
     <div id="controls-bar" aria-label="Interactive device controls">
       <h2>Interactive Controls</h2>
       <div id="controls-buttons">
-        <button id="pishock-btn" class="control-btn">⚡ PiShock</button>
-        <button id="lovense-btn" class="control-btn">💜 Lovense</button>
+        <div class="control-btn-wrap">
+          <button id="pishock-btn" class="control-btn">⚡ PiShock 🐾</button>
+          <div id="pishock-cooldown-bar" class="cooldown-bar"><div class="cooldown-bar-fill"></div></div>
+        </div>
+        <div class="control-btn-wrap">
+          <button id="lovense-btn" class="control-btn">💜 Lovense 🐾</button>
+          <div id="lovense-cooldown-bar" class="cooldown-bar"><div class="cooldown-bar-fill"></div></div>
+        </div>
       </div>
     </div>
   </section>
@@ -400,6 +483,7 @@
           videoEl.srcObject = ev.streams[0];
           statusEl.textContent = '● Live';
           statusEl.className   = 'stream-status live';
+          videoEl.classList.add('live-glow');
         }
       };
 
@@ -407,6 +491,7 @@
         if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
           statusEl.textContent = 'Connection lost – reload to retry';
           statusEl.className   = 'stream-status error';
+          videoEl.classList.remove('live-glow');
         }
       };
 
@@ -524,6 +609,14 @@
       } catch { return null; }
     }
 
+    /** Map access_level to a mochii.live tier badge label. */
+    function tierLabel(level) {
+      if (level >= 3) return '🐾 Alpha Pack';
+      if (level >= 2) return '🐾 Loyal Doggo';
+      if (level >= 1) return '🐾 Good Pupil';
+      return null;
+    }
+
     /** Format a number of seconds as MM:SS. */
     function formatCountdown(seconds) {
       const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -540,12 +633,17 @@
 
     /**
      * Start (or restart) a countdown display on *btn* until *endTimeMs*.
-     * Disables the button while the cooldown is active and re-enables it when
-     * it expires.  The cooldown end time is persisted in sessionStorage so
-     * that the timer survives a page reload.
+     * Disables the button and drives a pink progress bar while the cooldown
+     * is active; re-enables everything when it expires.  The cooldown end
+     * time is persisted in sessionStorage so the timer survives a page reload.
+     * *totalMs* is the full cooldown duration used to compute bar fill width.
      */
-    function startCooldownDisplay(device, btn, baseLabel, endTimeMs) {
+    function startCooldownDisplay(device, btn, baseLabel, endTimeMs, totalMs) {
       if (controlTimers[device]) clearInterval(controlTimers[device]);
+
+      const barEl  = document.getElementById(`${device}-cooldown-bar`);
+      const fillEl = barEl ? barEl.querySelector('.cooldown-bar-fill') : null;
+      const total  = totalMs || COOLDOWN_FALLBACK_SECONDS * 1000;
 
       function tick() {
         const remaining = Math.ceil((endTimeMs - Date.now()) / 1000);
@@ -555,9 +653,16 @@
           sessionStorage.removeItem(`${device}_cooldown_until`);
           btn.disabled    = false;
           btn.textContent = baseLabel;
+          if (barEl)  barEl.style.display = 'none';
+          if (fillEl) fillEl.style.width  = '100%';
         } else {
           btn.disabled    = true;
           btn.textContent = `${baseLabel} (${formatCountdown(remaining)})`;
+          if (barEl)  barEl.style.display = 'block';
+          if (fillEl) {
+            const pct = ((endTimeMs - Date.now()) / total) * 100;
+            fillEl.style.width = `${Math.max(0, pct).toFixed(1)}%`;
+          }
         }
       }
 
@@ -594,7 +699,7 @@
 
             btn.textContent = `${baseLabel} (Active ${data.activation_seconds}s)`;
             setTimeout(() => {
-              startCooldownDisplay(device, btn, baseLabel, endTime);
+              startCooldownDisplay(device, btn, baseLabel, endTime, cooldownSeconds * 1000);
             }, data.activation_seconds * 1000);
           } else {
             // Premium: brief confirmation, then re-enable immediately.
@@ -606,7 +711,7 @@
           const retryAfter = parseInt(resp.headers.get('Retry-After') || COOLDOWN_FALLBACK_SECONDS, 10);
           const endTime    = Date.now() + retryAfter * 1000;
           sessionStorage.setItem(`${device}_cooldown_until`, endTime.toString());
-          startCooldownDisplay(device, btn, baseLabel, endTime);
+          startCooldownDisplay(device, btn, baseLabel, endTime, retryAfter * 1000);
         } else if (resp.status === 401) {
           clearToken();
           showLogin();
@@ -635,9 +740,17 @@
 
       document.getElementById('controls-bar').style.display = 'flex';
 
+      // Show tier badge in the header
+      const badge = document.getElementById('tier-badge');
+      const label = tierLabel(payload.access_level || 0);
+      if (badge && label) {
+        badge.textContent = label;
+        badge.style.display = 'inline-block';
+      }
+
       const devices = [
-        { id: 'pishock', label: '⚡ PiShock', btnId: 'pishock-btn' },
-        { id: 'lovense', label: '💜 Lovense', btnId: 'lovense-btn' },
+        { id: 'pishock', label: '⚡ PiShock 🐾', btnId: 'pishock-btn' },
+        { id: 'lovense', label: '💜 Lovense 🐾', btnId: 'lovense-btn' },
       ];
 
       devices.forEach(({ id, label, btnId }) => {
@@ -664,6 +777,9 @@
       Object.values(controlTimers).forEach(clearInterval);
       Object.keys(controlTimers).forEach(k => delete controlTimers[k]);
       document.getElementById('controls-bar').style.display = 'none';
+      // Hide tier badge
+      const badge = document.getElementById('tier-badge');
+      if (badge) badge.style.display = 'none';
       // Clear persisted cooldown timestamps so a fresh login starts clean
       ['pishock', 'lovense'].forEach(d => sessionStorage.removeItem(`${d}_cooldown_until`));
       clearToken();
@@ -696,7 +812,7 @@
           token_exchange_failed:  'Could not complete sign-in with Fanvue. Please try again.',
           profile_fetch_failed:   'Could not retrieve your Fanvue profile. Please try again.',
           missing_params:         'Invalid callback. Please try again.',
-          access_denied:          'Access was denied. Please authorize the app on Fanvue.',
+          access_denied:          '🐾 Bad Dog! No treats here. Please authorize the app on Fanvue.',
         };
         showLogin(messages[err] || `Login error: ${err}`, 'error');
         return;

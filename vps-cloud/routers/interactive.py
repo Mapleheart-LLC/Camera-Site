@@ -15,13 +15,17 @@ Access rules
   level 3 (Premium)  – No rate limit.
 
 Both endpoints require a valid Fanvue JWT (Bearer token).
+Each successful activation is logged to the ``activations`` SQLite table.
 """
 
+import sqlite3
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from redis.asyncio import Redis
 
+from db import get_db
 from dependencies import get_current_user
 from redis_client import get_redis
 
@@ -91,9 +95,19 @@ def _make_teaser_dependency(device: str):
     return check_teaser_limit
 
 
+def _log_activation(db: sqlite3.Connection, device: str, actor: str) -> None:
+    """Insert a row into the activations log table."""
+    db.execute(
+        "INSERT INTO activations (device, actor, activated_at) VALUES (?, ?, ?)",
+        (device, actor, datetime.now(timezone.utc).isoformat()),
+    )
+    db.commit()
+
+
 @router.post("/pishock")
 async def control_pishock(
     current_user: dict = Depends(_make_teaser_dependency("pishock")),
+    db: sqlite3.Connection = Depends(get_db),
 ):
     """
     Trigger a PiShock device for the authenticated subscriber.
@@ -106,6 +120,7 @@ async def control_pishock(
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
+    _log_activation(db, "pishock", current_user["fanvue_id"])
     response: dict = {
         "status": "ok",
         "device": "pishock",
@@ -121,6 +136,7 @@ async def control_pishock(
 @router.post("/lovense")
 async def control_lovense(
     current_user: dict = Depends(_make_teaser_dependency("lovense")),
+    db: sqlite3.Connection = Depends(get_db),
 ):
     """
     Trigger a Lovense device for the authenticated subscriber.
@@ -133,6 +149,7 @@ async def control_lovense(
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
+    _log_activation(db, "lovense", current_user["fanvue_id"])
     response: dict = {
         "status": "ok",
         "device": "lovense",
