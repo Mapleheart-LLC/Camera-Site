@@ -401,6 +401,72 @@
     /* ── Misc ───────────────────────────────────────── */
     .empty-row td { color: #5a3a3e; text-align: center; padding: 1.25rem; }
 
+    /* ── Puppy Pouch ─────────────────────────────────── */
+    .question-row td { vertical-align: top; }
+    .question-row.deep-linked { outline: 2px solid #E8AEB7; background: rgba(232,174,183,.08); animation: pulsePink 1.6s ease-out 3; }
+    @keyframes pulsePink { 0%,100% { background: rgba(232,174,183,.08); } 50% { background: rgba(232,174,183,.18); } }
+
+    .q-text {
+      font-size: .9rem;
+      color: #f0e6e8;
+      max-width: 360px;
+      word-break: break-word;
+    }
+
+    .q-ts { font-size: .75rem; color: #9e7e82; font-family: monospace; white-space: nowrap; }
+
+    #answer-form-wrap {
+      display: none;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin-top: .75rem;
+    }
+
+    #answer-form-wrap h3 {
+      font-size: .78rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: .6rem;
+    }
+
+    #answer-textarea {
+      width: 100%;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 7px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .88rem;
+      padding: .5rem .75rem;
+      resize: vertical;
+      min-height: 70px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: .6rem;
+    }
+
+    #answer-textarea:focus { border-color: #e8aeb7; }
+
+    .answer-form-actions { display: flex; gap: .5rem; }
+
+    #answer-form-error {
+      font-size: .78rem;
+      color: #f87171;
+      min-height: 1em;
+      margin-top: .4rem;
+    }
+
+    .btn-share {
+      background: transparent;
+      border: 1px solid #1da1f2;
+      color: #1da1f2;
+    }
+    .btn-share:hover { background: #1da1f2; color: #fff; }
+
     .toast {
       position: fixed;
       bottom: 1.5rem;
@@ -555,6 +621,42 @@
         </div>
       </section>
 
+      <!-- Puppy Pouch – Unanswered Questions -->
+      <section class="card" aria-label="Puppy Pouch questions">
+        <div class="card-header">
+          <h2>🐾 Puppy Pouch</h2>
+          <button id="refresh-questions-btn" class="btn-sm btn-edit">↻ Refresh</button>
+        </div>
+        <div class="card-body">
+          <!-- Answer form (hidden by default, shown when a question is selected) -->
+          <div id="answer-form-wrap">
+            <h3 id="answer-form-title">Reply to Question</h3>
+            <p id="answer-question-preview" style="font-size:.85rem;color:#c49a9f;margin-bottom:.6rem;font-style:italic;word-break:break-word;"></p>
+            <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+            <div class="answer-form-actions">
+              <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
+              <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+            </div>
+            <p id="answer-form-error"></p>
+          </div>
+
+          <div style="overflow-x:auto">
+            <table class="admin-table" aria-label="Unanswered questions">
+              <thead>
+                <tr>
+                  <th>Question</th>
+                  <th>Received (UTC)</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="questions-body">
+                <tr class="empty-row"><td colspan="3">Loading questions…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- Recent Activations -->
       <section class="card" aria-label="Recent activations">
         <div class="card-header">
@@ -705,10 +807,11 @@
 
     // ── Load everything ───────────────────────────────
     async function loadAll() {
-      await Promise.all([loadStats(), loadCameras()]);
+      await Promise.all([loadStats(), loadCameras(), loadQuestions()]);
     }
 
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
+    document.getElementById('refresh-questions-btn').addEventListener('click', loadQuestions);
 
     // ── Stats ─────────────────────────────────────────
     async function loadStats() {
@@ -921,7 +1024,121 @@
         .replace(/"/g, '&quot;');
     }
 
-    // ── Auto-restore session ──────────────────────────
+    // ── Puppy Pouch – question management ─────────────
+    let _answeringId = null;
+
+    async function loadQuestions() {
+      try {
+        const questions = await apiGet('/api/admin/questions');
+        renderQuestions(questions);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load questions.');
+      }
+    }
+
+    // ── Deep-link: /admin/questions/<id> ─────────────
+    const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    function getDeepLinkedId() {
+      // Support both ?q=<id> query param and /admin/questions/<id> path segments.
+      const params = new URLSearchParams(window.location.search);
+      const fromParam = params.get('q');
+      if (fromParam && _UUID_RE.test(fromParam)) return fromParam;
+      const pathMatch = window.location.pathname.match(/\/admin\/questions\/([^/]+)/);
+      const fromPath = pathMatch ? pathMatch[1] : null;
+      if (fromPath && _UUID_RE.test(fromPath)) return fromPath;
+      return null;
+    }
+
+    function scrollToDeepLinkedQuestion() {
+      const targetId = getDeepLinkedId();
+      if (!targetId) return;
+      const row = document.querySelector(`.question-row[data-id="${CSS.escape(targetId)}"]`);
+      if (!row) return;
+      // Remove any previous highlight so re-renders re-trigger the animation.
+      row.classList.remove('deep-linked');
+      // Force a reflow so removing+adding the class restarts the animation.
+      void row.offsetWidth;
+      row.classList.add('deep-linked');
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function renderQuestions(questions) {
+      const tbody = document.getElementById('questions-body');
+      if (!questions.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No unanswered questions 🐾</td></tr>';
+        return;
+      }
+      tbody.innerHTML = questions.map(q => {
+        const ts = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+          <td><div class="q-text">${escHtml(q.text)}</div></td>
+          <td class="q-ts">${escHtml(ts)}</td>
+          <td>
+            <div class="action-cell">
+              <button class="btn-sm btn-edit reply-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Reply &amp; Share</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('.reply-btn').forEach(btn => {
+        btn.addEventListener('click', () => openAnswerForm(btn.dataset.id, btn.dataset.text));
+      });
+
+      scrollToDeepLinkedQuestion();
+    }
+
+    function openAnswerForm(id, text) {
+      _answeringId = id;
+      document.getElementById('answer-question-preview').textContent = `"${text}"`;
+      document.getElementById('answer-textarea').value = '';
+      document.getElementById('answer-form-error').textContent = '';
+      document.getElementById('answer-form-wrap').style.display = 'block';
+      document.getElementById('answer-textarea').focus();
+    }
+
+    function closeAnswerForm() {
+      _answeringId = null;
+      document.getElementById('answer-form-wrap').style.display = 'none';
+    }
+
+    document.getElementById('answer-cancel-btn').addEventListener('click', closeAnswerForm);
+
+    document.getElementById('answer-save-btn').addEventListener('click', async () => {
+      const answer  = document.getElementById('answer-textarea').value.trim();
+      const errEl   = document.getElementById('answer-form-error');
+      const saveBtn = document.getElementById('answer-save-btn');
+
+      if (!answer) { errEl.textContent = 'Please enter an answer.'; return; }
+      errEl.textContent = '';
+      saveBtn.disabled = true;
+
+      try {
+        const resp = await apiPost(`/api/admin/questions/${encodeURIComponent(_answeringId)}/answer`, { answer });
+        if (resp.ok) {
+          const shareUrl = `${window.location.origin}/q/${encodeURIComponent(_answeringId)}`;
+          closeAnswerForm();
+          await loadQuestions();
+          showToast('🐾 Answer saved!');
+          // Open Twitter Web Intent in a new tab
+          const tweetText = encodeURIComponent('Ask me anything at mochii.live 🐾');
+          const tweetUrl  = encodeURIComponent(shareUrl);
+          window.open(
+            `https://twitter.com/intent/tweet?text=${tweetText}&url=${tweetUrl}`,
+            '_blank',
+            'noopener,noreferrer'
+          );
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
     (function init() {
       if (getCreds()) {
         // Validate existing credentials silently; fall back to login on failure.

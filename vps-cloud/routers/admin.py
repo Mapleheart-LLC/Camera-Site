@@ -213,3 +213,54 @@ def admin_control_device(
         "message": "Admin command accepted (mock response).",
         "triggered_by": admin_user,
     }
+
+
+# ---------------------------------------------------------------------------
+# Puppy Pouch – admin question management
+# ---------------------------------------------------------------------------
+
+
+class AnswerPayload(BaseModel):
+    answer: str
+
+
+@router.get("/questions")
+def admin_list_unanswered_questions(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all questions that have not yet been answered."""
+    rows = db.execute(
+        """
+        SELECT id, text, created_at
+        FROM questions
+        WHERE answer IS NULL
+        ORDER BY created_at ASC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.post("/questions/{question_id}/answer", status_code=status.HTTP_200_OK)
+def admin_answer_question(
+    question_id: str,
+    payload: AnswerPayload,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Save an answer to the specified question and mark it as public."""
+    row = db.execute(
+        "SELECT id FROM questions WHERE id = ?", (question_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+    db.execute(
+        "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
+        (payload.answer, question_id),
+    )
+    db.commit()
+    return {"id": question_id, "message": "Answer saved and question is now public 🐾"}
+
