@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from db import DATABASE_PATH, get_db, get_db_connection
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -21,15 +22,12 @@ from dependencies import (
     get_current_user,
 )
 from routers.interactive import router as interactive_router
+from routers.admin import router as admin_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
 # ---------------------------------------------------------------------------
-_BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
-DATABASE_PATH: str = os.environ.get(
-    "DATABASE_PATH", os.path.join(_BASE_DIR, "camera_site.db")
-)
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
@@ -79,14 +77,8 @@ logging.basicConfig(
 # ---------------------------------------------------------------------------
 
 
-def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init_db() -> None:
-    """Create the users and cameras tables if they do not already exist."""
+    """Create the users, cameras, and activations tables if they do not already exist."""
     conn = get_db_connection()
     conn.execute(
         """
@@ -107,16 +99,18 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS activations (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            device       TEXT    NOT NULL,
+            fanvue_id    TEXT    NOT NULL,
+            activated_at TEXT    NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
-
-
-def get_db():
-    conn = get_db_connection()
-    try:
-        yield conn
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -396,6 +390,7 @@ def get_my_cameras(
 # ---------------------------------------------------------------------------
 
 app.include_router(interactive_router)
+app.include_router(admin_router)
 
 # Serve the static frontend (mount last so API routes take priority)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
