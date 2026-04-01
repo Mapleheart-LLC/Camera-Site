@@ -26,11 +26,14 @@ services:
       - FANVUE_PROFILE_URL=${FANVUE_PROFILE_URL:-https://api.fanvue.com/profile}
       # Optional: your Fanvue creator UUID (used for subscription checks)
       - FANVUE_CREATOR_ID=${FANVUE_CREATOR_ID:-}
+      # Redis connection URL for teaser rate-limiting
+      - REDIS_URL=redis://redis:6379
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
     depends_on:
       - go2rtc
+      - redis
     restart: unless-stopped
 
   # ── go2rtc – RTSP → WebRTC bridge ───────────────────
@@ -42,6 +45,11 @@ services:
       - "8555:8555"   # WebRTC/ICE TCP
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    restart: unless-stopped
+
+  # ── Redis – rate-limiting store ─────────────────────
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
 
   # ── Tailscale – secure site-to-site VPN ─────────────

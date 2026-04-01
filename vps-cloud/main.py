@@ -20,6 +20,7 @@ from dependencies import (
     get_current_user,
 )
 from routers.interactive import router as interactive_router
+from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
@@ -174,6 +175,8 @@ async def lifespan(app: FastAPI):
         )
     init_db()
     yield
+    # Close the Redis connection pool on shutdown to release resources.
+    await close_redis()
 
 
 app = FastAPI(title="Camera Site API", lifespan=lifespan)
