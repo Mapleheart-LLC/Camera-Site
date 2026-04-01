@@ -57,13 +57,12 @@ services:
   # ── Cloudflare Tunnel – VPS to public web ───────────
   # Exposes the backend through a Cloudflare Tunnel without opening inbound
   # firewall ports.  Create a tunnel in the Cloudflare Zero Trust dashboard,
-  # then export the token:
-  #   export CLOUDFLARE_TUNNEL_TOKEN=<your-tunnel-token>
+  # then set CLFD_TOKEN in the Komodo stack environment.
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate run --token ${CLFD_TOKEN}
     environment:
-      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - CLFD_TOKEN=${CLFD_TOKEN}
     depends_on:
       - backend
     restart: unless-stopped
