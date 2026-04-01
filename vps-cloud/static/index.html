@@ -362,7 +362,7 @@
 
   <!-- ── Login Section ─────────────────────────────── -->
   <section id="login-section">
-    <h1>🐾 mochii.live</h1>
+    <h1 aria-label="mochii.live">🐾 mochii.live</h1>
     <p class="tagline">Sign in to join the pack and access live streams.</p>
 
     <a id="fanvue-login-btn" href="/auth/login">
@@ -379,7 +379,7 @@
   <!-- ── Dashboard Section ─────────────────────────── -->
   <section id="dashboard-section" aria-label="Camera Dashboard">
     <header>
-      <h1>🐾 mochii.live</h1>
+      <h1 aria-label="mochii.live">🐾 mochii.live</h1>
       <span id="tier-badge"></span>
       <button id="logout-btn">Go for a Walk 🐾</button>
     </header>
@@ -387,7 +387,7 @@
       <!-- Sidebar -->
       <nav id="camera-sidebar" aria-label="Camera list">
         <h2>The Yard</h2>
-        <p id="sidebar-message"><span class="paw-loading">🐾</span></p>
+        <p id="sidebar-message"><span class="paw-loading" role="status" aria-label="Loading cameras">🐾</span></p>
         <div id="upgrade-prompt">
           🐾 Bad Dog! No treats here.<br>
           <a href="https://fanvue.com" target="_blank" rel="noopener noreferrer">
