@@ -17,7 +17,19 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 # ---------------------------------------------------------------------------
 # Auth configuration (override via environment variables in production)
 # ---------------------------------------------------------------------------
-SECRET_KEY: str = os.environ.get("SECRET_KEY", "changeme-replace-in-production!!")
+_mock_auth_raw = os.environ.get("MOCK_AUTH", "")
+_MOCK_AUTH: bool = _mock_auth_raw.lower() == "true"
+
+_DEFAULT_KEY = "changeme-replace-in-production!!"
+_DEMO_FALLBACK_KEY = "demo-mode-insecure-do-not-use-in-production"
+
+# Prefer JWT_SECRET, then SECRET_KEY.  If neither is set and MOCK_AUTH is
+# enabled, fall back to an insecure demo key so the app stays up during demos.
+SECRET_KEY: str = (
+    os.environ.get("JWT_SECRET")
+    or os.environ.get("SECRET_KEY")
+    or (_DEMO_FALLBACK_KEY if _MOCK_AUTH else _DEFAULT_KEY)
+)
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 

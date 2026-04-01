@@ -17,6 +17,8 @@ Access rules
 Both endpoints require a valid Fanvue JWT (Bearer token).
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from redis.asyncio import Redis
 
@@ -47,7 +49,7 @@ def _make_teaser_dependency(device: str):
 
     async def check_teaser_limit(
         current_user: dict = Depends(get_current_user),
-        redis: Redis = Depends(get_redis),
+        redis: Optional[Redis] = Depends(get_redis),
     ) -> dict:
         access_level: int = current_user.get("access_level", 0)
         fanvue_id: str = current_user["fanvue_id"]
@@ -63,6 +65,10 @@ def _make_teaser_dependency(device: str):
             return current_user
 
         # Teaser path (access levels 1 and 2) – enforce the 1-hour cooldown.
+        # If Redis is unavailable, skip rate-limiting and grant access.
+        if redis is None:
+            return current_user
+
         key = _cooldown_key(fanvue_id, device)
         ttl: int = await redis.ttl(key)
 
