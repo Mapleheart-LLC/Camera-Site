@@ -235,6 +235,58 @@
       color: #4b5563;
       font-size: 1rem;
     }
+
+    /* ── IoT Controls bar ───────────────────────────── */
+    #controls-bar {
+      display: none;
+      align-items: center;
+      gap: 1rem;
+      padding: .75rem 1.5rem;
+      border-top: 1px solid #2d3148;
+      background: #1a1d27;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #controls-bar h2 {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      white-space: nowrap;
+      margin: 0;
+    }
+
+    #controls-buttons {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+    }
+
+    .control-btn {
+      padding: .5rem 1.25rem;
+      background: #1e3a5f;
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      color: #93c5fd;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      white-space: nowrap;
+      min-width: 130px;
+    }
+
+    .control-btn:hover:not(:disabled) {
+      background: #1d4ed8;
+      border-color: #60a5fa;
+      color: #fff;
+    }
+
+    .control-btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -280,6 +332,14 @@
         <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
         <p id="stream-status" class="stream-status" style="display:none;"></p>
         <p id="viewer-title" style="display:none;"></p>
+      </div>
+    </div>
+    <!-- ── IoT Controls bar ──────────────────────────── -->
+    <div id="controls-bar" aria-label="Interactive device controls">
+      <h2>Interactive Controls</h2>
+      <div id="controls-buttons">
+        <button id="pishock-btn" class="control-btn">⚡ PiShock</button>
+        <button id="lovense-btn" class="control-btn">💜 Lovense</button>
       </div>
     </div>
   </section>
@@ -449,9 +509,163 @@
       }
     }
 
+    // ── IoT Controls ──────────────────────────────────
+
+    /**
+     * Decode the payload section of a JWT without verifying the signature.
+     *
+     * NOTE: This is used only to make UI decisions (e.g., show/hide buttons).
+     * It is NOT a security boundary – authorisation is always enforced server-side.
+     */
+    function decodeJwtPayload(token) {
+      try {
+        const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(atob(b64));
+      } catch { return null; }
+    }
+
+    /** Format a number of seconds as MM:SS. */
+    function formatCountdown(seconds) {
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = (seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    // Fallback cooldown duration (seconds) used when the Retry-After header is
+    // absent.  Must match _COOLDOWN_SECONDS in routers/interactive.py.
+    const COOLDOWN_FALLBACK_SECONDS = 3600;
+
+    /** Active countdown interval handles keyed by device name. */
+    const controlTimers = {};
+
+    /**
+     * Start (or restart) a countdown display on *btn* until *endTimeMs*.
+     * Disables the button while the cooldown is active and re-enables it when
+     * it expires.  The cooldown end time is persisted in sessionStorage so
+     * that the timer survives a page reload.
+     */
+    function startCooldownDisplay(device, btn, baseLabel, endTimeMs) {
+      if (controlTimers[device]) clearInterval(controlTimers[device]);
+
+      function tick() {
+        const remaining = Math.ceil((endTimeMs - Date.now()) / 1000);
+        if (remaining <= 0) {
+          clearInterval(controlTimers[device]);
+          delete controlTimers[device];
+          sessionStorage.removeItem(`${device}_cooldown_until`);
+          btn.disabled    = false;
+          btn.textContent = baseLabel;
+        } else {
+          btn.disabled    = true;
+          btn.textContent = `${baseLabel} (${formatCountdown(remaining)})`;
+        }
+      }
+
+      tick(); // set initial state immediately
+      controlTimers[device] = setInterval(tick, 1000);
+    }
+
+    /**
+     * Call the control API for *device* and handle the response:
+     *   200 – show activation feedback; start cooldown timer for teaser users.
+     *   429 – extract Retry-After and start cooldown timer.
+     *   401 – token expired; return to login.
+     */
+    async function triggerDevice(device, btn, baseLabel) {
+      const token = getToken();
+      if (!token) return;
+
+      btn.disabled    = true;
+      btn.textContent = `${baseLabel} …`;
+
+      try {
+        const resp = await fetch(`/api/control/${device}`, {
+          method:  'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.activation_seconds) {
+            // Teaser activation: show active state, then transition to countdown.
+            const cooldownSeconds = data.cooldown_seconds || COOLDOWN_FALLBACK_SECONDS;
+            const endTime = Date.now() + cooldownSeconds * 1000;
+            sessionStorage.setItem(`${device}_cooldown_until`, endTime.toString());
+
+            btn.textContent = `${baseLabel} (Active ${data.activation_seconds}s)`;
+            setTimeout(() => {
+              startCooldownDisplay(device, btn, baseLabel, endTime);
+            }, data.activation_seconds * 1000);
+          } else {
+            // Premium: brief confirmation, then re-enable immediately.
+            btn.disabled    = false;
+            btn.textContent = `${baseLabel} ✓`;
+            setTimeout(() => { btn.textContent = baseLabel; }, 2000);
+          }
+        } else if (resp.status === 429) {
+          const retryAfter = parseInt(resp.headers.get('Retry-After') || COOLDOWN_FALLBACK_SECONDS, 10);
+          const endTime    = Date.now() + retryAfter * 1000;
+          sessionStorage.setItem(`${device}_cooldown_until`, endTime.toString());
+          startCooldownDisplay(device, btn, baseLabel, endTime);
+        } else if (resp.status === 401) {
+          clearToken();
+          showLogin();
+        } else {
+          btn.disabled    = false;
+          btn.textContent = `${baseLabel} (Error)`;
+          setTimeout(() => { btn.textContent = baseLabel; }, 3000);
+        }
+      } catch {
+        btn.disabled    = false;
+        btn.textContent = `${baseLabel} (Error)`;
+        setTimeout(() => { btn.textContent = baseLabel; }, 3000);
+      }
+    }
+
+    /**
+     * Show the IoT controls bar if the current user holds access_level >= 1,
+     * and restore any active cooldown timers from sessionStorage.
+     */
+    function initControls() {
+      const token = getToken();
+      if (!token) return;
+
+      const payload = decodeJwtPayload(token);
+      if (!payload || (payload.access_level || 0) < 1) return;
+
+      document.getElementById('controls-bar').style.display = 'flex';
+
+      const devices = [
+        { id: 'pishock', label: '⚡ PiShock', btnId: 'pishock-btn' },
+        { id: 'lovense', label: '💜 Lovense', btnId: 'lovense-btn' },
+      ];
+
+      devices.forEach(({ id, label, btnId }) => {
+        const btn = document.getElementById(btnId);
+        btn.addEventListener('click', () => triggerDevice(id, btn, label));
+
+        // Restore a cooldown that was active before the last page load.
+        const stored = sessionStorage.getItem(`${id}_cooldown_until`);
+        if (stored) {
+          const remaining = Math.ceil((parseInt(stored, 10) - Date.now()) / 1000);
+          if (remaining > 0) {
+            startCooldownDisplay(id, btn, label, parseInt(stored, 10));
+          } else {
+            sessionStorage.removeItem(`${id}_cooldown_until`);
+          }
+        }
+      });
+    }
+
     // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (activePc) { activePc.close(); activePc = null; }
+      // Clear any active countdown timers and hide controls bar
+      Object.values(controlTimers).forEach(clearInterval);
+      Object.keys(controlTimers).forEach(k => delete controlTimers[k]);
+      document.getElementById('controls-bar').style.display = 'none';
+      // Clear persisted cooldown timestamps so a fresh login starts clean
+      ['pishock', 'lovense'].forEach(d => sessionStorage.removeItem(`${d}_cooldown_until`));
       clearToken();
       showLogin();
     });
@@ -472,6 +686,7 @@
         saveToken(token);
         showDashboard();
         loadCameras();
+        initControls();
         return;
       }
 
@@ -491,6 +706,7 @@
       if (getToken()) {
         showDashboard();
         loadCameras();
+        initControls();
       } else {
         showLogin();
       }
