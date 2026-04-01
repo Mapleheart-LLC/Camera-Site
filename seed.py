@@ -1,8 +1,9 @@
 """
-seed.py – Initialize the SQLite database and insert a test user.
+seed.py – Initialize the SQLite database and seed camera data.
 
 NOTE: This script is intended for development use only.
-      Do not use these credentials in a production environment.
+      Users are no longer pre-seeded here; they are created on first login
+      via Fanvue OAuth 2.0.
 
 Run once before starting the application (or let the Dockerfile handle it):
     python seed.py
@@ -11,31 +12,26 @@ Run once before starting the application (or let the Dockerfile handle it):
 import os
 import sqlite3
 
-from passlib.context import CryptContext
-
 DATABASE_PATH: str = os.environ.get("DATABASE_PATH", "camera_site.db")
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            username        TEXT    NOT NULL UNIQUE,
-            secret_code     TEXT    NOT NULL,
-            has_paid        INTEGER NOT NULL DEFAULT 0,
-            allowed_cameras TEXT    NOT NULL DEFAULT ''
+            id           TEXT    PRIMARY KEY,
+            fanvue_id    TEXT    NOT NULL UNIQUE,
+            access_level INTEGER NOT NULL DEFAULT 0
         )
         """
     )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS cameras (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            display_name TEXT    NOT NULL,
-            stream_slug  TEXT    NOT NULL UNIQUE
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            display_name         TEXT    NOT NULL,
+            stream_slug          TEXT    NOT NULL UNIQUE,
+            minimum_access_level INTEGER NOT NULL DEFAULT 1
         )
         """
     )
@@ -44,25 +40,17 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 def seed_cameras(conn: sqlite3.Connection) -> None:
     cameras = [
-        ("Front Door", "cam_front"),
-        ("Back Yard",  "cam_back"),
-        ("Garage",     "cam_garage"),
+        # (display_name, stream_slug, minimum_access_level)
+        ("Lobby",     "cam_lobby",     1),  # visible to all followers (free)
+        ("VIP Room",  "cam_vip_room",  2),  # requires Tier 1 subscription
+        ("Backstage", "cam_backstage", 3),  # requires Tier 2+ subscription
     ]
     conn.executemany(
-        "INSERT OR IGNORE INTO cameras (display_name, stream_slug) VALUES (?, ?)",
-        cameras,
-    )
-    conn.commit()
-
-
-def seed_test_user(conn: sqlite3.Connection) -> None:
-    hashed_code = pwd_context.hash("testcode123")
-    conn.execute(
         """
-        INSERT OR IGNORE INTO users (username, secret_code, has_paid, allowed_cameras)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO cameras (display_name, stream_slug, minimum_access_level)
+        VALUES (?, ?, ?)
         """,
-        ("testuser", hashed_code, 1, "cam_front,cam_back,cam_garage"),
+        cameras,
     )
     conn.commit()
 
@@ -72,13 +60,12 @@ def main() -> None:
     try:
         init_db(conn)
         seed_cameras(conn)
-        seed_test_user(conn)
         print(f"Database ready at '{DATABASE_PATH}'.")
-        print("Test user created (if not already present):")
-        print("  username    : testuser")
-        print("  secret_code : testcode123  (stored as bcrypt hash)")
-        print("  has_paid    : True")
-        print("  cameras     : cam_front, cam_back, cam_garage")
+        print("Cameras seeded:")
+        print("  cam_lobby     – minimum_access_level 1 (free followers)")
+        print("  cam_vip_room  – minimum_access_level 2 (Tier 1 subscribers)")
+        print("  cam_backstage – minimum_access_level 3 (Tier 2+ subscribers)")
+        print("Users are created automatically on first Fanvue OAuth login.")
     finally:
         conn.close()
 

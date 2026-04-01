@@ -26,62 +26,57 @@
       width: 100%;
       max-width: 380px;
       box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      text-align: center;
     }
 
     #login-section h1 {
-      text-align: center;
       font-size: 1.5rem;
-      margin-bottom: 1.75rem;
+      margin-bottom: .75rem;
       color: #93c5fd;
     }
 
-    .form-group { margin-bottom: 1.25rem; }
-
-    label {
-      display: block;
-      font-size: .85rem;
-      color: #94a3b8;
-      margin-bottom: .4rem;
+    #login-section p.tagline {
+      font-size: .9rem;
+      color: #64748b;
+      margin-bottom: 2rem;
     }
 
-    input[type="text"],
-    input[type="password"] {
-      width: 100%;
-      padding: .6rem .8rem;
-      background: #0f1117;
-      border: 1px solid #2d3148;
-      border-radius: 6px;
-      color: #e2e8f0;
-      font-size: 1rem;
-      outline: none;
-      transition: border-color .2s;
-    }
-
-    input:focus { border-color: #3b82f6; }
-
-    button[type="submit"] {
-      width: 100%;
-      padding: .75rem;
-      background: #3b82f6;
+    /* Fanvue brand button */
+    #fanvue-login-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .75rem 1.5rem;
+      background: #7c3aed;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       color: #fff;
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
-      transition: background .2s;
+      text-decoration: none;
+      transition: background .2s, transform .1s;
     }
 
-    button[type="submit"]:hover { background: #2563eb; }
-    button[type="submit"]:disabled { background: #4b5563; cursor: not-allowed; }
+    #fanvue-login-btn:hover  { background: #6d28d9; }
+    #fanvue-login-btn:active { transform: scale(.98); }
 
-    #login-error {
-      margin-top: .75rem;
+    #fanvue-login-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+      flex-shrink: 0;
+    }
+
+    #login-message {
+      margin-top: 1.25rem;
       font-size: .85rem;
-      color: #f87171;
-      text-align: center;
       min-height: 1.2em;
     }
+
+    #login-message.error   { color: #f87171; }
+    #login-message.info    { color: #94a3b8; }
+    #login-message.upgrade { color: #f59e0b; }
 
     /* ── Dashboard ──────────────────────────────────── */
     #dashboard-section {
@@ -180,6 +175,23 @@
       padding: .25rem;
     }
 
+    #upgrade-prompt {
+      display: none;
+      margin-top: .5rem;
+      padding: .75rem;
+      background: #1f1a00;
+      border: 1px solid #78350f;
+      border-radius: 6px;
+      font-size: .82rem;
+      color: #fbbf24;
+      line-height: 1.4;
+    }
+
+    #upgrade-prompt a {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
     /* ── Video viewer ───────────────────────────────── */
     #viewer {
       flex: 1;
@@ -230,20 +242,17 @@
   <!-- ── Login Section ─────────────────────────────── -->
   <section id="login-section">
     <h1>🎥 Camera Site</h1>
-    <form id="login-form">
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input id="username" type="text" name="username"
-               autocomplete="username" required placeholder="testuser" />
-      </div>
-      <div class="form-group">
-        <label for="secret_code">Secret Code</label>
-        <input id="secret_code" type="password" name="secret_code"
-               autocomplete="current-password" required placeholder="••••••••••" />
-      </div>
-      <button type="submit" id="login-btn">Sign In</button>
-      <p id="login-error" role="alert" aria-live="polite"></p>
-    </form>
+    <p class="tagline">Sign in with your Fanvue account to access live streams.</p>
+
+    <a id="fanvue-login-btn" href="/auth/login">
+      <!-- Fanvue-style F icon -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 3h18v3H9v3h9v3H9v9H6V9H3V3z"/>
+      </svg>
+      Login with Fanvue
+    </a>
+
+    <p id="login-message" role="alert" aria-live="polite"></p>
   </section>
 
   <!-- ── Dashboard Section ─────────────────────────── -->
@@ -257,6 +266,13 @@
       <nav id="camera-sidebar" aria-label="Camera list">
         <h2>Cameras</h2>
         <p id="sidebar-message">Loading…</p>
+        <div id="upgrade-prompt">
+          🔒 No cameras are available at your current subscription tier.<br>
+          <a href="https://fanvue.com" target="_blank" rel="noopener noreferrer">
+            Upgrade your Fanvue subscription
+          </a>
+          to unlock streams.
+        </div>
       </nav>
       <!-- Viewer -->
       <div id="viewer">
@@ -278,35 +294,36 @@
 
     // ── UI toggles ────────────────────────────────────
     function showDashboard() {
-      document.getElementById('login-section').style.display    = 'none';
+      document.getElementById('login-section').style.display     = 'none';
       const dash = document.getElementById('dashboard-section');
       dash.style.display = 'flex';
       document.body.style.alignItems = 'stretch';
     }
 
-    function showLogin() {
-      document.getElementById('login-section').style.display    = 'block';
+    function showLogin(msg, msgClass) {
+      document.getElementById('login-section').style.display     = 'block';
       document.getElementById('dashboard-section').style.display = 'none';
       document.body.style.alignItems = 'center';
+
+      const msgEl = document.getElementById('login-message');
+      if (msg) {
+        msgEl.textContent = msg;
+        msgEl.className   = msgClass || 'info';
+      } else {
+        msgEl.textContent = '';
+        msgEl.className   = '';
+      }
     }
 
     // ── Active WebRTC peer connection ─────────────────
     let activePc = null;
 
     // ── WebRTC stream using go2rtc API ────────────────
-    /**
-     * Connects to go2rtc's WebRTC API and attaches the stream to a <video>.
-     * Closes any previously open peer connection first.
-     */
     async function startWebRTCStream(webrtcApiUrl) {
-      const videoEl    = document.getElementById('stream-video');
-      const statusEl   = document.getElementById('stream-status');
+      const videoEl  = document.getElementById('stream-video');
+      const statusEl = document.getElementById('stream-status');
 
-      // Tear down any existing connection.
-      if (activePc) {
-        activePc.close();
-        activePc = null;
-      }
+      if (activePc) { activePc.close(); activePc = null; }
       videoEl.srcObject = null;
 
       statusEl.textContent = 'Connecting…';
@@ -337,7 +354,6 @@
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Wait for ICE gathering to complete before sending the offer.
         const ICE_GATHERING_TIMEOUT_MS = 3000;
         await new Promise((resolve) => {
           if (pc.iceGatheringState === 'complete') { resolve(); return; }
@@ -366,11 +382,9 @@
 
     // ── Switch to a camera ────────────────────────────
     function selectCamera(displayName, streamSlug, buttonEl) {
-      // Update active button highlight.
       document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
       buttonEl.classList.add('active');
 
-      // Show viewer elements.
       document.getElementById('viewer-placeholder').style.display = 'none';
       document.getElementById('stream-video').style.display       = 'block';
       document.getElementById('stream-status').style.display      = 'block';
@@ -379,31 +393,34 @@
 
       const go2rtcHost = window.GO2RTC_HOST || 'localhost';
       const go2rtcPort = window.GO2RTC_PORT || '1984';
-      const webrtcApiUrl = `http://${go2rtcHost}:${go2rtcPort}/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
+      const webrtcApiUrl =
+        `http://${go2rtcHost}:${go2rtcPort}/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
 
       startWebRTCStream(webrtcApiUrl);
     }
 
     // ── Render sidebar camera buttons ─────────────────
     function renderSidebar(cameras) {
-      const sidebar = document.getElementById('camera-sidebar');
-      // Remove old buttons and message, keep the heading.
-      sidebar.querySelectorAll('.cam-btn, #sidebar-message').forEach(el => el.remove());
+      const sidebar     = document.getElementById('camera-sidebar');
+      const upgradeEl   = document.getElementById('upgrade-prompt');
+      const sidebarMsg  = document.getElementById('sidebar-message');
+
+      sidebar.querySelectorAll('.cam-btn').forEach(el => el.remove());
+      if (sidebarMsg) sidebarMsg.remove();
 
       if (cameras.length === 0) {
-        const msg = document.createElement('p');
-        msg.id = 'sidebar-message';
-        msg.textContent = 'No cameras assigned to your account.';
-        sidebar.appendChild(msg);
+        upgradeEl.style.display = 'block';
         return;
       }
 
+      upgradeEl.style.display = 'none';
       cameras.forEach((cam) => {
         const btn = document.createElement('button');
         btn.className   = 'cam-btn';
         btn.textContent = cam.display_name;
         btn.addEventListener('click', () => selectCamera(cam.display_name, cam.stream_slug, btn));
-        sidebar.appendChild(btn);
+        // Insert before upgrade-prompt so it stays at the bottom
+        sidebar.insertBefore(btn, upgradeEl);
       });
     }
 
@@ -432,58 +449,52 @@
       }
     }
 
-    // ── Login form handler ────────────────────────────
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const errorEl = document.getElementById('login-error');
-      const btn     = document.getElementById('login-btn');
-
-      errorEl.textContent = '';
-      btn.disabled = true;
-      btn.textContent = 'Signing in…';
-
-      const username    = document.getElementById('username').value.trim();
-      const secret_code = document.getElementById('secret_code').value;
-
-      try {
-        const resp = await fetch('/login', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ username, secret_code }),
-        });
-
-        const data = await resp.json();
-
-        if (!resp.ok) {
-          errorEl.textContent = data.detail || 'Login failed. Please try again.';
-          return;
-        }
-
-        saveToken(data.access_token);
-        showDashboard();
-        loadCameras();
-
-      } catch (err) {
-        errorEl.textContent = 'Network error – please try again.';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Sign In';
-      }
-    });
-
     // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (activePc) { activePc.close(); activePc = null; }
       clearToken();
       showLogin();
-      document.getElementById('login-form').reset();
     });
 
-    // ── Auto-login if token already exists ────────────
-    if (getToken()) {
-      showDashboard();
-      loadCameras();
-    }
+    // ── Handle OAuth callback (token or error in URL) ─
+    (function handleOAuthCallback() {
+      const hash   = window.location.hash.slice(1);  // strip leading '#'
+      const params = new URLSearchParams(hash);
+      const token  = params.get('token');
+      const err    = params.get('error') || new URLSearchParams(window.location.search).get('error');
+
+      // Clear the fragment/query so tokens aren't left in browser history
+      if (token || err) {
+        history.replaceState(null, '', window.location.pathname);
+      }
+
+      if (token) {
+        saveToken(token);
+        showDashboard();
+        loadCameras();
+        return;
+      }
+
+      if (err) {
+        const messages = {
+          invalid_state:          'Login session expired. Please try again.',
+          token_exchange_failed:  'Could not complete sign-in with Fanvue. Please try again.',
+          profile_fetch_failed:   'Could not retrieve your Fanvue profile. Please try again.',
+          missing_params:         'Invalid callback. Please try again.',
+          access_denied:          'Access was denied. Please authorize the app on Fanvue.',
+        };
+        showLogin(messages[err] || `Login error: ${err}`, 'error');
+        return;
+      }
+
+      // No callback params – check for an existing session token
+      if (getToken()) {
+        showDashboard();
+        loadCameras();
+      } else {
+        showLogin();
+      }
+    })();
   </script>
 </body>
 </html>
