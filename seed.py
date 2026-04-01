@@ -30,6 +30,28 @@ def init_db(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cameras (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            display_name TEXT    NOT NULL,
+            stream_slug  TEXT    NOT NULL UNIQUE
+        )
+        """
+    )
+    conn.commit()
+
+
+def seed_cameras(conn: sqlite3.Connection) -> None:
+    cameras = [
+        ("Front Door", "cam_front"),
+        ("Back Yard",  "cam_back"),
+        ("Garage",     "cam_garage"),
+    ]
+    conn.executemany(
+        "INSERT OR IGNORE INTO cameras (display_name, stream_slug) VALUES (?, ?)",
+        cameras,
+    )
     conn.commit()
 
 
@@ -40,7 +62,7 @@ def seed_test_user(conn: sqlite3.Connection) -> None:
         INSERT OR IGNORE INTO users (username, secret_code, has_paid, allowed_cameras)
         VALUES (?, ?, ?, ?)
         """,
-        ("testuser", hashed_code, 1, "cam1,cam2"),
+        ("testuser", hashed_code, 1, "cam_front,cam_back,cam_garage"),
     )
     conn.commit()
 
@@ -49,13 +71,14 @@ def main() -> None:
     conn = sqlite3.connect(DATABASE_PATH)
     try:
         init_db(conn)
+        seed_cameras(conn)
         seed_test_user(conn)
         print(f"Database ready at '{DATABASE_PATH}'.")
         print("Test user created (if not already present):")
         print("  username    : testuser")
         print("  secret_code : testcode123  (stored as bcrypt hash)")
         print("  has_paid    : True")
-        print("  cameras     : cam1, cam2")
+        print("  cameras     : cam_front, cam_back, cam_garage")
     finally:
         conn.close()
 

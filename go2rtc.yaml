@@ -3,8 +3,9 @@
 # Documentation: https://github.com/AlexxIT/go2rtc
 
 streams:
-  cam1: rtsp://user:password@192.168.1.10:554/stream
-  cam2: rtsp://user:password@192.168.1.11:554/stream
+  cam_front:  rtsp://user:password@192.168.1.10:554/stream
+  cam_back:   rtsp://user:password@192.168.1.11:554/stream
+  cam_garage: rtsp://user:password@192.168.1.12:554/stream
 
 api:
   listen: ":1984"

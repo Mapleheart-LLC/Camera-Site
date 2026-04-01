@@ -87,15 +87,17 @@
     #dashboard-section {
       display: none;
       width: 100%;
-      max-width: 960px;
-      padding: 1.5rem;
+      height: 100vh;
+      flex-direction: column;
     }
 
     #dashboard-section header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 1.5rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #2d3148;
+      flex-shrink: 0;
     }
 
     #dashboard-section header h1 {
@@ -116,47 +118,110 @@
 
     #logout-btn:hover { border-color: #f87171; color: #f87171; }
 
-    #streams-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .stream-card {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 10px;
+    /* ── Main layout: sidebar + viewer ─────────────── */
+    #main-layout {
+      display: flex;
+      flex: 1;
       overflow: hidden;
     }
 
-    .stream-card h2 {
-      padding: .75rem 1rem;
-      font-size: 1rem;
-      color: #94a3b8;
-      border-bottom: 1px solid #2d3148;
+    /* ── Sidebar ────────────────────────────────────── */
+    #camera-sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: #1a1d27;
+      border-right: 1px solid #2d3148;
+      padding: 1rem .75rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
     }
 
-    video.stream-video {
+    #camera-sidebar h2 {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #64748b;
+      padding: 0 .25rem .5rem;
+      border-bottom: 1px solid #2d3148;
+      margin-bottom: .25rem;
+    }
+
+    .cam-btn {
       width: 100%;
+      background: transparent;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #94a3b8;
+      padding: .6rem .75rem;
+      text-align: left;
+      cursor: pointer;
+      font-size: .9rem;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+
+    .cam-btn:hover {
+      background: #252840;
+      border-color: #3b82f6;
+      color: #e2e8f0;
+    }
+
+    .cam-btn.active {
+      background: #1e3a5f;
+      border-color: #3b82f6;
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    #sidebar-message {
+      font-size: .85rem;
+      color: #64748b;
+      padding: .25rem;
+    }
+
+    /* ── Video viewer ───────────────────────────────── */
+    #viewer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: #0f1117;
+      overflow: hidden;
+    }
+
+    #viewer-title {
+      font-size: 1.1rem;
+      color: #94a3b8;
+      margin-bottom: .75rem;
+      align-self: flex-start;
+    }
+
+    #stream-video {
+      width: 100%;
+      max-width: 960px;
       aspect-ratio: 16/9;
       background: #000;
+      border-radius: 8px;
       display: block;
     }
 
-    .stream-status {
-      padding: .5rem 1rem;
-      font-size: .8rem;
+    #stream-status {
+      margin-top: .5rem;
+      font-size: .85rem;
       color: #64748b;
+      align-self: flex-start;
     }
 
-    .stream-status.connecting { color: #f59e0b; }
-    .stream-status.live       { color: #34d399; }
-    .stream-status.error      { color: #f87171; }
+    #stream-status.connecting { color: #f59e0b; }
+    #stream-status.live       { color: #34d399; }
+    #stream-status.error      { color: #f87171; }
 
-    #streams-message {
-      color: #64748b;
-      font-size: .95rem;
-      padding: 1rem 0;
+    #viewer-placeholder {
+      color: #4b5563;
+      font-size: 1rem;
     }
   </style>
 </head>
@@ -187,8 +252,19 @@
       <h1>🎥 Live Cameras</h1>
       <button id="logout-btn">Log out</button>
     </header>
-    <div id="streams-container">
-      <p id="streams-message">Loading streams…</p>
+    <div id="main-layout">
+      <!-- Sidebar -->
+      <nav id="camera-sidebar" aria-label="Camera list">
+        <h2>Cameras</h2>
+        <p id="sidebar-message">Loading…</p>
+      </nav>
+      <!-- Viewer -->
+      <div id="viewer">
+        <p id="viewer-placeholder">Select a camera from the sidebar.</p>
+        <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
+        <p id="stream-status" class="stream-status" style="display:none;"></p>
+        <p id="viewer-title" style="display:none;"></p>
+      </div>
     </div>
   </section>
 
@@ -203,8 +279,9 @@
     // ── UI toggles ────────────────────────────────────
     function showDashboard() {
       document.getElementById('login-section').style.display    = 'none';
-      document.getElementById('dashboard-section').style.display = 'block';
-      document.body.style.alignItems = 'flex-start';
+      const dash = document.getElementById('dashboard-section');
+      dash.style.display = 'flex';
+      document.body.style.alignItems = 'stretch';
     }
 
     function showLogin() {
@@ -213,13 +290,30 @@
       document.body.style.alignItems = 'center';
     }
 
+    // ── Active WebRTC peer connection ─────────────────
+    let activePc = null;
+
     // ── WebRTC stream using go2rtc API ────────────────
     /**
      * Connects to go2rtc's WebRTC API and attaches the stream to a <video>.
-     * go2rtc expects a POST with the SDP offer body and returns the SDP answer.
+     * Closes any previously open peer connection first.
      */
-    async function startWebRTCStream(videoEl, statusEl, webrtcApiUrl) {
+    async function startWebRTCStream(webrtcApiUrl) {
+      const videoEl    = document.getElementById('stream-video');
+      const statusEl   = document.getElementById('stream-status');
+
+      // Tear down any existing connection.
+      if (activePc) {
+        activePc.close();
+        activePc = null;
+      }
+      videoEl.srcObject = null;
+
+      statusEl.textContent = 'Connecting…';
+      statusEl.className   = 'stream-status connecting';
+
       const pc = new RTCPeerConnection({ iceServers: [] });
+      activePc = pc;
 
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
@@ -228,14 +322,14 @@
         if (ev.streams && ev.streams[0]) {
           videoEl.srcObject = ev.streams[0];
           statusEl.textContent = '● Live';
-          statusEl.className = 'stream-status live';
+          statusEl.className   = 'stream-status live';
         }
       };
 
       pc.oniceconnectionstatechange = () => {
         if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
           statusEl.textContent = 'Connection lost – reload to retry';
-          statusEl.className = 'stream-status error';
+          statusEl.className   = 'stream-status error';
         }
       };
 
@@ -244,8 +338,6 @@
         await pc.setLocalDescription(offer);
 
         // Wait for ICE gathering to complete before sending the offer.
-        // ICE_GATHERING_TIMEOUT_MS: safety limit in case the browser never fires
-        // 'complete' (e.g. no STUN server, all candidates are host-only).
         const ICE_GATHERING_TIMEOUT_MS = 3000;
         await new Promise((resolve) => {
           if (pc.iceGatheringState === 'complete') { resolve(); return; }
@@ -268,68 +360,75 @@
       } catch (err) {
         console.error('WebRTC error:', err);
         statusEl.textContent = `Error: ${err.message}`;
-        statusEl.className = 'stream-status error';
+        statusEl.className   = 'stream-status error';
       }
     }
 
-    // ── Render streams ────────────────────────────────
-    function renderStreams(streams) {
-      const container = document.getElementById('streams-container');
-      container.innerHTML = '';
+    // ── Switch to a camera ────────────────────────────
+    function selectCamera(displayName, streamSlug, buttonEl) {
+      // Update active button highlight.
+      document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+      buttonEl.classList.add('active');
 
-      const cameraNames = Object.keys(streams);
-      if (cameraNames.length === 0) {
-        container.innerHTML = '<p id="streams-message">No cameras assigned to your account.</p>';
+      // Show viewer elements.
+      document.getElementById('viewer-placeholder').style.display = 'none';
+      document.getElementById('stream-video').style.display       = 'block';
+      document.getElementById('stream-status').style.display      = 'block';
+      document.getElementById('viewer-title').style.display       = 'block';
+      document.getElementById('viewer-title').textContent         = displayName;
+
+      const go2rtcHost = window.GO2RTC_HOST || 'localhost';
+      const go2rtcPort = window.GO2RTC_PORT || '1984';
+      const webrtcApiUrl = `http://${go2rtcHost}:${go2rtcPort}/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
+
+      startWebRTCStream(webrtcApiUrl);
+    }
+
+    // ── Render sidebar camera buttons ─────────────────
+    function renderSidebar(cameras) {
+      const sidebar = document.getElementById('camera-sidebar');
+      // Remove old buttons and message, keep the heading.
+      sidebar.querySelectorAll('.cam-btn, #sidebar-message').forEach(el => el.remove());
+
+      if (cameras.length === 0) {
+        const msg = document.createElement('p');
+        msg.id = 'sidebar-message';
+        msg.textContent = 'No cameras assigned to your account.';
+        sidebar.appendChild(msg);
         return;
       }
 
-      cameraNames.forEach((cam) => {
-        const { webrtc_api } = streams[cam];
-
-        const card = document.createElement('div');
-        card.className = 'stream-card';
-
-        const title = document.createElement('h2');
-        title.textContent = cam;
-
-        const video = document.createElement('video');
-        video.className = 'stream-video';
-        video.autoplay = true;
-        video.muted    = true;
-        video.playsInline = true;
-        video.controls = true;
-
-        const statusEl = document.createElement('p');
-        statusEl.className = 'stream-status connecting';
-        statusEl.textContent = 'Connecting…';
-
-        card.appendChild(title);
-        card.appendChild(video);
-        card.appendChild(statusEl);
-        container.appendChild(card);
-
-        startWebRTCStream(video, statusEl, webrtc_api);
+      cameras.forEach((cam) => {
+        const btn = document.createElement('button');
+        btn.className   = 'cam-btn';
+        btn.textContent = cam.display_name;
+        btn.addEventListener('click', () => selectCamera(cam.display_name, cam.stream_slug, btn));
+        sidebar.appendChild(btn);
       });
     }
 
-    // ── Load stream URLs from the protected API ───────
-    async function loadStreams() {
+    // ── Load allowed cameras from the protected API ───
+    async function loadCameras() {
       const token = getToken();
       if (!token) { showLogin(); return; }
 
       try {
-        const resp = await fetch('/api/stream', {
+        const resp = await fetch('/api/my-cameras', {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         if (resp.status === 401) { clearToken(); showLogin(); return; }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-        const data = await resp.json();
-        renderStreams(data.streams);
+        const cameras = await resp.json();
+        renderSidebar(cameras);
       } catch (err) {
-        document.getElementById('streams-message').textContent =
-          `Failed to load streams: ${err.message}`;
+        const sidebar = document.getElementById('camera-sidebar');
+        sidebar.querySelectorAll('.cam-btn, #sidebar-message').forEach(el => el.remove());
+        const msg = document.createElement('p');
+        msg.id = 'sidebar-message';
+        msg.textContent = `Failed to load cameras: ${err.message}`;
+        sidebar.appendChild(msg);
       }
     }
 
@@ -362,7 +461,7 @@
 
         saveToken(data.access_token);
         showDashboard();
-        loadStreams();
+        loadCameras();
 
       } catch (err) {
         errorEl.textContent = 'Network error – please try again.';
@@ -374,6 +473,7 @@
 
     // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
+      if (activePc) { activePc.close(); activePc = null; }
       clearToken();
       showLogin();
       document.getElementById('login-form').reset();
@@ -382,8 +482,9 @@
     // ── Auto-login if token already exists ────────────
     if (getToken()) {
       showDashboard();
-      loadStreams();
+      loadCameras();
     }
   </script>
 </body>
 </html>
+
