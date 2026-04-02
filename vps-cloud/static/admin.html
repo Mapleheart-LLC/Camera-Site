@@ -555,6 +555,7 @@
           <!-- Inline add/edit form (hidden by default) -->
           <div id="camera-form">
             <h3 id="form-title">Add Camera</h3>
+            <!-- Row 1: name, slug, access level -->
             <div class="form-row">
               <div class="form-field">
                 <label for="f-name">Display Name</label>
@@ -572,6 +573,43 @@
                   <option value="3">3 – Alpha Pack</option>
                 </select>
               </div>
+            </div>
+            <!-- Row 2: stream source toggle -->
+            <div class="form-row" style="align-items:center;gap:.75rem;margin-bottom:.5rem">
+              <span style="font-size:.8rem;font-weight:700;color:#c49ea5">Stream Source</span>
+              <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
+                <input type="radio" name="source-type" id="src-tapo" value="tapo" checked />
+                🔌 Tapo Camera
+              </label>
+              <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
+                <input type="radio" name="source-type" id="src-rtsp" value="rtsp" />
+                🎥 Custom RTSP URL
+              </label>
+            </div>
+            <!-- Tapo fields -->
+            <div id="tapo-fields" class="form-row">
+              <div class="form-field">
+                <label for="f-tapo-ip">Tapo IP Address</label>
+                <input id="f-tapo-ip" type="text" placeholder="e.g. 192.168.1.100" />
+              </div>
+              <div class="form-field">
+                <label for="f-tapo-user">Tapo Username</label>
+                <input id="f-tapo-user" type="text" placeholder="Tapo account email" autocomplete="username" />
+              </div>
+              <div class="form-field">
+                <label for="f-tapo-pass">Tapo Password</label>
+                <input id="f-tapo-pass" type="password" placeholder="Tapo account password" autocomplete="new-password" />
+              </div>
+            </div>
+            <!-- Custom RTSP field -->
+            <div id="rtsp-fields" class="form-row" style="display:none">
+              <div class="form-field" style="flex:1">
+                <label for="f-rtsp-url">RTSP URL</label>
+                <input id="f-rtsp-url" type="text" placeholder="rtsp://user:pass@192.168.1.100/stream1" />
+              </div>
+            </div>
+            <!-- Save / cancel -->
+            <div class="form-row" style="margin-top:.5rem">
               <div class="form-actions">
                 <button id="form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
                 <button id="form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
@@ -588,12 +626,13 @@
                   <th>ID</th>
                   <th>Name</th>
                   <th>Stream Slug</th>
+                  <th>Source</th>
                   <th>Min Level</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="cameras-body">
-                <tr class="empty-row"><td colspan="5">Loading cameras…</td></tr>
+                <tr class="empty-row"><td colspan="6">Loading cameras…</td></tr>
               </tbody>
             </table>
           </div>
@@ -861,11 +900,16 @@
       if (level >= 2) return 'l2';
       return 'l1';
     }
+    function sourceLabel(cam) {
+      if (cam.tapo_ip) return `🔌 ${escHtml(cam.tapo_ip)}`;
+      if (cam.rtsp_url) return '🎥 Custom RTSP';
+      return '—';
+    }
 
     function renderCameras(cameras) {
       const tbody = document.getElementById('cameras-body');
       if (!cameras.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No cameras configured yet.</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No cameras configured yet.</td></tr>';
         return;
       }
       tbody.innerHTML = cameras.map(cam => `
@@ -873,6 +917,7 @@
           <td>${cam.id}</td>
           <td>${escHtml(cam.display_name)}</td>
           <td><code>${escHtml(cam.stream_slug)}</code></td>
+          <td>${sourceLabel(cam)}</td>
           <td>
             <span class="badge-level ${tierClass(cam.minimum_access_level)}">
               ${cam.minimum_access_level} – ${tierLabel(cam.minimum_access_level)}
@@ -896,12 +941,46 @@
 
     // ── Camera form ───────────────────────────────────
     const cameraForm = document.getElementById('camera-form');
+    let _slugManuallyEdited = false;
 
-    function openForm(title, name = '', slug = '', level = 1) {
+    // Auto-populate slug from display name while it hasn't been manually edited.
+    document.getElementById('f-name').addEventListener('input', () => {
+      if (!_slugManuallyEdited) {
+        const suffix = document.getElementById('f-name').value
+          .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        document.getElementById('f-slug').value = suffix ? 'cam_' + suffix : '';
+      }
+    });
+    document.getElementById('f-slug').addEventListener('input', () => {
+      _slugManuallyEdited = true;
+    });
+
+    // Show/hide Tapo vs custom RTSP fields based on the radio selection.
+    document.querySelectorAll('input[name="source-type"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const isTapo = document.getElementById('src-tapo').checked;
+        document.getElementById('tapo-fields').style.display = isTapo ? '' : 'none';
+        document.getElementById('rtsp-fields').style.display  = isTapo ? 'none' : '';
+      });
+    });
+
+    function openForm(title, cam = {}) {
       document.getElementById('form-title').textContent = title;
-      document.getElementById('f-name').value  = name;
-      document.getElementById('f-slug').value  = slug;
-      document.getElementById('f-level').value = level;
+      document.getElementById('f-name').value  = cam.display_name  || '';
+      document.getElementById('f-slug').value  = cam.stream_slug   || '';
+      document.getElementById('f-level').value = cam.minimum_access_level || 1;
+      _slugManuallyEdited = !!cam.stream_slug;  // pre-filled slug should not be auto-replaced
+
+      const isTapo = !!cam.tapo_ip || !cam.rtsp_url;  // default to Tapo for new cameras
+      document.getElementById('src-tapo').checked = isTapo;
+      document.getElementById('src-rtsp').checked = !isTapo;
+      document.getElementById('tapo-fields').style.display = isTapo ? '' : 'none';
+      document.getElementById('rtsp-fields').style.display  = isTapo ? 'none' : '';
+
+      document.getElementById('f-tapo-ip').value   = cam.tapo_ip       || '';
+      document.getElementById('f-tapo-user').value = cam.tapo_username  || '';
+      document.getElementById('f-tapo-pass').value = cam.tapo_password  || '';
+      document.getElementById('f-rtsp-url').value  = cam.rtsp_url       || '';
       document.getElementById('form-error').textContent = '';
       cameraForm.style.display = 'block';
       document.getElementById('f-name').focus();
@@ -910,6 +989,7 @@
     function closeForm() {
       cameraForm.style.display = 'none';
       _editingId = null;
+      _slugManuallyEdited = false;
     }
 
     document.getElementById('add-camera-btn').addEventListener('click', () => {
@@ -925,18 +1005,35 @@
       const errEl = document.getElementById('form-error');
 
       if (!name || !slug) { errEl.textContent = 'Name and slug are required.'; return; }
+
+      const isTapo = document.getElementById('src-tapo').checked;
+      const tapo_ip       = document.getElementById('f-tapo-ip').value.trim()   || null;
+      const tapo_username = document.getElementById('f-tapo-user').value.trim() || null;
+      // Passwords are intentionally not trimmed to preserve leading/trailing characters.
+      const tapo_password = document.getElementById('f-tapo-pass').value        || null;
+      const rtsp_url      = document.getElementById('f-rtsp-url').value.trim()  || null;
+
+      if (isTapo && !tapo_ip) { errEl.textContent = 'Tapo IP address is required.'; return; }
+      if (!isTapo && !rtsp_url) { errEl.textContent = 'RTSP URL is required.'; return; }
+
       errEl.textContent = '';
+
+      const body = {
+        display_name: name,
+        stream_slug: slug,
+        minimum_access_level: level,
+        tapo_ip:       isTapo ? tapo_ip       : null,
+        tapo_username: isTapo ? tapo_username : null,
+        tapo_password: isTapo ? tapo_password : null,
+        rtsp_url:      isTapo ? null          : rtsp_url,
+      };
 
       try {
         let resp;
         if (_editingId !== null) {
-          resp = await apiPut(`/api/admin/cameras/${_editingId}`, {
-            display_name: name, stream_slug: slug, minimum_access_level: level,
-          });
+          resp = await apiPut(`/api/admin/cameras/${_editingId}`, body);
         } else {
-          resp = await apiPost('/api/admin/cameras', {
-            display_name: name, stream_slug: slug, minimum_access_level: level,
-          });
+          resp = await apiPost('/api/admin/cameras', body);
         }
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
@@ -958,7 +1055,7 @@
         const cam = cameras.find(c => c.id === id);
         if (!cam) { showToast('Camera not found.'); return; }
         _editingId = id;
-        openForm('Edit Camera', cam.display_name, cam.stream_slug, cam.minimum_access_level);
+        openForm('Edit Camera', cam);
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load camera.');
       }

@@ -1,21 +1,8 @@
 # go2rtc configuration
-# Replace the mock RTSP URLs with your real camera streams before deploying.
-# Mock addresses use the RFC 5737 documentation range (192.0.2.0/24) which
-# do not route on the public internet.
+# Camera streams are registered dynamically by the FastAPI backend via the
+# go2rtc REST API (PUT /api/streams?name=<slug>&src=<rtsp_url>).
+# You do not need to add streams here manually.
 # Documentation: https://github.com/AlexxIT/go2rtc
-
-streams:
-  # access_level 1 – free followers
-  cam_lobby:
-    - "exec:ffmpeg -re -f lavfi -i testsrc2=size=1280x720:rate=25 -vcodec libx264 -preset ultrafast -tune zerolatency -g 50 -f rtsp rtsp://localhost:8554/cam_lobby 2>/dev/null"
-
-  # access_level 2 – Tier 1 subscribers
-  cam_vip_room:
-    - "exec:ffmpeg -re -f lavfi -i testsrc2=size=1280x720:rate=25 -vcodec libx264 -preset ultrafast -tune zerolatency -g 50 -f rtsp rtsp://localhost:8554/cam_vip_room 2>/dev/null"
-
-  # access_level 3 – Tier 2+ subscribers
-  cam_backstage:
-    - "exec:ffmpeg -re -f lavfi -i testsrc2=size=1280x720:rate=25 -vcodec libx264 -preset ultrafast -tune zerolatency -g 50 -f rtsp rtsp://localhost:8554/cam_backstage 2>/dev/null"
 
 api:
   listen: ":1984"
