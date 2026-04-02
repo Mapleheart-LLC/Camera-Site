@@ -122,8 +122,64 @@ def init_db() -> None:
         )
         """
     )
+    # Idempotent migrations: add stream-source columns to existing databases.
+    for _col, _defn in [
+        ("rtsp_url",      "TEXT"),
+        ("tapo_ip",       "TEXT"),
+        ("tapo_username", "TEXT"),
+        ("tapo_password", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE cameras ADD COLUMN {_col} {_defn}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# go2rtc helpers
+# ---------------------------------------------------------------------------
+
+
+async def _sync_cameras_to_go2rtc() -> None:
+    """On startup, register every camera that has connection info with go2rtc."""
+    go2rtc_base = f"http://{GO2RTC_HOST}:{GO2RTC_PORT}"
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT stream_slug, rtsp_url, tapo_ip, tapo_username, tapo_password FROM cameras"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for row in rows:
+            tapo_ip = row["tapo_ip"]
+            if tapo_ip:
+                user = row["tapo_username"] or ""
+                pwd = row["tapo_password"] or ""
+                effective_url = f"rtsp://{user}:{pwd}@{tapo_ip}/stream1"
+            else:
+                effective_url = row["rtsp_url"]
+
+            if not effective_url:
+                continue
+
+            slug = row["stream_slug"]
+            try:
+                await client.put(
+                    f"{go2rtc_base}/api/streams",
+                    params={"name": slug, "src": effective_url},
+                )
+                logger.info("Registered camera stream '%s' with go2rtc", slug)
+            except Exception as exc:
+                logger.warning(
+                    "Could not register stream '%s' with go2rtc on startup: %s", slug, exc
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +263,7 @@ async def lifespan(app: FastAPI):
             "OAuth login will not work until these are configured."
         )
     init_db()
+    await _sync_cameras_to_go2rtc()
     yield
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
