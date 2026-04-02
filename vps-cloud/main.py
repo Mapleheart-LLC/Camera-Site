@@ -297,7 +297,11 @@ def auth_login():
     real Fanvue API credentials.
     """
     if MOCK_AUTH:
-        return RedirectResponse(url="/#token=FAKE_TOKEN", status_code=302)
+        mock_token = create_access_token(
+            {"sub": "mock-user", "access_level": 3},
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        )
+        return RedirectResponse(url=f"/#token={mock_token}", status_code=302)
 
     if not FANVUE_CLIENT_ID:
         raise HTTPException(
