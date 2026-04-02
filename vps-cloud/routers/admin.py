@@ -20,6 +20,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote as _url_quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -51,8 +52,8 @@ def _effective_rtsp_url(
 ) -> Optional[str]:
     """Return the RTSP URL to use for this camera record."""
     if tapo_ip:
-        user = tapo_username or ""
-        pwd = tapo_password or ""
+        user = _url_quote(tapo_username or "", safe="")
+        pwd  = _url_quote(tapo_password  or "", safe="")
         return f"rtsp://{user}:{pwd}@{tapo_ip}/stream1"
     return rtsp_url or None
 
@@ -192,13 +193,18 @@ def admin_update_camera(
             detail="Camera not found.",
         )
     old_slug = row["stream_slug"]
-    new_name  = payload.display_name        if payload.display_name        is not None else row["display_name"]
-    new_slug  = payload.stream_slug         if payload.stream_slug         is not None else row["stream_slug"]
-    new_level = payload.minimum_access_level if payload.minimum_access_level is not None else row["minimum_access_level"]
-    new_rtsp  = (payload.rtsp_url      or None) if payload.rtsp_url      is not None else row["rtsp_url"]
-    new_tapo_ip   = (payload.tapo_ip       or None) if payload.tapo_ip       is not None else row["tapo_ip"]
-    new_tapo_user = (payload.tapo_username or None) if payload.tapo_username is not None else row["tapo_username"]
-    new_tapo_pass = (payload.tapo_password or None) if payload.tapo_password is not None else row["tapo_password"]
+
+    def _pick(new_val, old_val):
+        """Use new_val if provided (normalising empty string to None), else keep old_val."""
+        return (new_val or None) if new_val is not None else old_val
+
+    new_name      = payload.display_name         if payload.display_name        is not None else row["display_name"]
+    new_slug      = payload.stream_slug          if payload.stream_slug         is not None else row["stream_slug"]
+    new_level     = payload.minimum_access_level if payload.minimum_access_level is not None else row["minimum_access_level"]
+    new_rtsp      = _pick(payload.rtsp_url,      row["rtsp_url"])
+    new_tapo_ip   = _pick(payload.tapo_ip,       row["tapo_ip"])
+    new_tapo_user = _pick(payload.tapo_username, row["tapo_username"])
+    new_tapo_pass = _pick(payload.tapo_password, row["tapo_password"])
     try:
         db.execute(
             """

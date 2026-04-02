@@ -123,6 +123,8 @@ def init_db() -> None:
         """
     )
     # Idempotent migrations: add stream-source columns to existing databases.
+    # Column names and types are hardcoded literals (not user input), so
+    # string interpolation here is safe and necessary for DDL statements.
     for _col, _defn in [
         ("rtsp_url",      "TEXT"),
         ("tapo_ip",       "TEXT"),
@@ -160,8 +162,8 @@ async def _sync_cameras_to_go2rtc() -> None:
         for row in rows:
             tapo_ip = row["tapo_ip"]
             if tapo_ip:
-                user = row["tapo_username"] or ""
-                pwd = row["tapo_password"] or ""
+                user = _url_quote(row["tapo_username"] or "", safe="")
+                pwd  = _url_quote(row["tapo_password"]  or "", safe="")
                 effective_url = f"rtsp://{user}:{pwd}@{tapo_ip}/stream1"
             else:
                 effective_url = row["rtsp_url"]

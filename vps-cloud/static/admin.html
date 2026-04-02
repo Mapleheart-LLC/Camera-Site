@@ -598,7 +598,7 @@
               </div>
               <div class="form-field">
                 <label for="f-tapo-pass">Tapo Password</label>
-                <input id="f-tapo-pass" type="password" placeholder="Tapo account password" autocomplete="current-password" />
+                <input id="f-tapo-pass" type="password" placeholder="Tapo account password" autocomplete="new-password" />
               </div>
             </div>
             <!-- Custom RTSP field -->
@@ -946,9 +946,9 @@
     // Auto-populate slug from display name while it hasn't been manually edited.
     document.getElementById('f-name').addEventListener('input', () => {
       if (!_slugManuallyEdited) {
-        const slug = 'cam_' + document.getElementById('f-name').value
+        const suffix = document.getElementById('f-name').value
           .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        document.getElementById('f-slug').value = slug;
+        document.getElementById('f-slug').value = suffix ? 'cam_' + suffix : '';
       }
     });
     document.getElementById('f-slug').addEventListener('input', () => {
@@ -1009,6 +1009,7 @@
       const isTapo = document.getElementById('src-tapo').checked;
       const tapo_ip       = document.getElementById('f-tapo-ip').value.trim()   || null;
       const tapo_username = document.getElementById('f-tapo-user').value.trim() || null;
+      // Passwords are intentionally not trimmed to preserve leading/trailing characters.
       const tapo_password = document.getElementById('f-tapo-pass').value        || null;
       const rtsp_url      = document.getElementById('f-rtsp-url').value.trim()  || null;
 
