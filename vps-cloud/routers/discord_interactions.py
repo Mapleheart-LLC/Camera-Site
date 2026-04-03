@@ -40,13 +40,21 @@ _PONG               = 1
 _CHANNEL_MESSAGE    = 4
 _MODAL              = 9
 
+# ── Discord limits ───────────────────────────────────────────────────────────
+_DISCORD_TEXT_INPUT_MAX_LEN = 4000  # max characters in a modal text input value
+
 
 def _verify_signature(public_key_hex: str, signature_hex: str, timestamp: str, body: bytes) -> None:
     """Raise HTTPException 401 if the Discord signature is invalid."""
     try:
-        pub = Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key_hex))
-        pub.verify(bytes.fromhex(signature_hex), timestamp.encode() + body)
-    except (InvalidSignature, ValueError) as exc:
+        pub_bytes = bytes.fromhex(public_key_hex)
+        sig_bytes = bytes.fromhex(signature_hex)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed signature headers") from exc
+    try:
+        pub = Ed25519PublicKey.from_public_bytes(pub_bytes)
+        pub.verify(sig_bytes, timestamp.encode() + body)
+    except InvalidSignature as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid request signature") from exc
 
 

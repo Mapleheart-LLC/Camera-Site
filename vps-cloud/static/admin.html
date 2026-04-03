@@ -1183,7 +1183,7 @@
       row.classList.add('deep-linked');
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
       // Auto-open the reply modal so the admin can answer immediately
-      const text = row.dataset.text || row.querySelector('.q-text')?.textContent || '';
+      const text = row.dataset?.text || row.querySelector('.q-text')?.textContent || '';
       openAnswerForm(targetId, text);
     }
 
@@ -1233,7 +1233,7 @@
       if (e.target === document.getElementById('reply-modal-backdrop')) closeAnswerForm();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAnswerForm();
+      if (e.key === 'Escape' && document.getElementById('reply-modal-backdrop').classList.contains('open')) closeAnswerForm();
     });
 
     document.getElementById('answer-save-btn').addEventListener('click', async () => {
