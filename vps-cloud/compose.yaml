@@ -58,6 +58,23 @@ services:
       - SEGPAY_PRICE_POINT_ID=${SEGPAY_PRICE_POINT_ID:-}
       # Optional: shared secret for Segpay postback HMAC-SHA256 verification
       - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
+      # ── The Drool Log – Reddit scraper credentials ────
+      # Register a Reddit OAuth app at https://www.reddit.com/prefs/apps
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+      - REDDIT_USERNAME=${REDDIT_USERNAME:-}
+      - REDDIT_PASSWORD=${REDDIT_PASSWORD:-}
+      - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-drool-log/1.0}
+      # ── The Drool Log – Twitter/X scraper credentials ─
+      # Create an app at https://developer.twitter.com
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-}
+      - TWITTER_USER_ID=${TWITTER_USER_ID:-}
+      - TWITTER_API_KEY=${TWITTER_API_KEY:-}
+      - TWITTER_API_SECRET=${TWITTER_API_SECRET:-}
+      - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN:-}
+      - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET:-}
+      # Salt used to anonymise commenter IPs in the Drool Log
+      - DROOL_SALT=${DROOL_SALT:-}
       # Printful API key – required for automatic print-on-demand fulfilment
       - PRINTFUL_API_KEY=${PRINTFUL_API_KEY:-}
     volumes:
