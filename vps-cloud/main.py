@@ -28,6 +28,7 @@ from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
+from routers.store import router as store_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -161,6 +162,45 @@ def init_db() -> None:
             sort_order  INTEGER NOT NULL DEFAULT 0,
             is_active   INTEGER NOT NULL DEFAULT 1,
             created_at  TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS products (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                 TEXT    NOT NULL,
+            description          TEXT,
+            price                REAL    NOT NULL,
+            image_url            TEXT,
+            is_printful          INTEGER NOT NULL DEFAULT 0,
+            printful_variant_id  TEXT,
+            stock_count          INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS orders (
+            id                      TEXT    PRIMARY KEY,
+            external_transaction_id TEXT,
+            provider_name           TEXT    NOT NULL DEFAULT 'segpay',
+            status                  TEXT    NOT NULL DEFAULT 'pending',
+            customer_email          TEXT    NOT NULL,
+            total_amount            REAL    NOT NULL,
+            shipping_address        TEXT    NOT NULL DEFAULT '{}',
+            created_at              TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_items (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id    TEXT    NOT NULL REFERENCES orders(id),
+            product_id  INTEGER NOT NULL REFERENCES products(id),
+            quantity    INTEGER NOT NULL,
+            unit_price  REAL    NOT NULL
         )
         """
     )
@@ -525,6 +565,7 @@ app.include_router(interactive_router)
 app.include_router(admin_router)
 app.include_router(questions_router)
 app.include_router(links_router)
+app.include_router(store_router)
 
 
 @app.middleware("http")

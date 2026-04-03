@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="mochii.live Shop – Grab some merch and support the pack 🐾" />
+  <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="mochii.live" />
+  <meta property="og:title"       content="mochii.live 🐾 Shop" />
+  <meta property="og:description" content="Official merch. Secure checkout. All paws welcome." />
+  <meta property="og:url"         content="https://mochii.live/store.html" />
+  <link rel="canonical"           href="https://mochii.live/store.html" />
+  <meta name="twitter:card"       content="summary" />
+  <meta name="twitter:title"      content="mochii.live 🐾 Shop" />
+  <meta name="twitter:description" content="Official merch. Secure checkout. All paws welcome." />
+  <title>mochii.live 🐾 Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Nav ────────────────────────────────────────── */
+    .store-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.75rem;
+      background: #1e1e1e;
+      border-bottom: 1px solid #3d2a2e;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .nav-logo {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      letter-spacing: .01em;
+      text-decoration: none;
+    }
+
+    .nav-home-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .45rem 1rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .2s, box-shadow .2s;
+    }
+    .nav-home-btn:hover {
+      background: #4d2a32;
+      box-shadow: 0 2px 12px rgba(232,174,183,.18);
+    }
+
+    /* ── Secure badge ───────────────────────────────── */
+    .secure-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      background: #242424;
+      border: 1px solid #2e1e22;
+      border-radius: 8px;
+      padding: .55rem 1.1rem;
+      font-size: .82rem;
+      font-weight: 700;
+      color: #b0c8a8;
+      width: fit-content;
+      margin: 1.4rem auto 0;
+    }
+    .secure-badge svg { flex-shrink: 0; }
+
+    /* ── Hero ───────────────────────────────────────── */
+    .store-hero {
+      text-align: center;
+      padding: 2.5rem 1.5rem 1rem;
+    }
+    .store-hero h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .5rem;
+    }
+    .store-hero p {
+      color: #c0a0a8;
+      font-size: 1rem;
+    }
+
+    /* ── Status banner ──────────────────────────────── */
+    .status-banner {
+      display: none;
+      text-align: center;
+      padding: .75rem 1.5rem;
+      border-radius: 10px;
+      margin: 1.2rem auto;
+      max-width: 520px;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+    .status-banner.success {
+      background: #1e3020;
+      border: 1px solid #4a8060;
+      color: #a8e0b8;
+    }
+    .status-banner.cancel {
+      background: #2e1e1a;
+      border: 1px solid #7a4040;
+      color: #e0a8a8;
+    }
+
+    /* ── Products grid ──────────────────────────────── */
+    .products-section {
+      padding: 1.5rem 1.5rem 2.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #c49a9f;
+      margin-bottom: 1.2rem;
+      letter-spacing: .02em;
+    }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .product-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .product-card:hover {
+      border-color: #e8aeb7;
+      box-shadow: 0 4px 20px rgba(232,174,183,.12);
+    }
+
+    .product-img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: #1e1e1e;
+    }
+    .product-img-placeholder {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #1e1e1e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+    }
+
+    .product-body {
+      padding: 1rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+
+    .product-name {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #f0e6e8;
+    }
+
+    .product-desc {
+      font-size: .83rem;
+      color: #9a7880;
+      flex: 1;
+    }
+
+    .product-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: .75rem;
+    }
+
+    .product-price {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    .product-out-of-stock {
+      font-size: .78rem;
+      font-weight: 700;
+      color: #7a5060;
+      background: #2a1a1e;
+      border: 1px solid #5a3040;
+      border-radius: 6px;
+      padding: .25rem .6rem;
+    }
+
+    .add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .45rem .9rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .add-btn:hover:not(:disabled) { background: #4d2a32; }
+    .add-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Cart sidebar ───────────────────────────────── */
+    .cart-section {
+      padding: 1rem 1.5rem 2.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .cart-box {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+
+    .cart-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #c49a9f;
+      margin-bottom: 1rem;
+    }
+
+    #cart-items { list-style: none; }
+    #cart-items li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: .5rem 0;
+      border-bottom: 1px solid #2e1e22;
+      font-size: .9rem;
+      gap: .5rem;
+    }
+    #cart-items li:last-child { border-bottom: none; }
+
+    .cart-item-name { flex: 1; color: #f0e6e8; font-weight: 600; }
+    .cart-item-qty {
+      color: #c49a9f;
+      font-size: .8rem;
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 6px;
+      padding: .2rem .5rem;
+    }
+    .cart-item-price { color: #e8aeb7; font-weight: 700; min-width: 4rem; text-align: right; }
+    .cart-remove-btn {
+      background: none;
+      border: none;
+      color: #7a5060;
+      cursor: pointer;
+      font-size: .85rem;
+      padding: .15rem .3rem;
+      border-radius: 4px;
+      transition: color .15s;
+    }
+    .cart-remove-btn:hover { color: #e8aeb7; }
+
+    .cart-empty { color: #5a3a3e; font-size: .9rem; text-align: center; padding: .75rem 0; }
+
+    .cart-total {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding-top: .75rem;
+      border-top: 1px solid #3d2a2e;
+      font-weight: 800;
+      font-size: 1rem;
+      color: #f0e6e8;
+    }
+    .cart-total span:last-child { color: #e8aeb7; }
+
+    /* ── Checkout form ──────────────────────────────── */
+    .checkout-form {
+      margin-top: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: .85rem;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+    @media (max-width: 520px) {
+      .form-row { grid-template-columns: 1fr; }
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+    }
+    .form-group label {
+      font-size: .78rem;
+      font-weight: 700;
+      color: #9a7880;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .form-group input {
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      padding: .55rem .8rem;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-group input:focus { border-color: #e8aeb7; }
+    .form-group input::placeholder { color: #4a3234; }
+
+    .checkout-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      width: 100%;
+      padding: .75rem 1.5rem;
+      background: #e8aeb7;
+      border: none;
+      border-radius: 10px;
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background .2s, box-shadow .2s;
+      margin-top: .25rem;
+    }
+    .checkout-btn:hover:not(:disabled) {
+      background: #f0c0cc;
+      box-shadow: 0 4px 18px rgba(232,174,183,.3);
+    }
+    .checkout-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Loading spinner ────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 1rem; height: 1rem;
+      border: 2px solid rgba(26,26,26,.3);
+      border-top-color: #1a1a1a;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+
+    /* ── Footer ─────────────────────────────────────── */
+    .store-footer {
+      margin-top: auto;
+      text-align: center;
+      padding: 1.25rem 1rem;
+      font-size: .75rem;
+      color: #4a3234;
+      border-top: 1px solid #2a1e20;
+    }
+    .store-footer a { color: #6a4a4e; text-decoration: none; }
+    .store-footer a:hover { color: #c49a9f; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navigation ──────────────────────────────────── -->
+  <nav class="store-nav">
+    <a class="nav-logo" href="/">🐾 mochii.live</a>
+    <a class="nav-home-btn" href="/">← Back Home</a>
+  </nav>
+
+  <!-- ── Secure checkout badge ──────────────────────── -->
+  <div class="secure-badge" role="img" aria-label="Secure Checkout">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0c8a8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+    Secure Checkout – Your payment info is never stored here.
+  </div>
+
+  <!-- ── Hero ────────────────────────────────────────── -->
+  <header class="store-hero">
+    <h1>🐾 The Pack Shop</h1>
+    <p>Official mochii.live merch. No login required – all paws welcome!</p>
+  </header>
+
+  <!-- ── Status banner (shown after redirect back) ─── -->
+  <div id="status-banner" class="status-banner" role="alert"></div>
+
+  <!-- ── Product grid ─────────────────────────────── -->
+  <main class="products-section">
+    <p class="section-title">Merch</p>
+    <div id="products-grid" class="products-grid">
+      <p style="color:#5a3a3e;font-size:.9rem;">Loading products…</p>
+    </div>
+  </main>
+
+  <!-- ── Cart & checkout form ──────────────────────── -->
+  <section class="cart-section" aria-label="Cart">
+    <div class="cart-box">
+      <p class="cart-title">🛒 Your Cart</p>
+      <ul id="cart-items"><li class="cart-empty">Your cart is empty.</li></ul>
+      <div class="cart-total" id="cart-total-row" style="display:none;">
+        <span>Total</span>
+        <span id="cart-total">$0.00</span>
+      </div>
+
+      <form class="checkout-form" id="checkout-form" novalidate>
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+
+        <div class="form-group">
+          <label for="full-name">Full name</label>
+          <input type="text" id="full-name" name="full-name" placeholder="Jane Pawsworth" required autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label for="address1">Address line 1</label>
+          <input type="text" id="address1" name="address1" placeholder="123 Biscuit Lane" required autocomplete="address-line1" />
+        </div>
+
+        <div class="form-group">
+          <label for="address2">Address line 2 (optional)</label>
+          <input type="text" id="address2" name="address2" placeholder="Apt 4B" autocomplete="address-line2" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" placeholder="Pawsville" required autocomplete="address-level2" />
+          </div>
+          <div class="form-group">
+            <label for="state">State / Province</label>
+            <input type="text" id="state" name="state" placeholder="CA" required autocomplete="address-level1" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="zip">ZIP / Postal code</label>
+            <input type="text" id="zip" name="zip" placeholder="90210" required autocomplete="postal-code" />
+          </div>
+          <div class="form-group">
+            <label for="country">Country</label>
+            <input type="text" id="country" name="country" placeholder="US" required autocomplete="country" maxlength="2" />
+          </div>
+        </div>
+
+        <button type="submit" class="checkout-btn" id="checkout-btn" disabled>
+          <div class="spinner" id="checkout-spinner"></div>
+          <span id="checkout-btn-label">🔒 Proceed to Secure Checkout</span>
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <footer class="store-footer">
+    <p>🐾 <a href="/">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
+  </footer>
+
+  <script>
+    // ---------------------------------------------------------------------------
+    // Cart state
+    // ---------------------------------------------------------------------------
+    const cart = {}; // { productId: { product, quantity } }
+
+    function cartIsEmpty() {
+      return Object.keys(cart).length === 0;
+    }
+
+    function cartTotal() {
+      return Object.values(cart).reduce(
+        (sum, { product, quantity }) => sum + product.price * quantity, 0
+      );
+    }
+
+    // ---------------------------------------------------------------------------
+    // Render helpers
+    // ---------------------------------------------------------------------------
+    function renderCart() {
+      const ul = document.getElementById('cart-items');
+      const totalRow = document.getElementById('cart-total-row');
+      const totalSpan = document.getElementById('cart-total');
+      const btn = document.getElementById('checkout-btn');
+
+      if (cartIsEmpty()) {
+        ul.innerHTML = '<li class="cart-empty">Your cart is empty.</li>';
+        totalRow.style.display = 'none';
+        btn.disabled = true;
+        return;
+      }
+
+      ul.innerHTML = '';
+      Object.values(cart).forEach(({ product, quantity }) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span class="cart-item-name">${esc(product.name)}</span>
+          <span class="cart-item-qty">×${quantity}</span>
+          <span class="cart-item-price">$${(product.price * quantity).toFixed(2)}</span>
+          <button class="cart-remove-btn" data-id="${product.id}" aria-label="Remove ${esc(product.name)}">✕</button>
+        `;
+        ul.appendChild(li);
+      });
+
+      totalRow.style.display = 'flex';
+      totalSpan.textContent = '$' + cartTotal().toFixed(2);
+      btn.disabled = false;
+
+      // Remove handlers
+      ul.querySelectorAll('.cart-remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          delete cart[btn.dataset.id];
+          renderCart();
+        });
+      });
+    }
+
+    function esc(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Load products
+    // ---------------------------------------------------------------------------
+    async function loadProducts() {
+      const grid = document.getElementById('products-grid');
+      try {
+        const resp = await fetch('/api/store/products');
+        if (!resp.ok) throw new Error('Failed to load products.');
+        const products = await resp.json();
+
+        if (!products.length) {
+          grid.innerHTML = '<p style="color:#5a3a3e;font-size:.9rem;">No products available yet – check back soon! 🐾</p>';
+          return;
+        }
+
+        grid.innerHTML = '';
+        products.forEach(p => {
+          const inStock = p.stock_count === null || p.stock_count > 0;
+          const card = document.createElement('div');
+          card.className = 'product-card';
+          const imgHtml = p.image_url
+            ? `<img class="product-img" src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy" />`
+            : `<div class="product-img-placeholder">🐾</div>`;
+          card.innerHTML = `
+            ${imgHtml}
+            <div class="product-body">
+              <p class="product-name">${esc(p.name)}</p>
+              ${p.description ? `<p class="product-desc">${esc(p.description)}</p>` : ''}
+              <div class="product-footer">
+                <span class="product-price">$${Number(p.price).toFixed(2)}</span>
+                ${inStock
+                  ? `<button class="add-btn" data-id="${p.id}">＋ Add to Cart</button>`
+                  : `<span class="product-out-of-stock">Out of Stock</span>`
+                }
+              </div>
+            </div>
+          `;
+          grid.appendChild(card);
+
+          if (inStock) {
+            card.querySelector('.add-btn').addEventListener('click', () => {
+              if (cart[p.id]) {
+                cart[p.id].quantity += 1;
+              } else {
+                cart[p.id] = { product: p, quantity: 1 };
+              }
+              renderCart();
+            });
+          }
+        });
+      } catch (err) {
+        grid.innerHTML = `<p style="color:#7a5060;font-size:.9rem;">Could not load products. Please try again later.</p>`;
+        console.error(err);
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Checkout
+    // ---------------------------------------------------------------------------
+    document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (cartIsEmpty()) return;
+
+      const btn = document.getElementById('checkout-btn');
+      const spinner = document.getElementById('checkout-spinner');
+      const label = document.getElementById('checkout-btn-label');
+
+      btn.disabled = true;
+      spinner.style.display = 'inline-block';
+      label.textContent = 'Redirecting to payment…';
+
+      const email = document.getElementById('email').value.trim();
+      const shippingAddress = {
+        name:     document.getElementById('full-name').value.trim(),
+        address1: document.getElementById('address1').value.trim(),
+        address2: document.getElementById('address2').value.trim(),
+        city:     document.getElementById('city').value.trim(),
+        state:    document.getElementById('state').value.trim(),
+        zip:      document.getElementById('zip').value.trim(),
+        country:  document.getElementById('country').value.trim().toUpperCase() || 'US',
+      };
+
+      const cartItems = Object.values(cart).map(({ product, quantity }) => ({
+        product_id: product.id,
+        quantity,
+      }));
+
+      try {
+        const resp = await fetch('/api/store/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cart: cartItems,
+            customer_email: email,
+            shipping_address: shippingAddress,
+          }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          throw new Error(data.detail || 'Checkout failed. Please try again.');
+        }
+
+        // Redirect to Segpay payment page.
+        window.location.href = data.checkout_url;
+      } catch (err) {
+        spinner.style.display = 'none';
+        label.textContent = '🔒 Proceed to Secure Checkout';
+        btn.disabled = false;
+        showBanner('cancel', '⚠️ ' + err.message);
+        console.error(err);
+      }
+    });
+
+    // ---------------------------------------------------------------------------
+    // Status banner (after payment redirect back)
+    // ---------------------------------------------------------------------------
+    function showBanner(type, message) {
+      const banner = document.getElementById('status-banner');
+      banner.className = 'status-banner ' + type;
+      banner.textContent = message;
+      banner.style.display = 'block';
+      banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'success') {
+      showBanner('success', '🎉 Payment successful! Your order is on its way. Check your email for a confirmation.');
+    } else if (params.get('status') === 'cancel') {
+      showBanner('cancel', '😿 Payment cancelled. Your cart is still here whenever you\'re ready!');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Init
+    // ---------------------------------------------------------------------------
+    loadProducts();
+    renderCart();
+  </script>
+</body>
+</html>
