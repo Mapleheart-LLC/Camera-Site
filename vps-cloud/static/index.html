@@ -1405,7 +1405,7 @@
       const payload = decodeJwtPayload(token);
       if (!payload || (payload.access_level || 0) < 1) return;
 
-      // Start polling now-playing every 5 s
+      // Start polling now-playing every 5 seconds
       pollNowPlaying();
       _npPollInterval = setInterval(pollNowPlaying, 5000);
 

@@ -75,7 +75,7 @@ async def _get_valid_access_token(db: sqlite3.Connection) -> Optional[str]:
     if not refresh_token:
         return None
 
-    # Use existing token if still fresh (60 s buffer)
+    # Use existing token if still fresh (60-second buffer)
     if access_token and expires_at_str:
         try:
             if float(expires_at_str) > time.time() + 60:
