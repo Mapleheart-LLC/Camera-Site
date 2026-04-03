@@ -35,6 +35,14 @@ services:
       # notifications when new questions are submitted to the Puppy Pouch.
       # Leave empty to disable notifications.
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # Discord channel IDs for bot-based delivery (preferred over webhook URL
+      # when DISCORD_BOT_TOKEN is also set).
+      # question channel: new Q&A notes with a Reply button
+      - DISCORD_QUESTION_CHANNEL_ID=${DISCORD_QUESTION_CHANNEL_ID:-}
+      # notification channel: answer-published / general site events
+      - DISCORD_NOTIFICATION_CHANNEL_ID=${DISCORD_NOTIFICATION_CHANNEL_ID:-}
+      # admin channel: private operational alerts (e.g. new store purchases)
+      - DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID:-}
       # Ed25519 public key from the Discord Developer Portal (Application →
       # General Information → Public Key).  Required for the reply button /
       # modal feature.  Leave empty to disable Discord interactions.
