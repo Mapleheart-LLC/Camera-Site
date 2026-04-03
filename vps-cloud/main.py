@@ -312,6 +312,15 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS oauth_pending (
+            token      TEXT PRIMARY KEY,
+            secret     TEXT NOT NULL,
+            expires_at TEXT NOT NULL
+        )
+        """
+    )
     # Idempotent migrations: add stream-source columns to existing databases.
     # Column names and types are hardcoded literals (not user input), so
     # string interpolation here is safe and necessary for DDL statements.
