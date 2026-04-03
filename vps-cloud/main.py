@@ -719,6 +719,12 @@ def admin_page_redirect(request: Request):
     return RedirectResponse(url=target, status_code=301)
 
 
+@app.get("/drool", include_in_schema=False)
+def drool_page_redirect():
+    """Redirect /drool to the static drool.html page (Shame Gallery)."""
+    return RedirectResponse(url="/drool.html", status_code=301)
+
+
 # ---------------------------------------------------------------------------
 # Puppy Pouch share page
 # ---------------------------------------------------------------------------

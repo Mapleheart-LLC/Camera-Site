@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="mochii.live – The Drool Log. She liked this. Now everyone knows. 🐾" />
+  <meta property="og:type"        content="website" />
+  <meta property="og:site_name"   content="mochii.live" />
+  <meta property="og:title"       content="The Drool Log 🐾 – mochii.live" />
+  <meta property="og:description" content="Her secret likes and saves. Exposed for the pack." />
+  <meta property="og:url"         content="https://mochii.live/drool" />
+  <link rel="canonical"           href="https://mochii.live/drool" />
+  <meta name="twitter:card"       content="summary" />
+  <meta name="twitter:title"      content="The Drool Log 🐾 – mochii.live" />
+  <meta name="twitter:description" content="Her secret likes and saves. Exposed for the pack." />
+  <title>The Drool Log 🐾 – mochii.live</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN (utility classes) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { nunito: ['Nunito', 'Varela Round', 'system-ui', 'sans-serif'] },
+          colors: {
+            charcoal: '#1a1a1a',
+            surface: '#1e1e1e',
+            card:    '#242424',
+            border:  '#3d2a2e',
+            'pink':  '#e8aeb7',
+            'pink-deep': '#3d2028',
+            'pink-muted': '#c49a9f',
+            'text-main': '#f0e6e8',
+            'text-muted': '#9e7e82',
+            'text-dim':   '#6a4a4e',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+    }
+
+    /* ── Nav ─────────────────────────────────────────── */
+    .drool-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.75rem;
+      background: #1e1e1e;
+      border-bottom: 1px solid #3d2a2e;
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160,30,50,.1);
+    }
+
+    .nav-logo {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      letter-spacing: .01em;
+      text-decoration: none;
+    }
+
+    .nav-home-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .45rem 1rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-size: .85rem;
+      font-weight: 700;
+      font-family: inherit;
+      text-decoration: none;
+      transition: background .18s, color .18s, box-shadow .18s;
+    }
+
+    .nav-home-btn:hover {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+    }
+
+    /* ── Weekly Whimper hero ─────────────────────────── */
+    .whimper-hero {
+      margin: 1.5rem 1.25rem;
+      border-radius: 20px;
+      background: #1e1116;
+      border: 1.5px solid #c49a9f;
+      box-shadow: 0 0 40px rgba(232,174,183,.18), 0 0 80px rgba(232,174,183,.08);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .whimper-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200,80,100,.14) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .whimper-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 999px;
+      padding: .25rem .75rem;
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: #e8aeb7;
+    }
+
+    /* ── Post card ───────────────────────────────────── */
+    .post-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      overflow: hidden;
+      break-inside: avoid;
+      margin-bottom: 1rem;
+      transition: border-color .22s, box-shadow .22s, transform .18s;
+      position: relative;
+    }
+
+    .post-card:hover {
+      border-color: #c49a9f;
+      box-shadow: 0 6px 32px rgba(232,174,183,.18), 0 2px 8px rgba(0,0,0,.4);
+      transform: translateY(-2px);
+    }
+
+    /* ── Media area ──────────────────────────────────── */
+    .card-media {
+      width: 100%;
+      background: #1a1a1a;
+      position: relative;
+      overflow: hidden;
+      min-height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-media img,
+    .card-media video {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+    }
+
+    .card-media-placeholder {
+      width: 100%;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1e1116 0%, #2a1c1f 100%);
+      color: #6a4a4e;
+      font-size: 2rem;
+    }
+
+    /* ── Card body ───────────────────────────────────── */
+    .card-body {
+      padding: .85rem 1rem;
+    }
+
+    .card-platform-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: .55rem;
+    }
+
+    .platform-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .72rem;
+      font-weight: 700;
+      color: #9e7e82;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+
+    .drool-meter {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .75rem;
+      font-weight: 700;
+      color: #c49a9f;
+    }
+
+    .card-text {
+      font-size: .85rem;
+      color: #c49a9f;
+      line-height: 1.45;
+      margin-bottom: .75rem;
+      word-break: break-word;
+    }
+
+    /* ── Bark buttons ────────────────────────────────── */
+    .bark-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      margin-bottom: .75rem;
+    }
+
+    .bark-btn {
+      padding: .3rem .65rem;
+      background: #3d2028;
+      border: 1px solid #6a4a4e;
+      border-radius: 999px;
+      color: #c49a9f;
+      font-size: .75rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .18s, border-color .18s, color .18s, box-shadow .18s;
+      white-space: nowrap;
+    }
+
+    .bark-btn:hover {
+      background: #4d2835;
+      border-color: #e8aeb7;
+      color: #f5d5da;
+      box-shadow: 0 2px 12px rgba(232,174,183,.22);
+    }
+
+    .bark-btn.active {
+      background: #e8aeb7;
+      border-color: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 2px 16px rgba(232,174,183,.35);
+    }
+
+    @keyframes barkPop {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(1.22); }
+      65%  { transform: scale(0.90); }
+      100% { transform: scale(1); }
+    }
+
+    .barking { animation: barkPop .38s cubic-bezier(.36,.07,.19,.97); }
+
+    /* ── Comment input ───────────────────────────────── */
+    .comment-form {
+      display: flex;
+      gap: .45rem;
+      margin-bottom: .65rem;
+    }
+
+    .comment-input {
+      flex: 1;
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .8rem;
+      padding: .45rem .75rem;
+      outline: none;
+      transition: border-color .18s;
+      min-width: 0;
+    }
+
+    .comment-input::placeholder { color: #6a4a4e; }
+    .comment-input:focus { border-color: #c49a9f; }
+
+    .comment-send-btn {
+      padding: .45rem .8rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-size: .8rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .18s, color .18s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .comment-send-btn:hover {
+      background: #e8aeb7;
+      color: #1a1a1a;
+    }
+
+    /* ── Comment list ─────────────────────────────────── */
+    .comment-list {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+
+    .comment-item {
+      font-size: .78rem;
+      line-height: 1.4;
+      color: #9e7e82;
+    }
+
+    .comment-author {
+      color: #c49a9f;
+      font-weight: 700;
+    }
+
+    .comment-text { color: #d4b8bb; }
+
+    /* ── Masonry grid ────────────────────────────────── */
+    .masonry {
+      columns: 1;
+      column-gap: 1rem;
+    }
+
+    @media (min-width: 560px) { .masonry { columns: 2; } }
+    @media (min-width: 1024px) { .masonry { columns: 3; } }
+
+    /* ── Toast ───────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 12px;
+      padding: .65rem 1.25rem;
+      color: #e8aeb7;
+      font-size: .85rem;
+      font-weight: 700;
+      z-index: 100;
+      transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+      white-space: nowrap;
+      box-shadow: 0 4px 24px rgba(0,0,0,.5);
+      pointer-events: none;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Loading skeleton ────────────────────────────── */
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #242424 25%, #2d1f22 50%, #242424 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+
+    /* ── Section header ──────────────────────────────── */
+    .section-label {
+      font-size: .68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .13em;
+      color: #6a4a4e;
+      margin-bottom: .75rem;
+    }
+
+    /* ── Empty state ──────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #6a4a4e;
+    }
+
+    .empty-state .paw { font-size: 3rem; display: block; margin-bottom: 1rem; }
+
+    /* ── Link ─────────────────────────────────────────── */
+    .card-link {
+      display: block;
+      font-size: .72rem;
+      color: #6a4a4e;
+      text-decoration: none;
+      margin-bottom: .6rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transition: color .15s;
+    }
+
+    .card-link:hover { color: #9e7e82; text-decoration: underline; }
+
+    /* Reaction count row */
+    .reaction-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .35rem;
+      margin-bottom: .65rem;
+    }
+
+    .reaction-count {
+      font-size: .72rem;
+      color: #9e7e82;
+      background: #2a1c1f;
+      border: 1px solid #3d2a2e;
+      border-radius: 999px;
+      padding: .15rem .55rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ──────────────────────────────────────────── -->
+  <nav class="drool-nav" aria-label="Site navigation">
+    <a href="/" class="nav-logo">🐾 mochii.live</a>
+    <a href="/" class="nav-home-btn">← Back to the Pack</a>
+  </nav>
+
+  <!-- ── Page header ──────────────────────────────────── -->
+  <div style="padding: 1.5rem 1.25rem 0; max-width: 1200px; margin: 0 auto; width: 100%;">
+    <h1 style="font-size: clamp(1.6rem,4vw,2.4rem); font-weight: 800; color: #e8aeb7; margin-bottom: .3rem;">
+      The Drool Log 🐾
+    </h1>
+    <p style="font-size: .9rem; color: #9e7e82; margin-bottom: 1.25rem;">
+      She liked this. She saved this. She thought no one would find out. <em>She was wrong.</em>
+    </p>
+  </div>
+
+  <main style="max-width: 1200px; margin: 0 auto; padding: 0 1.25rem 4rem; width: 100%;">
+
+    <!-- ── Weekly Whimper section ───────────────────── -->
+    <div id="whimper-section" style="display:none;" aria-label="Weekly Whimper">
+      <p class="section-label">✦ Weekly Whimper ✦</p>
+      <div class="whimper-hero" id="whimper-card">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- ── Feed section ─────────────────────────────── -->
+    <div id="feed-section">
+      <p class="section-label" style="margin-top: 1.5rem;" id="feed-label">✦ Her Shame Gallery ✦</p>
+      <!-- Loading skeletons -->
+      <div id="loading-state" class="masonry">
+        <div class="post-card" style="padding: 1rem;">
+          <div class="skeleton" style="height: 160px; margin-bottom: .75rem; border-radius: 10px;"></div>
+          <div class="skeleton" style="height: 14px; width: 60%; margin-bottom: .5rem;"></div>
+          <div class="skeleton" style="height: 12px; width: 80%;"></div>
+        </div>
+        <div class="post-card" style="padding: 1rem;">
+          <div class="skeleton" style="height: 200px; margin-bottom: .75rem; border-radius: 10px;"></div>
+          <div class="skeleton" style="height: 14px; width: 50%; margin-bottom: .5rem;"></div>
+          <div class="skeleton" style="height: 12px; width: 70%;"></div>
+        </div>
+        <div class="post-card" style="padding: 1rem;">
+          <div class="skeleton" style="height: 140px; margin-bottom: .75rem; border-radius: 10px;"></div>
+          <div class="skeleton" style="height: 14px; width: 65%; margin-bottom: .5rem;"></div>
+          <div class="skeleton" style="height: 12px; width: 75%;"></div>
+        </div>
+      </div>
+      <div id="feed-grid" class="masonry" style="display:none;"></div>
+      <div id="empty-state" class="empty-state" style="display:none;">
+        <span class="paw" aria-hidden="true">🐾</span>
+        <p style="font-size:1rem; font-weight:700; color:#9e7e82;">Nothing yet... she's been good.</p>
+        <p style="font-size:.85rem; color:#6a4a4e; margin-top:.35rem;">Check back soon – the scraper runs every 5 minutes.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Rate-limit / error toast ─────────────────────── -->
+  <div id="toast" role="alert" aria-live="assertive"></div>
+
+  <script>
+    'use strict';
+
+    // ── SVG icon helpers ─────────────────────────────────
+    const ICONS = {
+      eye: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+      reddit: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#ff4500" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#ff4500"/><ellipse cx="12" cy="13.5" rx="5.5" ry="3.5" fill="#fff"/><circle cx="8.5" cy="13" r="1" fill="#ff4500"/><circle cx="15.5" cy="13" r="1" fill="#ff4500"/><path d="M10 16.5c.6.5 1.5.8 2 .8s1.4-.3 2-.8" stroke="#ff4500" stroke-width="1" fill="none"/><circle cx="17.5" cy="8" r="1.5" fill="#ff4500"/><path d="M14 9.5c.5-1.5 2-2 3.2-1.5" stroke="#fff" stroke-width="1" fill="none"/><circle cx="17.5" cy="8" r=".6" fill="#fff"/></svg>`,
+      twitter: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#1d9bf0" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#1d9bf0"/><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L2.25 2.25H8.08l4.253 5.622Z" fill="#fff"/></svg>`,
+      msg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    };
+
+    const REACTION_LABELS = {
+      'Good Girl':  'Good Girl 🐾',
+      'Bad Puppy':  'Bad Puppy 💢',
+      'Dumb Thing': 'Dumb Thing 🤭',
+      'Pretty Toy': 'Pretty Toy 🎀',
+    };
+
+    // ── Toast ─────────────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+    }
+
+    // ── API helpers ───────────────────────────────────────
+    async function apiFetch(url, opts = {}) {
+      const r = await fetch(url, opts);
+      if (r.status === 429) {
+        showToast('The puppy can only take so much! Wait a bit. 🐾');
+        return null;
+      }
+      return r;
+    }
+
+    // ── Build comment HTML (safe) ─────────────────────────
+    function escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function buildCommentEl(c) {
+      const div = document.createElement('div');
+      div.className = 'comment-item';
+      div.innerHTML = `<span class="comment-author">${escHtml(c.pack_member_id ?? 'Pack Member')}</span>: <span class="comment-text">${escHtml(c.comment_text)}</span>`;
+      return div;
+    }
+
+    // ── Build post card ───────────────────────────────────
+    function buildCard(item, isWhimper = false) {
+      const card = document.createElement('article');
+      card.className = 'post-card';
+      card.setAttribute('aria-label', `${item.platform} post`);
+
+      // Media
+      let mediaHtml;
+      if (item.media_url) {
+        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
+        if (isVideo) {
+          mediaHtml = `<div class="card-media"><video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="max-height:320px;"></video></div>`;
+        } else {
+          mediaHtml = `<div class="card-media"><img src="${escHtml(item.media_url)}" alt="She liked this" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-media-placeholder\\'>🐾</div>'" /></div>`;
+        }
+      } else {
+        mediaHtml = `<div class="card-media"><div class="card-media-placeholder" aria-hidden="true">🐾</div></div>`;
+      }
+
+      // Platform icon
+      const platformIcon = ICONS[item.platform] || '';
+      const platformLabel = item.platform === 'reddit' ? 'Reddit' : 'Twitter/X';
+
+      // Reaction counts
+      const rxCounts = Object.entries(item.reaction_counts || {});
+      const rxHtml = rxCounts.length
+        ? rxCounts.map(([k, v]) => `<span class="reaction-count">${escHtml(REACTION_LABELS[k] || k)} ${v}</span>`).join('')
+        : '';
+
+      // Text snippet
+      const snippet = item.text_content
+        ? (item.text_content.length > 180 ? item.text_content.slice(0, 177) + '…' : item.text_content)
+        : '';
+
+      // Build inner HTML
+      card.innerHTML = `
+        ${mediaHtml}
+        <div class="card-body">
+          <div class="card-platform-row">
+            <span class="platform-chip">${platformIcon}${escHtml(platformLabel)}</span>
+            <span class="drool-meter" title="Drool Meter: times she's been caught">${ICONS.eye} ${item.view_count ?? 0}</span>
+          </div>
+          ${snippet ? `<p class="card-text">"${escHtml(snippet)}"</p>` : ''}
+          <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer">${escHtml(item.original_url)}</a>
+          ${rxHtml ? `<div class="reaction-counts">${rxHtml}</div>` : ''}
+
+          <!-- Quick Bark buttons -->
+          <div class="bark-row" aria-label="Quick Bark reactions">
+            ${Object.keys(REACTION_LABELS).map(r => `
+              <button class="bark-btn" data-reaction="${escHtml(r)}" aria-label="React: ${escHtml(REACTION_LABELS[r])}">${escHtml(REACTION_LABELS[r])}</button>
+            `).join('')}
+          </div>
+
+          <!-- Comment form -->
+          <form class="comment-form" aria-label="Leave a remark">
+            <input class="comment-input" type="text" maxlength="500" placeholder="Leave a remark for the girl..." aria-label="Leave a remark for the girl" autocomplete="off" />
+            <button type="submit" class="comment-send-btn">Bark 🐾</button>
+          </form>
+
+          <!-- Comments -->
+          <div class="comment-list" aria-label="Barks from the pack">
+            ${(item.comments || []).map(c => `
+              <div class="comment-item">
+                <span class="comment-author">${escHtml(c.pack_member_id ?? 'Pack Member')}</span>:
+                <span class="comment-text">${escHtml(c.comment_text)}</span>
+              </div>
+            `).join('')}
+          </div>
+          ${(item.comment_count ?? 0) > 0 && !(item.comments || []).length
+            ? `<p style="font-size:.72rem;color:#6a4a4e;margin-top:.4rem;">${item.comment_count} bark${item.comment_count !== 1 ? 's' : ''} from the pack</p>`
+            : ''}
+        </div>
+      `;
+
+      // ── Reaction button handlers ──────────────────────
+      card.querySelectorAll('.bark-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const reaction = btn.dataset.reaction;
+          btn.classList.add('barking');
+          btn.addEventListener('animationend', () => btn.classList.remove('barking'), { once: true });
+
+          const res = await apiFetch(`/api/drool/${item.id}/react`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reaction_type: reaction }),
+          });
+
+          if (res && res.ok) {
+            // Mark active
+            card.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Refresh reaction counts
+            const data = await res.json().catch(() => null);
+            if (data) {
+              refreshReactionCounts(card, item.id);
+            }
+          }
+        });
+      });
+
+      // ── Comment form handler ──────────────────────────
+      const form = card.querySelector('.comment-form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = form.querySelector('.comment-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const sendBtn = form.querySelector('.comment-send-btn');
+        sendBtn.disabled = true;
+        sendBtn.textContent = '…';
+
+        const res = await apiFetch(`/api/drool/${item.id}/comment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment_text: text }),
+        });
+
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Bark 🐾';
+
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
+          input.value = '';
+          // Prepend new comment to the list
+          const commentList = card.querySelector('.comment-list');
+          const packId = data?.pack_member_id ?? 'Pack Member';
+          const newComment = buildCommentEl({ pack_member_id: packId, comment_text: text });
+          newComment.style.opacity = '0';
+          newComment.style.transition = 'opacity .3s';
+          commentList.insertBefore(newComment, commentList.firstChild);
+          requestAnimationFrame(() => { newComment.style.opacity = '1'; });
+        }
+      });
+
+      return card;
+    }
+
+    // ── Refresh reaction counts on a card ─────────────────
+    async function refreshReactionCounts(cardEl, itemId) {
+      // Do a lightweight re-fetch of the feed filtered by this item – or just
+      // fetch the full feed and grab the matching item (cheapest since backend
+      // is local SQLite).  A simple approach: re-fetch page 1 and find the item.
+      try {
+        const r = await fetch(`/api/drool?page=1&page_size=100`);
+        if (!r.ok) return;
+        const items = await r.json();
+        const updated = items.find(i => i.id === itemId);
+        if (!updated) return;
+        const rxEl = cardEl.querySelector('.reaction-counts');
+        if (!rxEl) return;
+        const rxCounts = Object.entries(updated.reaction_counts || {});
+        rxEl.innerHTML = rxCounts
+          .map(([k, v]) => `<span class="reaction-count">${escHtml(REACTION_LABELS[k] || k)} ${v}</span>`)
+          .join('');
+      } catch (_) { /* ignore */ }
+    }
+
+    // ── Build Weekly Whimper card (larger, hero style) ────
+    function buildWhimperCard(item) {
+      const wrapper = document.getElementById('whimper-card');
+      wrapper.innerHTML = '';
+
+      const inner = document.createElement('div');
+      inner.style.cssText = 'position:relative; z-index:1;';
+
+      // Header badge + caption
+      const header = document.createElement('div');
+      header.style.cssText = 'padding:1.25rem 1.25rem .75rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem;';
+      header.innerHTML = `
+        <span class="whimper-badge">🏆 Most Embarrassing of the Week</span>
+        <span style="font-size:.8rem;color:#9e7e82;">The pack's favorite treat this week. 🐾</span>
+      `;
+      inner.appendChild(header);
+
+      // Media (larger)
+      if (item.media_url) {
+        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
+        const mediaWrap = document.createElement('div');
+        mediaWrap.style.cssText = 'padding: 0 1.25rem .5rem; border-radius: 12px; overflow:hidden;';
+        if (isVideo) {
+          mediaWrap.innerHTML = `<video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;"></video>`;
+        } else {
+          mediaWrap.innerHTML = `<img src="${escHtml(item.media_url)}" alt="Weekly Whimper" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" onerror="this.style.display='none'" />`;
+        }
+        inner.appendChild(mediaWrap);
+      }
+
+      // Body
+      const body = document.createElement('div');
+      body.style.cssText = 'padding: .75rem 1.25rem 1.25rem;';
+
+      const platformIcon = ICONS[item.platform] || '';
+      const platformLabel = item.platform === 'reddit' ? 'Reddit' : 'Twitter/X';
+      const snippet = item.text_content
+        ? (item.text_content.length > 280 ? item.text_content.slice(0, 277) + '…' : item.text_content)
+        : '';
+
+      body.innerHTML = `
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;flex-wrap:wrap;">
+          <span class="platform-chip" style="font-size:.8rem;">${platformIcon}${escHtml(platformLabel)}</span>
+          <span class="drool-meter" style="font-size:.82rem;" title="Drool Meter">${ICONS.eye} ${item.view_count ?? 0}</span>
+          <span class="drool-meter" style="font-size:.82rem;">${ICONS.msg} ${item.comment_count ?? 0}</span>
+          <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer" style="margin:0;font-size:.78rem;max-width:200px;">${escHtml(item.original_url)}</a>
+        </div>
+        ${snippet ? `<p style="font-size:.9rem;color:#c49a9f;line-height:1.5;margin-bottom:.85rem;">"${escHtml(snippet)}"</p>` : ''}
+      `;
+
+      // Reactions
+      const rxCounts = Object.entries(item.reaction_counts || {});
+      if (rxCounts.length) {
+        const rxWrap = document.createElement('div');
+        rxWrap.className = 'reaction-counts';
+        rxWrap.innerHTML = rxCounts.map(([k, v]) => `<span class="reaction-count">${escHtml(REACTION_LABELS[k] || k)} ${v}</span>`).join('');
+        body.appendChild(rxWrap);
+      }
+
+      // Bark buttons for whimper card
+      const barkRow = document.createElement('div');
+      barkRow.className = 'bark-row';
+      barkRow.setAttribute('aria-label', 'Quick Bark reactions');
+      barkRow.innerHTML = Object.keys(REACTION_LABELS).map(r =>
+        `<button class="bark-btn" data-reaction="${escHtml(r)}" style="font-size:.82rem;">${escHtml(REACTION_LABELS[r])}</button>`
+      ).join('');
+
+      barkRow.querySelectorAll('.bark-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.classList.add('barking');
+          btn.addEventListener('animationend', () => btn.classList.remove('barking'), { once: true });
+          const res = await apiFetch(`/api/drool/${item.id}/react`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reaction_type: btn.dataset.reaction }),
+          });
+          if (res && res.ok) {
+            barkRow.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+          }
+        });
+      });
+
+      body.appendChild(barkRow);
+
+      // Comment form + list
+      const commentSection = document.createElement('div');
+      commentSection.innerHTML = `
+        <form class="comment-form" aria-label="Leave a remark">
+          <input class="comment-input" type="text" maxlength="500" placeholder="Leave a remark for the girl..." aria-label="Leave a remark for the girl" autocomplete="off" />
+          <button type="submit" class="comment-send-btn">Bark 🐾</button>
+        </form>
+        <div class="comment-list">
+          ${(item.comments || []).map(c => `
+            <div class="comment-item">
+              <span class="comment-author">${escHtml(c.pack_member_id ?? 'Pack Member')}</span>:
+              <span class="comment-text">${escHtml(c.comment_text)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      const form = commentSection.querySelector('.comment-form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = form.querySelector('.comment-input');
+        const text = input.value.trim();
+        if (!text) return;
+        const sendBtn = form.querySelector('.comment-send-btn');
+        sendBtn.disabled = true;
+        sendBtn.textContent = '…';
+        const res = await apiFetch(`/api/drool/${item.id}/comment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comment_text: text }),
+        });
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Bark 🐾';
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
+          input.value = '';
+          const cl = commentSection.querySelector('.comment-list');
+          const packId = data?.pack_member_id ?? 'Pack Member';
+          const newC = buildCommentEl({ pack_member_id: packId, comment_text: text });
+          newC.style.opacity = '0';
+          newC.style.transition = 'opacity .3s';
+          cl.insertBefore(newC, cl.firstChild);
+          requestAnimationFrame(() => { newC.style.opacity = '1'; });
+        }
+      });
+
+      body.appendChild(commentSection);
+      inner.appendChild(body);
+      wrapper.appendChild(inner);
+    }
+
+    // ── Load feed from API ────────────────────────────────
+    async function loadFeed() {
+      let items;
+      try {
+        const r = await fetch('/api/drool?page=1&page_size=50');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        items = await r.json();
+      } catch (err) {
+        console.error('Failed to load drool feed:', err);
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('empty-state').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('loading-state').style.display = 'none';
+
+      if (!items || items.length === 0) {
+        document.getElementById('empty-state').style.display = 'block';
+        return;
+      }
+
+      // First item is the Weekly Whimper (if is_weekly_whimper === true)
+      let feedItems = items;
+      const whimperItem = items.find(i => i.is_weekly_whimper);
+      if (whimperItem) {
+        const whimperSection = document.getElementById('whimper-section');
+        whimperSection.style.display = 'block';
+        buildWhimperCard(whimperItem);
+        feedItems = items.filter(i => !i.is_weekly_whimper);
+      }
+
+      const grid = document.getElementById('feed-grid');
+      grid.style.display = '';
+      feedItems.forEach(item => {
+        grid.appendChild(buildCard(item));
+      });
+
+      // If only the whimper exists and no other items
+      if (feedItems.length === 0 && whimperItem) {
+        document.getElementById('feed-label').style.display = 'none';
+      }
+    }
+
+    // ── Init ─────────────────────────────────────────────
+    loadFeed();
+  </script>
+</body>
+</html>
