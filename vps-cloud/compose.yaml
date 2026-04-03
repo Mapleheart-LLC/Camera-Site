@@ -102,7 +102,7 @@ services:
       # Defaults to TWITTER_USER_ID when not set.
       - TWITTER_ADMIN_USER_ID=${TWITTER_ADMIN_USER_ID:-}
       # Optional: admin JWT lifetime in minutes (default 1440 = 24 h).
-      - TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES=${TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES:-}
+      - TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES=${TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES:-1440}
       # ── The Drool Log – Bluesky scraper credentials ───
       # Create an app password at https://bsky.app/settings/app-passwords
       - BSKY_HANDLE=${BSKY_HANDLE:-}
