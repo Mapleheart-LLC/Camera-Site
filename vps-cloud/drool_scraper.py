@@ -13,11 +13,11 @@ REDDIT_USERNAME        – Reddit account username to scrape
 REDDIT_PASSWORD        – Reddit account password
 REDDIT_USER_AGENT      – User-agent string (e.g. "drool-log/1.0 by u/yourname")
 
-TWITTER_BEARER_TOKEN   – Twitter/X app-only Bearer Token (for likes / bookmarks)
+TWITTER_BEARER_TOKEN   – Twitter/X app-only Bearer Token (optional if user auth is set)
 TWITTER_USER_ID        – Numeric Twitter/X user ID to scrape
-TWITTER_API_KEY        – Twitter/X API Key (consumer key) – needed for bookmarks
+TWITTER_API_KEY        – Twitter/X API Key (consumer key) – for OAuth 1.0a user auth
 TWITTER_API_SECRET     – Twitter/X API Secret
-TWITTER_ACCESS_TOKEN   – Twitter/X Access Token (user auth) – needed for bookmarks
+TWITTER_ACCESS_TOKEN   – Twitter/X Access Token (user auth) – obtained via admin OAuth flow
 TWITTER_ACCESS_SECRET  – Twitter/X Access Token Secret
 
 BSKY_HANDLE            – Bluesky handle (e.g. yourname.bsky.social)
@@ -251,12 +251,14 @@ def _get_tweepy_client() -> Optional[object]:
     access_token  = _load_credential("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN")
     access_secret = _load_credential("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET")
 
-    if not bearer:
+    # Require at least a bearer token OR a full user-auth token pair so the
+    # client can make authenticated calls (liked tweets work with either).
+    if not bearer and not (access_token and access_secret):
         return None
 
     try:
         return _tweepy.Client(
-            bearer_token=bearer,
+            bearer_token=bearer or None,
             consumer_key=api_key or None,
             consumer_secret=api_secret or None,
             access_token=access_token or None,
@@ -269,7 +271,7 @@ def _get_tweepy_client() -> Optional[object]:
 
 
 def _scrape_twitter() -> None:
-    """Fetch liked and bookmarked tweets and store new ones in drool_archive."""
+    """Fetch liked tweets and store new ones in drool_archive."""
     client = _get_tweepy_client()
     if client is None:
         logger.debug("Twitter scraper: credentials not configured, skipping.")
@@ -301,7 +303,7 @@ def _scrape_twitter() -> None:
                             m, "preview_image_url", None
                         )
                 for tweet in resp.data:
-                    url = f"https://twitter.com/i/web/status/{tweet.id}"
+                    url = f"https://x.com/i/web/status/{tweet.id}"
                     media_url: Optional[str] = None
                     att = getattr(tweet, "attachments", None) or {}
                     mk = (att.get("media_keys") or [None])[0]
@@ -316,37 +318,10 @@ def _scrape_twitter() -> None:
         except Exception as exc:
             logger.warning("Twitter scraper: liked tweets fetch failed: %s", exc)
 
-        # Bookmarks (requires user-level OAuth 1.0a or OAuth 2.0 user context)
-        try:
-            resp = client.get_bookmarks(
-                id=user_id,
-                max_results=50,
-                tweet_fields=["created_at", "text", "attachments"],
-                expansions=["attachments.media_keys"],
-                media_fields=["url", "preview_image_url"],
-            )
-            if resp and resp.data:
-                media_map = {}
-                if resp.includes and "media" in resp.includes:
-                    for m in resp.includes["media"]:
-                        media_map[m.media_key] = getattr(m, "url", None) or getattr(
-                            m, "preview_image_url", None
-                        )
-                for tweet in resp.data:
-                    url = f"https://twitter.com/i/web/status/{tweet.id}"
-                    media_url = None
-                    att = getattr(tweet, "attachments", None) or {}
-                    mk = (att.get("media_keys") or [None])[0]
-                    if mk:
-                        media_url = media_map.get(mk)
-                    ts = (
-                        tweet.created_at.isoformat()
-                        if tweet.created_at
-                        else datetime.now(timezone.utc).isoformat()
-                    )
-                    items.append(("twitter", url, media_url, tweet.text, ts))
-        except Exception as exc:
-            logger.warning("Twitter scraper: bookmarks fetch failed: %s", exc)
+        # Bookmarks require OAuth 2.0 Authorization Code (PKCE) user context,
+        # which is not currently supported by this codebase.  The endpoint
+        # returns a 403 for any other auth method, so we skip it entirely.
+        logger.debug("Twitter scraper: bookmark scraping skipped (requires OAuth 2.0 PKCE).")
 
         new_count = 0
         newly_inserted: list[tuple] = []
