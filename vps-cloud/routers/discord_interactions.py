@@ -25,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, HTTPException, Request, status
 
 from db import get_db_connection
+from discord_webhook import send_answer_notification
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +168,9 @@ async def discord_interactions(request: Request):
         lines = ["✅ Reply saved and published!"]
         if share_url:
             lines.append(f"Share it: {share_url}")
+
+        # Notify the notification channel that an answer has been published.
+        await send_answer_notification(question_id=question_id, share_url=share_url)
 
         return {
             "type": _CHANNEL_MESSAGE,

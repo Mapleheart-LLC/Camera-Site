@@ -6,6 +6,7 @@ Public endpoints (no authentication required):
   GET  /api/questions/public         – list all answered, public questions
 """
 
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -66,6 +67,7 @@ async def submit_question(
         question_text=payload.text,
         is_embed=True,
         question_id=question_id,
+        channel_id=os.environ.get("DISCORD_QUESTION_CHANNEL_ID"),
     )
 
     return {"id": question_id, "message": "Your question has been submitted 🐾"}
