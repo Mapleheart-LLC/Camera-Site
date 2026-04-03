@@ -71,38 +71,59 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Pending-state store: oauth_token → (oauth_token_secret, expiry)
+# Pending-state store: persisted in the SQLite oauth_pending table so that
+# state survives container restarts between /login and /callback.
 # Keys are cleaned up after 10 minutes or on first use, whichever comes first.
 # ---------------------------------------------------------------------------
 
 _STATE_TTL_SECONDS = 600  # 10 minutes
 
-_pending: dict[str, tuple[str, datetime]] = {}
+
+def _store_pending(token: str, secret: str) -> None:
+    """Persist an OAuth pending state token → secret mapping to the database."""
+    expiry = (
+        datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL_SECONDS)
+    ).isoformat()
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "DELETE FROM oauth_pending WHERE expires_at < ?",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO oauth_pending (token, secret, expires_at)"
+            " VALUES (?, ?, ?)",
+            (token, secret, expiry),
+        )
+        conn.commit()
+        conn.close()
+    except _sqlite3.Error as exc:
+        logger.error("Failed to store OAuth pending state: %s", exc)
 
 
-def _store_pending(oauth_token: str, oauth_token_secret: str) -> None:
-    _prune_pending()
-    expiry = datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL_SECONDS)
-    _pending[oauth_token] = (oauth_token_secret, expiry)
-
-
-def _pop_pending(oauth_token: str) -> Optional[str]:
-    """Return and remove the stored token secret, or None if missing/expired."""
-    _prune_pending()
-    entry = _pending.pop(oauth_token, None)
-    if entry is None:
+def _pop_pending(token: str) -> Optional[str]:
+    """Return and remove the stored secret, or None if missing/expired."""
+    try:
+        conn = get_db_connection()
+        row = conn.execute(
+            "SELECT secret, expires_at FROM oauth_pending WHERE token = ?", (token,)
+        ).fetchone()
+        conn.execute("DELETE FROM oauth_pending WHERE token = ?", (token,))
+        conn.execute(
+            "DELETE FROM oauth_pending WHERE expires_at < ?",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+        conn.close()
+    except _sqlite3.Error as exc:
+        logger.error("Failed to pop OAuth pending state: %s", exc)
         return None
-    secret, expiry = entry
-    if datetime.now(timezone.utc) > expiry:
+    if row is None:
+        return None
+    secret, expires_at = row["secret"], row["expires_at"]
+    if datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc):
         return None
     return secret
-
-
-def _prune_pending() -> None:
-    now = datetime.now(timezone.utc)
-    expired = [k for k, (_, exp) in _pending.items() if exp <= now]
-    for k in expired:
-        del _pending[k]
 
 
 # ---------------------------------------------------------------------------
@@ -260,35 +281,7 @@ def twitter_callback(
 # Routes – OAuth 2.0 PKCE (bookmarks)
 # ---------------------------------------------------------------------------
 
-# Pending PKCE state: state_token → (code_verifier, expiry)
-_pkce_pending: dict[str, tuple[str, datetime]] = {}
-
 _PKCE_SCOPES = "bookmark.read tweet.read users.read offline.access"
-
-
-def _store_pkce(state: str, code_verifier: str) -> None:
-    _prune_pkce()
-    expiry = datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL_SECONDS)
-    _pkce_pending[state] = (code_verifier, expiry)
-
-
-def _pop_pkce(state: str) -> Optional[str]:
-    """Return and remove the stored code verifier, or None if missing/expired."""
-    _prune_pkce()
-    entry = _pkce_pending.pop(state, None)
-    if entry is None:
-        return None
-    verifier, expiry = entry
-    if datetime.now(timezone.utc) > expiry:
-        return None
-    return verifier
-
-
-def _prune_pkce() -> None:
-    now = datetime.now(timezone.utc)
-    expired = [k for k, (_, exp) in _pkce_pending.items() if exp <= now]
-    for k in expired:
-        del _pkce_pending[k]
 
 
 @router.get("/auth/twitter2/login", include_in_schema=False)
@@ -332,7 +325,7 @@ def twitter2_login():
             url="/admin.html?error=oauth2_init_failed", status_code=302
         )
 
-    _store_pkce(state, code_verifier)
+    _store_pending(state, code_verifier)
     return RedirectResponse(url=auth_url, status_code=302)
 
 
@@ -348,7 +341,7 @@ def twitter2_callback(
             url="/admin.html?error=twitter2_cancelled", status_code=302
         )
 
-    code_verifier = _pop_pkce(state)
+    code_verifier = _pop_pending(state)
     if not code_verifier:
         return RedirectResponse(
             url="/admin.html?error=invalid_state", status_code=302
