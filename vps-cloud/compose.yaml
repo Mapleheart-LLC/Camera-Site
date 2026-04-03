@@ -91,6 +91,10 @@ services:
       - TWITTER_API_SECRET=${TWITTER_API_SECRET:-}
       - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN:-}
       - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET:-}
+      # ── The Drool Log – Bluesky scraper credentials ───
+      # Create an app password at https://bsky.app/settings/app-passwords
+      - BSKY_HANDLE=${BSKY_HANDLE:-}
+      - BSKY_APP_PASSWORD=${BSKY_APP_PASSWORD:-}
       # Salt used to anonymise commenter IPs in the Drool Log
       - DROOL_SALT=${DROOL_SALT:-}
       # Printful API key – required for automatic print-on-demand fulfilment

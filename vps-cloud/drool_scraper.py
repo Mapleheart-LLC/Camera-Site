@@ -1,12 +1,12 @@
 """
 drool_scraper.py – Permanent Record scraper for The Drool Log.
 
-Fetches liked/saved content from Reddit (via praw) and Twitter/X (via tweepy)
-on a 5-minute schedule using APScheduler, saving only new items to the
-drool_archive table.
+Fetches liked/saved content from Reddit (via praw), Twitter/X (via tweepy),
+and Bluesky (via atproto) on a 5-minute schedule using APScheduler, saving
+only new items to the drool_archive table.
 
-Configuration (environment variables)
---------------------------------------
+Configuration (environment variables – all also settable via admin panel)
+-------------------------------------------------------------------------
 REDDIT_CLIENT_ID       – Reddit OAuth app client ID
 REDDIT_CLIENT_SECRET   – Reddit OAuth app client secret
 REDDIT_USERNAME        – Reddit account username to scrape
@@ -19,6 +19,9 @@ TWITTER_API_KEY        – Twitter/X API Key (consumer key) – needed for bookm
 TWITTER_API_SECRET     – Twitter/X API Secret
 TWITTER_ACCESS_TOKEN   – Twitter/X Access Token (user auth) – needed for bookmarks
 TWITTER_ACCESS_SECRET  – Twitter/X Access Token Secret
+
+BSKY_HANDLE            – Bluesky handle (e.g. yourname.bsky.social)
+BSKY_APP_PASSWORD      – Bluesky app password (from Settings → App Passwords)
 
 DISCORD_WEBHOOK_URL    – (shared) Discord webhook for new-item pings
 """
@@ -49,7 +52,31 @@ except ImportError:  # noqa: BLE001
     _tweepy = None  # type: ignore[assignment]
     _TWEEPY_AVAILABLE = False
 
+try:
+    from atproto import Client as _AtprotoClient  # type: ignore[import-untyped]
+    _ATPROTO_AVAILABLE = True
+except ImportError:  # noqa: BLE001
+    _AtprotoClient = None  # type: ignore[assignment]
+    _ATPROTO_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Credential helper – DB-first with env-var fallback
+# ---------------------------------------------------------------------------
+
+
+def _load_credential(db_key: str, env_key: str) -> str:
+    """Return a scraper credential from the settings table, falling back to env."""
+    try:
+        conn = get_db_connection()
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (db_key,)).fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not read credential '%s' from DB: %s", db_key, exc)
+    return os.environ.get(env_key, "")
 
 # ---------------------------------------------------------------------------
 # Scheduler (module-level singleton; started / stopped by main.py lifespan)
@@ -100,11 +127,11 @@ def _get_praw_reddit() -> Optional[object]:
         logger.debug("praw is not installed; Reddit scraper disabled.")
         return None
 
-    client_id = os.environ.get("REDDIT_CLIENT_ID", "")
-    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
-    username = os.environ.get("REDDIT_USERNAME", "")
-    password = os.environ.get("REDDIT_PASSWORD", "")
-    user_agent = os.environ.get("REDDIT_USER_AGENT", "drool-log/1.0")
+    client_id     = _load_credential("drool_reddit_client_id",     "REDDIT_CLIENT_ID")
+    client_secret = _load_credential("drool_reddit_client_secret", "REDDIT_CLIENT_SECRET")
+    username      = _load_credential("drool_reddit_username",      "REDDIT_USERNAME")
+    password      = _load_credential("drool_reddit_password",      "REDDIT_PASSWORD")
+    user_agent    = _load_credential("drool_reddit_user_agent",    "REDDIT_USER_AGENT") or "drool-log/1.0"
 
     if not all([client_id, client_secret, username, password]):
         return None
@@ -204,11 +231,11 @@ def _get_tweepy_client() -> Optional[object]:
         logger.debug("tweepy is not installed; Twitter scraper disabled.")
         return None
 
-    bearer = os.environ.get("TWITTER_BEARER_TOKEN", "")
-    api_key = os.environ.get("TWITTER_API_KEY", "")
-    api_secret = os.environ.get("TWITTER_API_SECRET", "")
-    access_token = os.environ.get("TWITTER_ACCESS_TOKEN", "")
-    access_secret = os.environ.get("TWITTER_ACCESS_SECRET", "")
+    bearer        = _load_credential("drool_twitter_bearer_token",  "TWITTER_BEARER_TOKEN")
+    api_key       = _load_credential("drool_twitter_api_key",       "TWITTER_API_KEY")
+    api_secret    = _load_credential("drool_twitter_api_secret",    "TWITTER_API_SECRET")
+    access_token  = _load_credential("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN")
+    access_secret = _load_credential("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET")
 
     if not bearer:
         return None
@@ -234,7 +261,7 @@ def _scrape_twitter() -> None:
         logger.debug("Twitter scraper: credentials not configured, skipping.")
         return
 
-    user_id = os.environ.get("TWITTER_USER_ID", "")
+    user_id = _load_credential("drool_twitter_user_id", "TWITTER_USER_ID")
     if not user_id:
         logger.debug("Twitter scraper: TWITTER_USER_ID not set, skipping.")
         return
@@ -335,6 +362,94 @@ def _scrape_twitter() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Bluesky scraper
+# ---------------------------------------------------------------------------
+
+
+def _scrape_bluesky() -> None:
+    """Fetch liked posts from Bluesky and store new ones in drool_archive."""
+    if not _ATPROTO_AVAILABLE:
+        logger.debug("atproto is not installed; Bluesky scraper disabled.")
+        return
+
+    handle       = _load_credential("drool_bsky_handle",       "BSKY_HANDLE")
+    app_password = _load_credential("drool_bsky_app_password", "BSKY_APP_PASSWORD")
+
+    if not handle or not app_password:
+        logger.debug("Bluesky scraper: credentials not configured, skipping.")
+        return
+
+    try:
+        client = _AtprotoClient()
+        client.login(handle, app_password)
+    except Exception as exc:
+        logger.warning("Bluesky scraper: could not authenticate: %s", exc)
+        return
+
+    conn = get_db_connection()
+    try:
+        items: list[tuple] = []
+
+        try:
+            resp = client.app.bsky.feed.get_actor_likes({"actor": handle, "limit": 50})
+            for feed_view in (resp.feed or []):
+                post = feed_view.post
+                at_uri = post.uri  # at://did/app.bsky.feed.post/rkey
+                parts = at_uri.split("/")
+                did  = parts[2] if len(parts) > 2 else handle
+                rkey = parts[-1] if parts else ""
+                url  = f"https://bsky.app/profile/{did}/post/{rkey}"
+
+                text = ""
+                record = getattr(post, "record", None)
+                if record:
+                    text = getattr(record, "text", "") or ""
+
+                media_url: Optional[str] = None
+                embed = getattr(post, "embed", None)
+                if embed:
+                    images = getattr(embed, "images", None)
+                    if images:
+                        media_url = getattr(images[0], "fullsize", None)
+
+                indexed_at = getattr(post, "indexed_at", None)
+                if indexed_at:
+                    ts = indexed_at if isinstance(indexed_at, str) else indexed_at.isoformat()
+                else:
+                    ts = datetime.now(timezone.utc).isoformat()
+
+                items.append(("bluesky", url, media_url, text, ts))
+        except Exception as exc:
+            logger.warning("Bluesky scraper: liked posts fetch failed: %s", exc)
+
+        new_count = 0
+        newly_inserted: list[tuple] = []
+        for platform, orig_url, media_url, text_content, ts in items:
+            existing = conn.execute(
+                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
+            ).fetchone()
+            if existing:
+                continue
+            conn.execute(
+                """
+                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (platform, orig_url, media_url or None, text_content or None, ts),
+            )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            new_count += 1
+        conn.commit()
+        if new_count:
+            logger.info("Bluesky scraper: archived %d new item(s).", new_count)
+            _notify_new_items(newly_inserted)
+    except Exception as exc:
+        logger.error("Bluesky scraper error: %s", exc)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Combined job (runs every 5 minutes)
 # ---------------------------------------------------------------------------
 
@@ -350,6 +465,10 @@ async def run_drool_scrape() -> None:
         _scrape_twitter()
     except Exception as exc:  # noqa: BLE001
         logger.error("Drool scraper: Twitter job error: %s", exc)
+    try:
+        _scrape_bluesky()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Drool scraper: Bluesky job error: %s", exc)
     logger.info("Drool scraper: run complete.")
 
 
