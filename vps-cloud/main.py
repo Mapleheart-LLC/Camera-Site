@@ -90,7 +90,7 @@ BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop")
+_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool")
 
 
 def _build_allowed_origins() -> list[str]:
@@ -705,9 +705,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def subdomain_routing(request: Request, call_next):
     """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
-    anon.mochii.live/  → serves /anon content    (URL in browser unchanged)
-    links.mochii.live/ → serves /links content   (URL in browser unchanged)
-    shop.mochii.live/  → serves /store.html      (URL in browser unchanged)
+    anon.mochii.live/   → serves /anon content    (URL in browser unchanged)
+    links.mochii.live/  → serves /links content   (URL in browser unchanged)
+    shop.mochii.live/   → serves /store.html      (URL in browser unchanged)
+    drool.mochii.live/  → serves /drool.html      (URL in browser unchanged)
 
     Only GET requests to exactly "/" are rewritten so that the correct HTML
     page is returned.  All other paths (API calls, static assets, …) pass
@@ -720,6 +721,7 @@ async def subdomain_routing(request: Request, call_next):
             "anon.":   "/anon",
             "links.":  "/links",
             "shop.":   "/store.html",
+            "drool.":  "/drool.html",
         }
         for prefix, target_path in _subdomain_map.items():
             if host.startswith(prefix):
