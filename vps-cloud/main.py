@@ -45,6 +45,7 @@ from slowapi import _rate_limit_exceeded_handler
 # ---------------------------------------------------------------------------
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
+GO2RTC_TIMEOUT: float = 15.0
 
 # Fanvue OAuth 2.0 settings – set these in your environment / docker-compose.yml
 FANVUE_CLIENT_ID: str = os.environ.get("FANVUE_CLIENT_ID", "")
@@ -720,6 +721,47 @@ def get_my_cameras(
     return JSONResponse(
         [{"display_name": row["display_name"], "stream_slug": row["stream_slug"]} for row in rows]
     )
+
+
+@app.post("/api/webrtc")
+async def proxy_webrtc(
+    request: Request,
+    src: str,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Proxy the WebRTC SDP exchange to go2rtc, enforcing stream-level access control."""
+    access_level: int = current_user["access_level"]
+
+    row = db.execute(
+        "SELECT id FROM cameras WHERE stream_slug = ? AND minimum_access_level <= ?",
+        (src, access_level),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=403, detail="Access denied to this stream")
+
+    body = await request.body()
+    go2rtc_url = (
+        f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/webrtc"
+        f"?src={_url_quote(src, safe='')}"
+    )
+
+    async with httpx.AsyncClient(timeout=GO2RTC_TIMEOUT) as client:
+        try:
+            resp = await client.post(
+                go2rtc_url,
+                content=body,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        except httpx.RequestError as exc:
+            logger.error("go2rtc request error for src=%s: %s", src, exc)
+            raise HTTPException(status_code=502, detail="Unable to reach stream service")
+
+    if not resp.is_success:
+        logger.error("go2rtc returned %s for src=%s", resp.status_code, src)
+        raise HTTPException(status_code=502, detail="Stream service returned an error")
+
+    return Response(content=resp.content, media_type="text/plain")
 
 
 # ---------------------------------------------------------------------------
