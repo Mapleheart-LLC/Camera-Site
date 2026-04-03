@@ -32,8 +32,12 @@ from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
 from routers.discord_interactions import router as discord_interactions_router
+from routers.drool import router as drool_router, limiter as drool_limiter
+from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from redis_client import close_redis
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
@@ -268,6 +272,43 @@ def init_db() -> None:
         )
         """
     )
+    # ── Drool Log tables ──────────────────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS drool_archive (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform     TEXT    NOT NULL CHECK(platform IN ('reddit', 'twitter')),
+            original_url TEXT    NOT NULL UNIQUE,
+            media_url    TEXT,
+            text_content TEXT,
+            view_count   INTEGER NOT NULL DEFAULT 0,
+            timestamp    TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS drool_comments (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            drool_id       INTEGER NOT NULL REFERENCES drool_archive(id),
+            comment_text   TEXT    NOT NULL,
+            pack_member_id TEXT    NOT NULL,
+            created_at     TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS drool_reactions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            drool_id       INTEGER NOT NULL REFERENCES drool_archive(id),
+            reaction_type  TEXT    NOT NULL
+                               CHECK(reaction_type IN ('Good Girl','Bad Puppy','Dumb Thing','Pretty Toy')),
+            pack_member_id TEXT    NOT NULL,
+            UNIQUE(drool_id, pack_member_id)
+        )
+        """
+    )
     # Idempotent migrations: add stream-source columns to existing databases.
     # Column names and types are hardcoded literals (not user input), so
     # string interpolation here is safe and necessary for DDL statements.
@@ -414,8 +455,10 @@ async def lifespan(app: FastAPI):
         )
     init_db()
     await _sync_cameras_to_go2rtc()
+    start_drool_scheduler()
     await register_metadata_schema()
     yield
+    stop_drool_scheduler()
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
 
@@ -649,7 +692,13 @@ app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
 app.include_router(discord_interactions_router)
+app.include_router(drool_router)
 app.include_router(discord_oauth_router)
+
+# Attach the slowapi rate-limiter state and exception handler to the app so
+# that @limiter.limit decorators in the drool router function correctly.
+app.state.limiter = drool_limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -685,6 +734,12 @@ def admin_page_redirect(request: Request):
     qs = request.url.query
     target = f"/admin.html?{qs}" if qs else "/admin.html"
     return RedirectResponse(url=target, status_code=301)
+
+
+@app.get("/drool", include_in_schema=False)
+def drool_page_redirect():
+    """Redirect /drool to the static drool.html page (Shame Gallery)."""
+    return RedirectResponse(url="/drool.html", status_code=301)
 
 
 # ---------------------------------------------------------------------------
