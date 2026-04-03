@@ -8,572 +8,912 @@
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:title"       content="mochii.live 🐾 Shop" />
   <meta property="og:description" content="Official merch. Secure checkout. All paws welcome." />
-  <meta property="og:url"         content="https://mochii.live/store.html" />
-  <link rel="canonical"           href="https://mochii.live/store.html" />
+  <meta property="og:url"         content="https://shop.mochii.live" />
+  <link rel="canonical"           href="https://shop.mochii.live" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="mochii.live 🐾 Shop" />
   <meta name="twitter:description" content="Official merch. Secure checkout. All paws welcome." />
   <title>mochii.live 🐾 Shop</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --pink:        #e8aeb7;
+      --pink-light:  #f4cdd5;
+      --pink-glow:   rgba(232,174,183,.22);
+      --pink-deep:   #c47d8a;
+      --bg:          #0f0f13;
+      --surface:     #1a1a20;
+      --surface2:    #21212a;
+      --border:      #2a1f2e;
+      --border-pink: #4a2535;
+      --text:        #f0e6e8;
+      --text-muted:  #9a7880;
+      --text-dim:    #52333b;
+      --green:       #a8e0b8;
+      --green-bg:    #142010;
+      --red:         #e0a8b0;
+      --red-bg:      #2a1015;
+    }
+
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
-      background: #1a1a1a;
-      color: #f0e6e8;
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
-    /* ── Nav ────────────────────────────────────────── */
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-pink); border-radius: 3px; }
+
+    /* ── Nav ─────────────────────────────────────── */
     .store-nav {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: .85rem 1.75rem;
-      background: #1e1e1e;
-      border-bottom: 1px solid #3d2a2e;
+      background: rgba(15,15,19,.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
-      z-index: 20;
+      z-index: 100;
     }
 
     .nav-logo {
       font-size: 1.15rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      letter-spacing: .01em;
+      font-weight: 900;
+      color: var(--pink);
       text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      transition: color .15s;
     }
+    .nav-logo:hover { color: var(--pink-light); }
 
-    .nav-home-btn {
+    .nav-right { display: flex; align-items: center; gap: .7rem; }
+
+    .nav-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .42rem .95rem;
+      background: transparent;
+      border: 1px solid var(--border-pink);
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: .8rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .nav-back-btn:hover { border-color: var(--pink); color: var(--pink); }
+
+    .cart-toggle-btn {
       display: inline-flex;
       align-items: center;
       gap: .45rem;
-      padding: .45rem 1rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 10px;
-      color: #e8aeb7;
+      padding: .42rem 1rem;
+      background: var(--border-pink);
+      border: 1px solid var(--pink);
+      border-radius: 20px;
+      color: var(--pink);
       font-family: inherit;
-      font-size: .85rem;
-      font-weight: 700;
-      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 800;
       cursor: pointer;
-      transition: background .2s, box-shadow .2s;
+      transition: all .2s;
     }
-    .nav-home-btn:hover {
-      background: #4d2a32;
-      box-shadow: 0 2px 12px rgba(232,174,183,.18);
+    .cart-toggle-btn:hover { background: #5a2a38; box-shadow: 0 0 18px var(--pink-glow); }
+
+    .cart-badge {
+      background: var(--pink);
+      color: #14101a;
+      font-size: .68rem;
+      font-weight: 900;
+      min-width: 17px;
+      height: 17px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
     }
 
-    /* ── Secure badge ───────────────────────────────── */
-    .secure-badge {
+    /* ── Hero ─────────────────────────────────────── */
+    .store-hero {
+      position: relative;
+      padding: 5rem 1.5rem 3.5rem;
+      text-align: center;
+      overflow: hidden;
+    }
+    .store-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 90% 70% at 50% -10%, rgba(196,125,138,.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 110%, rgba(232,174,183,.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .store-hero::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(to right, transparent, var(--border-pink), transparent);
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      background: rgba(232,174,183,.08);
+      border: 1px solid rgba(232,174,183,.2);
+      border-radius: 20px;
+      padding: .28rem .85rem;
+      font-size: .72rem;
+      font-weight: 800;
+      color: var(--pink);
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+    }
+
+    .store-hero h1 {
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1.08;
+      background: linear-gradient(140deg, #f4cdd5 0%, var(--pink) 45%, #b86878 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: .7rem;
+    }
+
+    .store-hero p {
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 440px;
+      margin: 0 auto 2rem;
+      line-height: 1.6;
+    }
+
+    .trust-row {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: .5rem;
-      background: #242424;
-      border: 1px solid #2e1e22;
-      border-radius: 8px;
-      padding: .55rem 1.1rem;
-      font-size: .82rem;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      font-size: .76rem;
       font-weight: 700;
-      color: #b0c8a8;
-      width: fit-content;
-      margin: 1.4rem auto 0;
+      color: var(--text-muted);
     }
-    .secure-badge svg { flex-shrink: 0; }
+    .trust-item svg { opacity: .65; flex-shrink: 0; }
 
-    /* ── Hero ───────────────────────────────────────── */
-    .store-hero {
-      text-align: center;
-      padding: 2.5rem 1.5rem 1rem;
-    }
-    .store-hero h1 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      margin-bottom: .5rem;
-    }
-    .store-hero p {
-      color: #c0a0a8;
-      font-size: 1rem;
-    }
-
-    /* ── Status banner ──────────────────────────────── */
+    /* ── Status banner ─────────────────────────── */
     .status-banner {
       display: none;
       text-align: center;
-      padding: .75rem 1.5rem;
-      border-radius: 10px;
-      margin: 1.2rem auto;
-      max-width: 520px;
+      padding: .85rem 1.5rem;
+      border-radius: 12px;
+      max-width: 660px;
+      margin: 1.5rem auto 0;
       font-weight: 700;
-      font-size: .95rem;
+      font-size: .92rem;
     }
-    .status-banner.success {
-      background: #1e3020;
-      border: 1px solid #4a8060;
-      color: #a8e0b8;
-    }
-    .status-banner.cancel {
-      background: #2e1e1a;
-      border: 1px solid #7a4040;
-      color: #e0a8a8;
-    }
+    .status-banner.success { background: var(--green-bg); border: 1px solid #3a6848; color: var(--green); }
+    .status-banner.cancel  { background: var(--red-bg);   border: 1px solid #6a3035; color: var(--red);   }
 
-    /* ── Products grid ──────────────────────────────── */
-    .products-section {
-      padding: 1.5rem 1.5rem 2.5rem;
-      max-width: 1100px;
+    /* ── Layout ────────────────────────────────── */
+    .shop-layout {
+      flex: 1;
+      max-width: 1200px;
       margin: 0 auto;
       width: 100%;
+      padding: 2.5rem 1.5rem 5rem;
     }
 
-    .section-title {
-      font-size: 1.15rem;
+    .section-label {
+      font-size: .72rem;
       font-weight: 800;
-      color: #c49a9f;
-      margin-bottom: 1.2rem;
-      letter-spacing: .02em;
+      color: var(--text-muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, var(--border), transparent);
     }
 
+    /* ── Products grid ─────────────────────────── */
     .products-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 1.25rem;
+      margin-bottom: 3.5rem;
     }
 
     .product-card {
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transition: border-color .2s, box-shadow .2s;
+      transition: transform .25s, border-color .25s, box-shadow .25s;
     }
     .product-card:hover {
-      border-color: #e8aeb7;
-      box-shadow: 0 4px 20px rgba(232,174,183,.12);
+      transform: translateY(-4px);
+      border-color: var(--border-pink);
+      box-shadow: 0 12px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(232,174,183,.07);
     }
 
-    .product-img {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
-      background: #1e1e1e;
+    .product-img-wrap {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      background: var(--surface2);
     }
+    .product-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform .45s ease;
+      display: block;
+    }
+    .product-card:hover .product-img { transform: scale(1.08); }
+
     .product-img-placeholder {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      background: #1e1e1e;
+      width: 100%; height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 3.5rem;
+      font-size: 4rem;
     }
 
     .product-body {
-      padding: 1rem;
+      padding: 1.1rem 1.1rem 1.2rem;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: .4rem;
     }
 
     .product-name {
-      font-size: 1rem;
+      font-size: .97rem;
       font-weight: 800;
-      color: #f0e6e8;
+      color: var(--text);
+      line-height: 1.3;
+      margin-bottom: .3rem;
     }
 
     .product-desc {
-      font-size: .83rem;
-      color: #9a7880;
+      font-size: .8rem;
+      color: var(--text-muted);
+      line-height: 1.5;
       flex: 1;
+      margin-bottom: .9rem;
     }
 
     .product-footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-top: .75rem;
+      gap: .5rem;
     }
 
     .product-price {
-      font-size: 1.05rem;
-      font-weight: 800;
-      color: #e8aeb7;
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: var(--pink);
     }
 
     .product-out-of-stock {
-      font-size: .78rem;
+      font-size: .73rem;
       font-weight: 700;
-      color: #7a5060;
-      background: #2a1a1e;
-      border: 1px solid #5a3040;
-      border-radius: 6px;
-      padding: .25rem .6rem;
+      color: var(--text-dim);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .28rem .65rem;
     }
 
     .add-btn {
       display: inline-flex;
       align-items: center;
-      gap: .35rem;
-      padding: .45rem .9rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 8px;
-      color: #e8aeb7;
+      gap: .3rem;
+      padding: .48rem 1rem;
+      background: var(--border-pink);
+      border: 1px solid var(--pink);
+      border-radius: 10px;
+      color: var(--pink);
       font-family: inherit;
-      font-size: .85rem;
-      font-weight: 700;
+      font-size: .82rem;
+      font-weight: 800;
       cursor: pointer;
-      transition: background .2s;
+      transition: all .2s;
+      white-space: nowrap;
     }
-    .add-btn:hover:not(:disabled) { background: #4d2a32; }
-    .add-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .add-btn:hover:not(:disabled) { background: #5a2a38; box-shadow: 0 4px 14px var(--pink-glow); }
+    .add-btn:disabled { opacity: .38; cursor: not-allowed; }
+    .add-btn.added { background: #142010; border-color: var(--green); color: var(--green); }
 
-    /* ── Cart sidebar ───────────────────────────────── */
-    .cart-section {
-      padding: 1rem 1.5rem 2.5rem;
-      max-width: 1100px;
-      margin: 0 auto;
-      width: 100%;
+    /* ── Skeleton loaders ─────────────────────── */
+    @keyframes shimmer {
+      0%   { background-position: -600px 0; }
+      100% { background-position:  600px 0; }
     }
-
-    .cart-box {
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      padding: 1.25rem;
+    .skel {
+      background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+      background-size: 600px 100%;
+      animation: shimmer 1.6s infinite;
+      border-radius: 8px;
     }
+    .skel-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .skel-img  { aspect-ratio: 1; }
+    .skel-body { padding: 1.1rem; }
+    .skel-line { height: 13px; margin-bottom: 9px; }
+    .skel-line.short { width: 55%; }
 
-    .cart-title {
+    /* ── Cart overlay + panel ─────────────────── */
+    .cart-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 200;
+    }
+    .cart-overlay.open { display: block; }
+
+    .cart-panel {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(400px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      z-index: 201;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+    }
+    .cart-panel.open { transform: translateX(0); }
+
+    .cart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .cart-header-title {
       font-size: 1rem;
       font-weight: 800;
-      color: #c49a9f;
-      margin-bottom: 1rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: .45rem;
     }
+    .cart-close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: .3rem .4rem;
+      border-radius: 7px;
+      line-height: 1;
+      transition: color .15s, background .15s;
+    }
+    .cart-close-btn:hover { color: var(--text); background: var(--surface2); }
+
+    .cart-items-scroll { flex: 1; overflow-y: auto; padding: .75rem 1.4rem; }
 
     #cart-items { list-style: none; }
     #cart-items li {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: .5rem 0;
-      border-bottom: 1px solid #2e1e22;
-      font-size: .9rem;
-      gap: .5rem;
+      align-items: flex-start;
+      gap: .7rem;
+      padding: .9rem 0;
+      border-bottom: 1px solid var(--border);
     }
     #cart-items li:last-child { border-bottom: none; }
 
-    .cart-item-name { flex: 1; color: #f0e6e8; font-weight: 600; }
-    .cart-item-qty {
-      color: #c49a9f;
-      font-size: .8rem;
-      background: #1e1e1e;
-      border: 1px solid #3d2a2e;
+    .ci-thumb {
+      width: 54px; height: 54px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: var(--surface2);
+      flex-shrink: 0;
+      display: block;
+    }
+    .ci-thumb-ph {
+      width: 54px; height: 54px;
+      border-radius: 10px;
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+    .ci-info { flex: 1; min-width: 0; }
+    .ci-name { font-size: .88rem; font-weight: 700; color: var(--text); margin-bottom: .18rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ci-price { font-size: .78rem; color: var(--text-muted); margin-bottom: .38rem; }
+    .ci-qty {
+      display: flex;
+      align-items: center;
+      gap: .38rem;
+    }
+    .qty-btn {
+      width: 22px; height: 22px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      padding: .2rem .5rem;
-    }
-    .cart-item-price { color: #e8aeb7; font-weight: 700; min-width: 4rem; text-align: right; }
-    .cart-remove-btn {
-      background: none;
-      border: none;
-      color: #7a5060;
-      cursor: pointer;
+      color: var(--text-muted);
       font-size: .85rem;
-      padding: .15rem .3rem;
-      border-radius: 4px;
-      transition: color .15s;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+      line-height: 1;
     }
-    .cart-remove-btn:hover { color: #e8aeb7; }
+    .qty-btn:hover { border-color: var(--pink); color: var(--pink); }
+    .qty-val { font-size: .82rem; font-weight: 700; color: var(--text); min-width: 1.1rem; text-align: center; }
+    .ci-remove { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: .78rem; padding: .2rem; border-radius: 4px; transition: color .15s; flex-shrink: 0; align-self: flex-start; }
+    .ci-remove:hover { color: var(--red); }
 
-    .cart-empty { color: #5a3a3e; font-size: .9rem; text-align: center; padding: .75rem 0; }
+    .cart-empty-state { text-align: center; padding: 3.5rem 1rem; color: var(--text-dim); }
+    .cart-empty-state .ee { font-size: 2.8rem; margin-bottom: .7rem; }
 
-    .cart-total {
+    .cart-footer {
+      padding: 1.2rem 1.4rem;
+      border-top: 1px solid var(--border);
+    }
+    .cart-subtotal {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-top: 1rem;
-      padding-top: .75rem;
-      border-top: 1px solid #3d2a2e;
-      font-weight: 800;
-      font-size: 1rem;
-      color: #f0e6e8;
+      align-items: baseline;
+      margin-bottom: 1rem;
     }
-    .cart-total span:last-child { color: #e8aeb7; }
+    .cart-sub-label { font-size: .84rem; font-weight: 700; color: var(--text-muted); }
+    .cart-sub-val { font-size: 1.3rem; font-weight: 900; color: var(--text); }
 
-    /* ── Checkout form ──────────────────────────────── */
-    .checkout-form {
-      margin-top: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      gap: .85rem;
-    }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: .75rem;
-    }
-    @media (max-width: 520px) {
-      .form-row { grid-template-columns: 1fr; }
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: .3rem;
-    }
-    .form-group label {
-      font-size: .78rem;
-      font-weight: 700;
-      color: #9a7880;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-    }
-    .form-group input {
-      background: #1e1e1e;
-      border: 1px solid #3d2a2e;
-      border-radius: 8px;
-      padding: .55rem .8rem;
-      color: #f0e6e8;
-      font-family: inherit;
-      font-size: .9rem;
-      outline: none;
-      transition: border-color .2s;
-    }
-    .form-group input:focus { border-color: #e8aeb7; }
-    .form-group input::placeholder { color: #4a3234; }
-
-    .checkout-btn {
+    .cart-checkout-btn {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: .5rem;
       width: 100%;
-      padding: .75rem 1.5rem;
-      background: #e8aeb7;
+      padding: .78rem 1rem;
+      background: linear-gradient(135deg, #c47282 0%, var(--pink) 55%, var(--pink-light) 100%);
       border: none;
-      border-radius: 10px;
-      color: #1a1a1a;
+      border-radius: 12px;
+      color: #14101a;
       font-family: inherit;
-      font-size: 1rem;
-      font-weight: 800;
+      font-size: .92rem;
+      font-weight: 900;
       cursor: pointer;
-      transition: background .2s, box-shadow .2s;
-      margin-top: .25rem;
+      transition: all .2s;
     }
-    .checkout-btn:hover:not(:disabled) {
-      background: #f0c0cc;
-      box-shadow: 0 4px 18px rgba(232,174,183,.3);
-    }
-    .checkout-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .cart-checkout-btn:hover { box-shadow: 0 6px 22px var(--pink-glow); transform: translateY(-1px); }
 
-    /* ── Loading spinner ────────────────────────────── */
+    /* ── Checkout section ─────────────────────── */
+    .checkout-section {
+      max-width: 680px;
+    }
+
+    .checkout-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+    }
+
+    .checkout-box h3 {
+      font-size: .7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+    .checkout-box h3 + h3 { margin-top: 1.5rem; }
+
+    .order-summary {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.75rem;
+      display: none;
+    }
+    .os-title { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: .65rem; }
+    .os-items { list-style: none; }
+    .os-items li { display: flex; justify-content: space-between; font-size: .83rem; color: var(--text); padding: .28rem 0; border-bottom: 1px solid var(--border); }
+    .os-items li:last-child { border-bottom: none; }
+    .os-total { display: flex; justify-content: space-between; font-weight: 900; padding-top: .65rem; margin-top: .15rem; border-top: 1px solid var(--border-pink); }
+    .os-total span:last-child { color: var(--pink); }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    .form-full { grid-column: 1 / -1; }
+    @media (max-width: 520px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-full { grid-column: 1; }
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-group label {
+      font-size: .7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+    .form-group input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .6rem .88rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: .88rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-group input:focus { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(232,174,183,.09); }
+    .form-group input::placeholder { color: var(--text-dim); }
+
+    .checkout-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .55rem;
+      width: 100%;
+      padding: .88rem 1.5rem;
+      background: linear-gradient(135deg, #c47282 0%, var(--pink) 55%, var(--pink-light) 100%);
+      border: none;
+      border-radius: 12px;
+      color: #14101a;
+      font-family: inherit;
+      font-size: .97rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all .2s;
+      margin-top: 1.5rem;
+    }
+    .checkout-btn:hover:not(:disabled) { box-shadow: 0 8px 28px var(--pink-glow); transform: translateY(-1px); }
+    .checkout-btn:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner {
-      width: 1rem; height: 1rem;
-      border: 2px solid rgba(26,26,26,.3);
-      border-top-color: #1a1a1a;
+      width: .95rem; height: .95rem;
+      border: 2.5px solid rgba(20,16,26,.3);
+      border-top-color: #14101a;
       border-radius: 50%;
       animation: spin .7s linear infinite;
       display: none;
     }
 
-    /* ── Footer ─────────────────────────────────────── */
+    /* ── Footer ─────────────────────────────────── */
     .store-footer {
-      margin-top: auto;
       text-align: center;
-      padding: 1.25rem 1rem;
-      font-size: .75rem;
-      color: #4a3234;
-      border-top: 1px solid #2a1e20;
+      padding: 1.5rem 1rem;
+      font-size: .72rem;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
     }
-    .store-footer a { color: #6a4a4e; text-decoration: none; }
-    .store-footer a:hover { color: #c49a9f; }
+    .store-footer a { color: var(--text-muted); text-decoration: none; transition: color .15s; }
+    .store-footer a:hover { color: var(--pink); }
+
+    /* responsive tweaks */
+    @media (max-width: 640px) {
+      .store-nav   { padding: .75rem 1rem; }
+      .store-hero  { padding: 3.5rem 1rem 2.5rem; }
+      .shop-layout { padding: 2rem 1rem 4rem; }
+      .checkout-box { padding: 1.25rem 1.1rem; }
+      .trust-row   { gap: 1.25rem; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- ── Navigation ──────────────────────────────────── -->
+  <!-- ── Nav ──────────────────────────────────── -->
   <nav class="store-nav">
-    <a class="nav-logo" href="/">🐾 mochii.live</a>
-    <a class="nav-home-btn" href="/">← Back Home</a>
+    <a class="nav-logo" href="https://mochii.live">🐾 mochii.live</a>
+    <div class="nav-right">
+      <a class="nav-back-btn" href="https://mochii.live">← Home</a>
+      <button class="cart-toggle-btn" id="cart-toggle-btn" onclick="openCart()" aria-label="Open cart">
+        🛒 Cart <span class="cart-badge" id="cart-count">0</span>
+      </button>
+    </div>
   </nav>
 
-  <!-- ── Secure checkout badge ──────────────────────── -->
-  <div class="secure-badge" role="img" aria-label="Secure Checkout">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0c8a8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-    Secure Checkout – Your payment info is never stored here.
-  </div>
+  <!-- ── Cart overlay + panel ─────────────────── -->
+  <div class="cart-overlay" id="cart-overlay" onclick="closeCart()"></div>
+  <aside class="cart-panel" id="cart-panel" aria-label="Shopping cart" aria-modal="true">
+    <div class="cart-header">
+      <span class="cart-header-title">🛒 Your Cart</span>
+      <button class="cart-close-btn" onclick="closeCart()" aria-label="Close cart">✕</button>
+    </div>
+    <div class="cart-items-scroll">
+      <ul id="cart-items">
+        <li class="cart-empty-state">
+          <div class="ee">🐾</div>
+          Your cart is empty.<br>
+          <small style="color:var(--text-dim);font-size:.78rem;">Add something from the shop!</small>
+        </li>
+      </ul>
+    </div>
+    <div class="cart-footer" id="cart-footer" style="display:none;">
+      <div class="cart-subtotal">
+        <span class="cart-sub-label">Subtotal</span>
+        <span class="cart-sub-val" id="cart-total">$0.00</span>
+      </div>
+      <button class="cart-checkout-btn" onclick="scrollToCheckout()">
+        Proceed to Checkout →
+      </button>
+    </div>
+  </aside>
 
-  <!-- ── Hero ────────────────────────────────────────── -->
+  <!-- ── Hero ─────────────────────────────────── -->
   <header class="store-hero">
-    <h1>🐾 The Pack Shop</h1>
-    <p>Official mochii.live merch. No login required – all paws welcome!</p>
+    <div class="hero-pill">✦ official merch</div>
+    <h1>The Pack Shop</h1>
+    <p>Grab some gear and rep the pack. No login required – all paws welcome 🐾</p>
+    <div class="trust-row">
+      <span class="trust-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Secure Checkout
+      </span>
+      <span class="trust-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Ships Worldwide
+      </span>
+      <span class="trust-item">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+        Fulfilled by Printful
+      </span>
+    </div>
   </header>
 
-  <!-- ── Status banner (shown after redirect back) ─── -->
+  <!-- ── Status banner ─────────────────────────── -->
   <div id="status-banner" class="status-banner" role="alert"></div>
 
-  <!-- ── Product grid ─────────────────────────────── -->
-  <main class="products-section">
-    <p class="section-title">Merch</p>
+  <!-- ── Main layout ───────────────────────────── -->
+  <main class="shop-layout">
+
+    <!-- Products -->
+    <div class="section-label">Merch</div>
     <div id="products-grid" class="products-grid">
-      <p style="color:#5a3a3e;font-size:.9rem;">Loading products…</p>
+      <div class="skel-card"><div class="skel-img skel"></div><div class="skel-body"><div class="skel-line skel"></div><div class="skel-line short skel"></div></div></div>
+      <div class="skel-card"><div class="skel-img skel"></div><div class="skel-body"><div class="skel-line skel"></div><div class="skel-line short skel"></div></div></div>
+      <div class="skel-card"><div class="skel-img skel"></div><div class="skel-body"><div class="skel-line skel"></div><div class="skel-line short skel"></div></div></div>
+      <div class="skel-card"><div class="skel-img skel"></div><div class="skel-body"><div class="skel-line skel"></div><div class="skel-line short skel"></div></div></div>
     </div>
+
+    <!-- Checkout -->
+    <section id="checkout-section" class="checkout-section" aria-label="Checkout">
+      <div class="section-label">Checkout</div>
+      <div class="checkout-box">
+
+        <div class="order-summary" id="order-summary">
+          <p class="os-title">Order Summary</p>
+          <ul class="os-items" id="os-items"></ul>
+          <div class="os-total">
+            <span>Total</span>
+            <span id="os-total-val">$0.00</span>
+          </div>
+        </div>
+
+        <form id="checkout-form" novalidate>
+          <h3>Contact</h3>
+          <div class="form-grid">
+            <div class="form-group form-full">
+              <label for="email">Email address</label>
+              <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+            </div>
+            <div class="form-group form-full">
+              <label for="full-name">Full name</label>
+              <input type="text" id="full-name" name="full-name" placeholder="Jane Pawsworth" required autocomplete="name" />
+            </div>
+          </div>
+
+          <h3 style="margin-top:1.5rem;">Shipping Address</h3>
+          <div class="form-grid">
+            <div class="form-group form-full">
+              <label for="address1">Address</label>
+              <input type="text" id="address1" name="address1" placeholder="123 Biscuit Lane" required autocomplete="address-line1" />
+            </div>
+            <div class="form-group form-full">
+              <label for="address2">Apt / Suite (optional)</label>
+              <input type="text" id="address2" name="address2" placeholder="Apt 4B" autocomplete="address-line2" />
+            </div>
+            <div class="form-group">
+              <label for="city">City</label>
+              <input type="text" id="city" name="city" placeholder="Pawsville" required autocomplete="address-level2" />
+            </div>
+            <div class="form-group">
+              <label for="state">State / Province</label>
+              <input type="text" id="state" name="state" placeholder="CA" required autocomplete="address-level1" />
+            </div>
+            <div class="form-group">
+              <label for="zip">ZIP / Postal code</label>
+              <input type="text" id="zip" name="zip" placeholder="90210" required autocomplete="postal-code" />
+            </div>
+            <div class="form-group">
+              <label for="country">Country (2-letter code)</label>
+              <input type="text" id="country" name="country" placeholder="US" required autocomplete="country" maxlength="2" pattern="[A-Za-z]{2}" />
+            </div>
+          </div>
+
+          <button type="submit" class="checkout-btn" id="checkout-btn" disabled>
+            <div class="spinner" id="checkout-spinner"></div>
+            <span id="checkout-btn-label">🔒 Proceed to Secure Checkout</span>
+          </button>
+        </form>
+
+      </div>
+    </section>
+
   </main>
 
-  <!-- ── Cart & checkout form ──────────────────────── -->
-  <section class="cart-section" aria-label="Cart">
-    <div class="cart-box">
-      <p class="cart-title">🛒 Your Cart</p>
-      <ul id="cart-items"><li class="cart-empty">Your cart is empty.</li></ul>
-      <div class="cart-total" id="cart-total-row" style="display:none;">
-        <span>Total</span>
-        <span id="cart-total">$0.00</span>
-      </div>
-
-      <form class="checkout-form" id="checkout-form" novalidate>
-        <div class="form-group">
-          <label for="email">Email address</label>
-          <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
-        </div>
-
-        <div class="form-group">
-          <label for="full-name">Full name</label>
-          <input type="text" id="full-name" name="full-name" placeholder="Jane Pawsworth" required autocomplete="name" />
-        </div>
-
-        <div class="form-group">
-          <label for="address1">Address line 1</label>
-          <input type="text" id="address1" name="address1" placeholder="123 Biscuit Lane" required autocomplete="address-line1" />
-        </div>
-
-        <div class="form-group">
-          <label for="address2">Address line 2 (optional)</label>
-          <input type="text" id="address2" name="address2" placeholder="Apt 4B" autocomplete="address-line2" />
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="city">City</label>
-            <input type="text" id="city" name="city" placeholder="Pawsville" required autocomplete="address-level2" />
-          </div>
-          <div class="form-group">
-            <label for="state">State / Province</label>
-            <input type="text" id="state" name="state" placeholder="CA" required autocomplete="address-level1" />
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="zip">ZIP / Postal code</label>
-            <input type="text" id="zip" name="zip" placeholder="90210" required autocomplete="postal-code" />
-          </div>
-          <div class="form-group">
-            <label for="country">Country</label>
-            <input type="text" id="country" name="country" placeholder="US" required autocomplete="country" maxlength="2" pattern="[A-Za-z]{2}" />
-          </div>
-        </div>
-
-        <button type="submit" class="checkout-btn" id="checkout-btn" disabled>
-          <div class="spinner" id="checkout-spinner"></div>
-          <span id="checkout-btn-label">🔒 Proceed to Secure Checkout</span>
-        </button>
-      </form>
-    </div>
-  </section>
-
   <footer class="store-footer">
-    <p>🐾 <a href="/">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
+    <p>🐾 <a href="https://mochii.live">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
   </footer>
 
   <script>
-    // ---------------------------------------------------------------------------
-    // Cart state
-    // ---------------------------------------------------------------------------
-    const cart = {}; // { productId: { product, quantity } }
+    // ── Cart state ──────────────────────────────────────────────────────────────
+    const cart = {}; // { id: { product, quantity } }
 
-    function cartIsEmpty() {
-      return Object.keys(cart).length === 0;
+    const cartIsEmpty  = () => Object.keys(cart).length === 0;
+    const cartTotal    = () => Object.values(cart).reduce((s, {product,quantity}) => s + product.price * quantity, 0);
+    const cartQtyTotal = () => Object.values(cart).reduce((s, {quantity}) => s + quantity, 0);
+
+    // ── Cart panel ──────────────────────────────────────────────────────────────
+    function openCart() {
+      document.getElementById('cart-overlay').classList.add('open');
+      document.getElementById('cart-panel').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeCart() {
+      document.getElementById('cart-overlay').classList.remove('open');
+      document.getElementById('cart-panel').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+    function scrollToCheckout() {
+      closeCart();
+      document.getElementById('checkout-section').scrollIntoView({ behavior: 'smooth' });
     }
 
-    function cartTotal() {
-      return Object.values(cart).reduce(
-        (sum, { product, quantity }) => sum + product.price * quantity, 0
-      );
+    // ── Helpers ─────────────────────────────────────────────────────────────────
+    function esc(s) {
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    // ---------------------------------------------------------------------------
-    // Render helpers
-    // ---------------------------------------------------------------------------
+    // ── Render cart ─────────────────────────────────────────────────────────────
     function renderCart() {
-      const ul = document.getElementById('cart-items');
-      const totalRow = document.getElementById('cart-total-row');
-      const totalSpan = document.getElementById('cart-total');
-      const btn = document.getElementById('checkout-btn');
+      const ul       = document.getElementById('cart-items');
+      const footer   = document.getElementById('cart-footer');
+      const totalEl  = document.getElementById('cart-total');
+      const countEl  = document.getElementById('cart-count');
+      const checkBtn = document.getElementById('checkout-btn');
+      const summary  = document.getElementById('order-summary');
+      const osItems  = document.getElementById('os-items');
+      const osTotal  = document.getElementById('os-total-val');
+
+      countEl.textContent = cartQtyTotal();
 
       if (cartIsEmpty()) {
-        ul.innerHTML = '<li class="cart-empty">Your cart is empty.</li>';
-        totalRow.style.display = 'none';
-        btn.disabled = true;
+        ul.innerHTML = `<li class="cart-empty-state"><div class="ee">🐾</div>Your cart is empty.<br><small style="color:var(--text-dim);font-size:.78rem;">Add something from the shop!</small></li>`;
+        footer.style.display = 'none';
+        checkBtn.disabled = true;
+        summary.style.display = 'none';
         return;
       }
 
-      ul.innerHTML = '';
+      ul.innerHTML  = '';
+      osItems.innerHTML = '';
+
       Object.values(cart).forEach(({ product, quantity }) => {
         const li = document.createElement('li');
+        const thumb = product.image_url
+          ? `<img class="ci-thumb" src="${esc(product.image_url)}" alt="${esc(product.name)}" loading="lazy">`
+          : `<div class="ci-thumb-ph">🐾</div>`;
         li.innerHTML = `
-          <span class="cart-item-name">${esc(product.name)}</span>
-          <span class="cart-item-qty">×${quantity}</span>
-          <span class="cart-item-price">$${(product.price * quantity).toFixed(2)}</span>
-          <button class="cart-remove-btn" data-id="${product.id}" aria-label="Remove ${esc(product.name)}">✕</button>
+          ${thumb}
+          <div class="ci-info">
+            <div class="ci-name">${esc(product.name)}</div>
+            <div class="ci-price">$${Number(product.price).toFixed(2)} each</div>
+            <div class="ci-qty">
+              <button class="qty-btn" data-id="${product.id}" data-act="dec" aria-label="Decrease">−</button>
+              <span class="qty-val">${quantity}</span>
+              <button class="qty-btn" data-id="${product.id}" data-act="inc" aria-label="Increase">+</button>
+            </div>
+          </div>
+          <button class="ci-remove" data-id="${product.id}" aria-label="Remove ${esc(product.name)}">✕</button>
         `;
         ul.appendChild(li);
+
+        const sli = document.createElement('li');
+        sli.innerHTML = `<span>${esc(product.name)} ×${quantity}</span><span>$${(product.price * quantity).toFixed(2)}</span>`;
+        osItems.appendChild(sli);
       });
 
-      totalRow.style.display = 'flex';
-      totalSpan.textContent = '$' + cartTotal().toFixed(2);
-      btn.disabled = false;
-
-      // Remove handlers
-      ul.querySelectorAll('.cart-remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          delete cart[btn.dataset.id];
-          renderCart();
-        });
-      });
+      const total = cartTotal();
+      totalEl.textContent = '$' + total.toFixed(2);
+      osTotal.textContent  = '$' + total.toFixed(2);
+      footer.style.display = 'block';
+      checkBtn.disabled    = false;
+      summary.style.display = 'block';
     }
 
-    function esc(str) {
-      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    // Event delegation for cart item controls (re-bound each render via once:true)
+    function bindCartEvents() {
+      const ul = document.getElementById('cart-items');
+      ul.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-id]');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        if (btn.classList.contains('ci-remove')) {
+          delete cart[id];
+        } else if (btn.dataset.act === 'dec') {
+          if (cart[id] && cart[id].quantity > 1) cart[id].quantity--;
+          else delete cart[id];
+        } else if (btn.dataset.act === 'inc') {
+          if (cart[id]) cart[id].quantity++;
+        }
+        renderCart();
+        bindCartEvents();
+      }, { once: true });
     }
 
-    // ---------------------------------------------------------------------------
-    // Load products
-    // ---------------------------------------------------------------------------
+    function updateCart() {
+      renderCart();
+      bindCartEvents();
+    }
+
+    // ── Load products ────────────────────────────────────────────────────────────
     async function loadProducts() {
       const grid = document.getElementById('products-grid');
       try {
         const resp = await fetch('/api/store/products');
-        if (!resp.ok) throw new Error('Failed to load products.');
+        if (!resp.ok) throw new Error('Server error ' + resp.status);
         const products = await resp.json();
 
         if (!products.length) {
-          grid.innerHTML = '<p style="color:#5a3a3e;font-size:.9rem;">No products available yet – check back soon! 🐾</p>';
+          grid.innerHTML = '<p style="color:var(--text-dim);font-size:.9rem;padding:1rem 0;">No products yet – check back soon! 🐾</p>';
           return;
         }
 
@@ -583,18 +923,18 @@
           const card = document.createElement('div');
           card.className = 'product-card';
           const imgHtml = p.image_url
-            ? `<img class="product-img" src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy" />`
-            : `<div class="product-img-placeholder">🐾</div>`;
+            ? `<div class="product-img-wrap"><img class="product-img" src="${esc(p.image_url)}" alt="${esc(p.name)}" loading="lazy"></div>`
+            : `<div class="product-img-wrap"><div class="product-img-placeholder">🐾</div></div>`;
           card.innerHTML = `
             ${imgHtml}
             <div class="product-body">
               <p class="product-name">${esc(p.name)}</p>
-              ${p.description ? `<p class="product-desc">${esc(p.description)}</p>` : ''}
+              ${p.description ? `<p class="product-desc">${esc(p.description)}</p>` : `<p class="product-desc"></p>`}
               <div class="product-footer">
                 <span class="product-price">$${Number(p.price).toFixed(2)}</span>
                 ${inStock
-                  ? `<button class="add-btn" data-id="${p.id}">＋ Add to Cart</button>`
-                  : `<span class="product-out-of-stock">Out of Stock</span>`
+                  ? `<button class="add-btn" data-id="${p.id}" aria-label="Add ${esc(p.name)} to cart">＋ Add</button>`
+                  : `<span class="product-out-of-stock">Out of stock</span>`
                 }
               </div>
             </div>
@@ -602,38 +942,42 @@
           grid.appendChild(card);
 
           if (inStock) {
-            card.querySelector('.add-btn').addEventListener('click', () => {
-              if (cart[p.id]) {
-                cart[p.id].quantity += 1;
-              } else {
-                cart[p.id] = { product: p, quantity: 1 };
-              }
-              renderCart();
+            card.querySelector('.add-btn').addEventListener('click', (e) => {
+              const btn = e.currentTarget;
+              if (cart[p.id]) cart[p.id].quantity++;
+              else cart[p.id] = { product: p, quantity: 1 };
+              updateCart();
+              // Visual feedback
+              btn.classList.add('added');
+              const orig = btn.textContent;
+              btn.textContent = '✓ Added!';
+              setTimeout(() => { btn.classList.remove('added'); btn.textContent = orig; }, 1100);
+              // Glow the cart button
+              const cb = document.getElementById('cart-toggle-btn');
+              cb.style.boxShadow = '0 0 20px var(--pink-glow)';
+              setTimeout(() => { cb.style.boxShadow = ''; }, 700);
             });
           }
         });
       } catch (err) {
-        grid.innerHTML = `<p style="color:#7a5060;font-size:.9rem;">Could not load products. Please try again later.</p>`;
+        grid.innerHTML = `<p style="color:var(--red);font-size:.88rem;">Could not load products. Please try again later.</p>`;
         console.error(err);
       }
     }
 
-    // ---------------------------------------------------------------------------
-    // Checkout
-    // ---------------------------------------------------------------------------
+    // ── Checkout ─────────────────────────────────────────────────────────────────
     document.getElementById('checkout-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       if (cartIsEmpty()) return;
 
-      const btn = document.getElementById('checkout-btn');
+      const btn     = document.getElementById('checkout-btn');
       const spinner = document.getElementById('checkout-spinner');
-      const label = document.getElementById('checkout-btn-label');
+      const label   = document.getElementById('checkout-btn-label');
 
       btn.disabled = true;
       spinner.style.display = 'inline-block';
       label.textContent = 'Redirecting to payment…';
 
-      const email = document.getElementById('email').value.trim();
       const shippingAddress = {
         name:     document.getElementById('full-name').value.trim(),
         address1: document.getElementById('address1').value.trim(),
@@ -641,12 +985,11 @@
         city:     document.getElementById('city').value.trim(),
         state:    document.getElementById('state').value.trim(),
         zip:      document.getElementById('zip').value.trim(),
-        country:  document.getElementById('country').value.trim().toUpperCase() || 'US',
+        country:  (document.getElementById('country').value.trim().toUpperCase() || 'US'),
       };
 
       const cartItems = Object.values(cart).map(({ product, quantity }) => ({
-        product_id: product.id,
-        quantity,
+        product_id: product.id, quantity,
       }));
 
       try {
@@ -655,18 +998,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             cart: cartItems,
-            customer_email: email,
+            customer_email: document.getElementById('email').value.trim(),
             shipping_address: shippingAddress,
           }),
         });
-
         const data = await resp.json();
-
-        if (!resp.ok) {
-          throw new Error(data.detail || 'Checkout failed. Please try again.');
-        }
-
-        // Redirect to Segpay payment page.
+        if (!resp.ok) throw new Error(data.detail || 'Checkout failed. Please try again.');
         window.location.href = data.checkout_url;
       } catch (err) {
         spinner.style.display = 'none';
@@ -677,29 +1014,25 @@
       }
     });
 
-    // ---------------------------------------------------------------------------
-    // Status banner (after payment redirect back)
-    // ---------------------------------------------------------------------------
-    function showBanner(type, message) {
-      const banner = document.getElementById('status-banner');
-      banner.className = 'status-banner ' + type;
-      banner.textContent = message;
-      banner.style.display = 'block';
-      banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // ── Status banner ─────────────────────────────────────────────────────────────
+    function showBanner(type, msg) {
+      const b = document.getElementById('status-banner');
+      b.className = 'status-banner ' + type;
+      b.textContent = msg;
+      b.style.display = 'block';
+      b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     const params = new URLSearchParams(window.location.search);
     if (params.get('status') === 'success') {
       showBanner('success', '🎉 Payment successful! Your order is on its way. Check your email for a confirmation.');
     } else if (params.get('status') === 'cancel') {
-      showBanner('cancel', '😿 Payment cancelled. Your cart is still here whenever you\'re ready!');
+      showBanner('cancel', "😿 Payment cancelled. Your cart is still here whenever you're ready!");
     }
 
-    // ---------------------------------------------------------------------------
-    // Init
-    // ---------------------------------------------------------------------------
+    // ── Init ──────────────────────────────────────────────────────────────────────
     loadProducts();
-    renderCart();
+    updateCart();
   </script>
 </body>
 </html>
