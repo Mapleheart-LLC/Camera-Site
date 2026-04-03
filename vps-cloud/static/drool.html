@@ -429,8 +429,8 @@
 
   <!-- ── Nav ──────────────────────────────────────────── -->
   <nav class="drool-nav" aria-label="Site navigation">
-    <a href="/" class="nav-logo">🐾 mochii.live</a>
-    <a href="/" class="nav-home-btn">← Back to the Pack</a>
+    <a href="https://mochii.live" class="nav-logo">🐾 mochii.live</a>
+    <a href="https://mochii.live" class="nav-home-btn">← Back to the Pack</a>
   </nav>
 
   <!-- ── Page header ──────────────────────────────────── -->
@@ -517,6 +517,7 @@
       eye: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
       reddit: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#ff4500" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#ff4500"/><ellipse cx="12" cy="13.5" rx="5.5" ry="3.5" fill="#fff"/><circle cx="8.5" cy="13" r="1" fill="#ff4500"/><circle cx="15.5" cy="13" r="1" fill="#ff4500"/><path d="M10 16.5c.6.5 1.5.8 2 .8s1.4-.3 2-.8" stroke="#ff4500" stroke-width="1" fill="none"/><circle cx="17.5" cy="8" r="1.5" fill="#ff4500"/><path d="M14 9.5c.5-1.5 2-2 3.2-1.5" stroke="#fff" stroke-width="1" fill="none"/><circle cx="17.5" cy="8" r=".6" fill="#fff"/></svg>`,
       twitter: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#1d9bf0" aria-hidden="true"><rect width="24" height="24" rx="4" fill="#1d9bf0"/><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L2.25 2.25H8.08l4.253 5.622Z" fill="#fff"/></svg>`,
+      bluesky: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 600 530" aria-hidden="true"><path d="M135.72 44.03C202.22 93.95 273.74 195.17 300 249.49c26.26-54.32 97.78-155.54 164.28-205.46C512.26 8.01 590-19.86 590 68.83c0 17.71-10.16 148.79-16.11 170.07-20.7 73.98-96.14 92.85-163.25 81.43 117.3 19.96 147.14 86.09 82.7 152.22-122.39 125.59-175.91-31.51-189.63-71.77-2.51-7.38-3.69-10.83-3.71-7.9-.02-2.94-1.19.52-3.71 7.9-13.71 40.26-67.23 197.36-189.63 71.77-64.44-66.13-34.6-132.26 82.7-152.22C122.26 333.75 46.81 314.88 26.11 240.9 20.16 219.61 10 88.54 10 68.83 10-19.86 87.74 8.01 135.72 44.03z" fill="#0085ff"/></svg>`,
       msg: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
     };
 
@@ -582,7 +583,7 @@
 
       // Platform icon
       const platformIcon = ICONS[item.platform] || '';
-      const platformLabel = item.platform === 'reddit' ? 'Reddit' : 'Twitter/X';
+      const platformLabel = item.platform === 'reddit' ? 'Reddit' : item.platform === 'bluesky' ? 'Bluesky' : 'Twitter/X';
 
       // Reaction counts
       const rxCounts = Object.entries(item.reaction_counts || {});
@@ -755,7 +756,7 @@
       body.style.cssText = 'padding: .75rem 1.25rem 1.25rem;';
 
       const platformIcon = ICONS[item.platform] || '';
-      const platformLabel = item.platform === 'reddit' ? 'Reddit' : 'Twitter/X';
+      const platformLabel = item.platform === 'reddit' ? 'Reddit' : item.platform === 'bluesky' ? 'Bluesky' : 'Twitter/X';
       const snippet = item.text_content
         ? (item.text_content.length > 280 ? item.text_content.slice(0, 277) + '…' : item.text_content)
         : '';
@@ -770,21 +771,21 @@
         ${snippet ? `<p style="font-size:.9rem;color:#c49a9f;line-height:1.5;margin-bottom:.85rem;">"${escHtml(snippet)}"</p>` : ''}
       `;
 
-      // Reactions
+      // Reactions – always render the container so refreshReactionCounts can update it
       const rxCounts = Object.entries(item.reaction_counts || {});
+      const rxWrap = document.createElement('div');
+      rxWrap.className = 'reaction-counts';
       if (rxCounts.length) {
-        const rxWrap = document.createElement('div');
-        rxWrap.className = 'reaction-counts';
         rxWrap.innerHTML = rxCounts.map(([k, v]) => `<span class="reaction-count">${escHtml(REACTION_LABELS[k] || k)} ${v}</span>`).join('');
-        body.appendChild(rxWrap);
       }
+      body.appendChild(rxWrap);
 
       // Bark buttons for whimper card
       const barkRow = document.createElement('div');
       barkRow.className = 'bark-row';
       barkRow.setAttribute('aria-label', 'Quick Bark reactions');
       barkRow.innerHTML = Object.keys(REACTION_LABELS).map(r =>
-        `<button class="bark-btn" data-reaction="${escHtml(r)}" style="font-size:.82rem;">${escHtml(REACTION_LABELS[r])}</button>`
+        `<button class="bark-btn" data-reaction="${escHtml(r)}" aria-label="React: ${escHtml(REACTION_LABELS[r])}" style="font-size:.82rem;">${escHtml(REACTION_LABELS[r])}</button>`
       ).join('');
 
       barkRow.querySelectorAll('.bark-btn').forEach(btn => {
@@ -799,6 +800,7 @@
           if (res && res.ok) {
             barkRow.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            refreshReactionCounts(wrapper, item.id);
           }
         });
       });
