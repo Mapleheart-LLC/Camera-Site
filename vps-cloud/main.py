@@ -690,7 +690,7 @@ def get_my_cameras(
 ):
     """Return cameras the authenticated user is permitted to view."""
     access_level: int = current_user["access_level"]
-    user_id: str = current_user["sub"]
+    user_id: str = current_user["fanvue_id"]
 
     rows = db.execute(
             """
