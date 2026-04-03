@@ -19,7 +19,7 @@
       min-height: 100vh;
     }
 
-    /* ── Login panel ────────────────────────────────── */
+    /* ── Login panel ─────────────────────────────────────── */
     #login-panel {
       display: flex;
       align-items: center;
@@ -34,577 +34,256 @@
       padding: 2.5rem 2rem;
       width: 100%;
       max-width: 360px;
-      box-shadow: 0 8px 40px rgba(232,174,183,0.12);
+      box-shadow: 0 8px 40px rgba(232,174,183,.12);
       text-align: center;
     }
 
-    #login-card h1 {
-      font-size: 1.6rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      margin-bottom: .5rem;
-    }
+    #login-card h1 { font-size: 1.6rem; font-weight: 800; color: #e8aeb7; margin-bottom: .5rem; }
+    #login-card p.subtitle { font-size: .85rem; color: #9e7e82; margin-bottom: 1.75rem; }
 
-    #login-card p.subtitle {
-      font-size: .85rem;
-      color: #9e7e82;
-      margin-bottom: 1.75rem;
-    }
-
-    .field-group {
-      text-align: left;
-      margin-bottom: 1rem;
-    }
-
+    .field-group { text-align: left; margin-bottom: 1rem; }
     .field-group label {
-      display: block;
-      font-size: .8rem;
-      font-weight: 700;
-      color: #c49a9f;
-      margin-bottom: .35rem;
-      text-transform: uppercase;
-      letter-spacing: .05em;
+      display: block; font-size: .8rem; font-weight: 700; color: #c49a9f;
+      margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .05em;
     }
-
     .field-group input {
-      width: 100%;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 8px;
-      color: #f0e6e8;
-      font-family: inherit;
-      font-size: .95rem;
-      padding: .6rem .85rem;
-      outline: none;
-      transition: border-color .2s;
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 8px;
+      color: #f0e6e8; font-family: inherit; font-size: .95rem; padding: .6rem .85rem;
+      outline: none; transition: border-color .2s;
     }
-
     .field-group input:focus { border-color: #e8aeb7; }
 
-    #login-error {
-      font-size: .82rem;
-      color: #f87171;
-      min-height: 1.2em;
-      margin-bottom: .75rem;
-    }
+    #login-error { font-size: .82rem; color: #f87171; min-height: 1.2em; margin-bottom: .75rem; }
 
     .btn-primary {
-      width: 100%;
-      padding: .7rem 1rem;
-      background: #e8aeb7;
-      border: none;
-      border-radius: 10px;
-      color: #1a1a1a;
-      font-family: inherit;
-      font-size: 1rem;
-      font-weight: 800;
-      cursor: pointer;
+      width: 100%; padding: .7rem 1rem; background: #e8aeb7; border: none; border-radius: 10px;
+      color: #1a1a1a; font-family: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
       transition: background .2s, box-shadow .2s, transform .1s;
     }
-
     .btn-primary:hover { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,.3); }
     .btn-primary:active { transform: scale(.97); }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* ── Admin dashboard ────────────────────────────── */
-    #admin-panel { display: none; }
+    /* ── Admin shell ─────────────────────────────────────── */
+    #admin-panel { display: none; min-height: 100vh; }
 
-    header.admin-header {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-      justify-content: space-between;
-      padding: 1rem 1.5rem;
-      background: #202020;
-      border-bottom: 1px solid #3d2a2e;
+    .admin-topbar {
+      position: sticky; top: 0; z-index: 150;
+      display: flex; align-items: center; gap: .75rem;
+      padding: 0 1.25rem; height: 56px;
+      background: #1c1c1c; border-bottom: 1px solid #3d2a2e;
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
     }
 
-    header.admin-header h1 {
-      font-size: 1.3rem;
-      font-weight: 800;
-      color: #e8aeb7;
+    #mob-menu-btn {
+      display: none; background: none; border: none;
+      color: #9e7e82; font-size: 1.4rem; cursor: pointer;
+      padding: .25rem .4rem; border-radius: 6px; transition: color .15s;
     }
+    #mob-menu-btn:hover { color: #e8aeb7; }
 
-    header.admin-header .admin-badge {
-      padding: .2rem .65rem;
-      border-radius: 20px;
-      background: rgba(232,174,183,.12);
-      border: 1px solid #e8aeb7;
-      color: #e8aeb7;
-      font-size: .72rem;
-      font-weight: 700;
-      letter-spacing: .05em;
+    .topbar-title { font-size: 1.15rem; font-weight: 800; color: #e8aeb7; white-space: nowrap; }
+    .topbar-badge {
+      padding: .15rem .6rem; border-radius: 20px;
+      background: rgba(232,174,183,.1); border: 1px solid #e8aeb7;
+      color: #e8aeb7; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
     }
 
     #logout-admin-btn {
-      margin-left: auto;
-      background: transparent;
-      border: 1px solid #4b3538;
-      border-radius: 8px;
-      color: #9e7e82;
-      padding: .35rem .85rem;
-      font-family: inherit;
-      font-size: .85rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: border-color .2s, color .2s;
+      margin-left: auto; background: transparent; border: 1px solid #4b3538;
+      border-radius: 8px; color: #9e7e82; padding: .35rem .85rem;
+      font-family: inherit; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: border-color .2s, color .2s; white-space: nowrap;
     }
     #logout-admin-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
-    .admin-body {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 1.75rem 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 2rem;
+    /* ── Layout ──────────────────────────────────────── */
+    .admin-layout { display: flex; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ──────────────────────────────────────── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: #1c1c1c; border-right: 1px solid #3d2a2e;
+      padding: .75rem 0 1.5rem;
+      position: sticky; top: 56px;
+      height: calc(100vh - 56px); overflow-y: auto;
+      display: flex; flex-direction: column;
     }
 
-    /* ── Section cards ──────────────────────────────── */
-    .card {
-      background: #202020;
-      border: 1px solid #3d2a2e;
-      border-radius: 12px;
-      overflow: hidden;
+    .sidebar-section-label {
+      font-size: .63rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: #5a3a3e;
+      padding: .75rem 1.25rem .3rem; margin-top: .5rem;
     }
 
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: .85rem 1.25rem;
-      border-bottom: 1px solid #3d2a2e;
-      background: #262626;
-    }
-
-    .card-header h2 {
-      font-size: .9rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-
-    .card-body { padding: 1.25rem; }
-
-    /* ── Stats row ──────────────────────────────────── */
-    .stats-row {
-      display: flex;
-      gap: 1.25rem;
-      flex-wrap: wrap;
-    }
-
-    .stat-tile {
-      flex: 1;
-      min-width: 140px;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      padding: 1rem 1.25rem;
-      text-align: center;
-    }
-
-    .stat-tile .stat-value {
-      font-size: 2rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      line-height: 1;
-    }
-
-    .stat-tile .stat-label {
-      font-size: .78rem;
-      color: #9e7e82;
-      margin-top: .35rem;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-
-    /* ── Table ──────────────────────────────────────── */
-    .admin-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: .88rem;
-    }
-
-    .admin-table th {
+    .nav-item {
+      display: flex; align-items: center; gap: .55rem;
+      width: 100%; padding: .6rem 1.25rem;
+      background: none; border: none; border-left: 3px solid transparent;
+      color: #9e7e82; font-family: inherit; font-size: .88rem; font-weight: 700;
+      cursor: pointer; transition: color .15s, background .15s, border-color .15s;
       text-align: left;
-      font-size: .72rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #9e7e82;
-      padding: .6rem .85rem;
-      border-bottom: 1px solid #3d2a2e;
+    }
+    .nav-item:hover { color: #e8aeb7; background: rgba(232,174,183,.06); }
+    .nav-item.active { color: #e8aeb7; background: rgba(232,174,183,.12); border-left-color: #e8aeb7; }
+    .nav-item.danger { color: #8a4545; }
+    .nav-item.danger:hover { color: #f87171; background: rgba(248,113,113,.07); }
+    .nav-item.danger.active { color: #f87171; background: rgba(248,113,113,.1); border-left-color: #f87171; }
+
+    .nav-badge {
+      margin-left: auto; background: #e8aeb7; color: #1a1a1a;
+      border-radius: 20px; font-size: .68rem; font-weight: 800;
+      padding: .05rem .42rem; min-width: 1.4em; text-align: center; display: none;
+    }
+    .nav-badge.visible { display: inline-block; }
+
+    /* ── Main content ────────────────────────────────── */
+    .admin-main { flex: 1; padding: 1.75rem 2rem; min-width: 0; }
+
+    .section-heading {
+      font-size: 1.3rem; font-weight: 800; color: #e8aeb7;
+      margin-bottom: 1.5rem; display: flex; align-items: center; gap: .5rem;
     }
 
-    .admin-table td {
-      padding: .65rem .85rem;
-      border-bottom: 1px solid #2a1e20;
-      vertical-align: middle;
-    }
+    .admin-section { display: none; }
+    .admin-section.active { display: block; }
 
+    /* ── Sub-tabs ─────────────────────────────────────── */
+    .sub-tabs {
+      display: flex; gap: .5rem; margin-bottom: 1.25rem;
+      border-bottom: 1px solid #3d2a2e; padding-bottom: .75rem;
+    }
+    .sub-tab {
+      padding: .38rem 1rem; background: transparent; border: 1px solid #3d2a2e;
+      border-radius: 20px; color: #9e7e82; font-family: inherit;
+      font-size: .83rem; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .sub-tab:hover { color: #e8aeb7; border-color: #e8aeb7; }
+    .sub-tab.active { background: #e8aeb7; color: #1a1a1a; border-color: #e8aeb7; }
+    .sub-tab-content { display: none; }
+    .sub-tab-content.active { display: block; }
+
+    /* ── Cards ───────────────────────────────────────── */
+    .card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .8rem 1.25rem; border-bottom: 1px solid #3d2a2e; background: #242424;
+    }
+    .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
+    .card-body { padding: 1.25rem; }
+    .card-body.no-pad { padding: 0; }
+
+    /* ── Stats ───────────────────────────────────────── */
+    .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .stat-tile { flex: 1; min-width: 120px; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.25rem; text-align: center; }
+    .stat-tile .stat-value { font-size: 2rem; font-weight: 800; color: #e8aeb7; line-height: 1; }
+    .stat-tile .stat-label { font-size: .73rem; color: #9e7e82; margin-top: .35rem; text-transform: uppercase; letter-spacing: .05em; }
+
+    /* ── Tables ──────────────────────────────────────── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .admin-table th { text-align: left; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; padding: .6rem .85rem; border-bottom: 1px solid #3d2a2e; }
+    .admin-table td { padding: .65rem .85rem; border-bottom: 1px solid #2a1e20; vertical-align: middle; }
     .admin-table tr:last-child td { border-bottom: none; }
-    .admin-table tr:hover td { background: #2a1a1d; }
+    .admin-table tr:hover td { background: rgba(232,174,183,.04); }
+    .empty-row td { color: #5a3a3e; text-align: center; padding: 1.5rem; }
 
-    .badge-level {
-      display: inline-block;
-      padding: .15rem .55rem;
-      border-radius: 6px;
-      font-size: .75rem;
-      font-weight: 700;
-    }
+    /* ── Buttons ─────────────────────────────────────── */
+    .btn-sm { padding: .3rem .7rem; border-radius: 6px; font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+    .btn-edit { background: transparent; border: 1px solid #e8aeb7; color: #e8aeb7; }
+    .btn-edit:hover { background: #e8aeb7; color: #1a1a1a; }
+    .btn-delete { background: transparent; border: 1px solid #f87171; color: #f87171; }
+    .btn-delete:hover { background: #f87171; color: #1a1a1a; }
+    .action-cell { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+    /* ── Access level badges ─────────────────────────── */
+    .badge-level { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
     .badge-level.l1 { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
     .badge-level.l2 { background: rgba(216,167,177,.12); color: #d8a7b1; border: 1px solid #d8a7b1; }
     .badge-level.l3 { background: rgba(240,176,192,.15); color: #f0b0c0; border: 1px solid #f0b0c0; }
 
-    .btn-sm {
-      padding: .3rem .7rem;
-      border-radius: 6px;
-      font-family: inherit;
-      font-size: .8rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .15s, border-color .15s, color .15s;
-    }
-
-    .btn-edit {
-      background: transparent;
-      border: 1px solid #e8aeb7;
-      color: #e8aeb7;
-    }
-    .btn-edit:hover { background: #e8aeb7; color: #1a1a1a; }
-
-    .btn-delete {
-      background: transparent;
-      border: 1px solid #f87171;
-      color: #f87171;
-    }
-    .btn-delete:hover { background: #f87171; color: #1a1a1a; }
-
-    .action-cell { display: flex; gap: .4rem; }
-
-    /* ── Add/edit camera form ───────────────────────── */
-    #camera-form {
-      display: none;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      padding: 1.1rem;
-      margin-bottom: 1rem;
-    }
-
-    #camera-form h3 {
-      font-size: .85rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      margin-bottom: .85rem;
-    }
-
+    /* ── Camera form ─────────────────────────────────── */
+    #camera-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
+    #camera-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
     .form-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
-
     .form-field { flex: 1; min-width: 140px; }
-
-    .form-field label {
-      display: block;
-      font-size: .72rem;
-      font-weight: 700;
-      color: #9e7e82;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      margin-bottom: .3rem;
-    }
-
-    .form-field input,
-    .form-field select {
-      width: 100%;
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 7px;
-      color: #f0e6e8;
-      font-family: inherit;
-      font-size: .88rem;
-      padding: .5rem .75rem;
-      outline: none;
-      transition: border-color .2s;
-    }
-    .form-field input:focus,
-    .form-field select:focus { border-color: #e8aeb7; }
+    .form-field label { display: block; font-size: .7rem; font-weight: 700; color: #9e7e82; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+    .form-field input, .form-field select { width: 100%; background: #242424; border: 1px solid #3d2a2e; border-radius: 7px; color: #f0e6e8; font-family: inherit; font-size: .88rem; padding: .5rem .75rem; outline: none; transition: border-color .2s; }
+    .form-field input:focus, .form-field select:focus { border-color: #e8aeb7; }
     .form-field select option { background: #242424; }
-
     .form-actions { display: flex; gap: .5rem; align-items: flex-end; padding-bottom: 1px; }
+    #form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
 
-    #form-error {
-      font-size: .8rem;
-      color: #f87171;
-      margin-top: .5rem;
-      min-height: 1em;
-    }
-
-    /* ── IoT control board ──────────────────────────── */
+    /* ── IoT control ─────────────────────────────────── */
     .iot-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
-
-    .iot-card {
-      flex: 1;
-      min-width: 180px;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      padding: 1.1rem 1.25rem;
-      text-align: center;
-    }
-
-    .iot-card .iot-name {
-      font-size: .8rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: #9e7e82;
-      margin-bottom: .75rem;
-    }
-
-    .btn-iot {
-      width: 100%;
-      padding: .6rem 1rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 8px;
-      color: #e8aeb7;
-      font-family: inherit;
-      font-size: .9rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .15s, color .15s;
-    }
+    .iot-card { flex: 1; min-width: 180px; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem 1.25rem; text-align: center; }
+    .iot-card .iot-name { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; margin-bottom: .75rem; }
+    .btn-iot { width: 100%; padding: .6rem 1rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; color: #e8aeb7; font-family: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
     .btn-iot:hover:not(:disabled) { background: #e8aeb7; color: #1a1a1a; }
     .btn-iot:disabled { opacity: .5; cursor: not-allowed; }
+    .iot-result { margin-top: .6rem; font-size: .78rem; color: #9e7e82; min-height: 1em; }
 
-    .iot-result {
-      margin-top: .6rem;
-      font-size: .78rem;
-      color: #9e7e82;
-      min-height: 1em;
-    }
-
-    /* ── Activations list ───────────────────────────── */
-    #activations-body td:first-child { font-size: .82rem; }
+    /* ── Activations ─────────────────────────────────── */
     .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
-    .device-tag {
-      display: inline-block;
-      padding: .1rem .45rem;
-      border-radius: 5px;
-      font-size: .75rem;
-      font-weight: 700;
-    }
+    .device-tag { display: inline-block; padding: .1rem .45rem; border-radius: 5px; font-size: .75rem; font-weight: 700; }
     .device-tag.pishock { background: rgba(240,176,64,.1); color: #f0b040; border: 1px solid #f0b040; }
     .device-tag.lovense { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
 
-    /* ── Misc ───────────────────────────────────────── */
-    .empty-row td { color: #5a3a3e; text-align: center; padding: 1.25rem; }
-
-    /* ── Puppy Pouch ─────────────────────────────────── */
+    /* ── Q&A ─────────────────────────────────────────── */
     .question-row td { vertical-align: top; }
-    .question-row.deep-linked { outline: 2px solid #E8AEB7; background: rgba(232,174,183,.08); animation: pulsePink 1.6s ease-out 3; }
+    .question-row.deep-linked { outline: 2px solid #e8aeb7; background: rgba(232,174,183,.08); animation: pulsePink 1.6s ease-out 3; }
     @keyframes pulsePink { 0%,100% { background: rgba(232,174,183,.08); } 50% { background: rgba(232,174,183,.18); } }
-
-    .q-text {
-      font-size: .9rem;
-      color: #f0e6e8;
-      max-width: 360px;
-      word-break: break-word;
-    }
-
+    .q-text { font-size: .9rem; color: #f0e6e8; max-width: 360px; word-break: break-word; }
+    .q-answer-preview { font-size: .83rem; color: #9e7e82; max-width: 360px; word-break: break-word; font-style: italic; }
     .q-ts { font-size: .75rem; color: #9e7e82; font-family: monospace; white-space: nowrap; }
 
-    #answer-form-wrap {
-      display: none;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      padding: 1rem 1.1rem;
-      margin-top: .75rem;
-    }
-
-    #answer-form-wrap h3 {
-      font-size: .78rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      margin-bottom: .6rem;
-    }
-
-    #answer-textarea {
-      width: 100%;
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 7px;
-      color: #f0e6e8;
-      font-family: inherit;
-      font-size: .88rem;
-      padding: .5rem .75rem;
-      resize: vertical;
-      min-height: 70px;
-      outline: none;
-      transition: border-color .2s;
-      margin-bottom: .6rem;
-    }
-
+    #answer-form-wrap { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+    #answer-form-wrap h3 { font-size: .78rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+    #answer-textarea { width: 100%; background: #242424; border: 1px solid #3d2a2e; border-radius: 7px; color: #f0e6e8; font-family: inherit; font-size: .88rem; padding: .5rem .75rem; resize: vertical; min-height: 70px; outline: none; transition: border-color .2s; margin-bottom: .6rem; }
     #answer-textarea:focus { border-color: #e8aeb7; }
-
     .answer-form-actions { display: flex; gap: .5rem; }
+    #answer-form-error { font-size: .78rem; color: #f87171; min-height: 1em; margin-top: .4rem; }
 
-    #answer-form-error {
-      font-size: .78rem;
-      color: #f87171;
-      min-height: 1em;
-      margin-top: .4rem;
-    }
+    /* ── Links management ────────────────────────────── */
+    #link-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
+    #link-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
+    #link-form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
+    .link-active-badge { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
+    .link-active-badge.on  { background: rgba(74,222,128,.1);  color: #4ade80; border: 1px solid #4ade80; }
+    .link-active-badge.off { background: rgba(156,163,175,.1); color: #9ca3af; border: 1px solid #9ca3af; }
 
-    .btn-share {
-      background: transparent;
-      border: 1px solid #1da1f2;
-      color: #1da1f2;
-    }
-    .btn-share:hover { background: #1da1f2; color: #fff; }
-
-    .toast {
-      position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 8px;
-      padding: .65rem 1.1rem;
-      font-size: .85rem;
-      color: #e8aeb7;
-      font-weight: 700;
-      box-shadow: 0 4px 20px rgba(0,0,0,.4);
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .25s, transform .25s;
-      pointer-events: none;
-      z-index: 100;
-    }
-    .toast.show { opacity: 1; transform: translateY(0); }
-
-    /* ── Danger Zone ─────────────────────────────────── */
-    .danger-card {
-      background: #1e1010;
-      border: 1px solid #6b1f1f;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    .danger-card .card-header {
-      background: #2a1515;
-      border-bottom: 1px solid #6b1f1f;
-    }
-
+    /* ── Settings / Danger Zone ──────────────────────── */
+    .danger-card { background: #1e1010; border: 1px solid #6b1f1f; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+    .danger-card .card-header { background: #2a1515; border-bottom: 1px solid #6b1f1f; }
     .danger-card .card-header h2 { color: #f87171; }
-
-    .settings-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1rem;
-    }
-
-    .setting-tile {
-      background: #1a1010;
-      border: 1px solid #4b2020;
-      border-radius: 10px;
-      padding: 1rem 1.1rem;
-    }
-
-    .setting-tile .setting-label {
-      font-size: .72rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      color: #9e7e82;
-      margin-bottom: .35rem;
-    }
-
-    .setting-tile .setting-value {
-      font-size: .88rem;
-      font-family: monospace;
-      word-break: break-all;
-      color: #f0e6e8;
-    }
-
-    .badge-ok    { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(74,222,128,.12); color:#4ade80; border:1px solid #4ade80; }
-    .badge-warn  { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(251,191,36,.12); color:#fbbf24; border:1px solid #fbbf24; }
+    .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .setting-tile { background: #1a1010; border: 1px solid #4b2020; border-radius: 10px; padding: 1rem 1.1rem; }
+    .setting-tile .setting-label { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #9e7e82; margin-bottom: .35rem; }
+    .setting-tile .setting-value { font-size: .88rem; font-family: monospace; word-break: break-all; color: #f0e6e8; }
+    .badge-ok    { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(74,222,128,.12);  color:#4ade80; border:1px solid #4ade80; }
+    .badge-warn  { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(251,191,36,.12);  color:#fbbf24; border:1px solid #fbbf24; }
     .badge-error { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(248,113,113,.12); color:#f87171; border:1px solid #f87171; }
-
-    .mock-toggle-row {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      margin-top: .75rem;
-      flex-wrap: wrap;
-    }
-
-    .toggle-btn {
-      padding: .4rem 1rem;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: .85rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: opacity .2s, transform .1s;
-      border: none;
-    }
+    .mock-toggle-row { display: flex; align-items: center; gap: 1rem; margin-top: .75rem; flex-wrap: wrap; }
+    .toggle-btn { padding: .4rem 1rem; border-radius: 8px; font-family: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; transition: opacity .2s, transform .1s; border: none; }
     .toggle-btn:disabled { opacity: .55; cursor: not-allowed; }
     .toggle-btn:active { transform: scale(.97); }
     .toggle-btn.enable  { background: #f87171; color: #1e1010; }
     .toggle-btn.disable { background: #4ade80; color: #1e1010; }
+    .danger-note { font-size: .78rem; color: #9e7e82; margin-top: 1rem; padding: .65rem .9rem; background: rgba(248,113,113,.06); border: 1px solid #4b2020; border-radius: 8px; line-height: 1.5; }
 
-    .danger-note {
-      font-size: .78rem;
-      color: #9e7e82;
-      margin-top: 1rem;
-      padding: .65rem .9rem;
-      background: rgba(248,113,113,.06);
-      border: 1px solid #4b2020;
-      border-radius: 8px;
-      line-height: 1.5;
-    }
-    /* ── Links management ────────────────────────────── */
-    #link-form {
-      display: none;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      padding: 1.1rem;
-      margin-bottom: 1rem;
-    }
+    /* ── Toast ───────────────────────────────────────── */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,.4); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 300; }
+    .toast.show { opacity: 1; transform: translateY(0); }
 
-    #link-form h3 {
-      font-size: .85rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      margin-bottom: .85rem;
+    /* ── Mobile ──────────────────────────────────────── */
+    @media (max-width: 740px) {
+      #mob-menu-btn { display: flex; }
+      .topbar-badge { display: none; }
+      .sidebar { display: none; position: fixed; top: 56px; left: 0; z-index: 200; height: calc(100vh - 56px); width: 240px; box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+      .sidebar.open { display: flex; }
+      #mob-overlay { display: none; position: fixed; inset: 56px 0 0 0; background: rgba(0,0,0,.45); z-index: 190; }
+      #mob-overlay.open { display: block; }
+      .admin-main { padding: 1.25rem 1rem; }
     }
-
-    #link-form-error {
-      font-size: .8rem;
-      color: #f87171;
-      margin-top: .5rem;
-      min-height: 1em;
-    }
-
-    .link-active-badge {
-      display: inline-block;
-      padding: .15rem .55rem;
-      border-radius: 6px;
-      font-size: .75rem;
-      font-weight: 700;
-    }
-    .link-active-badge.on  { background: rgba(74,222,128,.1); color: #4ade80; border: 1px solid #4ade80; }
-    .link-active-badge.off { background: rgba(156,163,175,.1); color: #9ca3af; border: 1px solid #9ca3af; }
   </style>
 </head>
 <body>
@@ -614,7 +293,6 @@
     <div id="login-card">
       <h1 aria-label="The Alpha Kennel">🐾 The Alpha Kennel</h1>
       <p class="subtitle">Authorized Paws Only</p>
-
       <div class="field-group">
         <label for="admin-username">Username</label>
         <input id="admin-username" type="text" autocomplete="username" placeholder="Enter username" />
@@ -623,371 +301,326 @@
         <label for="admin-password">Password</label>
         <input id="admin-password" type="password" autocomplete="current-password" placeholder="Enter password" />
       </div>
-
       <p id="login-error" role="alert" aria-live="polite"></p>
-
       <button id="login-btn" class="btn-primary">🐾 Enter the Kennel</button>
     </div>
   </div>
 
   <!-- ── Admin panel ──────────────────────────────────── -->
   <div id="admin-panel">
-    <header class="admin-header">
-      <h1 aria-label="The Alpha Kennel – Authorized Paws Only">🐾 The Alpha Kennel</h1>
-      <span class="admin-badge">Authorized Paws Only</span>
+
+    <header class="admin-topbar">
+      <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
+      <span class="topbar-title">🐾 The Alpha Kennel</span>
+      <span class="topbar-badge">Authorized Paws Only</span>
       <button id="logout-admin-btn">Leave Kennel 🐾</button>
     </header>
 
-    <div class="admin-body">
+    <div id="mob-overlay"></div>
 
-      <!-- Stats -->
-      <section class="card" aria-label="Stats">
-        <div class="card-header">
-          <h2>📊 Stats</h2>
-          <button id="refresh-btn" class="btn-sm btn-edit">↻ Refresh</button>
-        </div>
-        <div class="card-body">
-          <div class="stats-row">
-            <div class="stat-tile">
-              <div id="stat-users" class="stat-value">—</div>
-              <div class="stat-label">Total Users</div>
-            </div>
-            <div class="stat-tile">
-              <div id="stat-cameras" class="stat-value">—</div>
-              <div class="stat-label">Total Cameras</div>
-            </div>
-            <div class="stat-tile">
-              <div id="stat-activations" class="stat-value">—</div>
-              <div class="stat-label">Recent Activations</div>
-            </div>
-            <div class="stat-tile">
-              <div id="stat-camera-accesses" class="stat-value">—</div>
-              <div class="stat-label">Camera Accesses</div>
+    <div class="admin-layout">
+
+      <nav class="sidebar" id="sidebar" aria-label="Admin navigation">
+        <div class="sidebar-section-label">Main</div>
+        <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
+        <button class="nav-item" data-target="s-cameras">📷 Cameras</button>
+        <button class="nav-item" data-target="s-qa">
+          🐾 Q&amp;A
+          <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
+        </button>
+        <button class="nav-item" data-target="s-devices">🎮 Devices</button>
+        <div class="sidebar-section-label">Site</div>
+        <button class="nav-item" data-target="s-links">🔗 Links</button>
+        <button class="nav-item" data-target="s-logs">📋 Logs</button>
+        <div class="sidebar-section-label">System</div>
+        <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
+      </nav>
+
+      <main class="admin-main">
+
+        <!-- ── Dashboard ─────────────────────────────── -->
+        <section id="s-dashboard" class="admin-section active">
+          <h1 class="section-heading">
+            📊 Dashboard
+            <button id="refresh-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh All</button>
+          </h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Stats</h2></div>
+            <div class="card-body">
+              <div class="stats-row">
+                <div class="stat-tile"><div id="stat-users" class="stat-value">—</div><div class="stat-label">Total Users</div></div>
+                <div class="stat-tile"><div id="stat-cameras" class="stat-value">—</div><div class="stat-label">Total Cameras</div></div>
+                <div class="stat-tile"><div id="stat-unanswered" class="stat-value">—</div><div class="stat-label">Unanswered Q's</div></div>
+                <div class="stat-tile"><div id="stat-activations" class="stat-value">—</div><div class="stat-label">Recent Activations</div></div>
+                <div class="stat-tile"><div id="stat-camera-accesses" class="stat-value">—</div><div class="stat-label">Camera Accesses</div></div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- Camera Management -->
-      <section class="card" aria-label="Camera management">
-        <div class="card-header">
-          <h2>📷 Camera Management</h2>
-          <button id="add-camera-btn" class="btn-sm btn-edit">+ Add Camera</button>
-        </div>
-        <div class="card-body">
-          <!-- Inline add/edit form (hidden by default) -->
-          <div id="camera-form">
-            <h3 id="form-title">Add Camera</h3>
-            <!-- Row 1: name, slug, access level -->
-            <div class="form-row">
-              <div class="form-field">
-                <label for="f-name">Display Name</label>
-                <input id="f-name" type="text" placeholder="e.g. Lobby" />
-              </div>
-              <div class="form-field">
-                <label for="f-slug">Stream Slug</label>
-                <input id="f-slug" type="text" placeholder="e.g. cam_lobby" />
-              </div>
-              <div class="form-field" style="max-width:150px">
-                <label for="f-level">Min Access Level</label>
-                <select id="f-level">
-                  <option value="1">1 – Good Pupil</option>
-                  <option value="2">2 – Loyal Doggo</option>
-                  <option value="3">3 – Alpha Pack</option>
-                </select>
+          <div class="card">
+            <div class="card-header"><h2>📋 Recent Activations</h2></div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Recent activations">
+                  <thead><tr><th>Device</th><th>User / Actor</th><th>Timestamp (UTC)</th></tr></thead>
+                  <tbody id="activations-body">
+                    <tr class="empty-row"><td colspan="3">No activations yet.</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-            <!-- Row 2: stream source toggle -->
-            <div class="form-row" style="align-items:center;gap:.75rem;margin-bottom:.5rem">
-              <span style="font-size:.8rem;font-weight:700;color:#c49ea5">Stream Source</span>
-              <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
-                <input type="radio" name="source-type" id="src-tapo" value="tapo" checked />
-                🔌 Tapo Camera
-              </label>
-              <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
-                <input type="radio" name="source-type" id="src-rtsp" value="rtsp" />
-                🎥 Custom RTSP URL
-              </label>
-            </div>
-            <!-- Tapo fields -->
-            <div id="tapo-fields" class="form-row">
-              <div class="form-field">
-                <label for="f-tapo-ip">Tapo IP Address</label>
-                <input id="f-tapo-ip" type="text" placeholder="e.g. 192.168.1.100" />
-              </div>
-              <div class="form-field">
-                <label for="f-tapo-user">Tapo Username</label>
-                <input id="f-tapo-user" type="text" placeholder="Tapo account email" autocomplete="username" />
-              </div>
-              <div class="form-field">
-                <label for="f-tapo-pass">Tapo Password</label>
-                <input id="f-tapo-pass" type="password" placeholder="Tapo account password" autocomplete="new-password" />
-              </div>
-            </div>
-            <!-- Custom RTSP field -->
-            <div id="rtsp-fields" class="form-row" style="display:none">
-              <div class="form-field" style="flex:1">
-                <label for="f-rtsp-url">RTSP URL</label>
-                <input id="f-rtsp-url" type="text" placeholder="rtsp://user:pass@192.168.1.100/stream1" />
-              </div>
-            </div>
-            <!-- Save / cancel -->
-            <div class="form-row" style="margin-top:.5rem">
-              <div class="form-actions">
-                <button id="form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
-                <button id="form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
-              </div>
-            </div>
-            <p id="form-error"></p>
           </div>
+        </section>
 
-          <!-- Camera table -->
-          <div style="overflow-x:auto">
-            <table class="admin-table" aria-label="Cameras">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Name</th>
-                  <th>Stream Slug</th>
-                  <th>Source</th>
-                  <th>Min Level</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="cameras-body">
-                <tr class="empty-row"><td colspan="6">Loading cameras…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+        <!-- ── Cameras ────────────────────────────────── -->
+        <section id="s-cameras" class="admin-section">
+          <h1 class="section-heading">📷 Camera Management</h1>
 
-      <!-- Manual IoT Control -->
-      <section class="card" aria-label="Manual device control">
-        <div class="card-header">
-          <h2>🎮 Manual Control</h2>
-        </div>
-        <div class="card-body">
-          <div class="iot-grid">
-            <div class="iot-card">
-              <div class="iot-name">PiShock</div>
-              <button id="admin-pishock-btn" class="btn-iot">⚡ Trigger PiShock</button>
-              <p id="pishock-result" class="iot-result"></p>
+          <div class="card">
+            <div class="card-header">
+              <h2>Cameras</h2>
+              <button id="add-camera-btn" class="btn-sm btn-edit">+ Add Camera</button>
             </div>
-            <div class="iot-card">
-              <div class="iot-name">Lovense</div>
-              <button id="admin-lovense-btn" class="btn-iot">💜 Trigger Lovense</button>
-              <p id="lovense-result" class="iot-result"></p>
+            <div class="card-body">
+              <div id="camera-form">
+                <h3 id="form-title">Add Camera</h3>
+                <div class="form-row">
+                  <div class="form-field"><label for="f-name">Display Name</label><input id="f-name" type="text" placeholder="e.g. Lobby" /></div>
+                  <div class="form-field"><label for="f-slug">Stream Slug</label><input id="f-slug" type="text" placeholder="e.g. cam_lobby" /></div>
+                  <div class="form-field" style="max-width:150px">
+                    <label for="f-level">Min Access Level</label>
+                    <select id="f-level">
+                      <option value="1">1 – Good Pupil</option>
+                      <option value="2">2 – Loyal Doggo</option>
+                      <option value="3">3 – Alpha Pack</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row" style="align-items:center;gap:.75rem;margin:.6rem 0 .3rem">
+                  <span style="font-size:.8rem;font-weight:700;color:#c49ea5">Stream Source</span>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-tapo" value="tapo" checked /> 🔌 Tapo Camera</label>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-rtsp" value="rtsp" /> 🎥 Custom RTSP URL</label>
+                </div>
+                <div id="tapo-fields" class="form-row">
+                  <div class="form-field"><label for="f-tapo-ip">Tapo IP Address</label><input id="f-tapo-ip" type="text" placeholder="e.g. 192.168.1.100" /></div>
+                  <div class="form-field"><label for="f-tapo-user">Tapo Username</label><input id="f-tapo-user" type="text" placeholder="Tapo account email" autocomplete="username" /></div>
+                  <div class="form-field"><label for="f-tapo-pass">Tapo Password</label><input id="f-tapo-pass" type="password" placeholder="Tapo account password" autocomplete="new-password" /></div>
+                </div>
+                <div id="rtsp-fields" class="form-row" style="display:none">
+                  <div class="form-field" style="flex:1"><label for="f-rtsp-url">RTSP URL</label><input id="f-rtsp-url" type="text" placeholder="rtsp://user:pass@192.168.1.100/stream1" /></div>
+                </div>
+                <div class="form-row" style="margin-top:.6rem">
+                  <div class="form-actions">
+                    <button id="form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
+                    <button id="form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                  </div>
+                </div>
+                <p id="form-error"></p>
+              </div>
+
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Cameras">
+                  <thead><tr><th>ID</th><th>Name</th><th>Stream Slug</th><th>Source</th><th>Min Level</th><th>Actions</th></tr></thead>
+                  <tbody id="cameras-body">
+                    <tr class="empty-row"><td colspan="6">Loading cameras…</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- Puppy Pouch – Unanswered Questions -->
-      <section class="card" aria-label="Puppy Pouch questions">
-        <div class="card-header">
-          <h2>🐾 Puppy Pouch</h2>
-          <button id="refresh-questions-btn" class="btn-sm btn-edit">↻ Refresh</button>
-        </div>
-        <div class="card-body">
-          <!-- Answer form (hidden by default, shown when a question is selected) -->
-          <div id="answer-form-wrap">
-            <h3 id="answer-form-title">Reply to Question</h3>
-            <p id="answer-question-preview" style="font-size:.85rem;color:#c49a9f;margin-bottom:.6rem;font-style:italic;word-break:break-word;"></p>
-            <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
-            <div class="answer-form-actions">
-              <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
-              <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
-            </div>
-            <p id="answer-form-error"></p>
+        <!-- ── Q&A ───────────────────────────────────── -->
+        <section id="s-qa" class="admin-section">
+          <h1 class="section-heading">
+            🐾 Q&amp;A
+            <button id="refresh-questions-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-tab="unanswered">📬 Unanswered</button>
+            <button class="sub-tab" data-tab="answered">✅ Answered</button>
           </div>
 
-          <div style="overflow-x:auto">
-            <table class="admin-table" aria-label="Unanswered questions">
-              <thead>
-                <tr>
-                  <th>Question</th>
-                  <th>Received (UTC)</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="questions-body">
-                <tr class="empty-row"><td colspan="3">Loading questions…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+          <!-- Unanswered -->
+          <div id="tab-unanswered" class="sub-tab-content active">
+            <div class="card">
+              <div class="card-header"><h2>Awaiting Your Reply</h2></div>
+              <div class="card-body">
+                <div id="answer-form-wrap">
+                  <h3 id="answer-form-title">Reply to Question</h3>
+                  <p id="answer-question-preview" style="font-size:.85rem;color:#c49a9f;margin-bottom:.6rem;font-style:italic;word-break:break-word;"></p>
+                  <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+                  <div class="answer-form-actions">
+                    <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
+                    <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                  </div>
+                  <p id="answer-form-error"></p>
+                </div>
 
-      <!-- Recent Activations -->
-      <section class="card" aria-label="Recent activations">
-        <div class="card-header">
-          <h2>📋 Recent Activations</h2>
-        </div>
-        <div class="card-body" style="padding:0">
-          <div style="overflow-x:auto">
-            <table class="admin-table" aria-label="Recent activations">
-              <thead>
-                <tr>
-                  <th>Device</th>
-                  <th>User / Actor</th>
-                  <th>Timestamp (UTC)</th>
-                </tr>
-              </thead>
-              <tbody id="activations-body">
-                <tr class="empty-row"><td colspan="3">No activations yet.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Camera Service Logs ── -->
-      <section class="card" aria-label="Camera service logs">
-        <div class="card-header">
-          <h2>🎥 Camera Service Logs</h2>
-        </div>
-        <div class="card-body" style="padding:0">
-          <div style="overflow-x:auto">
-            <table class="admin-table" aria-label="Camera service logs">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Access Level</th>
-                  <th>Cameras Served</th>
-                  <th>Timestamp (UTC)</th>
-                </tr>
-              </thead>
-              <tbody id="camera-logs-body">
-                <tr class="empty-row"><td colspan="4">No camera accesses logged yet.</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Links Management ── -->
-      <section class="card" aria-label="Links management">
-        <div class="card-header">
-          <h2>🔗 Links</h2>
-          <button id="add-link-btn" class="btn-sm btn-edit">+ Add Link</button>
-        </div>
-        <div class="card-body">
-          <!-- Inline add/edit form (hidden by default) -->
-          <div id="link-form">
-            <h3 id="link-form-title">Add Link</h3>
-            <div class="form-row">
-              <div class="form-field">
-                <label for="lf-title">Title</label>
-                <input id="lf-title" type="text" placeholder="e.g. My Fanvue" />
-              </div>
-              <div class="form-field" style="max-width:90px">
-                <label for="lf-emoji">Emoji / Icon</label>
-                <input id="lf-emoji" type="text" placeholder="e.g. 🐾" maxlength="8" />
-              </div>
-              <div class="form-field" style="max-width:110px">
-                <label for="lf-order">Sort Order</label>
-                <input id="lf-order" type="number" value="0" min="0" />
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Unanswered questions">
+                    <thead><tr><th>Question</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
+                    <tbody id="questions-body">
+                      <tr class="empty-row"><td colspan="3">Loading questions…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-            <div class="form-row" style="margin-top:.5rem">
-              <div class="form-field" style="flex:1">
-                <label for="lf-url">URL</label>
-                <input id="lf-url" type="url" placeholder="https://…" />
-              </div>
-              <div class="form-field" style="max-width:130px;display:flex;flex-direction:column;justify-content:flex-end">
-                <label style="cursor:pointer;display:flex;align-items:center;gap:.4rem;padding-bottom:6px">
-                  <input id="lf-active" type="checkbox" checked /> Active
-                </label>
+          </div>
+
+          <!-- Answered -->
+          <div id="tab-answered" class="sub-tab-content">
+            <div class="card">
+              <div class="card-header"><h2>Already Answered</h2></div>
+              <div class="card-body">
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Answered questions">
+                    <thead><tr><th>Question</th><th>Your Answer</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
+                    <tbody id="answered-questions-body">
+                      <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-            <div class="form-row" style="margin-top:.5rem">
-              <div class="form-actions">
-                <button id="link-form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
-                <button id="link-form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+          </div>
+        </section>
+
+        <!-- ── Devices ────────────────────────────────── -->
+        <section id="s-devices" class="admin-section">
+          <h1 class="section-heading">🎮 Manual Device Control</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>IoT Devices</h2></div>
+            <div class="card-body">
+              <div class="iot-grid">
+                <div class="iot-card">
+                  <div class="iot-name">PiShock</div>
+                  <button id="admin-pishock-btn" class="btn-iot">⚡ Trigger PiShock</button>
+                  <p id="pishock-result" class="iot-result"></p>
+                </div>
+                <div class="iot-card">
+                  <div class="iot-name">Lovense</div>
+                  <button id="admin-lovense-btn" class="btn-iot">💜 Trigger Lovense</button>
+                  <p id="lovense-result" class="iot-result"></p>
+                </div>
               </div>
             </div>
-            <p id="link-form-error"></p>
           </div>
+        </section>
 
-          <!-- Links table -->
-          <div style="overflow-x:auto">
-            <table class="admin-table" aria-label="Links">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Icon</th>
-                  <th>Title</th>
-                  <th>URL</th>
-                  <th>Order</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="links-body">
-                <tr class="empty-row"><td colspan="7">Loading links…</td></tr>
-              </tbody>
-            </table>
+        <!-- ── Links ──────────────────────────────────── -->
+        <section id="s-links" class="admin-section">
+          <h1 class="section-heading">🔗 Links Management</h1>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Links</h2>
+              <button id="add-link-btn" class="btn-sm btn-edit">+ Add Link</button>
+            </div>
+            <div class="card-body">
+              <div id="link-form">
+                <h3 id="link-form-title">Add Link</h3>
+                <div class="form-row">
+                  <div class="form-field"><label for="lf-title">Title</label><input id="lf-title" type="text" placeholder="e.g. My Fanvue" /></div>
+                  <div class="form-field" style="max-width:90px"><label for="lf-emoji">Emoji / Icon</label><input id="lf-emoji" type="text" placeholder="e.g. 🐾" maxlength="8" /></div>
+                  <div class="form-field" style="max-width:110px"><label for="lf-order">Sort Order</label><input id="lf-order" type="number" value="0" min="0" /></div>
+                </div>
+                <div class="form-row" style="margin-top:.5rem">
+                  <div class="form-field" style="flex:1"><label for="lf-url">URL</label><input id="lf-url" type="url" placeholder="https://…" /></div>
+                  <div class="form-field" style="max-width:130px;display:flex;flex-direction:column;justify-content:flex-end">
+                    <label style="cursor:pointer;display:flex;align-items:center;gap:.4rem;padding-bottom:6px"><input id="lf-active" type="checkbox" checked /> Active</label>
+                  </div>
+                </div>
+                <div class="form-row" style="margin-top:.5rem">
+                  <div class="form-actions">
+                    <button id="link-form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
+                    <button id="link-form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                  </div>
+                </div>
+                <p id="link-form-error"></p>
+              </div>
+
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Links">
+                  <thead><tr><th>ID</th><th>Icon</th><th>Title</th><th>URL</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="links-body">
+                    <tr class="empty-row"><td colspan="7">Loading links…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem;">
+                🔗 Public links page: <a href="/links" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">/links</a>
+              </p>
+            </div>
           </div>
-          <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem;">
-            🔗 Public links page: <a href="/links" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">/links</a>
-          </p>
-        </div>
-      </section>
+        </section>
 
-      <!-- ── Danger Zone – Environment Variable Settings ── -->
-      <section class="danger-card" aria-label="Danger zone settings">
-        <div class="card-header">
-          <h2>⚠️ Danger Zone</h2>
-        </div>
-        <div class="card-body">
-          <div class="settings-grid" id="settings-grid">
-            <!-- populated by loadSettings() -->
+        <!-- ── Logs ───────────────────────────────────── -->
+        <section id="s-logs" class="admin-section">
+          <h1 class="section-heading">📋 Logs</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>🎥 Camera Service Logs</h2></div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Camera service logs">
+                  <thead><tr><th>User</th><th>Access Level</th><th>Cameras Served</th><th>Timestamp (UTC)</th></tr></thead>
+                  <tbody id="camera-logs-body">
+                    <tr class="empty-row"><td colspan="4">No camera accesses logged yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
+        </section>
 
-          <!-- MOCK_AUTH toggle -->
-          <div class="mock-toggle-row">
-            <span id="mock-auth-status-badge">—</span>
-            <button id="mock-toggle-btn" class="toggle-btn" disabled>Loading…</button>
+        <!-- ── Settings ───────────────────────────────── -->
+        <section id="s-settings" class="admin-section">
+          <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
+
+          <div class="danger-card">
+            <div class="card-header"><h2>⚠️ Environment Settings</h2></div>
+            <div class="card-body">
+              <div class="settings-grid" id="settings-grid"></div>
+
+              <div class="mock-toggle-row">
+                <span id="mock-auth-status-badge">—</span>
+                <button id="mock-toggle-btn" class="toggle-btn" disabled>Loading…</button>
+              </div>
+
+              <p class="danger-note">
+                🔒 <strong>SECRET_KEY</strong>, <strong>Fanvue OAuth credentials</strong>, and
+                <strong>ADMIN_PASSWORD</strong> must be changed via environment variables and a
+                container restart — they cannot be updated through this panel for security reasons.<br><br>
+                The <strong>MOCK_AUTH</strong> toggle takes effect immediately without a restart.
+                All other settings are read-only here and reflect the current container environment.
+              </p>
+            </div>
           </div>
+        </section>
 
-          <p class="danger-note">
-            🔒 <strong>SECRET_KEY</strong>, <strong>Fanvue OAuth credentials</strong>, and
-            <strong>ADMIN_PASSWORD</strong> must be changed via environment variables and a
-            container restart — they cannot be updated through this panel for security reasons.
-            <br><br>
-            The <strong>MOCK_AUTH</strong> toggle takes effect immediately without a restart.
-            All other settings are read-only here and reflect the current container environment.
-          </p>
-        </div>
-      </section>
+      </main>
+    </div>
+  </div>
 
-    </div><!-- /.admin-body -->
-  </div><!-- /#admin-panel -->
-
-  <!-- Toast notification -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
-    // ── Credential storage ────────────────────────────
-    // Credentials are stored in sessionStorage as Base64 so they can be
-    // re-attached on every fetch() call (required for HTTP Basic Auth).
-    // This is acceptable for an admin tool served exclusively over HTTPS.
-    // sessionStorage is cleared automatically when the browser tab is closed.
+    // ── Credential storage ─────────────────────────────
     const CRED_KEY = 'mochii_admin_creds';
-
-    function saveCreds(user, pass) {
-      sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`));
-    }
-    function getCreds() { return sessionStorage.getItem(CRED_KEY); }
-    function clearCreds() { sessionStorage.removeItem(CRED_KEY); }
-
+    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`)); }
+    function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
+    function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
     function authHeader() {
       const creds = getCreds();
       return creds ? { 'Authorization': `Basic ${creds}` } : {};
     }
 
-    // ── Toast helper ──────────────────────────────────
+    // ── Toast helper ───────────────────────────────────
     let _toastTimer = null;
     function showToast(msg) {
       const el = document.getElementById('toast');
@@ -997,31 +630,26 @@
       _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
     }
 
-    // ── Panel toggling ────────────────────────────────
+    // ── Panel toggling ─────────────────────────────────
     function showAdminPanel() {
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
       loadAll();
     }
-
     function showLoginPanel(msg) {
       document.getElementById('login-panel').style.display = 'flex';
       document.getElementById('admin-panel').style.display = 'none';
-      if (msg) {
-        const el = document.getElementById('login-error');
-        el.textContent = msg;
-      }
+      if (msg) document.getElementById('login-error').textContent = msg;
       clearCreds();
     }
 
-    // ── API helpers ───────────────────────────────────
+    // ── API helpers ────────────────────────────────────
     async function apiGet(path) {
       const resp = await fetch(path, { headers: authHeader() });
       if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return resp.json();
     }
-
     async function apiPost(path, body) {
       const resp = await fetch(path, {
         method: 'POST',
@@ -1031,7 +659,6 @@
       if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
       return resp;
     }
-
     async function apiPut(path, body) {
       const resp = await fetch(path, {
         method: 'PUT',
@@ -1041,13 +668,11 @@
       if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
       return resp;
     }
-
     async function apiDelete(path) {
       const resp = await fetch(path, { method: 'DELETE', headers: authHeader() });
       if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
       return resp;
     }
-
     async function apiPatch(path, body) {
       const resp = await fetch(path, {
         method: 'PATCH',
@@ -1058,20 +683,24 @@
       return resp;
     }
 
-    // ── Login ─────────────────────────────────────────
-    document.getElementById('login-btn').addEventListener('click', async () => {
-      const user = document.getElementById('admin-username').value.trim();
-      const pass = document.getElementById('admin-password').value;
-      const errEl = document.getElementById('login-error');
-      const btn = document.getElementById('login-btn');
+    // ── HTML escape ────────────────────────────────────
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
+    // ── Login ──────────────────────────────────────────
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const user  = document.getElementById('admin-username').value.trim();
+      const pass  = document.getElementById('admin-password').value;
+      const errEl = document.getElementById('login-error');
+      const btn   = document.getElementById('login-btn');
       errEl.textContent = '';
       if (!user || !pass) { errEl.textContent = 'Please enter your username and password.'; return; }
-
       btn.disabled = true;
       btn.textContent = 'Sniffing credentials…';
       saveCreds(user, pass);
-
       try {
         await apiGet('/api/admin/stats');
         showAdminPanel();
@@ -1084,34 +713,69 @@
       }
     });
 
-    // Allow Enter key to submit login form
     ['admin-username', 'admin-password'].forEach(id => {
       document.getElementById(id).addEventListener('keydown', e => {
         if (e.key === 'Enter') document.getElementById('login-btn').click();
       });
     });
 
-    // ── Logout ────────────────────────────────────────
+    // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-admin-btn').addEventListener('click', () => {
       showLoginPanel('');
       document.getElementById('login-error').textContent = '';
     });
 
-    // ── Load everything ───────────────────────────────
+    // ── Sidebar navigation ─────────────────────────────
+    function navigate(targetId) {
+      document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      const section = document.getElementById(targetId);
+      if (section) section.classList.add('active');
+      const btn = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+      if (btn) btn.classList.add('active');
+      closeMobileSidebar();
+    }
+
+    document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
+      btn.addEventListener('click', () => navigate(btn.dataset.target));
+    });
+
+    // ── Mobile sidebar ─────────────────────────────────
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mob-overlay');
+    const menuBtn = document.getElementById('mob-menu-btn');
+
+    function closeMobileSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    }
+    menuBtn.addEventListener('click', () => {
+      const isOpen = sidebar.classList.toggle('open');
+      overlay.classList.toggle('open', isOpen);
+    });
+    overlay.addEventListener('click', closeMobileSidebar);
+
+    // ── Load everything ────────────────────────────────
     async function loadAll() {
-      await Promise.all([loadStats(), loadCameras(), loadQuestions(), loadSettings(), loadCameraLogs(), loadLinks()]);
+      await Promise.all([
+        loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
+        loadSettings(), loadCameraLogs(), loadLinks(),
+      ]);
     }
 
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
-    document.getElementById('refresh-questions-btn').addEventListener('click', loadQuestions);
+    document.getElementById('refresh-questions-btn').addEventListener('click', () => {
+      loadQuestions();
+      loadAnsweredQuestions();
+    });
 
-    // ── Stats ─────────────────────────────────────────
+    // ── Stats ──────────────────────────────────────────
     async function loadStats() {
       try {
         const data = await apiGet('/api/admin/stats');
-        document.getElementById('stat-users').textContent          = data.total_users;
-        document.getElementById('stat-cameras').textContent        = data.total_cameras;
-        document.getElementById('stat-activations').textContent    = data.recent_activations.length;
+        document.getElementById('stat-users').textContent           = data.total_users;
+        document.getElementById('stat-cameras').textContent         = data.total_cameras;
+        document.getElementById('stat-activations').textContent     = data.recent_activations.length;
         document.getElementById('stat-camera-accesses').textContent = data.total_camera_accesses;
         renderActivations(data.recent_activations);
       } catch (err) {
@@ -1126,13 +790,13 @@
         return;
       }
       tbody.innerHTML = list.map(a => {
-        const tag = `<span class="device-tag ${a.device}">${a.device}</span>`;
-        const ts = a.activated_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
+        const tag = `<span class="device-tag ${escHtml(a.device)}">${escHtml(a.device)}</span>`;
+        const ts  = a.activated_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
         return `<tr><td>${tag}</td><td>${escHtml(a.actor)}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
       }).join('');
     }
 
-    // ── Camera Service Logs ───────────────────────────
+    // ── Camera Service Logs ────────────────────────────
     async function loadCameraLogs() {
       try {
         const logs = await apiGet('/api/admin/camera-logs');
@@ -1150,7 +814,7 @@
       }
     }
 
-    // ── Cameras ───────────────────────────────────────
+    // ── Cameras ────────────────────────────────────────
     let _editingId = null;
 
     async function loadCameras() {
@@ -1190,19 +854,12 @@
           <td>${escHtml(cam.display_name)}</td>
           <td><code>${escHtml(cam.stream_slug)}</code></td>
           <td>${sourceLabel(cam)}</td>
-          <td>
-            <span class="badge-level ${tierClass(cam.minimum_access_level)}">
-              ${cam.minimum_access_level} – ${tierLabel(cam.minimum_access_level)}
-            </span>
-          </td>
-          <td>
-            <div class="action-cell">
-              <button class="btn-sm btn-edit edit-cam-btn" data-id="${cam.id}">✏️ Edit</button>
-              <button class="btn-sm btn-delete del-cam-btn" data-id="${cam.id}">🗑️ Delete</button>
-            </div>
-          </td>
+          <td><span class="badge-level ${tierClass(cam.minimum_access_level)}">${cam.minimum_access_level} – ${tierLabel(cam.minimum_access_level)}</span></td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-edit edit-cam-btn" data-id="${cam.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-cam-btn" data-id="${cam.id}">🗑️ Delete</button>
+          </div></td>
         </tr>`).join('');
-
       tbody.querySelectorAll('.edit-cam-btn').forEach(btn => {
         btn.addEventListener('click', () => startEdit(parseInt(btn.dataset.id)));
       });
@@ -1211,11 +868,10 @@
       });
     }
 
-    // ── Camera form ───────────────────────────────────
+    // ── Camera form ────────────────────────────────────
     const cameraForm = document.getElementById('camera-form');
     let _slugManuallyEdited = false;
 
-    // Auto-populate slug from display name while it hasn't been manually edited.
     document.getElementById('f-name').addEventListener('input', () => {
       if (!_slugManuallyEdited) {
         const suffix = document.getElementById('f-name').value
@@ -1223,11 +879,8 @@
         document.getElementById('f-slug').value = suffix ? 'cam_' + suffix : '';
       }
     });
-    document.getElementById('f-slug').addEventListener('input', () => {
-      _slugManuallyEdited = true;
-    });
+    document.getElementById('f-slug').addEventListener('input', () => { _slugManuallyEdited = true; });
 
-    // Show/hide Tapo vs custom RTSP fields based on the radio selection.
     document.querySelectorAll('input[name="source-type"]').forEach(radio => {
       radio.addEventListener('change', () => {
         const isTapo = document.getElementById('src-tapo').checked;
@@ -1241,14 +894,12 @@
       document.getElementById('f-name').value  = cam.display_name  || '';
       document.getElementById('f-slug').value  = cam.stream_slug   || '';
       document.getElementById('f-level').value = cam.minimum_access_level || 1;
-      _slugManuallyEdited = !!cam.stream_slug;  // pre-filled slug should not be auto-replaced
-
-      const isTapo = !!cam.tapo_ip || !cam.rtsp_url;  // default to Tapo for new cameras
+      _slugManuallyEdited = !!cam.stream_slug;
+      const isTapo = !!cam.tapo_ip || !cam.rtsp_url;
       document.getElementById('src-tapo').checked = isTapo;
       document.getElementById('src-rtsp').checked = !isTapo;
       document.getElementById('tapo-fields').style.display = isTapo ? '' : 'none';
       document.getElementById('rtsp-fields').style.display  = isTapo ? 'none' : '';
-
       document.getElementById('f-tapo-ip').value   = cam.tapo_ip       || '';
       document.getElementById('f-tapo-user').value = cam.tapo_username  || '';
       document.getElementById('f-tapo-pass').value = cam.tapo_password  || '';
@@ -1275,38 +926,24 @@
       const slug  = document.getElementById('f-slug').value.trim();
       const level = parseInt(document.getElementById('f-level').value);
       const errEl = document.getElementById('form-error');
-
       if (!name || !slug) { errEl.textContent = 'Name and slug are required.'; return; }
-
-      const isTapo = document.getElementById('src-tapo').checked;
+      const isTapo        = document.getElementById('src-tapo').checked;
       const tapo_ip       = document.getElementById('f-tapo-ip').value.trim()   || null;
       const tapo_username = document.getElementById('f-tapo-user').value.trim() || null;
-      // Passwords are intentionally not trimmed to preserve leading/trailing characters.
       const tapo_password = document.getElementById('f-tapo-pass').value        || null;
       const rtsp_url      = document.getElementById('f-rtsp-url').value.trim()  || null;
-
-      if (isTapo && !tapo_ip) { errEl.textContent = 'Tapo IP address is required.'; return; }
+      if (isTapo && !tapo_ip)   { errEl.textContent = 'Tapo IP address is required.'; return; }
       if (!isTapo && !rtsp_url) { errEl.textContent = 'RTSP URL is required.'; return; }
-
       errEl.textContent = '';
-
       const body = {
-        display_name: name,
-        stream_slug: slug,
-        minimum_access_level: level,
-        tapo_ip:       isTapo ? tapo_ip       : null,
-        tapo_username: isTapo ? tapo_username : null,
-        tapo_password: isTapo ? tapo_password : null,
-        rtsp_url:      isTapo ? null          : rtsp_url,
+        display_name: name, stream_slug: slug, minimum_access_level: level,
+        tapo_ip: isTapo ? tapo_ip : null, tapo_username: isTapo ? tapo_username : null,
+        tapo_password: isTapo ? tapo_password : null, rtsp_url: isTapo ? null : rtsp_url,
       };
-
       try {
-        let resp;
-        if (_editingId !== null) {
-          resp = await apiPut(`/api/admin/cameras/${_editingId}`, body);
-        } else {
-          resp = await apiPost('/api/admin/cameras', body);
-        }
+        const resp = _editingId !== null
+          ? await apiPut(`/api/admin/cameras/${_editingId}`, body)
+          : await apiPost('/api/admin/cameras', body);
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
           errEl.textContent = data.detail || `Error ${resp.status}`;
@@ -1350,7 +987,7 @@
       }
     }
 
-    // ── Manual IoT control ────────────────────────────
+    // ── Manual IoT control ─────────────────────────────
     async function triggerDevice(device, btn, resultEl) {
       btn.disabled = true;
       resultEl.textContent = 'Sending command…';
@@ -1366,50 +1003,49 @@
       } catch (err) {
         if (err.message !== '401') resultEl.textContent = 'Request failed.';
       } finally {
-        setTimeout(() => {
-          btn.disabled = false;
-          resultEl.textContent = '';
-        }, 2500);
+        setTimeout(() => { btn.disabled = false; resultEl.textContent = ''; }, 2500);
       }
     }
 
     document.getElementById('admin-pishock-btn').addEventListener('click', () => {
-      triggerDevice('pishock',
-        document.getElementById('admin-pishock-btn'),
-        document.getElementById('pishock-result'));
+      triggerDevice('pishock', document.getElementById('admin-pishock-btn'), document.getElementById('pishock-result'));
     });
     document.getElementById('admin-lovense-btn').addEventListener('click', () => {
-      triggerDevice('lovense',
-        document.getElementById('admin-lovense-btn'),
-        document.getElementById('lovense-result'));
+      triggerDevice('lovense', document.getElementById('admin-lovense-btn'), document.getElementById('lovense-result'));
     });
 
-    // ── HTML escape ───────────────────────────────────
-    function escHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
+    // ── Q&A sub-tab switching ──────────────────────────
+    document.querySelectorAll('.sub-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const id = tab.dataset.tab;
+        document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sub-tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const content = document.getElementById(`tab-${id}`);
+        if (content) content.classList.add('active');
+      });
+    });
 
-    // ── Puppy Pouch – question management ─────────────
+    // ── Unanswered questions ───────────────────────────
     let _answeringId = null;
 
     async function loadQuestions() {
       try {
         const questions = await apiGet('/api/admin/questions');
         renderQuestions(questions);
+        const count = questions.length;
+        const badge = document.getElementById('nav-unanswered-badge');
+        badge.textContent = count;
+        badge.classList.toggle('visible', count > 0);
+        document.getElementById('stat-unanswered').textContent = count;
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load questions.');
       }
     }
 
-    // ── Deep-link: /admin/questions/<id> ─────────────
     const _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     function getDeepLinkedId() {
-      // Support both ?q=<id> query param and /admin/questions/<id> path segments.
       const params = new URLSearchParams(window.location.search);
       const fromParam = params.get('q');
       if (fromParam && _UUID_RE.test(fromParam)) return fromParam;
@@ -1424,9 +1060,7 @@
       if (!targetId) return;
       const row = document.querySelector(`.question-row[data-id="${CSS.escape(targetId)}"]`);
       if (!row) return;
-      // Remove any previous highlight so re-renders re-trigger the animation.
       row.classList.remove('deep-linked');
-      // Force a reflow so removing+adding the class restarts the animation.
       void row.offsetWidth;
       row.classList.add('deep-linked');
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1443,23 +1077,18 @@
         return `<tr class="question-row" data-id="${escHtml(q.id)}">
           <td><div class="q-text">${escHtml(q.text)}</div></td>
           <td class="q-ts">${escHtml(ts)}</td>
-          <td>
-            <div class="action-cell">
-              <button class="btn-sm btn-edit reply-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Reply &amp; Share</button>
-              <button class="btn-sm btn-delete del-question-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
-            </div>
-          </td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-edit reply-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Reply &amp; Share</button>
+            <button class="btn-sm btn-delete del-question-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
+          </div></td>
         </tr>`;
       }).join('');
-
       tbody.querySelectorAll('.reply-btn').forEach(btn => {
         btn.addEventListener('click', () => openAnswerForm(btn.dataset.id, btn.dataset.text));
       });
-
       tbody.querySelectorAll('.del-question-btn').forEach(btn => {
-        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id));
+        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id, true));
       });
-
       scrollToDeepLinkedQuestion();
     }
 
@@ -1483,25 +1112,25 @@
       const answer  = document.getElementById('answer-textarea').value.trim();
       const errEl   = document.getElementById('answer-form-error');
       const saveBtn = document.getElementById('answer-save-btn');
-
       if (!answer) { errEl.textContent = 'Please enter an answer.'; return; }
       errEl.textContent = '';
       saveBtn.disabled = true;
-
       try {
-        const resp = await apiPost(`/api/admin/questions/${encodeURIComponent(_answeringId)}/answer`, { answer });
+        const resp = await apiPost(
+          `/api/admin/questions/${encodeURIComponent(_answeringId)}/answer`,
+          { answer }
+        );
         if (resp.ok) {
-          const shareUrl = `${window.location.origin}/q/${encodeURIComponent(_answeringId)}`;
+          const shareUrl  = `${window.location.origin}/q/${encodeURIComponent(_answeringId)}`;
           closeAnswerForm();
           await loadQuestions();
+          await loadAnsweredQuestions();
           showToast('🐾 Answer saved!');
-          // Open Twitter Web Intent in a new tab
           const tweetText = encodeURIComponent('Drop a note in the Puppy Pouch! 🐾');
           const tweetUrl  = encodeURIComponent(shareUrl);
           window.open(
             `https://twitter.com/intent/tweet?text=${tweetText}&url=${tweetUrl}`,
-            '_blank',
-            'noopener,noreferrer'
+            '_blank', 'noopener,noreferrer'
           );
         } else {
           const data = await resp.json().catch(() => ({}));
@@ -1513,28 +1142,62 @@
         saveBtn.disabled = false;
       }
     });
-    (function init() {
-      if (getCreds()) {
-        // Validate existing credentials silently; fall back to login on failure.
-        fetch('/api/admin/stats', { headers: authHeader() })
-          .then(r => {
-            if (r.ok) {
-              showAdminPanel();
-            } else {
-              clearCreds();
-              document.getElementById('login-panel').style.display = 'flex';
-            }
-          })
-          .catch(() => {
-            clearCreds();
-            document.getElementById('login-panel').style.display = 'flex';
-          });
-      } else {
-        document.getElementById('login-panel').style.display = 'flex';
-      }
-    })();
 
-    // ── Danger Zone – Settings ────────────────────────
+    // ── Answered questions ─────────────────────────────
+    async function loadAnsweredQuestions() {
+      try {
+        const questions = await apiGet('/api/admin/questions/answered');
+        renderAnsweredQuestions(questions);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load answered questions.');
+      }
+    }
+
+    function renderAnsweredQuestions(questions) {
+      const tbody = document.getElementById('answered-questions-body');
+      if (!questions.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No answered questions yet 🐾</td></tr>';
+        return;
+      }
+      tbody.innerHTML = questions.map(q => {
+        const ts      = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const preview = q.answer.length > 90 ? escHtml(q.answer.slice(0, 87)) + '…' : escHtml(q.answer);
+        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+          <td><div class="q-text">${escHtml(q.text)}</div></td>
+          <td><div class="q-answer-preview">${preview}</div></td>
+          <td class="q-ts">${escHtml(ts)}</td>
+          <td><div class="action-cell">
+            <a class="btn-sm btn-edit" href="/q/${encodeURIComponent(q.id)}" target="_blank" rel="noopener" style="text-decoration:none">🔗 View</a>
+            <button class="btn-sm btn-delete del-answered-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.del-answered-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id, false));
+      });
+    }
+
+    async function deleteQuestion(id, isUnanswered) {
+      if (!confirm('Delete this question? This cannot be undone.')) return;
+      try {
+        const resp = await apiDelete(`/api/admin/questions/${id}`);
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        if (isUnanswered) {
+          await loadQuestions();
+        } else {
+          await loadAnsweredQuestions();
+        }
+        showToast('🗑️ Question deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    // ── Settings / Danger Zone ─────────────────────────
     let _settingsCache = null;
 
     function makeBadge(type, label) {
@@ -1545,49 +1208,21 @@
       try {
         const s = await apiGet('/api/admin/settings');
         _settingsCache = s;
-
-        // Build the status tiles
         const skBadge = s.secret_key_status === 'custom'
           ? makeBadge('ok', '✔ Custom key set')
           : s.secret_key_status === 'demo'
             ? makeBadge('warn', '⚠ Demo key')
             : makeBadge('error', '✘ Using default key');
-
         const fanvueBadge = (s.fanvue_client_id_set && s.fanvue_client_secret_set)
-          ? makeBadge('ok', '✔ Configured')
-          : makeBadge('warn', '⚠ Not configured');
-
+          ? makeBadge('ok', '✔ Configured') : makeBadge('warn', '⚠ Not configured');
         const adminBadge = s.admin_configured
-          ? makeBadge('ok', '✔ Configured')
-          : makeBadge('error', '✘ Not configured');
-
-        const redirectUri = escHtml(s.fanvue_redirect_uri);
-        const go2rtc = escHtml(`${s.go2rtc_host}:${s.go2rtc_port}`);
-
+          ? makeBadge('ok', '✔ Configured') : makeBadge('error', '✘ Not configured');
         document.getElementById('settings-grid').innerHTML = `
-          <div class="setting-tile">
-            <div class="setting-label">Secret Key</div>
-            <div class="setting-value">${skBadge}</div>
-          </div>
-          <div class="setting-tile">
-            <div class="setting-label">Fanvue OAuth</div>
-            <div class="setting-value">${fanvueBadge}</div>
-          </div>
-          <div class="setting-tile">
-            <div class="setting-label">Admin Credentials</div>
-            <div class="setting-value">${adminBadge}</div>
-          </div>
-          <div class="setting-tile">
-            <div class="setting-label">Fanvue Redirect URI</div>
-            <div class="setting-value">${redirectUri}</div>
-          </div>
-          <div class="setting-tile">
-            <div class="setting-label">go2rtc</div>
-            <div class="setting-value">${go2rtc}</div>
-          </div>
-        `;
-
-        // Update MOCK_AUTH toggle
+          <div class="setting-tile"><div class="setting-label">Secret Key</div><div class="setting-value">${skBadge}</div></div>
+          <div class="setting-tile"><div class="setting-label">Fanvue OAuth</div><div class="setting-value">${fanvueBadge}</div></div>
+          <div class="setting-tile"><div class="setting-label">Admin Credentials</div><div class="setting-value">${adminBadge}</div></div>
+          <div class="setting-tile"><div class="setting-label">Fanvue Redirect URI</div><div class="setting-value">${escHtml(s.fanvue_redirect_uri)}</div></div>
+          <div class="setting-tile"><div class="setting-label">go2rtc</div><div class="setting-value">${escHtml(`${s.go2rtc_host}:${s.go2rtc_port}`)}</div></div>`;
         renderMockAuthToggle(s.mock_auth_effective);
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load settings.');
@@ -1597,7 +1232,6 @@
     function renderMockAuthToggle(enabled) {
       const badge = document.getElementById('mock-auth-status-badge');
       const btn   = document.getElementById('mock-toggle-btn');
-
       if (enabled) {
         badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-error">⚠ Mock Auth ENABLED</span>';
         btn.textContent = 'Disable Mock Auth';
@@ -1630,7 +1264,7 @@
       }
     });
 
-    // ── Links management ──────────────────────────────
+    // ── Links management ───────────────────────────────
     let _editingLinkId = null;
 
     async function loadLinks() {
@@ -1652,24 +1286,18 @@
         const activeBadge = l.is_active
           ? '<span class="link-active-badge on">Active</span>'
           : '<span class="link-active-badge off">Hidden</span>';
-        const emoji = l.emoji ? escHtml(l.emoji) : '—';
+        const emoji      = l.emoji ? escHtml(l.emoji) : '—';
         const urlDisplay = escHtml(l.url.length > 45 ? l.url.slice(0, 42) + '…' : l.url);
         return `<tr data-id="${l.id}">
-          <td>${l.id}</td>
-          <td>${emoji}</td>
-          <td>${escHtml(l.title)}</td>
+          <td>${l.id}</td><td>${emoji}</td><td>${escHtml(l.title)}</td>
           <td><a href="${escHtml(l.url)}" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">${urlDisplay}</a></td>
-          <td>${l.sort_order}</td>
-          <td>${activeBadge}</td>
-          <td>
-            <div class="action-cell">
-              <button class="btn-sm btn-edit edit-link-btn" data-id="${l.id}">✏️ Edit</button>
-              <button class="btn-sm btn-delete del-link-btn" data-id="${l.id}">🗑️ Delete</button>
-            </div>
-          </td>
+          <td>${l.sort_order}</td><td>${activeBadge}</td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-edit edit-link-btn" data-id="${l.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-link-btn" data-id="${l.id}">🗑️ Delete</button>
+          </div></td>
         </tr>`;
       }).join('');
-
       tbody.querySelectorAll('.edit-link-btn').forEach(btn => {
         btn.addEventListener('click', () => startEditLink(parseInt(btn.dataset.id)));
       });
@@ -1682,20 +1310,17 @@
 
     function openLinkForm(title, link = {}) {
       document.getElementById('link-form-title').textContent = title;
-      document.getElementById('lf-title').value  = link.title  || '';
-      document.getElementById('lf-url').value    = link.url    || '';
-      document.getElementById('lf-emoji').value  = link.emoji  || '';
-      document.getElementById('lf-order').value  = link.sort_order !== undefined ? link.sort_order : 0;
+      document.getElementById('lf-title').value   = link.title  || '';
+      document.getElementById('lf-url').value     = link.url    || '';
+      document.getElementById('lf-emoji').value   = link.emoji  || '';
+      document.getElementById('lf-order').value   = link.sort_order !== undefined ? link.sort_order : 0;
       document.getElementById('lf-active').checked = link.is_active !== undefined ? !!link.is_active : true;
       document.getElementById('link-form-error').textContent = '';
       linkForm.style.display = 'block';
       document.getElementById('lf-title').focus();
     }
 
-    function closeLinkForm() {
-      linkForm.style.display = 'none';
-      _editingLinkId = null;
-    }
+    function closeLinkForm() { linkForm.style.display = 'none'; _editingLinkId = null; }
 
     document.getElementById('add-link-btn').addEventListener('click', () => {
       _editingLinkId = null;
@@ -1710,23 +1335,17 @@
       const order  = parseInt(document.getElementById('lf-order').value) || 0;
       const active = document.getElementById('lf-active').checked;
       const errEl  = document.getElementById('link-form-error');
-
-      if (!title)         { errEl.textContent = 'Title is required.'; return; }
-      if (!url)           { errEl.textContent = 'URL is required.'; return; }
+      if (!title) { errEl.textContent = 'Title is required.'; return; }
+      if (!url)   { errEl.textContent = 'URL is required.'; return; }
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         errEl.textContent = 'URL must start with http:// or https://'; return;
       }
       errEl.textContent = '';
-
       const body = { title, url, emoji, sort_order: order, is_active: active };
-
       try {
-        let resp;
-        if (_editingLinkId !== null) {
-          resp = await apiPut(`/api/admin/links/${_editingLinkId}`, body);
-        } else {
-          resp = await apiPost('/api/admin/links', body);
-        }
+        const resp = _editingLinkId !== null
+          ? await apiPut(`/api/admin/links/${_editingLinkId}`, body)
+          : await apiPost('/api/admin/links', body);
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
           errEl.textContent = data.detail || `Error ${resp.status}`;
@@ -1752,22 +1371,6 @@
       }
     }
 
-    async function deleteQuestion(id) {
-      if (!confirm('Delete this question? This cannot be undone.')) return;
-      try {
-        const resp = await apiDelete(`/api/admin/questions/${id}`);
-        if (!resp.ok && resp.status !== 204) {
-          const data = await resp.json().catch(() => ({}));
-          showToast(data.detail || 'Delete failed.');
-          return;
-        }
-        await loadQuestions();
-        showToast('🗑️ Question deleted.');
-      } catch (err) {
-        if (err.message !== '401') showToast('Delete failed.');
-      }
-    }
-
     async function deleteLink(id) {
       if (!confirm(`Delete link #${id}? This cannot be undone.`)) return;
       try {
@@ -1783,6 +1386,27 @@
         if (err.message !== '401') showToast('Delete failed.');
       }
     }
+
+    // ── Auto-login if session creds exist ──────────────
+    (function init() {
+      if (getCreds()) {
+        fetch('/api/admin/stats', { headers: authHeader() })
+          .then(r => {
+            if (r.ok) {
+              showAdminPanel();
+            } else {
+              clearCreds();
+              document.getElementById('login-panel').style.display = 'flex';
+            }
+          })
+          .catch(() => {
+            clearCreds();
+            document.getElementById('login-panel').style.display = 'flex';
+          });
+      } else {
+        document.getElementById('login-panel').style.display = 'flex';
+      }
+    })();
   </script>
 </body>
 </html>
