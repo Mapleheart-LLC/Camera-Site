@@ -139,7 +139,8 @@ def admin_update_link(
 
     new_title      = payload.title      if payload.title      is not None else row["title"]
     new_url        = payload.url        if payload.url        is not None else row["url"]
-    new_emoji      = payload.emoji      if payload.emoji      is not None else row["emoji"]
+    # Treat empty string as "clear the emoji"; None means "keep existing value".
+    new_emoji      = (payload.emoji or None) if payload.emoji is not None else row["emoji"]
     new_sort_order = payload.sort_order if payload.sort_order is not None else row["sort_order"]
     new_is_active  = (1 if payload.is_active else 0) if payload.is_active is not None else row["is_active"]
 

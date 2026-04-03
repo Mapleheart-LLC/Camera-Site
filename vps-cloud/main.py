@@ -4,7 +4,6 @@ import os
 import sys
 import secrets
 import sqlite3
-import textwrap
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -1011,7 +1010,7 @@ def question_share_page(
     <p class="card-title">Puppy Pouch 🐾 Anonymous Q&amp;A</p>
     <div class="bubble bubble-q">{q_text}</div>
     <div class="bubble bubble-a">{a_text}</div>
-    <p class="card-footer">Ask me anything at <a href="{_html_escape(base_url)}/anon">mochii.live</a> 🐾</p>
+    <p class="card-footer">Ask me anything at <a href="{_html_escape(base_url)}/anon">the Puppy Pouch</a> 🐾</p>
   </div>
 </body>
 </html>"""
