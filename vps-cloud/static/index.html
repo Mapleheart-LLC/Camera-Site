@@ -886,7 +886,14 @@
           body: new URLSearchParams({ data: pc.localDescription.sdp }),
         });
 
-        if (!response.ok) throw new Error(`go2rtc returned ${response.status}`);
+        if (!response.ok) {
+          let msg = 'Stream unavailable';
+          try {
+            const body = await response.json();
+            if (body.detail) msg = body.detail;
+          } catch (_) { /* use default */ }
+          throw new Error(msg);
+        }
 
         const answerSdp = await response.text();
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
