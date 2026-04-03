@@ -1182,6 +1182,9 @@
       void row.offsetWidth;
       row.classList.add('deep-linked');
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Auto-open the reply modal so the admin can answer immediately
+      const text = row.dataset.text || row.querySelector('.q-text')?.textContent || '';
+      openAnswerForm(targetId, text);
     }
 
     function renderQuestions(questions) {
@@ -1192,7 +1195,7 @@
       }
       tbody.innerHTML = questions.map(q => {
         const ts = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
-        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+        return `<tr class="question-row" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">
           <td><div class="q-text">${escHtml(q.text)}</div></td>
           <td class="q-ts">${escHtml(ts)}</td>
           <td><div class="action-cell">
@@ -1215,16 +1218,23 @@
       document.getElementById('answer-question-preview').textContent = `"${text}"`;
       document.getElementById('answer-textarea').value = '';
       document.getElementById('answer-form-error').textContent = '';
-      document.getElementById('answer-form-wrap').style.display = 'block';
+      document.getElementById('reply-modal-backdrop').classList.add('open');
       document.getElementById('answer-textarea').focus();
     }
 
     function closeAnswerForm() {
       _answeringId = null;
-      document.getElementById('answer-form-wrap').style.display = 'none';
+      document.getElementById('reply-modal-backdrop').classList.remove('open');
     }
 
     document.getElementById('answer-cancel-btn').addEventListener('click', closeAnswerForm);
+    document.getElementById('reply-modal-close-btn').addEventListener('click', closeAnswerForm);
+    document.getElementById('reply-modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('reply-modal-backdrop')) closeAnswerForm();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAnswerForm();
+    });
 
     document.getElementById('answer-save-btn').addEventListener('click', async () => {
       const answer  = document.getElementById('answer-textarea').value.trim();
@@ -1722,5 +1732,20 @@
       }
     })();
   </script>
+
+  <!-- ── Reply modal ──────────────────────────────────── -->
+  <div id="reply-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reply-modal-title">
+    <div id="reply-modal">
+      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">✕</button>
+      <h3 id="reply-modal-title">Reply to Note</h3>
+      <p id="answer-question-preview"></p>
+      <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+      <div class="answer-form-actions">
+        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
+        <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+      </div>
+      <p id="answer-form-error"></p>
+    </div>
+  </div>
 </body>
 </html>

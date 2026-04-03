@@ -81,15 +81,25 @@ async def send_discord_notification(
             # the reply modal for this question.
             reply_url = f"{base_url}/admin?q={question_id}"
             embed["url"] = reply_url
-            embed["fields"] = [
-                {
-                    "name": "Reply",
-                    "value": f"[🐾 Open reply modal in the Alpha Kennel]({reply_url})",
-                    "inline": False,
-                }
-            ]
 
         payload["embeds"] = [embed]
+
+        # Button component so the admin can reply directly from Discord.
+        # Clicking it triggers a modal via the /discord/interactions endpoint.
+        if question_id:
+            payload["components"] = [
+                {
+                    "type": 1,  # ACTION_ROW
+                    "components": [
+                        {
+                            "type": 2,    # BUTTON
+                            "style": 1,   # PRIMARY (blurple)
+                            "label": "Reply 🐾",
+                            "custom_id": f"reply:{question_id}",
+                        }
+                    ],
+                }
+            ]
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
