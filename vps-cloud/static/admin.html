@@ -822,7 +822,7 @@
             <strong>ADMIN_PASSWORD</strong> must be changed via environment variables and a
             container restart — they cannot be updated through this panel for security reasons.
             <br><br>
-            The <strong>MOCK AUTH</strong> toggle takes effect immediately without a restart.
+            The <strong>MOCK_AUTH</strong> toggle takes effect immediately without a restart.
             All other settings are read-only here and reflect the current container environment.
           </p>
         </div>
@@ -1460,9 +1460,7 @@
       try {
         const resp = await apiPatch('/api/admin/settings', { mock_auth: newVal });
         if (resp.ok) {
-          _settingsCache.mock_auth_effective = newVal;
-          _settingsCache.mock_auth_db = newVal;
-          renderMockAuthToggle(newVal);
+          await loadSettings();
           showToast(newVal ? '⚠️ Mock Auth enabled.' : '✔ Mock Auth disabled.');
         } else {
           showToast('Failed to update setting.');
