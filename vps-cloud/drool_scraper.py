@@ -386,7 +386,7 @@ def _scrape_bluesky() -> None:
         logger.debug("atproto is not installed; Bluesky scraper disabled.")
         return
 
-    handle       = _load_credential("drool_bsky_handle",       "BSKY_HANDLE")
+    handle       = _load_credential("drool_bsky_handle",       "BSKY_HANDLE").lstrip("@")
     app_password = _load_credential("drool_bsky_app_password", "BSKY_APP_PASSWORD")
 
     if not handle or not app_password:
