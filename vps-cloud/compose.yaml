@@ -40,6 +40,16 @@ services:
       - BASE_URL=${BASE_URL:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
+      # ── Store / Payment ───────────────────────────────
+      # Payment provider selection (default: segpay)
+      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-segpay}
+      # Segpay credentials – obtain from your Segpay merchant dashboard
+      - SEGPAY_PACKAGE_ID=${SEGPAY_PACKAGE_ID:-}
+      - SEGPAY_PRICE_POINT_ID=${SEGPAY_PRICE_POINT_ID:-}
+      # Optional: shared secret for Segpay postback HMAC-SHA256 verification
+      - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
+      # Printful API key – required for automatic print-on-demand fulfilment
+      - PRINTFUL_API_KEY=${PRINTFUL_API_KEY:-}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
