@@ -28,6 +28,9 @@ services:
       - FANVUE_CREATOR_ID=${FANVUE_CREATOR_ID:-}
       # Set MOCK_AUTH=true to bypass Fanvue OAuth (demo/testing only – never in production)
       - MOCK_AUTH=${MOCK_AUTH:-false}
+      # Admin panel credentials – must be set or /api/admin/* returns 503
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
     volumes:
