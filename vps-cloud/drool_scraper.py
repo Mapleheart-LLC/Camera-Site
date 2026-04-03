@@ -422,9 +422,32 @@ def _scrape_bluesky() -> None:
                 media_url: Optional[str] = None
                 embed = getattr(post, "embed", None)
                 if embed:
+                    # Direct image embed (app.bsky.embed.images#view)
                     images = getattr(embed, "images", None)
                     if images:
-                        media_url = getattr(images[0], "fullsize", None)
+                        media_url = (
+                            getattr(images[0], "fullsize", None)
+                            or getattr(images[0], "thumb", None)
+                        )
+                    # Record-with-media (app.bsky.embed.recordWithMedia#view)
+                    if not media_url:
+                        media = getattr(embed, "media", None)
+                        if media:
+                            media_images = getattr(media, "images", None)
+                            if media_images:
+                                media_url = (
+                                    getattr(media_images[0], "fullsize", None)
+                                    or getattr(media_images[0], "thumb", None)
+                                )
+                            if not media_url:
+                                ext = getattr(media, "external", None)
+                                if ext:
+                                    media_url = getattr(ext, "thumb", None)
+                    # External link card (app.bsky.embed.external#view)
+                    if not media_url:
+                        external = getattr(embed, "external", None)
+                        if external:
+                            media_url = getattr(external, "thumb", None)
 
                 indexed_at = getattr(post, "indexed_at", None)
                 if indexed_at:
