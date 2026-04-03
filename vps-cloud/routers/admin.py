@@ -11,7 +11,8 @@ Endpoints
   POST   /api/admin/cameras            – add a new camera
   PUT    /api/admin/cameras/{cam_id}   – update an existing camera
   DELETE /api/admin/cameras/{cam_id}   – remove a camera
-  GET    /api/admin/stats              – user/camera counts + recent activations
+  GET    /api/admin/stats              – user/camera counts + recent activations + camera access count
+  GET    /api/admin/camera-logs        – 50 most recent camera service access log entries
   POST   /api/admin/control/{device}   – manually trigger an IoT device
   GET    /api/admin/settings           – current env-var / runtime configuration status
   PATCH  /api/admin/settings           – update runtime-configurable settings (e.g. mock_auth)
@@ -271,9 +272,10 @@ def admin_stats(
     _: str = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Return a summary of registered users, cameras, and the 20 most recent IoT activations."""
+    """Return a summary of registered users, cameras, IoT activations, and camera service accesses."""
     total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     total_cameras = db.execute("SELECT COUNT(*) FROM cameras").fetchone()[0]
+    total_camera_accesses = db.execute("SELECT COUNT(*) FROM camera_service_logs").fetchone()[0]
     recent = db.execute(
         """
         SELECT device, actor, activated_at
@@ -285,8 +287,26 @@ def admin_stats(
     return {
         "total_users": total_users,
         "total_cameras": total_cameras,
+        "total_camera_accesses": total_camera_accesses,
         "recent_activations": [dict(r) for r in recent],
     }
+
+
+@router.get("/camera-logs")
+def admin_camera_logs(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the 50 most recent camera service access log entries."""
+    rows = db.execute(
+        """
+        SELECT user_id, access_level, camera_count, accessed_at
+        FROM camera_service_logs
+        ORDER BY id DESC
+        LIMIT 50
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------

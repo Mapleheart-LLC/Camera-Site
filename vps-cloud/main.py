@@ -131,6 +131,17 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS camera_service_logs (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      TEXT    NOT NULL,
+            access_level INTEGER NOT NULL,
+            camera_count INTEGER NOT NULL,
+            accessed_at  TEXT    NOT NULL
+        )
+        """
+    )
     # Idempotent migrations: add stream-source columns to existing databases.
     # Column names and types are hardcoded literals (not user input), so
     # string interpolation here is safe and necessary for DDL statements.
@@ -461,6 +472,7 @@ def get_my_cameras(
 ):
     """Return cameras the authenticated user is permitted to view."""
     access_level: int = current_user["access_level"]
+    user_id: str = current_user["sub"]
 
     rows = db.execute(
             """
@@ -471,6 +483,12 @@ def get_my_cameras(
             """,
             (access_level,),
         ).fetchall()
+
+    db.execute(
+        "INSERT INTO camera_service_logs (user_id, access_level, camera_count, accessed_at) VALUES (?, ?, ?, ?)",
+        (user_id, access_level, len(rows), datetime.now(timezone.utc).isoformat()),
+    )
+    db.commit()
 
     return JSONResponse(
         [{"display_name": row["display_name"], "stream_slug": row["stream_slug"]} for row in rows]

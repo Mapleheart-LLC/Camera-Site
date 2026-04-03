@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="mochii.live – Alpha Kennel admin panel." />
+  <meta name="robots" content="noindex, nofollow" />
   <title>🐾 The Alpha Kennel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -623,6 +625,10 @@
               <div id="stat-activations" class="stat-value">—</div>
               <div class="stat-label">Recent Activations</div>
             </div>
+            <div class="stat-tile">
+              <div id="stat-camera-accesses" class="stat-value">—</div>
+              <div class="stat-label">Camera Accesses</div>
+            </div>
           </div>
         </div>
       </section>
@@ -801,6 +807,30 @@
         </div>
       </section>
 
+      <!-- ── Camera Service Logs ── -->
+      <section class="card" aria-label="Camera service logs">
+        <div class="card-header">
+          <h2>🎥 Camera Service Logs</h2>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div style="overflow-x:auto">
+            <table class="admin-table" aria-label="Camera service logs">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Access Level</th>
+                  <th>Cameras Served</th>
+                  <th>Timestamp (UTC)</th>
+                </tr>
+              </thead>
+              <tbody id="camera-logs-body">
+                <tr class="empty-row"><td colspan="4">No camera accesses logged yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Danger Zone – Environment Variable Settings ── -->
       <section class="danger-card" aria-label="Danger zone settings">
         <div class="card-header">
@@ -965,7 +995,7 @@
 
     // ── Load everything ───────────────────────────────
     async function loadAll() {
-      await Promise.all([loadStats(), loadCameras(), loadQuestions(), loadSettings()]);
+      await Promise.all([loadStats(), loadCameras(), loadQuestions(), loadSettings(), loadCameraLogs()]);
     }
 
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
@@ -975,9 +1005,10 @@
     async function loadStats() {
       try {
         const data = await apiGet('/api/admin/stats');
-        document.getElementById('stat-users').textContent       = data.total_users;
-        document.getElementById('stat-cameras').textContent     = data.total_cameras;
-        document.getElementById('stat-activations').textContent = data.recent_activations.length;
+        document.getElementById('stat-users').textContent          = data.total_users;
+        document.getElementById('stat-cameras').textContent        = data.total_cameras;
+        document.getElementById('stat-activations').textContent    = data.recent_activations.length;
+        document.getElementById('stat-camera-accesses').textContent = data.total_camera_accesses;
         renderActivations(data.recent_activations);
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load stats.');
@@ -995,6 +1026,24 @@
         const ts = a.activated_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
         return `<tr><td>${tag}</td><td>${escHtml(a.actor)}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
       }).join('');
+    }
+
+    // ── Camera Service Logs ───────────────────────────
+    async function loadCameraLogs() {
+      try {
+        const logs = await apiGet('/api/admin/camera-logs');
+        const tbody = document.getElementById('camera-logs-body');
+        if (!logs.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No camera accesses logged yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = logs.map(l => {
+          const ts = l.accessed_at.replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
+          return `<tr><td>${escHtml(l.user_id)}</td><td>${escHtml(String(l.access_level))}</td><td>${escHtml(String(l.camera_count))}</td><td class="ts-cell">${escHtml(ts)}</td></tr>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load camera logs.');
+      }
     }
 
     // ── Cameras ───────────────────────────────────────
