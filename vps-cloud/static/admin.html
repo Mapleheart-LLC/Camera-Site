@@ -64,6 +64,24 @@
     .btn-primary:active { transform: scale(.97); }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
 
+    .btn-x {
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      width: 100%; padding: .65rem 1rem; background: #000; border: 1px solid #333;
+      border-radius: 10px; color: #fff; font-family: inherit; font-size: .95rem;
+      font-weight: 700; cursor: pointer; transition: background .2s, box-shadow .2s, transform .1s;
+      margin-top: .6rem; text-decoration: none;
+    }
+    .btn-x:hover { background: #111; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+    .btn-x:active { transform: scale(.97); }
+
+    .login-divider {
+      display: flex; align-items: center; gap: .6rem;
+      margin: .85rem 0 .25rem; color: #5e4a4d; font-size: .78rem; font-weight: 600;
+    }
+    .login-divider::before, .login-divider::after {
+      content: ''; flex: 1; height: 1px; background: #3d2a2e;
+    }
+
     /* ── Admin shell ─────────────────────────────────────── */
     #admin-panel { display: none; min-height: 100vh; }
 
@@ -346,6 +364,11 @@
       </div>
       <p id="login-error" role="alert" aria-live="polite"></p>
       <button id="login-btn" class="btn-primary">🐾 Enter the Kennel</button>
+      <div class="login-divider">or</div>
+      <a id="login-x-btn" href="/auth/twitter/login" class="btn-x">
+        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 1200 1227" fill="currentColor" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>
+        Login with X
+      </a>
     </div>
   </div>
 
@@ -860,10 +883,19 @@
   <script>
     // ── Credential storage ─────────────────────────────
     const CRED_KEY = 'mochii_admin_creds';
+    const JWT_KEY  = 'mochii_admin_jwt';
     function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`)); }
     function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
-    function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
+    function saveJwt(token)        { sessionStorage.setItem(JWT_KEY, token); }
+    function getJwt()              { return sessionStorage.getItem(JWT_KEY); }
+    function clearCreds() {
+      sessionStorage.removeItem(CRED_KEY);
+      sessionStorage.removeItem(JWT_KEY);
+    }
     function authHeader() {
+      const jwt = getJwt();
+      // Validate basic JWT structure (three dot-separated base64url segments)
+      if (jwt && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt)) return { 'Authorization': `Bearer ${jwt}` };
       const creds = getCreds();
       return creds ? { 'Authorization': `Basic ${creds}` } : {};
     }
@@ -1983,7 +2015,38 @@
 
     // ── Auto-login if session creds exist ──────────────
     (function init() {
-      if (getCreds()) {
+      // Handle redirect back from Twitter OAuth callback.
+      // The admin_token is passed in the fragment (#) so it never reaches the
+      // server in Referer headers or access logs.
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const queryParams = new URLSearchParams(window.location.search);
+      const adminToken = hashParams.get('admin_token');
+      const oauthError = queryParams.get('error');
+
+      if (adminToken) {
+        // Strip the token from the URL before storing so it isn't bookmarked
+        history.replaceState({}, '', '/admin.html');
+        saveJwt(adminToken);
+      }
+
+      if (oauthError) {
+        history.replaceState({}, '', '/admin.html');
+        const messages = {
+          twitter_cancelled:    'Twitter login was cancelled.',
+          invalid_state:        'Login session expired. Please try again.',
+          token_exchange_failed:'Could not complete Twitter login. Please try again.',
+          profile_fetch_failed: 'Could not fetch your Twitter profile. Please try again.',
+          not_configured:       'Twitter login is not configured on this server.',
+          unauthorized:         'Your Twitter account is not authorised to access this panel.',
+          tweepy_missing:       'Server error: Twitter library is missing.',
+        };
+        document.getElementById('login-panel').style.display = 'flex';
+        document.getElementById('login-error').textContent =
+          messages[oauthError] || `Login error: ${oauthError}`;
+        return;
+      }
+
+      if (getJwt() || getCreds()) {
         fetch('/api/admin/stats', { headers: authHeader() })
           .then(r => {
             if (r.ok) {
