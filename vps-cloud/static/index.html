@@ -768,7 +768,10 @@
 
         const response = await fetch(webrtcApiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Bearer ${getToken()}`,
+          },
           body: new URLSearchParams({ data: pc.localDescription.sdp }),
         });
 
@@ -794,10 +797,7 @@
       document.getElementById('viewer-title').style.display       = 'block';
       document.getElementById('viewer-title').textContent         = displayName;
 
-      const go2rtcHost = window.GO2RTC_HOST || 'localhost';
-      const go2rtcPort = window.GO2RTC_PORT || '1984';
-      const webrtcApiUrl =
-        `http://${go2rtcHost}:${go2rtcPort}/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
+      const webrtcApiUrl = `/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
 
       startWebRTCStream(webrtcApiUrl);
     }
