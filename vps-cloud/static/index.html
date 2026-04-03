@@ -560,6 +560,117 @@
       box-shadow: 0 4px 20px rgba(212, 102, 122, 0.35);
     }
 
+    /* ── Mobile responsive (≤ 640px) ───────────────── */
+    @media (max-width: 640px) {
+
+      /* Allow the dashboard to scroll instead of clipping */
+      #dashboard-section {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      /* Tighter header */
+      #dashboard-section header {
+        padding: .55rem .9rem;
+        gap: .5rem;
+      }
+
+      #dashboard-section header h1 {
+        font-size: 1.1rem;
+      }
+
+      #logout-btn {
+        padding: .3rem .65rem;
+        font-size: .8rem;
+      }
+
+      /* Stack sidebar on top of viewer */
+      #main-layout {
+        flex-direction: column;
+        overflow: visible;
+      }
+
+      /* Sidebar becomes a horizontal scrollable chip strip */
+      #camera-sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: visible;
+        border-right: none;
+        border-bottom: 1px solid #3d2a2e;
+        padding: .5rem .75rem;
+        gap: .45rem;
+        scrollbar-width: none;
+      }
+
+      #camera-sidebar::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* Label sits inline at the start of the strip */
+      #camera-sidebar h2 {
+        white-space: nowrap;
+        flex-shrink: 0;
+        border-bottom: none;
+        padding: 0 .25rem;
+        margin-bottom: 0;
+      }
+
+      /* Camera chips: auto-width, touch-friendly */
+      .cam-btn {
+        width: auto;
+        flex-shrink: 0;
+        padding: .45rem .8rem;
+        font-size: .85rem;
+        white-space: nowrap;
+      }
+
+      #sidebar-message {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      #upgrade-prompt {
+        flex-shrink: 0;
+        margin-top: 0;
+        font-size: .78rem;
+        max-width: 240px;
+      }
+
+      /* Video viewer: full width, less padding */
+      #viewer {
+        padding: .9rem .75rem 1.25rem;
+        justify-content: flex-start;
+      }
+
+      #viewer-title {
+        font-size: .95rem;
+        margin-bottom: .5rem;
+      }
+
+      #stream-status {
+        font-size: .8rem;
+      }
+
+      /* Controls bar: tighter, wraps nicely */
+      #controls-bar {
+        padding: .55rem .75rem;
+        gap: .6rem;
+      }
+
+      .control-btn-wrap {
+        min-width: 110px;
+      }
+
+      .control-btn {
+        padding: .45rem .9rem;
+        font-size: .85rem;
+      }
+
+    }
+
   </style>
 </head>
 <body>

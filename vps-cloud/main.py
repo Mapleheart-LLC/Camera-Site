@@ -45,6 +45,7 @@ from slowapi import _rate_limit_exceeded_handler
 # ---------------------------------------------------------------------------
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
+GO2RTC_TIMEOUT: float = 15.0
 
 # Fanvue OAuth 2.0 settings – set these in your environment / docker-compose.yml
 FANVUE_CLIENT_ID: str = os.environ.get("FANVUE_CLIENT_ID", "")
@@ -745,7 +746,7 @@ async def proxy_webrtc(
         f"?src={_url_quote(src, safe='')}"
     )
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=GO2RTC_TIMEOUT) as client:
         try:
             resp = await client.post(
                 go2rtc_url,
@@ -753,10 +754,12 @@ async def proxy_webrtc(
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"go2rtc unreachable: {exc}")
+            logger.error("go2rtc request error for src=%s: %s", src, exc)
+            raise HTTPException(status_code=502, detail="Unable to reach stream service")
 
     if not resp.is_success:
-        raise HTTPException(status_code=502, detail=f"go2rtc returned {resp.status_code}")
+        logger.error("go2rtc returned %s for src=%s", resp.status_code, src)
+        raise HTTPException(status_code=502, detail="Stream service returned an error")
 
     return Response(content=resp.content, media_type="text/plain")
 
