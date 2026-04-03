@@ -756,6 +756,12 @@ _OG_IMG_H = 630
 _LABEL_TEXT_GAP = 8   # pixels between a label line and the first body line
 _LINE_SPACING   = 6   # pixels between consecutive body text lines
 
+# Adaptive body font sizes tried in descending order; the first that fits is used
+_ADAPTIVE_FONT_SIZES = [46, 40, 36, 32, 28]
+
+# Fraction of the content area height allocated to the question bubble
+_Q_BUBBLE_HEIGHT_RATIO = 0.56
+
 # Brand colours matching the HTML card
 _BG_OUTER   = (26,  26,  26)   # #1a1a1a – page background
 _BG_CARD    = (36,  36,  36)   # #242424 – card background
@@ -779,19 +785,26 @@ def _make_fallback_png() -> bytes:
 _FALLBACK_PNG = _make_fallback_png()
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Return the best available font at the requested size.
 
     Falls back to Pillow's built-in bitmap font when no TrueType font is found;
     that font ignores *size* and renders at a fixed small size.
     """
-    candidates = [
-        # Common sans-serif fonts that are typically installed on Linux/Debian
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
-    ]
+    if bold:
+        candidates = [
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        ]
+    else:
+        candidates = [
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
     for path in candidates:
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
@@ -866,101 +879,146 @@ def _truncate_line(line: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont
 
 
 def _generate_og_image(q_text: str, a_text: str) -> bytes:
-    """Render a 1200×630 PNG card matching the site's dark-pink aesthetic."""
-    img = Image.new("RGB", (_OG_IMG_W, _OG_IMG_H), _BG_OUTER)
+    """Render a 1200×630 OG image with large text that fills the canvas."""
+    img  = Image.new("RGB", (_OG_IMG_W, _OG_IMG_H), (16, 8, 12))
     draw = ImageDraw.Draw(img)
 
-    # Card bounds
-    margin = 60
-    card_x1, card_y1 = margin, margin
-    card_x2, card_y2 = _OG_IMG_W - margin, _OG_IMG_H - margin
-    card_w = card_x2 - card_x1
-    pad = 36  # inner padding
+    # ── Gradient background (top dark → bottom slightly warmer) ─────────────
+    for y in range(_OG_IMG_H):
+        t = y / _OG_IMG_H
+        draw.line([(0, y), (_OG_IMG_W, y)], fill=(
+            int(16 + t * 9), int(8 + t * 5), int(12 + t * 9),
+        ))
 
-    # Draw card background + border
-    draw.rounded_rectangle(
-        [card_x1, card_y1, card_x2, card_y2],
-        radius=24,
-        fill=_BG_CARD,
-        outline=_BORDER_CARD,
-        width=2,
+    # ── Layout constants ─────────────────────────────────────────────────────
+    HEADER_H   = 74    # branded top bar
+    FOOTER_H   = 46    # footer strip at bottom
+    PAD_X      = 52    # left/right canvas margin
+    PAD_V      = 18    # bubble top/bottom inner padding
+    ACCENT_W   = 6     # left-edge accent bar width
+    PAD_BX     = 20    # text left padding (after accent bar)
+    PAD_BR     = 22    # text right padding
+    BUBBLE_R   = 16    # corner radius
+    LABEL_SIZE = 20
+    LABEL_GAP  = 10    # gap between label row and body text
+    LINE_GAP   = 8     # extra pixels between wrapped body lines
+    BUBBLE_GAP = 18    # gap between Q and A bubbles
+
+    bubble_w   = _OG_IMG_W - PAD_X * 2
+    inner_w    = bubble_w - ACCENT_W - PAD_BX - PAD_BR
+
+    content_top = HEADER_H + 14
+    content_bot = _OG_IMG_H - FOOTER_H - 10
+    content_h   = content_bot - content_top
+
+    # ── Fixed fonts ──────────────────────────────────────────────────────────
+    font_label  = _load_font(LABEL_SIZE, bold=True)
+    font_brand  = _load_font(27, bold=True)
+    font_domain = _load_font(20)
+    font_footer = _load_font(21)
+
+    def _fh(font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> int:
+        bb = draw.textbbox((0, 0), "Ag", font=font)
+        return bb[3] - bb[1]
+
+    lq_h = _fh(font_label)
+    la_h = _fh(font_label)
+
+    # ── Adaptive body font: try largest size where both bubbles fit ──────────
+    font_body = _load_font(28)
+    for size in _ADAPTIVE_FONT_SIZES:
+        f    = _load_font(size)
+        lh   = _fh(f)
+        step = lh + LINE_GAP
+        q_ls = _wrap_text(q_text, f, inner_w, draw)
+        a_ls = _wrap_text(a_text, f, inner_w, draw)
+        q_bh = 2 * PAD_V + lq_h + LABEL_GAP + len(q_ls) * step
+        a_bh = 2 * PAD_V + la_h + LABEL_GAP + len(a_ls) * step
+        if q_bh + BUBBLE_GAP + a_bh <= content_h:
+            font_body = f
+            break
+
+    lh   = _fh(font_body)
+    step = lh + LINE_GAP
+
+    q_lines = _wrap_text(q_text, font_body, inner_w, draw)
+    a_lines = _wrap_text(a_text, font_body, inner_w, draw)
+
+    # Truncate if even size-28 font overflows (very long text)
+    q_bh_max = int(content_h * _Q_BUBBLE_HEIGHT_RATIO) - BUBBLE_GAP // 2
+    a_bh_max = content_h - q_bh_max - BUBBLE_GAP
+    max_q = max(1, (q_bh_max - 2 * PAD_V - lq_h - LABEL_GAP) // step)
+    max_a = max(1, (a_bh_max - 2 * PAD_V - la_h - LABEL_GAP) // step)
+    if len(q_lines) > max_q:
+        q_lines = q_lines[:max_q]
+        q_lines[-1] = _truncate_line(q_lines[-1], font_body, inner_w, draw)
+    if len(a_lines) > max_a:
+        a_lines = a_lines[:max_a]
+        a_lines[-1] = _truncate_line(a_lines[-1], font_body, inner_w, draw)
+
+    q_bh = 2 * PAD_V + lq_h + LABEL_GAP + len(q_lines) * step
+    a_bh = 2 * PAD_V + la_h + LABEL_GAP + len(a_lines) * step
+
+    # Vertically centre both bubbles in the content area
+    total_bh = q_bh + BUBBLE_GAP + a_bh
+    start_y  = content_top + max(0, (content_h - total_bh) // 2)
+
+    # ── Header bar ───────────────────────────────────────────────────────────
+    draw.rectangle([0, 0, _OG_IMG_W, HEADER_H], fill=(24, 10, 16))
+    draw.line([(0, HEADER_H), (_OG_IMG_W, HEADER_H)], fill=(72, 28, 42), width=2)
+
+    # Paw-dot accent
+    dot_cx, dot_cy = 42, HEADER_H // 2
+    draw.ellipse([dot_cx - 18, dot_cy - 18, dot_cx + 18, dot_cy + 18], fill=(82, 30, 46))
+    draw.ellipse([dot_cx - 10, dot_cy - 10, dot_cx + 10, dot_cy + 10], fill=(212, 140, 162))
+
+    draw.text((72, HEADER_H // 2 - 16), "PUPPY POUCH",   font=font_brand,  fill=(220, 158, 178))
+    draw.text((72, HEADER_H // 2 +  8), "Anonymous Q&A", font=font_domain, fill=(128, 85, 100))
+
+    site_text = "mochii.live"
+    st_bb = draw.textbbox((0, 0), site_text, font=font_domain)
+    draw.text(
+        (_OG_IMG_W - PAD_X - (st_bb[2] - st_bb[0]), HEADER_H // 2 - 10),
+        site_text, font=font_domain, fill=(152, 106, 122),
     )
 
-    # Fonts
-    font_label  = _load_font(20)
-    font_body   = _load_font(30)
-    font_footer = _load_font(22)
-    font_title  = _load_font(22)
+    # ── Question bubble ──────────────────────────────────────────────────────
+    qx1, qy1 = PAD_X, start_y
+    qx2, qy2 = _OG_IMG_W - PAD_X, start_y + q_bh
+    draw.rounded_rectangle([qx1, qy1, qx2, qy2], radius=BUBBLE_R,
+                            fill=(58, 20, 30), outline=(200, 132, 154), width=2)
+    draw.rounded_rectangle([qx1, qy1, qx1 + ACCENT_W, qy2], radius=BUBBLE_R,
+                            fill=(220, 128, 154))
 
-    cur_y = card_y1 + pad
-
-    # ── Card title ──────────────────────────────────────────────────────────
-    title_text = "PUPPY POUCH 🐾 ANONYMOUS Q&A"
-    draw.text((card_x1 + pad, cur_y), title_text, font=font_title, fill=_FG_TITLE)
-    cur_y += 30 + 20  # title height + gap
-
-    # ── Question bubble ─────────────────────────────────────────────────────
-    inner_w = card_w - pad * 2
-
-    # Measure label
-    label_q = "🐾 QUESTION"
-    lq_bbox = draw.textbbox((0, 0), label_q, font=font_label)
-    lq_h = lq_bbox[3] - lq_bbox[1]
-
-    # Wrap question text
-    q_lines = _wrap_text(q_text, font_body, inner_w - 24, draw)
-    # Cap at 3 lines to avoid overflow; pixel-accurate ellipsis on last line
-    if len(q_lines) > 3:
-        q_lines = q_lines[:3]
-        q_lines[-1] = _truncate_line(q_lines[-1], font_body, inner_w - 24, draw)
-    body_q_bbox = draw.textbbox((0, 0), q_lines[0], font=font_body)
-    line_h = body_q_bbox[3] - body_q_bbox[1]
-    bubble_q_h = pad // 2 + lq_h + _LABEL_TEXT_GAP + line_h * len(q_lines) + (len(q_lines) - 1) * _LINE_SPACING + pad // 2
-
-    bx1, by1 = card_x1 + pad, cur_y
-    bx2, by2 = card_x2 - pad, cur_y + bubble_q_h
-    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=14, fill=_BG_Q, outline=_BORDER_Q, width=1)
-    ty = by1 + pad // 2
-    draw.text((bx1 + 14, ty), label_q, font=font_label, fill=_FG_Q_LABEL)
-    ty += lq_h + _LABEL_TEXT_GAP
+    ty = qy1 + PAD_V
+    draw.text((qx1 + ACCENT_W + PAD_BX, ty), "QUESTION", font=font_label, fill=(200, 132, 154))
+    ty += lq_h + LABEL_GAP
     for line in q_lines:
-        draw.text((bx1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
-        ty += line_h + _LINE_SPACING
-
-    cur_y = by2 + 16  # gap between bubbles
+        draw.text((qx1 + ACCENT_W + PAD_BX, ty), line, font=font_body, fill=(248, 220, 228))
+        ty += step
 
     # ── Answer bubble ────────────────────────────────────────────────────────
-    label_a = "💬 ANSWER"
-    la_bbox = draw.textbbox((0, 0), label_a, font=font_label)
-    la_h = la_bbox[3] - la_bbox[1]
+    ax1, ay1 = PAD_X, start_y + q_bh + BUBBLE_GAP
+    ax2, ay2 = _OG_IMG_W - PAD_X, start_y + q_bh + BUBBLE_GAP + a_bh
+    draw.rounded_rectangle([ax1, ay1, ax2, ay2], radius=BUBBLE_R,
+                            fill=(30, 27, 33), outline=(70, 60, 70), width=1)
+    draw.rounded_rectangle([ax1, ay1, ax1 + ACCENT_W, ay2], radius=BUBBLE_R,
+                            fill=(100, 72, 88))
 
-    remaining_h = (card_y2 - pad - 40) - cur_y  # leave room for footer
-    a_lines = _wrap_text(a_text, font_body, inner_w - 24, draw)
-    max_a_lines = max(1, (remaining_h - la_h - _LABEL_TEXT_GAP - pad) // (line_h + _LINE_SPACING))
-    if len(a_lines) > max_a_lines:
-        a_lines = a_lines[:max_a_lines]
-        a_lines[-1] = _truncate_line(a_lines[-1], font_body, inner_w - 24, draw)
-
-    bubble_a_h = pad // 2 + la_h + _LABEL_TEXT_GAP + line_h * len(a_lines) + (len(a_lines) - 1) * _LINE_SPACING + pad // 2
-    ax1, ay1 = card_x1 + pad, cur_y
-    ax2, ay2 = card_x2 - pad, cur_y + bubble_a_h
-    draw.rounded_rectangle([ax1, ay1, ax2, ay2], radius=14, fill=_BG_A, outline=_BORDER_A, width=1)
-    ty = ay1 + pad // 2
-    draw.text((ax1 + 14, ty), label_a, font=font_label, fill=_FG_A_LABEL)
-    ty += la_h + _LABEL_TEXT_GAP
+    ty = ay1 + PAD_V
+    draw.text((ax1 + ACCENT_W + PAD_BX, ty), "ANSWER", font=font_label, fill=(144, 108, 124))
+    ty += la_h + LABEL_GAP
     for line in a_lines:
-        draw.text((ax1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
-        ty += line_h + _LINE_SPACING
+        draw.text((ax1 + ACCENT_W + PAD_BX, ty), line, font=font_body, fill=(228, 215, 220))
+        ty += step
 
     # ── Footer ───────────────────────────────────────────────────────────────
-    footer_text = "Ask me anything at mochii.live 🐾"
-    ft_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    ft_w = ft_bbox[2] - ft_bbox[0]
+    footer_text = "Ask me anything at mochii.live"
+    ft_bb = draw.textbbox((0, 0), footer_text, font=font_footer)
+    ft_w  = ft_bb[2] - ft_bb[0]
     draw.text(
-        (card_x1 + (card_w - ft_w) // 2, card_y2 - pad - (ft_bbox[3] - ft_bbox[1])),
-        footer_text,
-        font=font_footer,
-        fill=_FG_FOOTER,
+        ((_OG_IMG_W - ft_w) // 2, _OG_IMG_H - FOOTER_H + 12),
+        footer_text, font=font_footer, fill=(96, 58, 72),
     )
 
     buf = io.BytesIO()
