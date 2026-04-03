@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 _SEGPAY_PURCHASE_BASE = "https://purchase.segpay.com/hosted/index.asp"
 
+# Segpay API limit for the x-description field.
+_SEGPAY_MAX_DESCRIPTION_LENGTH = 50
+
 # Segpay response codes that indicate a successful payment.
 _PAID_CODES = frozenset({"1", "approved", "success"})
 
@@ -63,7 +66,7 @@ class SegpayProvider(BasePaymentProvider):
 
         # Build a human-readable description from cart items (≤50 chars).
         item_names = ", ".join(item.get("name", "item") for item in cart)
-        description = item_names[:50] if item_names else "mochii.live order"
+        description = item_names[:_SEGPAY_MAX_DESCRIPTION_LENGTH] if item_names else "mochii.live order"
 
         params = {
             "x-eticketid": f"{package_id}:{price_point_id}",

@@ -148,7 +148,7 @@ async def _trigger_printful_order(order_id: str, db: sqlite3.Connection) -> None
                 order_id,
                 resp.text[:300],
             )
-    except Exception as exc:  # noqa: BLE001
+    except (httpx.HTTPError, httpx.TimeoutException, OSError) as exc:
         logger.warning("Failed to trigger Printful order for %s: %s", order_id, exc)
 
 
@@ -189,7 +189,7 @@ async def checkout(
     for item in payload.cart:
         product = products[item.product_id]
         stock = product.get("stock_count")
-        if stock is not None and stock == 0:
+        if stock is not None and stock <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"'{product['name']}' is out of stock.",
@@ -254,7 +254,7 @@ async def checkout(
         logger.error("Failed to create checkout session for order %s: %s", order_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Payment provider is not configured.",
+            detail=f"Unable to create payment session: {exc}",
         ) from exc
 
     return {"checkout_url": checkout_url, "order_id": order_id}
