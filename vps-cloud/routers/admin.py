@@ -394,6 +394,25 @@ def admin_answer_question(
     return {"id": question_id, "message": "Answer saved and question is now public 🐾"}
 
 
+@router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_question(
+    question_id: str,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Permanently delete a question."""
+    row = db.execute(
+        "SELECT id FROM questions WHERE id = ?", (question_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found.",
+        )
+    db.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+    db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Danger Zone – runtime configuration / environment variable settings
 # ---------------------------------------------------------------------------

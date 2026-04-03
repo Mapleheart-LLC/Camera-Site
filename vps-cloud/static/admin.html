@@ -1446,6 +1446,7 @@
           <td>
             <div class="action-cell">
               <button class="btn-sm btn-edit reply-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Reply &amp; Share</button>
+              <button class="btn-sm btn-delete del-question-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
             </div>
           </td>
         </tr>`;
@@ -1453,6 +1454,10 @@
 
       tbody.querySelectorAll('.reply-btn').forEach(btn => {
         btn.addEventListener('click', () => openAnswerForm(btn.dataset.id, btn.dataset.text));
+      });
+
+      tbody.querySelectorAll('.del-question-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id));
       });
 
       scrollToDeepLinkedQuestion();
@@ -1744,6 +1749,22 @@
         openLinkForm('Edit Link', link);
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load link.');
+      }
+    }
+
+    async function deleteQuestion(id) {
+      if (!confirm('Delete this question? This cannot be undone.')) return;
+      try {
+        const resp = await apiDelete(`/api/admin/questions/${id}`);
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadQuestions();
+        showToast('🗑️ Question deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
       }
     }
 
