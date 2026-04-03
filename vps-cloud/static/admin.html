@@ -375,6 +375,7 @@
         <div class="sidebar-section-label">Site</div>
         <button class="nav-item" data-target="s-links">🔗 Links</button>
         <button class="nav-item" data-target="s-store">🛍️ Store</button>
+        <button class="nav-item" data-target="s-drool">🐾 Drool Log</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
@@ -677,6 +678,120 @@
           </div>
         </section>
 
+        <!-- ── Drool Log ──────────────────────────────── -->
+        <section id="s-drool" class="admin-section">
+          <h1 class="section-heading">🐾 Drool Log – Scraper Credentials</h1>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>🔑 Credential Status</h2>
+              <button id="refresh-drool-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <div class="settings-grid" id="drool-creds-status-grid" style="margin-bottom:1.25rem"></div>
+              <p style="font-size:.8rem;color:#9e7e82;margin-bottom:1.5rem">
+                🔒 Values stored here override environment variables without requiring a container restart.
+                Leave a field blank and click Save to revert it to its environment variable (or clear it entirely).
+              </p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🟠 Reddit</h2></div>
+            <div class="card-body">
+              <!-- Mode toggle -->
+              <div class="form-row" style="align-items:center;gap:1.25rem;margin-bottom:1rem">
+                <span style="font-size:.8rem;font-weight:700;color:#c49ea5;text-transform:uppercase;letter-spacing:.05em">Scrape Mode</span>
+                <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
+                  <input type="radio" name="reddit-mode" id="reddit-mode-api" value="api" checked /> 🔑 Reddit API (praw)
+                </label>
+                <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
+                  <input type="radio" name="reddit-mode" id="reddit-mode-ifttt" value="ifttt" /> ⚡ IFTTT Webhook
+                </label>
+                <button id="dc-reddit-mode-save-btn" class="btn-sm btn-edit" style="margin-left:auto">Save Mode 🐾</button>
+                <p id="dc-reddit-mode-error" style="font-size:.82rem;color:#f87171;align-self:center"></p>
+              </div>
+
+              <!-- API credentials (shown when mode = api) -->
+              <div id="reddit-api-fields">
+                <div class="form-row">
+                  <div class="form-field"><label for="dc-reddit-client-id">Client ID</label><input id="dc-reddit-client-id" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
+                  <div class="form-field"><label for="dc-reddit-client-secret">Client Secret</label><input id="dc-reddit-client-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+                </div>
+                <div class="form-row">
+                  <div class="form-field"><label for="dc-reddit-username">Username</label><input id="dc-reddit-username" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
+                  <div class="form-field"><label for="dc-reddit-password">Password</label><input id="dc-reddit-password" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+                  <div class="form-field" style="flex:2"><label for="dc-reddit-user-agent">User Agent</label><input id="dc-reddit-user-agent" type="text" placeholder="e.g. drool-log/1.0 by u/yourname" autocomplete="off" /></div>
+                </div>
+                <div class="form-row" style="margin-top:.5rem">
+                  <button id="dc-reddit-save-btn" class="btn-sm btn-edit">Save Reddit API 🐾</button>
+                  <p id="dc-reddit-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+                </div>
+              </div>
+
+              <!-- IFTTT fields (shown when mode = ifttt) -->
+              <div id="reddit-ifttt-fields" style="display:none">
+                <div class="form-row">
+                  <div class="form-field" style="flex:1">
+                    <label for="dc-reddit-ifttt-secret">Webhook Secret</label>
+                    <input id="dc-reddit-ifttt-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" />
+                  </div>
+                </div>
+                <div class="form-row" style="margin-top:.5rem">
+                  <button id="dc-reddit-ifttt-save-btn" class="btn-sm btn-edit">Save IFTTT Secret 🐾</button>
+                  <p id="dc-reddit-ifttt-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+                </div>
+                <div id="ifttt-webhook-url-box" style="margin-top:1rem;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:8px;padding:.75rem 1rem">
+                  <p style="font-size:.78rem;font-weight:700;color:#c49ea5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Your IFTTT Webhook URL</p>
+                  <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+                    <code id="ifttt-webhook-url" style="font-size:.78rem;color:#e8aeb7;word-break:break-all;flex:1">Set a secret above to generate the URL</code>
+                    <button id="copy-ifttt-url-btn" class="btn-sm btn-edit" style="flex-shrink:0">📋 Copy</button>
+                  </div>
+                  <p style="font-size:.75rem;color:#9e7e82;margin-top:.6rem">
+                    In your IFTTT applet: <strong>value1</strong> = Post URL &nbsp;·&nbsp; <strong>value2</strong> = Title &nbsp;·&nbsp; <strong>value3</strong> = Image URL (optional)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🐦 Twitter / X</h2></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-field" style="flex:2"><label for="dc-tw-bearer">Bearer Token</label><input id="dc-tw-bearer" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+                <div class="form-field"><label for="dc-tw-user-id">User ID (numeric)</label><input id="dc-tw-user-id" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
+              </div>
+              <div class="form-row">
+                <div class="form-field"><label for="dc-tw-api-key">API Key</label><input id="dc-tw-api-key" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+                <div class="form-field"><label for="dc-tw-api-secret">API Secret</label><input id="dc-tw-api-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+              </div>
+              <div class="form-row">
+                <div class="form-field"><label for="dc-tw-access-token">Access Token</label><input id="dc-tw-access-token" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+                <div class="form-field"><label for="dc-tw-access-secret">Access Token Secret</label><input id="dc-tw-access-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+              </div>
+              <div class="form-row" style="margin-top:.5rem">
+                <button id="dc-twitter-save-btn" class="btn-sm btn-edit">Save Twitter / X 🐾</button>
+                <p id="dc-twitter-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>🦋 Bluesky</h2></div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-field"><label for="dc-bsky-handle">Handle</label><input id="dc-bsky-handle" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
+                <div class="form-field"><label for="dc-bsky-app-password">App Password</label><input id="dc-bsky-app-password" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+              </div>
+              <div class="form-row" style="margin-top:.5rem">
+                <button id="dc-bsky-save-btn" class="btn-sm btn-edit">Save Bluesky 🐾</button>
+                <p id="dc-bsky-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Logs ───────────────────────────────────── -->
         <section id="s-logs" class="admin-section">
           <h1 class="section-heading">📋 Logs</h1>
@@ -878,6 +993,7 @@
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
+        loadDroolCredentials(),
       ]);
     }
 
@@ -1710,6 +1826,145 @@
         </tr>`;
       }).join('');
     }
+
+    // ── Drool Log credentials ─────────────────────────
+    function _redditModeSwitch(mode) {
+      const isIfttt = mode === 'ifttt';
+      document.getElementById('reddit-mode-api').checked   = !isIfttt;
+      document.getElementById('reddit-mode-ifttt').checked = isIfttt;
+      document.getElementById('reddit-api-fields').style.display   = isIfttt ? 'none' : '';
+      document.getElementById('reddit-ifttt-fields').style.display = isIfttt ? '' : 'none';
+    }
+
+    document.querySelectorAll('input[name="reddit-mode"]').forEach(r => {
+      r.addEventListener('change', () => _redditModeSwitch(r.value));
+    });
+
+    async function loadDroolCredentials() {
+      try {
+        const data = await apiGet('/api/admin/drool/credentials');
+        const grid = document.getElementById('drool-creds-status-grid');
+
+        // Apply the stored mode to the toggle
+        const mode = data.reddit_mode?.value || 'api';
+        _redditModeSwitch(mode);
+
+        // Update webhook URL box whenever credentials are loaded
+        _refreshIftttUrl();
+
+        const platforms = {
+          'Reddit (API)':   ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password','reddit_user_agent'],
+          'Reddit (IFTTT)': ['reddit_ifttt_secret'],
+          'Twitter / X':    ['twitter_bearer_token','twitter_user_id','twitter_api_key','twitter_api_secret','twitter_access_token','twitter_access_secret'],
+          Bluesky:          ['bsky_handle','bsky_app_password'],
+        };
+        grid.innerHTML = Object.entries(platforms).map(([label, fields]) => {
+          const allSet = fields.every(f => data[f]?.effective_set);
+          const badge  = allSet ? makeBadge('ok', '✔ Configured') : makeBadge('warn', '⚠ Not configured');
+          const sources = fields.map(f => {
+            const src = data[f]?.source || 'none';
+            if (src === 'none') return null;
+            return `<span style="font-size:.72rem;color:#9e7e82">${escHtml(f)}: <strong style="color:#e8aeb7">${escHtml(src)}</strong></span>`;
+          }).filter(Boolean).join(' &nbsp; ');
+          const modeNote = label.startsWith('Reddit') ? `<span style="font-size:.72rem;color:#9e7e82">mode: <strong style="color:#e8aeb7">${escHtml(mode)}</strong></span>` : '';
+          return `<div class="setting-tile" style="flex-direction:column;align-items:flex-start;gap:.35rem">
+            <div style="display:flex;align-items:center;gap:.6rem"><div class="setting-label">${escHtml(label)}</div>${badge}${modeNote}</div>
+            ${sources ? `<div style="line-height:1.6">${sources}</div>` : ''}
+          </div>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load drool credentials.');
+      }
+    }
+
+    function _refreshIftttUrl() {
+      const urlEl = document.getElementById('ifttt-webhook-url');
+      const secret = ''; // secret is never returned – show placeholder
+      const base = window.location.origin;
+      urlEl.textContent = `${base}/api/drool/ifttt/reddit?secret=<your-secret>`;
+    }
+
+    document.getElementById('copy-ifttt-url-btn').addEventListener('click', () => {
+      const base = window.location.origin;
+      const text = `${base}/api/drool/ifttt/reddit?secret=<your-secret>`;
+      navigator.clipboard.writeText(text).then(() => showToast('📋 URL copied!'));
+    });
+
+    async function saveDroolCreds(fields, errElId) {
+      const errEl = document.getElementById(errElId);
+      errEl.textContent = '';
+      const body = {};
+      for (const [field, inputId] of Object.entries(fields)) {
+        const val = document.getElementById(inputId).value;
+        if (val !== '') body[field] = val;
+      }
+      if (!Object.keys(body).length) {
+        errEl.textContent = 'No changes to save.';
+        return;
+      }
+      try {
+        const resp = await apiPut('/api/admin/drool/credentials', body);
+        if (resp.ok) {
+          for (const inputId of Object.values(fields)) {
+            document.getElementById(inputId).value = '';
+          }
+          await loadDroolCredentials();
+          showToast('🐾 Credentials saved!');
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed.';
+      }
+    }
+
+    document.getElementById('refresh-drool-btn').addEventListener('click', loadDroolCredentials);
+
+    // Save mode radio selection
+    document.getElementById('dc-reddit-mode-save-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('dc-reddit-mode-error');
+      errEl.textContent = '';
+      const mode = document.querySelector('input[name="reddit-mode"]:checked')?.value || 'api';
+      try {
+        const resp = await apiPut('/api/admin/drool/credentials', { reddit_mode: mode });
+        if (resp.ok) {
+          await loadDroolCredentials();
+          showToast(`🐾 Reddit mode set to ${mode}!`);
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed.';
+      }
+    });
+
+    document.getElementById('dc-reddit-save-btn').addEventListener('click', () => saveDroolCreds({
+      reddit_client_id:     'dc-reddit-client-id',
+      reddit_client_secret: 'dc-reddit-client-secret',
+      reddit_username:      'dc-reddit-username',
+      reddit_password:      'dc-reddit-password',
+      reddit_user_agent:    'dc-reddit-user-agent',
+    }, 'dc-reddit-error'));
+
+    document.getElementById('dc-reddit-ifttt-save-btn').addEventListener('click', () => saveDroolCreds({
+      reddit_ifttt_secret: 'dc-reddit-ifttt-secret',
+    }, 'dc-reddit-ifttt-error'));
+
+    document.getElementById('dc-twitter-save-btn').addEventListener('click', () => saveDroolCreds({
+      twitter_bearer_token:  'dc-tw-bearer',
+      twitter_user_id:       'dc-tw-user-id',
+      twitter_api_key:       'dc-tw-api-key',
+      twitter_api_secret:    'dc-tw-api-secret',
+      twitter_access_token:  'dc-tw-access-token',
+      twitter_access_secret: 'dc-tw-access-secret',
+    }, 'dc-twitter-error'));
+
+    document.getElementById('dc-bsky-save-btn').addEventListener('click', () => saveDroolCreds({
+      bsky_handle:       'dc-bsky-handle',
+      bsky_app_password: 'dc-bsky-app-password',
+    }, 'dc-bsky-error'));
 
     // ── Auto-login if session creds exist ──────────────
     (function init() {

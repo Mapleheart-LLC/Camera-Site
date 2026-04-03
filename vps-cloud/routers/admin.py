@@ -21,6 +21,9 @@ Endpoints
   PUT    /api/admin/store/products/{id} – update a product
   DELETE /api/admin/store/products/{id} – delete a product
   GET    /api/admin/store/orders       – list all orders (most recent first)
+  GET    /api/admin/drool/credentials  – show which drool scraper credentials are configured
+  PUT    /api/admin/drool/credentials  – save / clear drool scraper credentials
+                                         (Reddit API, Reddit IFTTT, Twitter, Bluesky)
 """
 
 import logging
@@ -702,4 +705,125 @@ def admin_list_orders(
         o["items"] = [dict(item) for item in items]
         result.append(o)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Drool Log – scraper credentials management
+# ---------------------------------------------------------------------------
+
+# Mapping: request field → (settings_table_key, env_var_fallback, is_secret)
+_DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
+    # Reddit mode toggle – value is 'api' (default) or 'ifttt'
+    "reddit_mode":           ("drool_reddit_mode",           "REDDIT_MODE",           False),
+    # Reddit API credentials (used when reddit_mode == 'api')
+    "reddit_client_id":      ("drool_reddit_client_id",      "REDDIT_CLIENT_ID",      False),
+    "reddit_client_secret":  ("drool_reddit_client_secret",  "REDDIT_CLIENT_SECRET",  True),
+    "reddit_username":       ("drool_reddit_username",       "REDDIT_USERNAME",       False),
+    "reddit_password":       ("drool_reddit_password",       "REDDIT_PASSWORD",       True),
+    "reddit_user_agent":     ("drool_reddit_user_agent",     "REDDIT_USER_AGENT",     False),
+    # Reddit IFTTT secret (used when reddit_mode == 'ifttt')
+    "reddit_ifttt_secret":   ("drool_reddit_ifttt_secret",   "REDDIT_IFTTT_SECRET",   True),
+    "twitter_bearer_token":  ("drool_twitter_bearer_token",  "TWITTER_BEARER_TOKEN",  True),
+    "twitter_user_id":       ("drool_twitter_user_id",       "TWITTER_USER_ID",       False),
+    "twitter_api_key":       ("drool_twitter_api_key",       "TWITTER_API_KEY",       True),
+    "twitter_api_secret":    ("drool_twitter_api_secret",    "TWITTER_API_SECRET",    True),
+    "twitter_access_token":  ("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN",  True),
+    "twitter_access_secret": ("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET", True),
+    "bsky_handle":           ("drool_bsky_handle",           "BSKY_HANDLE",           False),
+    "bsky_app_password":     ("drool_bsky_app_password",     "BSKY_APP_PASSWORD",     True),
+}
+
+# Fields for which the actual value (not just set/not-set) is safe to expose
+# in the GET response because they are non-sensitive mode flags.
+_DROOL_CRED_EXPOSE_VALUE: set[str] = {"reddit_mode"}
+
+_REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt'
+
+
+class DroolCredsUpdate(BaseModel):
+    reddit_mode:           Optional[str] = None  # 'api' or 'ifttt'
+    reddit_client_id:      Optional[str] = None
+    reddit_client_secret:  Optional[str] = None
+    reddit_username:       Optional[str] = None
+    reddit_password:       Optional[str] = None
+    reddit_user_agent:     Optional[str] = None
+    reddit_ifttt_secret:   Optional[str] = None
+    twitter_bearer_token:  Optional[str] = None
+    twitter_user_id:       Optional[str] = None
+    twitter_api_key:       Optional[str] = None
+    twitter_api_secret:    Optional[str] = None
+    twitter_access_token:  Optional[str] = None
+    twitter_access_secret: Optional[str] = None
+    bsky_handle:           Optional[str] = None
+    bsky_app_password:     Optional[str] = None
+
+
+@router.get("/drool/credentials")
+def get_drool_credentials(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the configuration status of all drool scraper credentials.
+
+    Actual credential values are never returned – only whether each field
+    is set (and from which source: 'db', 'env', or 'none').
+    """
+    result: dict[str, dict] = {}
+    for field, (db_key, env_key, _is_secret) in _DROOL_CRED_MAP.items():
+        db_row = db.execute(
+            "SELECT value FROM settings WHERE key = ?", (db_key,)
+        ).fetchone()
+        db_val = db_row["value"] if db_row else None
+        env_val = os.environ.get(env_key, "")
+        source = "db" if db_val else ("env" if env_val else "none")
+        entry: dict = {
+            "db_set":        bool(db_val),
+            "env_set":       bool(env_val),
+            "effective_set": bool(db_val or env_val),
+            "source":        source,
+        }
+        # For non-sensitive mode flags, also return the actual current value.
+        if field in _DROOL_CRED_EXPOSE_VALUE:
+            entry["value"] = db_val or env_val or _REDDIT_MODE_DEFAULT
+        result[field] = entry
+    return result
+
+
+@router.put("/drool/credentials", status_code=status.HTTP_200_OK)
+def put_drool_credentials(
+    payload: DroolCredsUpdate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Save drool scraper credentials to the database settings table.
+
+    Pass an empty string for a field to clear it (removing the DB override
+    so the env-var fallback takes effect).  Omit a field (null) to leave it
+    unchanged.
+    """
+    updated: list[str] = []
+    for field, (db_key, _env_key, _is_secret) in _DROOL_CRED_MAP.items():
+        value = getattr(payload, field, None)
+        if value is None:
+            continue  # not provided – leave unchanged
+        # Validate the mode field
+        if field == "reddit_mode" and value not in (_REDDIT_MODE_DEFAULT, "ifttt", ""):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="reddit_mode must be 'api' or 'ifttt'.",
+            )
+        if value == "":
+            # Empty string → delete the DB entry (revert to env fallback)
+            db.execute("DELETE FROM settings WHERE key = ?", (db_key,))
+        else:
+            set_setting(db, db_key, value)
+        updated.append(field)
+    if updated:
+        db.commit()
+        logger.info(
+            "Admin '%s' updated drool credentials: %s",
+            admin_user,
+            ", ".join(updated),
+        )
+    return {"updated": updated}
 

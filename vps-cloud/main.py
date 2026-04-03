@@ -273,11 +273,13 @@ def init_db() -> None:
         """
     )
     # ── Drool Log tables ──────────────────────────────────────────────────
+    # New installs: platform column has no CHECK constraint so new platforms
+    # (e.g. 'bluesky') can be added without schema changes.
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS drool_archive (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            platform     TEXT    NOT NULL CHECK(platform IN ('reddit', 'twitter')),
+            platform     TEXT    NOT NULL,
             original_url TEXT    NOT NULL UNIQUE,
             media_url    TEXT,
             text_content TEXT,
@@ -322,6 +324,34 @@ def init_db() -> None:
             conn.execute(f"ALTER TABLE cameras ADD COLUMN {_col} {_defn}")
         except Exception:
             pass  # column already exists
+    # Migration: existing drool_archive tables may carry a CHECK constraint
+    # that rejects platforms other than 'reddit' and 'twitter'.  SQLite does
+    # not support ALTER COLUMN, so we recreate the table when needed.
+    try:
+        conn.execute(
+            "INSERT INTO drool_archive (platform, original_url, timestamp)"
+            " VALUES ('bluesky', '__bsky_probe__', 'x')"
+        )
+        conn.execute("DELETE FROM drool_archive WHERE original_url = '__bsky_probe__'")
+    except Exception:
+        # CHECK constraint violation – rebuild without the constraint.
+        conn.execute("DROP TABLE IF EXISTS drool_archive_v2")
+        conn.execute(
+            """
+            CREATE TABLE drool_archive_v2 (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                platform     TEXT    NOT NULL,
+                original_url TEXT    NOT NULL UNIQUE,
+                media_url    TEXT,
+                text_content TEXT,
+                view_count   INTEGER NOT NULL DEFAULT 0,
+                timestamp    TEXT    NOT NULL
+            )
+            """
+        )
+        conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
+        conn.execute("DROP TABLE drool_archive")
+        conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
     conn.commit()
     conn.close()
 
