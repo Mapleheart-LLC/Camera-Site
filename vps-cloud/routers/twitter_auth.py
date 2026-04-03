@@ -84,6 +84,7 @@ def _store_pending(token: str, secret: str) -> None:
     expiry = (
         datetime.now(timezone.utc) + timedelta(seconds=_STATE_TTL_SECONDS)
     ).isoformat()
+    conn = None
     try:
         conn = get_db_connection()
         conn.execute(
@@ -96,31 +97,38 @@ def _store_pending(token: str, secret: str) -> None:
             (token, secret, expiry),
         )
         conn.commit()
-        conn.close()
     except _sqlite3.Error as exc:
         logger.error("Failed to store OAuth pending state: %s", exc)
+    finally:
+        if conn:
+            conn.close()
 
 
 def _pop_pending(token: str) -> Optional[str]:
     """Return and remove the stored secret, or None if missing/expired."""
+    conn = None
     try:
         conn = get_db_connection()
         row = conn.execute(
             "SELECT secret, expires_at FROM oauth_pending WHERE token = ?", (token,)
         ).fetchone()
-        conn.execute("DELETE FROM oauth_pending WHERE token = ?", (token,))
+        if row is not None:
+            secret, expires_at = row["secret"], row["expires_at"]
+            # Always delete the used token (one-time use regardless of expiry).
+            conn.execute("DELETE FROM oauth_pending WHERE token = ?", (token,))
         conn.execute(
             "DELETE FROM oauth_pending WHERE expires_at < ?",
             (datetime.now(timezone.utc).isoformat(),),
         )
         conn.commit()
-        conn.close()
     except _sqlite3.Error as exc:
         logger.error("Failed to pop OAuth pending state: %s", exc)
         return None
+    finally:
+        if conn:
+            conn.close()
     if row is None:
         return None
-    secret, expires_at = row["secret"], row["expires_at"]
     if datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc):
         return None
     return secret
