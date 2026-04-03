@@ -326,7 +326,7 @@ def twitter2_login():
         # tweepy generates the PKCE code verifier/challenge internally.
         auth_url = oauth2_handler.get_authorization_url()
         state = oauth2_handler.state
-        code_verifier = oauth2_handler._client.code_verifier
+        code_verifier = oauth2_handler.code_verifier
     except Exception as exc:
         logger.error("Failed to build Twitter OAuth 2.0 authorization URL: %s", exc)
         return RedirectResponse(
@@ -380,7 +380,7 @@ def twitter2_callback(
             client_secret=client_secret,
         )
         # Restore the code verifier and state so tweepy can complete the exchange.
-        oauth2_handler._client.code_verifier = code_verifier
+        oauth2_handler.code_verifier = code_verifier
         oauth2_handler.state = state
         authorization_response = f"{callback_url}?code={code}&state={state}"
         token_data = oauth2_handler.fetch_token(authorization_response=authorization_response)
