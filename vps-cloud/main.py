@@ -1778,6 +1778,17 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
       text-align: center;
     }}
 
+    .shop-link {{
+      border-color: #6a3040;
+      background: #2a1520;
+    }}
+    .shop-link:hover {{
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
+      box-shadow: 0 4px 20px rgba(232,174,183,0.18);
+    }}
+
     .page-footer {{
       margin-top: 1.5rem;
       font-size: .75rem;
@@ -1795,6 +1806,7 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
   <div class="container" role="main">
     <p class="site-name">🐾 mochii.live</p>
     <p class="tagline">All the links in one place.</p>
+    <a class="link-btn shop-link" href="https://shop.mochii.live" target="_blank" rel="noopener noreferrer">🛒 The Pack Shop</a>
     {link_items_html}
     <p class="page-footer"><a href="/">← Back to mochii.live</a></p>
   </div>

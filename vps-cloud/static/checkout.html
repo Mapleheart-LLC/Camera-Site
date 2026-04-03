@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="mochii.live – Secure Checkout 🐾" />
+  <meta name="robots" content="noindex" />
+  <title>mochii.live 🐾 – Checkout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pink:        #e8aeb7;
+      --pink-light:  #f4cdd5;
+      --pink-glow:   rgba(232,174,183,.22);
+      --pink-deep:   #c47d8a;
+      --bg:          #0f0f13;
+      --surface:     #1a1a20;
+      --surface2:    #21212a;
+      --border:      #2a1f2e;
+      --border-pink: #4a2535;
+      --text:        #f0e6e8;
+      --text-muted:  #9a7880;
+      --text-dim:    #52333b;
+      --green:       #a8e0b8;
+      --green-bg:    #142010;
+      --red:         #e0a8b0;
+      --red-bg:      #2a1015;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-pink); border-radius: 3px; }
+
+    /* ── Nav ─────────────────────────────────────── */
+    .store-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.75rem;
+      background: rgba(15,15,19,.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-logo {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: var(--pink);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      transition: color .15s;
+    }
+    .nav-logo:hover { color: var(--pink-light); }
+
+    .nav-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .42rem .95rem;
+      background: transparent;
+      border: 1px solid var(--border-pink);
+      border-radius: 20px;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: .8rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .nav-back-btn:hover { border-color: var(--pink); color: var(--pink); }
+
+    /* ── Status banner ─────────────────────────── */
+    .status-banner {
+      display: none;
+      text-align: center;
+      padding: .85rem 1.5rem;
+      border-radius: 12px;
+      max-width: 660px;
+      margin: 1.5rem auto 0;
+      font-weight: 700;
+      font-size: .92rem;
+    }
+    .status-banner.success { background: var(--green-bg); border: 1px solid #3a6848; color: var(--green); }
+    .status-banner.cancel  { background: var(--red-bg);   border: 1px solid #6a3035; color: var(--red);   }
+
+    /* ── Layout ────────────────────────────────── */
+    .checkout-layout {
+      flex: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 2.5rem 1.5rem 5rem;
+    }
+
+    .section-label {
+      font-size: .72rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, var(--border), transparent);
+    }
+
+    /* ── Empty-cart state ───────────────────────── */
+    .empty-cart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+    .empty-cart-box .ee { font-size: 3rem; margin-bottom: 1rem; }
+    .empty-cart-box p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: .95rem; }
+    .back-to-shop-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .6rem 1.4rem;
+      background: var(--border-pink);
+      border: 1px solid var(--pink);
+      border-radius: 12px;
+      color: var(--pink);
+      font-family: inherit;
+      font-size: .88rem;
+      font-weight: 800;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .back-to-shop-btn:hover { background: #5a2a38; box-shadow: 0 4px 14px var(--pink-glow); }
+
+    /* ── Checkout box ───────────────────────────── */
+    .checkout-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+    }
+
+    .checkout-box h3 {
+      font-size: .7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+    .checkout-box h3 + h3 { margin-top: 1.5rem; }
+
+    /* ── Order summary ──────────────────────────── */
+    .order-summary {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+    .os-title { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: .65rem; }
+    .os-items { list-style: none; }
+    .os-items li { display: flex; justify-content: space-between; font-size: .83rem; color: var(--text); padding: .28rem 0; border-bottom: 1px solid var(--border); }
+    .os-items li:last-child { border-bottom: none; }
+    .os-total { display: flex; justify-content: space-between; font-weight: 900; padding-top: .65rem; margin-top: .15rem; border-top: 1px solid var(--border-pink); }
+    .os-total span:last-child { color: var(--pink); }
+
+    /* ── Form ───────────────────────────────────── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    .form-full { grid-column: 1 / -1; }
+    @media (max-width: 520px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-full { grid-column: 1; }
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-group label {
+      font-size: .7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+    .form-group input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .6rem .88rem;
+      color: var(--text);
+      font-family: inherit;
+      font-size: .88rem;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .form-group input:focus { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(232,174,183,.09); }
+    .form-group input::placeholder { color: var(--text-dim); }
+
+    /* ── Checkout button ────────────────────────── */
+    .checkout-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .55rem;
+      width: 100%;
+      padding: .88rem 1.5rem;
+      background: linear-gradient(135deg, #c47282 0%, var(--pink) 55%, var(--pink-light) 100%);
+      border: none;
+      border-radius: 12px;
+      color: #14101a;
+      font-family: inherit;
+      font-size: .97rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: all .2s;
+      margin-top: 1.5rem;
+    }
+    .checkout-btn:hover:not(:disabled) { box-shadow: 0 8px 28px var(--pink-glow); transform: translateY(-1px); }
+    .checkout-btn:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: .95rem; height: .95rem;
+      border: 2.5px solid rgba(20,16,26,.3);
+      border-top-color: #14101a;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+
+    /* ── Footer ─────────────────────────────────── */
+    .store-footer {
+      text-align: center;
+      padding: 1.5rem 1rem;
+      font-size: .72rem;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+    .store-footer a { color: var(--text-muted); text-decoration: none; transition: color .15s; }
+    .store-footer a:hover { color: var(--pink); }
+
+    @media (max-width: 640px) {
+      .store-nav     { padding: .75rem 1rem; }
+      .checkout-layout { padding: 2rem 1rem 4rem; }
+      .checkout-box  { padding: 1.25rem 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ──────────────────────────────────── -->
+  <nav class="store-nav">
+    <a class="nav-logo" href="https://mochii.live">🐾 mochii.live</a>
+    <a class="nav-back-btn" href="/store.html">← Back to Shop</a>
+  </nav>
+
+  <!-- ── Status banner ─────────────────────────── -->
+  <div id="status-banner" class="status-banner" role="alert"></div>
+
+  <!-- ── Main layout ───────────────────────────── -->
+  <main class="checkout-layout" id="checkout-main">
+    <!-- Content injected by JS -->
+  </main>
+
+  <footer class="store-footer">
+    <p>🐾 <a href="https://mochii.live">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
+  </footer>
+
+  <script>
+    // ── Helpers ─────────────────────────────────────────────────────────────────
+    function esc(s) {
+      return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function showBanner(type, msg) {
+      const b = document.getElementById('status-banner');
+      b.className = 'status-banner ' + type;
+      b.textContent = msg;
+      b.style.display = 'block';
+      b.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Load cart from sessionStorage ───────────────────────────────────────────
+    let cart = {};
+    try {
+      const saved = sessionStorage.getItem('packShopCart');
+      if (saved) cart = JSON.parse(saved);
+    } catch (_) { /* ignore corrupt storage */ }
+
+    const cartIsEmpty  = () => Object.keys(cart).length === 0;
+    const cartTotal    = () => Object.values(cart).reduce((s, {product,quantity}) => s + product.price * quantity, 0);
+
+    const main = document.getElementById('checkout-main');
+
+    if (cartIsEmpty()) {
+      // Show empty-cart UI
+      main.innerHTML = `
+        <div class="section-label">Checkout</div>
+        <div class="empty-cart-box">
+          <div class="ee">🛒</div>
+          <p>Your cart is empty! Head back to the shop to add some items.</p>
+          <a class="back-to-shop-btn" href="/store.html">← Back to Shop</a>
+        </div>
+      `;
+    } else {
+      // Build order summary HTML
+      let osItemsHtml = '';
+      Object.values(cart).forEach(({ product, quantity }) => {
+        osItemsHtml += `<li><span>${esc(product.name)} ×${quantity}</span><span>$${(product.price * quantity).toFixed(2)}</span></li>`;
+      });
+      const total = cartTotal();
+
+      main.innerHTML = `
+        <div class="section-label">Checkout</div>
+        <div class="checkout-box">
+
+          <div class="order-summary">
+            <p class="os-title">Order Summary</p>
+            <ul class="os-items">${osItemsHtml}</ul>
+            <div class="os-total">
+              <span>Total</span>
+              <span style="color:var(--pink)">$${total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <form id="checkout-form" novalidate>
+            <h3>Contact</h3>
+            <div class="form-grid">
+              <div class="form-group form-full">
+                <label for="email">Email address</label>
+                <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+              </div>
+              <div class="form-group form-full">
+                <label for="full-name">Full name</label>
+                <input type="text" id="full-name" name="full-name" placeholder="Jane Pawsworth" required autocomplete="name" />
+              </div>
+            </div>
+
+            <h3 style="margin-top:1.5rem;">Shipping Address</h3>
+            <div class="form-grid">
+              <div class="form-group form-full">
+                <label for="address1">Address</label>
+                <input type="text" id="address1" name="address1" placeholder="123 Biscuit Lane" required autocomplete="address-line1" />
+              </div>
+              <div class="form-group form-full">
+                <label for="address2">Apt / Suite (optional)</label>
+                <input type="text" id="address2" name="address2" placeholder="Apt 4B" autocomplete="address-line2" />
+              </div>
+              <div class="form-group">
+                <label for="city">City</label>
+                <input type="text" id="city" name="city" placeholder="Pawsville" required autocomplete="address-level2" />
+              </div>
+              <div class="form-group">
+                <label for="state">State / Province</label>
+                <input type="text" id="state" name="state" placeholder="CA" required autocomplete="address-level1" />
+              </div>
+              <div class="form-group">
+                <label for="zip">ZIP / Postal code</label>
+                <input type="text" id="zip" name="zip" placeholder="90210" required autocomplete="postal-code" />
+              </div>
+              <div class="form-group">
+                <label for="country">Country (2-letter code)</label>
+                <input type="text" id="country" name="country" placeholder="US" required autocomplete="country" maxlength="2" pattern="[A-Za-z]{2}" />
+              </div>
+            </div>
+
+            <button type="submit" class="checkout-btn" id="checkout-btn">
+              <div class="spinner" id="checkout-spinner"></div>
+              <span id="checkout-btn-label">🔒 Proceed to Secure Checkout</span>
+            </button>
+          </form>
+
+        </div>
+      `;
+
+      // ── Checkout form submit ───────────────────────────────────────────────────
+      document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const btn     = document.getElementById('checkout-btn');
+        const spinner = document.getElementById('checkout-spinner');
+        const label   = document.getElementById('checkout-btn-label');
+
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+        label.textContent = 'Redirecting to payment…';
+
+        const shippingAddress = {
+          name:     document.getElementById('full-name').value.trim(),
+          address1: document.getElementById('address1').value.trim(),
+          address2: document.getElementById('address2').value.trim(),
+          city:     document.getElementById('city').value.trim(),
+          state:    document.getElementById('state').value.trim(),
+          zip:      document.getElementById('zip').value.trim(),
+          country:  (document.getElementById('country').value.trim().toUpperCase() || 'US'),
+        };
+
+        const cartItems = Object.values(cart).map(({ product, quantity }) => ({
+          product_id: product.id, quantity,
+        }));
+
+        try {
+          const resp = await fetch('/api/store/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              cart: cartItems,
+              customer_email: document.getElementById('email').value.trim(),
+              shipping_address: shippingAddress,
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || 'Checkout failed. Please try again.');
+          sessionStorage.removeItem('packShopCart');
+          window.location.href = data.checkout_url;
+        } catch (err) {
+          spinner.style.display = 'none';
+          label.textContent = '🔒 Proceed to Secure Checkout';
+          btn.disabled = false;
+          showBanner('cancel', '⚠️ ' + err.message);
+          console.error(err);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
