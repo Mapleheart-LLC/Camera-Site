@@ -894,7 +894,8 @@
     }
     function authHeader() {
       const jwt = getJwt();
-      if (jwt) return { 'Authorization': `Bearer ${jwt}` };
+      // Validate basic JWT structure (three dot-separated base64url segments)
+      if (jwt && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt)) return { 'Authorization': `Bearer ${jwt}` };
       const creds = getCreds();
       return creds ? { 'Authorization': `Basic ${creds}` } : {};
     }
@@ -2014,15 +2015,18 @@
 
     // ── Auto-login if session creds exist ──────────────
     (function init() {
-      // Handle redirect back from Twitter OAuth callback
-      const params = new URLSearchParams(window.location.search);
-      const adminToken = params.get('admin_token');
-      const oauthError = params.get('error');
+      // Handle redirect back from Twitter OAuth callback.
+      // The admin_token is passed in the fragment (#) so it never reaches the
+      // server in Referer headers or access logs.
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const queryParams = new URLSearchParams(window.location.search);
+      const adminToken = hashParams.get('admin_token');
+      const oauthError = queryParams.get('error');
 
       if (adminToken) {
-        saveJwt(adminToken);
-        // Strip the token from the URL so it isn't bookmarked or leaked in history
+        // Strip the token from the URL before storing so it isn't bookmarked
         history.replaceState({}, '', '/admin.html');
+        saveJwt(adminToken);
       }
 
       if (oauthError) {

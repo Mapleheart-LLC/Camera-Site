@@ -253,12 +253,14 @@ def twitter_callback(
             url="/admin.html?error=unauthorized", status_code=302
         )
 
-    # Issue a short-lived admin JWT and redirect to the admin panel
+    # Issue a short-lived admin JWT and redirect to the admin panel.
+    # The token is passed in the URL fragment so it is never sent to the
+    # server in Referer headers or recorded in access logs.
     token = create_access_token(
         {"sub": "twitter_admin", "is_admin": True},
         expires_delta=timedelta(minutes=_ADMIN_TOKEN_EXPIRE_MINUTES),
     )
     logger.info("Twitter admin login successful for user ID %s", twitter_user_id)
     return RedirectResponse(
-        url=f"/admin.html?admin_token={token}", status_code=302
+        url=f"/admin.html#admin_token={token}", status_code=302
     )
