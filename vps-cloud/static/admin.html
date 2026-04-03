@@ -364,11 +364,6 @@
       </div>
       <p id="login-error" role="alert" aria-live="polite"></p>
       <button id="login-btn" class="btn-primary">🐾 Enter the Kennel</button>
-      <div class="login-divider">or</div>
-      <a id="login-x-btn" href="/auth/twitter/login" class="btn-x">
-        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 1200 1227" fill="currentColor" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>
-        Login with X
-      </a>
     </div>
   </div>
 
@@ -379,9 +374,6 @@
       <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
       <span class="topbar-title">🐾 The Alpha Kennel</span>
       <span class="topbar-badge">Authorized Paws Only</span>
-      <span id="twitter-auth-badge" style="display:none;font-size:.75rem;font-weight:700;color:#e8aeb7;background:#2a1a1e;border:1px solid #3d2a2e;border-radius:6px;padding:.2rem .55rem;margin-left:.4rem">
-        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 1200 1227" fill="currentColor" style="vertical-align:middle;margin-right:.25rem" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>Logged in via X
-      </span>
       <button id="logout-admin-btn">Leave Kennel 🐾</button>
     </header>
 
@@ -799,6 +791,13 @@
               <div class="form-row" style="margin-top:.5rem">
                 <button id="dc-twitter-save-btn" class="btn-sm btn-edit">Save Twitter / X 🐾</button>
                 <p id="dc-twitter-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+              </div>
+              <div class="form-row" style="margin-top:.75rem">
+                <a href="/auth/twitter/login" class="btn-x" style="width:auto;margin-top:0;padding:.35rem .9rem;font-size:.82rem">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>
+                  Connect Twitter/X (OAuth)
+                </a>
+                <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">Authorizes scraper access to likes &amp; bookmarks. Saves Access Token, Access Token Secret, and User ID automatically.</p>
               </div>
             </div>
           </div>
@@ -2017,68 +2016,44 @@
     }, 'dc-bsky-error'));
 
     // ── Auto-login if session creds exist ──────────────
-    // Show the "Logged in via X" badge whenever a Twitter JWT is the active auth.
-    function _updateTwitterBadge() {
-      const badge = document.getElementById('twitter-auth-badge');
-      if (!badge) return;
-      const jwt = getJwt();
-      if (jwt && /^[\w-]+\.[\w-]+\.[\w-]+$/.test(jwt)) {
-        try {
-          const payload = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-          badge.style.display = (payload.is_admin === true && payload.sub === 'twitter_admin') ? '' : 'none';
-        } catch { badge.style.display = 'none'; }
-      } else {
-        badge.style.display = 'none';
-      }
-    }
-
     (function init() {
-      // Handle redirect back from Twitter OAuth callback.
-      // The admin_token is passed in the fragment (#) so it never reaches the
-      // server in Referer headers or access logs.
-      const hashParams = new URLSearchParams(window.location.hash.slice(1));
       const queryParams = new URLSearchParams(window.location.search);
-      const adminToken = hashParams.get('admin_token');
-      const oauthError = queryParams.get('error');
+      const oauthError       = queryParams.get('error');
+      const twitterConnected = queryParams.get('twitter_connected');
 
-      if (adminToken) {
-        // Strip the token from the URL before storing so it isn't bookmarked.
+      // Strip any OAuth callback params from the URL before showing the panel.
+      if (oauthError || twitterConnected) {
         history.replaceState({}, '', '/admin.html');
-        saveJwt(adminToken);
-        // The token was just issued by our own backend – trust it and go
-        // straight to the admin panel so all data loads immediately.
-        _updateTwitterBadge();
-        showAdminPanel();
-        return;
       }
 
-      if (oauthError) {
-        history.replaceState({}, '', '/admin.html');
-        const messages = {
-          twitter_cancelled:    'Twitter login was cancelled.',
-          invalid_state:        'Login session expired. Please try again.',
-          token_exchange_failed:'Could not complete Twitter login. Please try again.',
-          oauth_init_failed:    'Could not connect to Twitter. Please try again later.',
-          profile_fetch_failed: 'Could not fetch your Twitter profile. Please try again.',
-          not_configured:       'Twitter login is not fully configured. Log in with your username & password, then set your API Key, API Secret, and User ID (Numeric) in the Twitter/X settings.',
-          unauthorized:         'Your Twitter account is not authorised to access this panel.',
-          tweepy_missing:       'Server error: Twitter library is missing.',
-        };
-        document.getElementById('login-panel').style.display = 'flex';
-        document.getElementById('login-error').textContent =
-          messages[oauthError] || `Login error: ${oauthError}`;
-        return;
-      }
+      const _oauthMessages = {
+        twitter_cancelled:    'Twitter authorization was cancelled.',
+        invalid_state:        'OAuth session expired. Please try again.',
+        token_exchange_failed:'Could not complete Twitter authorization. Please try again.',
+        oauth_init_failed:    'Could not connect to Twitter. Please try again later.',
+        profile_fetch_failed: 'Could not fetch your Twitter profile. Please try again.',
+        not_configured:       'Twitter login is not fully configured. Set your API Key and API Secret in the Twitter/X settings first.',
+        tweepy_missing:       'Server error: Twitter library is missing.',
+        db_save_failed:       'Twitter credentials were obtained but could not be saved. Check server logs.',
+      };
 
       if (getJwt() || getCreds()) {
         fetch('/api/admin/stats', { headers: authHeader() })
           .then(r => {
             if (r.ok) {
-              _updateTwitterBadge();
               showAdminPanel();
+              if (twitterConnected === '1') {
+                showToast('🐦 Twitter/X connected! Access token & User ID saved.');
+              } else if (oauthError) {
+                showToast('❌ ' + (_oauthMessages[oauthError] || `Twitter error: ${oauthError}`));
+              }
             } else {
               clearCreds();
               document.getElementById('login-panel').style.display = 'flex';
+              if (oauthError) {
+                document.getElementById('login-error').textContent =
+                  _oauthMessages[oauthError] || `Twitter error: ${oauthError}`;
+              }
             }
           })
           .catch(() => {
@@ -2087,6 +2062,10 @@
           });
       } else {
         document.getElementById('login-panel').style.display = 'flex';
+        if (oauthError) {
+          document.getElementById('login-error').textContent =
+            _oauthMessages[oauthError] || `Twitter error: ${oauthError}`;
+        }
       }
     })();
   </script>

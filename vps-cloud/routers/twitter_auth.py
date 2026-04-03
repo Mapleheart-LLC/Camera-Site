@@ -1,40 +1,36 @@
 """
-routers/twitter_auth.py – Twitter/X OAuth 1.0a admin authentication.
+routers/twitter_auth.py – Twitter/X OAuth 1.0a credential authorization.
 
-Allows the site owner to log in to the admin panel using their Twitter/X
-account instead of (or in addition to) the HTTP Basic Auth credentials.
+Allows the site owner to authorize the Drool Log scraper to access their
+Twitter/X likes and bookmarks.  The OAuth 1.0a flow obtains user-level
+access tokens and saves them to the settings database so the scraper can
+use them immediately without manual credential entry.
 
 Flow
 ----
-1. Admin visits ``GET /auth/twitter/login``.
+1. Admin (already logged in) clicks "Connect Twitter/X" in the admin panel
+   Drool Log → Twitter/X settings, which hits ``GET /auth/twitter/login``.
 2. The backend obtains a request token from Twitter and redirects to the
-   Twitter authorisation page.
+   Twitter authorization page.
 3. Twitter redirects back to ``GET /auth/twitter/callback`` with an
    ``oauth_verifier``.
 4. The backend exchanges the verifier for an access token, fetches the
-   authenticated user's numeric Twitter ID, and verifies it matches the
-   configured admin Twitter user ID (``TWITTER_ADMIN_USER_ID`` env var,
-   falling back to ``TWITTER_USER_ID``).
-5. On success a short-lived admin JWT (``{"sub": "twitter_admin",
-   "is_admin": true}``) is issued and the browser is redirected to
-   ``/admin.html?admin_token=<jwt>``.
+   authenticated user's numeric Twitter ID, and saves the access token,
+   access token secret, and user ID to the settings database
+   (``drool_twitter_access_token``, ``drool_twitter_access_secret``,
+   ``drool_twitter_user_id``).
+5. On success the browser is redirected to
+   ``/admin.html?twitter_connected=1``.
 
 Required env vars (shared with the Drool Log scraper)
 ------------------------------------------------------
 - ``TWITTER_API_KEY``    – OAuth 1.0a consumer key
 - ``TWITTER_API_SECRET`` – OAuth 1.0a consumer secret
-- ``TWITTER_USER_ID``    – The admin's numeric Twitter user ID
 
 Optional env vars
 -----------------
-- ``TWITTER_ADMIN_USER_ID``              – Overrides ``TWITTER_USER_ID`` for
-                                           the admin identity check.
-- ``TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES`` – JWT lifetime in minutes
-                                           (default 1440 = 24 h).
-- ``BASE_URL``                           – Used to build the callback URL.
-                                           Must match the callback URL
-                                           registered in the Twitter Developer
-                                           Portal.
+- ``BASE_URL`` – Used to build the callback URL.  Must match the callback
+                 URL registered in the Twitter Developer Portal.
 """
 
 import logging
@@ -46,20 +42,11 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
-from db import get_db_connection
-from dependencies import create_access_token
+from db import get_db_connection, set_setting
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-_ADMIN_TOKEN_EXPIRE_MINUTES: int = int(
-    os.environ.get("TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES") or "1440"
-)
 
 # ---------------------------------------------------------------------------
 # Pending-state store: oauth_token → (oauth_token_secret, expiry)
@@ -123,7 +110,7 @@ def _load_cred(db_key: str, env_key: str) -> str:
 
 @router.get("/auth/twitter/login", include_in_schema=False)
 def twitter_login():
-    """Redirect the admin browser to Twitter's OAuth 1.0a authorisation page."""
+    """Redirect the admin browser to Twitter's OAuth 1.0a authorization page."""
     try:
         import tweepy  # type: ignore[import-untyped]
     except ImportError:
@@ -134,17 +121,6 @@ def twitter_login():
     api_key = _load_cred("drool_twitter_api_key", "TWITTER_API_KEY")
     api_secret = _load_cred("drool_twitter_api_secret", "TWITTER_API_SECRET")
     if not api_key or not api_secret:
-        return RedirectResponse(
-            url="/admin.html?error=not_configured", status_code=302
-        )
-
-    # Pre-check: ensure the admin user ID is configured before starting the
-    # OAuth flow.  Without it the callback would complete the Twitter round-trip
-    # only to fail at the identity-verification step, giving a confusing result.
-    admin_user_id = _load_cred(
-        "twitter_admin_user_id", "TWITTER_ADMIN_USER_ID"
-    ) or _load_cred("drool_twitter_user_id", "TWITTER_USER_ID")
-    if not admin_user_id:
         return RedirectResponse(
             url="/admin.html?error=not_configured", status_code=302
         )
@@ -182,7 +158,7 @@ def twitter_callback(
     denied: Optional[str] = None,
 ):
     """Handle the OAuth 1.0a callback redirect from Twitter."""
-    # User cancelled the authorisation on Twitter's page
+    # User cancelled the authorization on Twitter's page
     if denied or not oauth_token or not oauth_verifier:
         return RedirectResponse(
             url="/admin.html?error=twitter_cancelled", status_code=302
@@ -238,37 +214,21 @@ def twitter_callback(
             url="/admin.html?error=profile_fetch_failed", status_code=302
         )
 
-    # Verify the authenticated user is the configured admin
-    admin_user_id = _load_cred(
-        "twitter_admin_user_id", "TWITTER_ADMIN_USER_ID"
-    ) or _load_cred("drool_twitter_user_id", "TWITTER_USER_ID")
-
-    if not admin_user_id:
-        logger.error(
-            "TWITTER_USER_ID is not configured; cannot verify admin identity."
+    # Save the obtained credentials to the settings database so the Drool Log
+    # scraper can use them immediately without any manual credential entry.
+    try:
+        conn = get_db_connection()
+        set_setting(conn, "drool_twitter_access_token", access_token)
+        set_setting(conn, "drool_twitter_access_secret", access_token_secret)
+        set_setting(conn, "drool_twitter_user_id", twitter_user_id)
+        conn.close()
+        logger.info(
+            "Twitter/X scraper credentials saved for user ID %s", twitter_user_id
         )
+    except Exception as exc:
+        logger.error("Failed to save Twitter credentials to DB: %s", exc)
         return RedirectResponse(
-            url="/admin.html?error=not_configured", status_code=302
+            url="/admin.html?error=db_save_failed", status_code=302
         )
 
-    if twitter_user_id != admin_user_id:
-        logger.warning(
-            "Twitter admin login rejected: user ID %s does not match admin ID %s",
-            twitter_user_id,
-            admin_user_id,
-        )
-        return RedirectResponse(
-            url="/admin.html?error=unauthorized", status_code=302
-        )
-
-    # Issue a short-lived admin JWT and redirect to the admin panel.
-    # The token is passed in the URL fragment so it is never sent to the
-    # server in Referer headers or recorded in access logs.
-    token = create_access_token(
-        {"sub": "twitter_admin", "is_admin": True},
-        expires_delta=timedelta(minutes=_ADMIN_TOKEN_EXPIRE_MINUTES),
-    )
-    logger.info("Twitter admin login successful for user ID %s", twitter_user_id)
-    return RedirectResponse(
-        url=f"/admin.html#admin_token={token}", status_code=302
-    )
+    return RedirectResponse(url="/admin.html?twitter_connected=1", status_code=302)
