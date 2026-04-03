@@ -39,6 +39,16 @@ services:
       # General Information → Public Key).  Required for the reply button /
       # modal feature.  Leave empty to disable Discord interactions.
       - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY:-}
+      # ── Discord OAuth2 / Linked Roles ─────────────────
+      # Register an OAuth2 application at https://discord.com/developers/applications
+      # and configure its Linked Roles Verification URL to {BASE_URL}/discord/verify-user.
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
+      # Must match the redirect URI registered in the Discord Developer Portal.
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-}
+      # Bot token – used on startup to register the Linked Roles metadata schema.
+      # Create a Bot user in the Discord Developer Portal and copy its token here.
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       # Public root URL of the site used to generate deep-links in Discord
       # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
       - BASE_URL=${BASE_URL:-}

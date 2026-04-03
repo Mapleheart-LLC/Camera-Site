@@ -32,6 +32,7 @@ from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
 from routers.discord_interactions import router as discord_interactions_router
+from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -244,6 +245,20 @@ def init_db() -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS discord_accounts (
+            discord_id               TEXT PRIMARY KEY,
+            user_id                  TEXT REFERENCES users(id),
+            discord_username         TEXT NOT NULL,
+            discord_avatar           TEXT,
+            discord_access_token     TEXT NOT NULL,
+            discord_refresh_token    TEXT,
+            discord_token_expires_at TEXT,
+            linked_at                TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS order_items (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             order_id    TEXT    NOT NULL REFERENCES orders(id),
@@ -399,6 +414,7 @@ async def lifespan(app: FastAPI):
         )
     init_db()
     await _sync_cameras_to_go2rtc()
+    await register_metadata_schema()
     yield
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
@@ -633,6 +649,7 @@ app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
 app.include_router(discord_interactions_router)
+app.include_router(discord_oauth_router)
 
 
 @app.middleware("http")
