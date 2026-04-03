@@ -170,7 +170,7 @@ async def discord_interactions(request: Request):
             lines.append(f"Share it: {share_url}")
 
         # Notify the notification channel that an answer has been published.
-        await send_answer_notification(question_id=question_id, share_url=share_url)
+        await send_answer_notification(share_url=share_url)
 
         return {
             "type": _CHANNEL_MESSAGE,

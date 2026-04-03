@@ -41,6 +41,8 @@ services:
       - DISCORD_QUESTION_CHANNEL_ID=${DISCORD_QUESTION_CHANNEL_ID:-}
       # notification channel: answer-published / general site events
       - DISCORD_NOTIFICATION_CHANNEL_ID=${DISCORD_NOTIFICATION_CHANNEL_ID:-}
+      # admin channel: private operational alerts (e.g. new store purchases)
+      - DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID:-}
       # Ed25519 public key from the Discord Developer Portal (Application →
       # General Information → Public Key).  Required for the reply button /
       # modal feature.  Leave empty to disable Discord interactions.

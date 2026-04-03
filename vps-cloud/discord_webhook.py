@@ -21,6 +21,10 @@ Configuration
     Channel where general site notifications are posted (e.g. a question has
     been answered and published).
 
+``DISCORD_ADMIN_CHANNEL_ID``
+    Private channel for admin-facing operational alerts (e.g. new store
+    purchases, system events).
+
 ``DISCORD_WEBHOOK_URL``  *(legacy fallback)*
     Incoming Webhook URL.  Used only when the bot-token path is unavailable.
 
@@ -165,7 +169,7 @@ async def send_discord_notification(
             await _post_to_webhook(webhook_url, payload)
 
 
-async def send_answer_notification(question_id: str, share_url: str = "") -> None:
+async def send_answer_notification(share_url: str = "") -> None:
     """Post an answer-published notification to the notification channel.
 
     Called after a question is answered so that the notification channel
@@ -182,3 +186,16 @@ async def send_answer_notification(question_id: str, share_url: str = "") -> Non
 
     payload: dict = {"content": "\n".join(lines)}
     await _post_to_channel(notification_channel_id, payload)
+
+
+async def send_admin_notification(content: str) -> None:
+    """Post an admin-facing operational alert to the admin channel.
+
+    Used for internal events that only admins need to see, such as new store
+    purchases.  No-ops if ``DISCORD_ADMIN_CHANNEL_ID`` is not set.
+    """
+    admin_channel_id: str = os.environ.get("DISCORD_ADMIN_CHANNEL_ID", "")
+    if not admin_channel_id:
+        return
+
+    await _post_to_channel(admin_channel_id, {"content": content})
