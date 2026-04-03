@@ -17,14 +17,13 @@ so that deep-link URLs included in embed titles resolve correctly.
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 
 # Discord color for mochii.live muted pink (0xE8AEB7 → decimal).
 _MOCHII_PINK: int = 0xE8AEB7
-
-_OG_PREVIEW_LEN = 100
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ async def send_discord_notification(
     question_id:
         Optional UUID of the question.  When provided (and ``BASE_URL`` is
         set), the embed title becomes a clickable deep-link to the admin
-        panel, and an "Action" field is added to the embed.
+        reply modal.
 
     The function swallows all exceptions and logs a warning on failure so
     that a Discord outage can never crash the application or fail a user's
@@ -69,24 +68,23 @@ async def send_discord_notification(
     payload: dict = {"content": content}
 
     if is_embed:
-        preview = question_text[:_OG_PREVIEW_LEN]
-        if len(question_text) > _OG_PREVIEW_LEN:
-            preview += "…"
-
         embed: dict = {
-            "title": "New Question Received! 🐾",
-            "description": preview,
+            "title": "📬 New note in the Puppy Pouch!",
+            "description": f">>> {question_text}",
             "color": _MOCHII_PINK,
-            "footer": {"text": "Log into the Alpha Kennel to reply."},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "footer": {"text": "mochii.live · Alpha Kennel"},
         }
 
         if question_id and base_url:
-            reply_url = f"{base_url}/admin/questions/{question_id}"
+            # /admin?q={id} deep-links directly into the admin panel and opens
+            # the reply modal for this question.
+            reply_url = f"{base_url}/admin?q={question_id}"
             embed["url"] = reply_url
             embed["fields"] = [
                 {
-                    "name": "Action",
-                    "value": f"[🐾 Click here to reply and share to Twitter]({reply_url})",
+                    "name": "Reply",
+                    "value": f"[🐾 Open reply modal in the Alpha Kennel]({reply_url})",
                     "inline": False,
                 }
             ]
