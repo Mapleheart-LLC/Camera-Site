@@ -35,6 +35,8 @@ from routers.discord_interactions import router as discord_interactions_router
 from routers.drool import router as drool_router, limiter as drool_limiter
 from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from redis_client import close_redis
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
@@ -679,8 +681,6 @@ app.include_router(drool_router)
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
 app.state.limiter = drool_limiter
-from slowapi.errors import RateLimitExceeded  # noqa: E402
-from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 

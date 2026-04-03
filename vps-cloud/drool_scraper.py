@@ -57,6 +57,23 @@ async def _ping_discord_new_item(platform: str, url: str, text: str) -> None:
     )
 
 
+def _notify_new_items(new_items: list[tuple]) -> None:
+    """Fire Discord pings for each newly inserted item (best-effort, sync wrapper)."""
+    import asyncio  # noqa: PLC0415
+
+    for platform, orig_url, _media, text_content, _ts in new_items:
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_ping_discord_new_item(platform, orig_url, text_content or ""))
+            else:
+                loop.run_until_complete(
+                    _ping_discord_new_item(platform, orig_url, text_content or "")
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Discord ping for new drool item failed: %s", exc)
+
+
 # ---------------------------------------------------------------------------
 # Reddit scraper
 # ---------------------------------------------------------------------------
@@ -133,6 +150,7 @@ def _scrape_reddit() -> None:
             logger.warning("Reddit scraper: saved fetch failed: %s", exc)
 
         new_count = 0
+        newly_inserted: list[tuple] = []
         for platform, orig_url, media_url, text_content, ts in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
@@ -146,10 +164,12 @@ def _scrape_reddit() -> None:
                 """,
                 (platform, orig_url, media_url or None, text_content or None, ts),
             )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
             logger.info("Reddit scraper: archived %d new item(s).", new_count)
+            _notify_new_items(newly_inserted)
     except Exception as exc:
         logger.error("Reddit scraper error: %s", exc)
     finally:
@@ -269,6 +289,7 @@ def _scrape_twitter() -> None:
             logger.warning("Twitter scraper: bookmarks fetch failed: %s", exc)
 
         new_count = 0
+        newly_inserted: list[tuple] = []
         for platform, orig_url, media_url, text_content, ts in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
@@ -282,10 +303,12 @@ def _scrape_twitter() -> None:
                 """,
                 (platform, orig_url, media_url or None, text_content or None, ts),
             )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
             logger.info("Twitter scraper: archived %d new item(s).", new_count)
+            _notify_new_items(newly_inserted)
     except Exception as exc:
         logger.error("Twitter scraper error: %s", exc)
     finally:

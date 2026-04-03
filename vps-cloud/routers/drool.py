@@ -37,6 +37,11 @@ router = APIRouter(prefix="/api/drool", tags=["drool"])
 # ---------------------------------------------------------------------------
 
 _DROOL_SALT: str = os.environ.get("DROOL_SALT", "drool-default-salt-change-me")
+if _DROOL_SALT == "drool-default-salt-change-me":
+    logger.warning(
+        "DROOL_SALT is not set. Pack Member identities are NOT cryptographically anonymous. "
+        "Set a strong DROOL_SALT environment variable before deploying to production."
+    )
 _MAX_COMMENT_LENGTH = 500
 
 ReactionType = Literal["Good Girl", "Bad Puppy", "Dumb Thing", "Pretty Toy"]
