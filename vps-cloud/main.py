@@ -1062,6 +1062,7 @@ def _html_escape(text: str) -> str:
 
 def _render_404_html(heading: str, message: str) -> str:
     """Return a styled 404 HTML page using the site's dark pink theme."""
+    home_url = _html_escape(BASE_URL or "/")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1095,7 +1096,7 @@ def _render_404_html(heading: str, message: str) -> str:
     <p class="error-code">404 – Not Found</p>
     <h1>{_html_escape(heading)}</h1>
     <p>{_html_escape(message)}</p>
-    <a class="btn" href="/">Back to mochii.live 🐾</a>
+    <a class="btn" href="{home_url}">Back to mochii.live 🐾</a>
   </div>
 </body>
 </html>"""
@@ -1543,7 +1544,7 @@ def anon_page(request: Request):
 <body>
   <div class="page-header">
     <h1>🐾 Puppy Pouch</h1>
-    <a class="back-link" href="/">← Back to mochii.live</a>
+    <a class="back-link" href="{_html_escape(canonical)}">← Back to mochii.live</a>
   </div>
 
   <!-- Submit form -->
@@ -1808,7 +1809,7 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
     <p class="tagline">All the links in one place.</p>
     <a class="link-btn shop-link" href="https://shop.mochii.live" target="_blank" rel="noopener noreferrer">🛒 The Pack Shop</a>
     {link_items_html}
-    <p class="page-footer"><a href="/">← Back to mochii.live</a></p>
+    <p class="page-footer"><a href="{_html_escape(canonical)}">← Back to mochii.live</a></p>
   </div>
 </body>
 </html>"""
