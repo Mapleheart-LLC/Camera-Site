@@ -43,7 +43,7 @@ import sqlite3 as _sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
 from db import get_db_connection
@@ -127,17 +127,26 @@ def twitter_login():
     try:
         import tweepy  # type: ignore[import-untyped]
     except ImportError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="tweepy is not installed; Twitter login is unavailable.",
+        return RedirectResponse(
+            url="/admin.html?error=tweepy_missing", status_code=302
         )
 
     api_key = _load_cred("drool_twitter_api_key", "TWITTER_API_KEY")
     api_secret = _load_cred("drool_twitter_api_secret", "TWITTER_API_SECRET")
     if not api_key or not api_secret:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Twitter API credentials (TWITTER_API_KEY / TWITTER_API_SECRET) are not configured.",
+        return RedirectResponse(
+            url="/admin.html?error=not_configured", status_code=302
+        )
+
+    # Pre-check: ensure the admin user ID is configured before starting the
+    # OAuth flow.  Without it the callback would complete the Twitter round-trip
+    # only to fail at the identity-verification step, giving a confusing result.
+    admin_user_id = _load_cred(
+        "twitter_admin_user_id", "TWITTER_ADMIN_USER_ID"
+    ) or _load_cred("drool_twitter_user_id", "TWITTER_USER_ID")
+    if not admin_user_id:
+        return RedirectResponse(
+            url="/admin.html?error=not_configured", status_code=302
         )
 
     base_url = os.environ.get("BASE_URL", "").rstrip("/")
@@ -158,9 +167,8 @@ def twitter_login():
         oauth_token_secret = auth.request_token["oauth_token_secret"]
     except Exception as exc:
         logger.error("Failed to obtain Twitter request token: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not reach Twitter. Please try again later.",
+        return RedirectResponse(
+            url="/admin.html?error=oauth_init_failed", status_code=302
         )
 
     _store_pending(oauth_token, oauth_token_secret)
