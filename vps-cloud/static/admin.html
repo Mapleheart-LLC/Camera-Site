@@ -842,6 +842,21 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- ── Reply modal ──────────────────────────────────── -->
+  <div id="reply-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reply-modal-title">
+    <div id="reply-modal">
+      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">✕</button>
+      <h3 id="reply-modal-title">Reply to Note</h3>
+      <p id="answer-question-preview"></p>
+      <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+      <div class="answer-form-actions">
+        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
+        <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+      </div>
+      <p id="answer-form-error"></p>
+    </div>
+  </div>
+
   <script>
     // ── Credential storage ─────────────────────────────
     const CRED_KEY = 'mochii_admin_creds';
@@ -1988,19 +2003,5 @@
     })();
   </script>
 
-  <!-- ── Reply modal ──────────────────────────────────── -->
-  <div id="reply-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reply-modal-title">
-    <div id="reply-modal">
-      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">✕</button>
-      <h3 id="reply-modal-title">Reply to Note</h3>
-      <p id="answer-question-preview"></p>
-      <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
-      <div class="answer-form-actions">
-        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
-        <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
-      </div>
-      <p id="answer-form-error"></p>
-    </div>
-  </div>
 </body>
 </html>
