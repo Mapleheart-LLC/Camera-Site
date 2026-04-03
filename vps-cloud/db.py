@@ -8,6 +8,8 @@ factory without creating circular imports.
 
 import os
 import sqlite3
+from datetime import datetime, timezone
+from typing import Optional
 
 _BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
 
@@ -29,3 +31,22 @@ def get_db():
         yield conn
     finally:
         conn.close()
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
+    """Return a runtime setting value from the settings table, or *default* if absent."""
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+    """Upsert a runtime setting in the settings table."""
+    conn.execute(
+        """
+        INSERT INTO settings (key, value, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        """,
+        (key, value, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()

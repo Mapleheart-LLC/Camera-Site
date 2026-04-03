@@ -13,6 +13,8 @@ Endpoints
   DELETE /api/admin/cameras/{cam_id}   – remove a camera
   GET    /api/admin/stats              – user/camera counts + recent activations
   POST   /api/admin/control/{device}   – manually trigger an IoT device
+  GET    /api/admin/settings           – current env-var / runtime configuration status
+  PATCH  /api/admin/settings           – update runtime-configurable settings (e.g. mock_auth)
 """
 
 import logging
@@ -26,7 +28,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from db import get_db
+from db import get_db, get_setting, set_setting
 from dependencies import get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -370,4 +372,90 @@ def admin_answer_question(
     )
     db.commit()
     return {"id": question_id, "message": "Answer saved and question is now public 🐾"}
+
+
+# ---------------------------------------------------------------------------
+# Danger Zone – runtime configuration / environment variable settings
+# ---------------------------------------------------------------------------
+
+_DEFAULT_SECRET_KEY = "changeme-replace-in-production!!"
+_DEMO_SECRET_KEY = "demo-mode-insecure-do-not-use-in-production"
+
+
+class SettingsPatch(BaseModel):
+    mock_auth: Optional[bool] = None
+
+
+@router.get("/settings")
+def get_settings(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the current status of all important runtime / environment settings.
+
+    Security-sensitive values (SECRET_KEY, passwords, OAuth secrets) are
+    never returned – only a *status* string indicating whether they are set
+    to a known-insecure default or a custom value.
+    """
+    secret_key = os.environ.get("JWT_SECRET") or os.environ.get("SECRET_KEY", "")
+    if not secret_key or secret_key == _DEFAULT_SECRET_KEY:
+        sk_status = "default"
+    elif secret_key == _DEMO_SECRET_KEY:
+        sk_status = "demo"
+    else:
+        sk_status = "custom"
+
+    mock_env_raw = os.environ.get("MOCK_AUTH", "").lower()
+    mock_auth_env = mock_env_raw == "true"
+
+    db_mock_raw = get_setting(db, "mock_auth")
+    mock_auth_db: Optional[bool] = None if db_mock_raw is None else (db_mock_raw.lower() == "true")
+    mock_auth_effective = mock_auth_db if mock_auth_db is not None else mock_auth_env
+
+    return {
+        "secret_key_status": sk_status,
+        "mock_auth_env": mock_auth_env,
+        "mock_auth_db": mock_auth_db,
+        "mock_auth_effective": mock_auth_effective,
+        "fanvue_client_id_set": bool(os.environ.get("FANVUE_CLIENT_ID")),
+        "fanvue_client_secret_set": bool(os.environ.get("FANVUE_CLIENT_SECRET")),
+        "fanvue_redirect_uri": os.environ.get(
+            "FANVUE_REDIRECT_URI", "http://localhost:8000/auth/callback"
+        ),
+        "fanvue_creator_id_set": bool(os.environ.get("FANVUE_CREATOR_ID")),
+        "admin_configured": (
+            bool(os.environ.get("ADMIN_USERNAME"))
+            and bool(os.environ.get("ADMIN_PASSWORD"))
+        ),
+        "go2rtc_host": os.environ.get("GO2RTC_HOST", "localhost"),
+        "go2rtc_port": os.environ.get("GO2RTC_PORT", "1984"),
+    }
+
+
+@router.patch("/settings", status_code=status.HTTP_200_OK)
+def patch_settings(
+    body: SettingsPatch,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update runtime-configurable settings stored in the database.
+
+    Only ``mock_auth`` may be changed here; it overrides the MOCK_AUTH
+    environment variable without requiring a container restart.  This lets
+    operators switch from demo mode to production mode on the fly.
+
+    Security-critical settings (SECRET_KEY, OAuth credentials, admin
+    password) must be changed via environment variables and a container
+    restart – they are intentionally not exposed through this endpoint.
+    """
+    updated: list[str] = []
+    if body.mock_auth is not None:
+        set_setting(db, "mock_auth", "true" if body.mock_auth else "false")
+        updated.append("mock_auth")
+        logger.info(
+            "Admin '%s' set mock_auth=%s via Danger Zone settings.",
+            admin_user,
+            body.mock_auth,
+        )
+    return {"updated": updated}
 

@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from db import DATABASE_PATH, get_db, get_db_connection
+from db import DATABASE_PATH, get_db, get_db_connection, get_setting
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -119,6 +119,15 @@ def init_db() -> None:
             answer     TEXT,
             is_public  INTEGER NOT NULL DEFAULT 0,
             created_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL
         )
         """
     )
@@ -256,7 +265,7 @@ async def lifespan(app: FastAPI):
     if MOCK_AUTH:
         print("MOCK MODE IS ENABLED")
         logger.warning(
-            "MOCK_AUTH is enabled. /auth/login will redirect to /#token=FAKE_TOKEN "
+            "MOCK_AUTH is enabled. /auth/login will issue a fake access_level=3 token "
             "without any Fanvue authentication. Do NOT use this in production."
         )
     elif not FANVUE_CLIENT_ID or not FANVUE_CLIENT_SECRET:
@@ -289,14 +298,21 @@ class CameraResponse(BaseModel):
 
 
 @app.get("/auth/login")
-def auth_login():
+def auth_login(db: sqlite3.Connection = Depends(get_db)):
     """Redirect the browser to Fanvue's OAuth 2.0 authorization page.
 
-    If MOCK_AUTH is enabled, skip the Fanvue redirect entirely and issue a
-    fake JWT with access_level=3 so the site's features can be demoed without
-    real Fanvue API credentials.
+    If MOCK_AUTH is enabled (via env var or the admin Danger Zone DB override),
+    skip the Fanvue redirect entirely and issue a fake JWT with access_level=3
+    so the site's features can be demoed without real Fanvue API credentials.
     """
-    if MOCK_AUTH:
+    # DB setting takes precedence over the env var so the admin can toggle
+    # mock-auth at runtime without restarting the container.
+    db_mock_auth = get_setting(db, "mock_auth")
+    effective_mock_auth = (
+        db_mock_auth.lower() == "true" if db_mock_auth is not None else MOCK_AUTH
+    )
+
+    if effective_mock_auth:
         mock_token = create_access_token(
             {"sub": "mock-user", "access_level": 3},
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
