@@ -845,10 +845,15 @@
     }
 
     // ── Load public links for the landing page ────────
+    let _linksLoading = false;
+
     async function loadLinks() {
       const container = document.getElementById('links-list');
       if (!container) return;
-      if (container.querySelector('.link-card')) return; // already loaded
+      if (_linksLoading) return;                            // prevent concurrent fetches
+      if (container.querySelector('.link-card')) return;   // already successfully loaded
+
+      _linksLoading = true;
 
       try {
         const resp = await fetch('/api/links');
@@ -858,6 +863,7 @@
 
         if (!links.length) {
           container.innerHTML = '<p class="links-empty">nothing here yet… check back soon 🐾</p>';
+          _linksLoading = false;
           return;
         }
 
@@ -878,6 +884,7 @@
         });
       } catch {
         container.innerHTML = '<p class="links-empty">couldn\'t load links… try refreshing 🐾</p>';
+        _linksLoading = false; // allow retry after error
       }
     }
 
