@@ -585,14 +585,6 @@
     <!-- OAuth error/info message -->
     <p id="login-message" role="alert" aria-live="polite"></p>
 
-    <!-- Links grid (populated from /api/links) -->
-    <div class="links-section">
-      <p class="links-section-label">explore ✦</p>
-      <div id="links-list" class="links-list">
-        <div class="links-empty"><span class="paw-loading" aria-label="Loading">🐾</span></div>
-      </div>
-    </div>
-
     <!-- Static nav cards -->
     <div class="links-section">
       <p class="links-section-label">pages ✦</p>
@@ -696,51 +688,6 @@
         msgEl.className   = '';
       }
 
-      loadLinks();
-    }
-
-    // ── Load public links for the landing page ────────
-    let _linksLoading = false;
-
-    async function loadLinks() {
-      const container = document.getElementById('links-list');
-      if (!container) return;
-      if (_linksLoading) return;                            // prevent concurrent fetches
-      if (container.querySelector('.link-card')) return;   // already successfully loaded
-
-      _linksLoading = true;
-
-      try {
-        const resp = await fetch('/api/links');
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const links = await resp.json();
-        container.innerHTML = '';
-
-        if (!links.length) {
-          container.innerHTML = '<p class="links-empty">nothing here yet… check back soon 🐾</p>';
-          _linksLoading = false;
-          return;
-        }
-
-        links.forEach(link => {
-          const a = document.createElement('a');
-          a.className = 'link-card';
-          a.href = escHtmlAttr(link.url);
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          const emoji = link.emoji
-            ? `<span class="link-card-emoji" aria-hidden="true">${escHtmlNote(link.emoji)}</span>`
-            : '';
-          a.innerHTML =
-            emoji +
-            `<span class="link-card-title">${escHtmlNote(link.title)}</span>` +
-            `<span class="link-card-arrow" aria-hidden="true">→</span>`;
-          container.appendChild(a);
-        });
-      } catch {
-        container.innerHTML = '<p class="links-empty">couldn\'t load links… try refreshing 🐾</p>';
-        _linksLoading = false; // allow retry after error
-      }
     }
 
     function escHtmlAttr(str) {
