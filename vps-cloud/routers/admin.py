@@ -16,6 +16,11 @@ Endpoints
   POST   /api/admin/control/{device}   – manually trigger an IoT device
   GET    /api/admin/settings           – current env-var / runtime configuration status
   PATCH  /api/admin/settings           – update runtime-configurable settings (e.g. mock_auth)
+  GET    /api/admin/store/products     – list all products
+  POST   /api/admin/store/products     – create a product
+  PUT    /api/admin/store/products/{id} – update a product
+  DELETE /api/admin/store/products/{id} – delete a product
+  GET    /api/admin/store/orders       – list all orders (most recent first)
 """
 
 import logging
@@ -514,4 +519,187 @@ def patch_settings(
             body.mock_auth,
         )
     return {"updated": updated}
+
+
+# ---------------------------------------------------------------------------
+# Store – product management
+# ---------------------------------------------------------------------------
+
+
+class ProductCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    price: float
+    image_url: Optional[str] = None
+    is_printful: bool = False
+    printful_variant_id: Optional[str] = None
+    stock_count: Optional[int] = None
+
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[float] = None
+    image_url: Optional[str] = None
+    is_printful: Optional[bool] = None
+    printful_variant_id: Optional[str] = None
+    stock_count: Optional[int] = None
+
+
+@router.get("/store/products")
+def admin_list_products(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all products (including out-of-stock ones)."""
+    rows = db.execute(
+        """
+        SELECT id, name, description, price, image_url,
+               is_printful, printful_variant_id, stock_count
+          FROM products ORDER BY id
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.post("/store/products", status_code=status.HTTP_201_CREATED)
+def admin_create_product(
+    payload: ProductCreate,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Create a new product."""
+    try:
+        cursor = db.execute(
+            """
+            INSERT INTO products
+                (name, description, price, image_url,
+                 is_printful, printful_variant_id, stock_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.name,
+                payload.description or None,
+                payload.price,
+                payload.image_url or None,
+                1 if payload.is_printful else 0,
+                payload.printful_variant_id or None,
+                payload.stock_count,
+            ),
+        )
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not create product: {exc}",
+        ) from exc
+    row = db.execute(
+        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        (cursor.lastrowid,),
+    ).fetchone()
+    return dict(row)
+
+
+@router.put("/store/products/{product_id}")
+def admin_update_product(
+    product_id: int,
+    payload: ProductUpdate,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update an existing product."""
+    row = db.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
+
+    new_name        = payload.name               if payload.name        is not None else row["name"]
+    new_desc        = payload.description        if payload.description is not None else row["description"]
+    new_price       = payload.price              if payload.price       is not None else row["price"]
+    new_image       = payload.image_url          if payload.image_url   is not None else row["image_url"]
+    new_printful    = payload.is_printful        if payload.is_printful is not None else bool(row["is_printful"])
+    new_variant     = payload.printful_variant_id if payload.printful_variant_id is not None else row["printful_variant_id"]
+    new_stock       = payload.stock_count        if payload.stock_count is not None else row["stock_count"]
+
+    try:
+        db.execute(
+            """
+            UPDATE products
+               SET name = ?, description = ?, price = ?, image_url = ?,
+                   is_printful = ?, printful_variant_id = ?, stock_count = ?
+             WHERE id = ?
+            """,
+            (new_name, new_desc or None, new_price, new_image or None,
+             1 if new_printful else 0, new_variant or None, new_stock, product_id),
+        )
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not update product: {exc}",
+        ) from exc
+
+    updated = db.execute(
+        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        (product_id,),
+    ).fetchone()
+    return dict(updated)
+
+
+@router.delete("/store/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_product(
+    product_id: int,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Delete a product. Fails if the product has associated orders."""
+    row = db.execute("SELECT id FROM products WHERE id = ?", (product_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
+    in_use = db.execute(
+        "SELECT 1 FROM order_items WHERE product_id = ? LIMIT 1", (product_id,)
+    ).fetchone()
+    if in_use:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a product that has existing orders.",
+        )
+    db.execute("DELETE FROM products WHERE id = ?", (product_id,))
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Store – order management
+# ---------------------------------------------------------------------------
+
+
+@router.get("/store/orders")
+def admin_list_orders(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all orders, most recent first, with their line items."""
+    orders = db.execute(
+        """
+        SELECT id, external_transaction_id, provider_name, status,
+               customer_email, total_amount, shipping_address, created_at
+          FROM orders
+         ORDER BY created_at DESC
+        """
+    ).fetchall()
+
+    result = []
+    for order in orders:
+        o = dict(order)
+        items = db.execute(
+            """
+            SELECT oi.quantity, oi.unit_price, p.id AS product_id, p.name AS product_name
+              FROM order_items oi
+              JOIN products p ON p.id = oi.product_id
+             WHERE oi.order_id = ?
+            """,
+            (o["id"],),
+        ).fetchall()
+        o["items"] = [dict(item) for item in items]
+        result.append(o)
+    return result
 

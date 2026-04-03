@@ -270,6 +270,18 @@
     .toggle-btn.disable { background: #4ade80; color: #1e1010; }
     .danger-note { font-size: .78rem; color: #9e7e82; margin-top: 1rem; padding: .65rem .9rem; background: rgba(248,113,113,.06); border: 1px solid #4b2020; border-radius: 8px; line-height: 1.5; }
 
+    /* ── Store management ────────────────────────────── */
+    #product-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
+    #product-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
+    #product-form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
+    .order-status-badge { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
+    .order-status-badge.pending  { background: rgba(251,191,36,.1);  color: #fbbf24; border: 1px solid #fbbf24; }
+    .order-status-badge.paid     { background: rgba(74,222,128,.1);  color: #4ade80; border: 1px solid #4ade80; }
+    .order-status-badge.failed   { background: rgba(248,113,113,.1); color: #f87171; border: 1px solid #f87171; }
+    .order-status-badge.unknown  { background: rgba(156,163,175,.1); color: #9ca3af; border: 1px solid #9ca3af; }
+    .order-items-detail { font-size: .78rem; color: #9e7e82; }
+    .printful-tag { display: inline-block; padding: .1rem .4rem; border-radius: 5px; font-size: .72rem; font-weight: 700; background: rgba(99,179,237,.12); color: #63b3ed; border: 1px solid #63b3ed; }
+
     /* ── Toast ───────────────────────────────────────── */
     .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,.4); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 300; }
     .toast.show { opacity: 1; transform: translateY(0); }
@@ -331,6 +343,7 @@
         <button class="nav-item" data-target="s-devices">🎮 Devices</button>
         <div class="sidebar-section-label">Site</div>
         <button class="nav-item" data-target="s-links">🔗 Links</button>
+        <button class="nav-item" data-target="s-store">🛍️ Store</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
@@ -354,6 +367,7 @@
                 <div class="stat-tile"><div id="stat-unanswered" class="stat-value">—</div><div class="stat-label">Unanswered Q's</div></div>
                 <div class="stat-tile"><div id="stat-activations" class="stat-value">—</div><div class="stat-label">Recent Activations</div></div>
                 <div class="stat-tile"><div id="stat-camera-accesses" class="stat-value">—</div><div class="stat-label">Camera Accesses</div></div>
+                <div class="stat-tile"><div id="stat-orders" class="stat-value">—</div><div class="stat-label">Total Orders</div></div>
               </div>
             </div>
           </div>
@@ -559,6 +573,90 @@
           </div>
         </section>
 
+        <!-- ── Store ──────────────────────────────────── -->
+        <section id="s-store" class="admin-section">
+          <h1 class="section-heading">
+            🛍️ Store Management
+            <button id="refresh-store-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-store-tab="products">📦 Products</button>
+            <button class="sub-tab" data-store-tab="orders">🧾 Orders</button>
+          </div>
+
+          <!-- Products -->
+          <div id="store-tab-products" class="sub-tab-content active">
+            <div class="card">
+              <div class="card-header">
+                <h2>Products</h2>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                  <a class="btn-sm btn-edit" href="/store.html" target="_blank" rel="noopener" style="text-decoration:none;font-size:.78rem">🔗 View Store</a>
+                  <button id="add-product-btn" class="btn-sm btn-edit">+ Add Product</button>
+                </div>
+              </div>
+              <div class="card-body">
+                <div id="product-form">
+                  <h3 id="product-form-title">Add Product</h3>
+                  <div class="form-row">
+                    <div class="form-field" style="flex:2"><label for="pf-name">Name</label><input id="pf-name" type="text" placeholder="e.g. Mochii Pack Tee" /></div>
+                    <div class="form-field" style="max-width:130px"><label for="pf-price">Price (USD)</label><input id="pf-price" type="number" min="0" step="0.01" placeholder="24.99" /></div>
+                    <div class="form-field" style="max-width:120px"><label for="pf-stock">Stock (blank = ∞)</label><input id="pf-stock" type="number" min="0" placeholder="leave blank" /></div>
+                  </div>
+                  <div class="form-row" style="margin-top:.5rem">
+                    <div class="form-field" style="flex:1"><label for="pf-desc">Description (optional)</label><input id="pf-desc" type="text" placeholder="Short product description" /></div>
+                  </div>
+                  <div class="form-row" style="margin-top:.5rem">
+                    <div class="form-field" style="flex:1"><label for="pf-image">Image URL (optional)</label><input id="pf-image" type="url" placeholder="https://…" /></div>
+                  </div>
+                  <div class="form-row" style="margin-top:.5rem;align-items:center;gap:1.25rem">
+                    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.85rem;font-weight:700;color:#9e7e82">
+                      <input id="pf-printful" type="checkbox" /> Printful product
+                    </label>
+                    <div class="form-field" style="flex:1" id="pf-variant-wrap">
+                      <label for="pf-variant">Printful Variant ID</label>
+                      <input id="pf-variant" type="text" placeholder="e.g. 12345678" />
+                    </div>
+                  </div>
+                  <div class="form-row" style="margin-top:.6rem">
+                    <div class="form-actions">
+                      <button id="product-form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
+                      <button id="product-form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                    </div>
+                  </div>
+                  <p id="product-form-error"></p>
+                </div>
+
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Products">
+                    <thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Type</th><th>Actions</th></tr></thead>
+                    <tbody id="products-admin-body">
+                      <tr class="empty-row"><td colspan="6">Loading products…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Orders -->
+          <div id="store-tab-orders" class="sub-tab-content">
+            <div class="card">
+              <div class="card-header"><h2>Orders</h2></div>
+              <div class="card-body no-pad">
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Orders">
+                    <thead><tr><th>Date (UTC)</th><th>Customer</th><th>Items</th><th>Total</th><th>Provider</th><th>Status</th><th>Transaction ID</th></tr></thead>
+                    <tbody id="orders-admin-body">
+                      <tr class="empty-row"><td colspan="7">Loading orders…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Logs ───────────────────────────────────── -->
         <section id="s-logs" class="admin-section">
           <h1 class="section-heading">📋 Logs</h1>
@@ -759,7 +857,7 @@
     async function loadAll() {
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
-        loadSettings(), loadCameraLogs(), loadLinks(),
+        loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
       ]);
     }
 
@@ -1385,6 +1483,202 @@
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
       }
+    }
+
+    // ── Store sub-tab switching ────────────────────────
+    document.querySelectorAll('.sub-tab[data-store-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const id = tab.dataset.storeTab;
+        document.querySelectorAll('.sub-tab[data-store-tab]').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('[id^="store-tab-"]').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        const content = document.getElementById(`store-tab-${id}`);
+        if (content) content.classList.add('active');
+      });
+    });
+
+    document.getElementById('refresh-store-btn').addEventListener('click', () => {
+      loadProducts();
+      loadOrders();
+    });
+
+    // ── Products ───────────────────────────────────────
+    let _editingProductId = null;
+
+    async function loadProducts() {
+      try {
+        const products = await apiGet('/api/admin/store/products');
+        renderProducts(products);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load products.');
+      }
+    }
+
+    function renderProducts(products) {
+      const tbody = document.getElementById('products-admin-body');
+      if (!products.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No products yet – add one above!</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(p => {
+        const stock = p.stock_count === null ? '<span style="color:#9e7e82">∞</span>' : escHtml(String(p.stock_count));
+        const type  = p.is_printful
+          ? '<span class="printful-tag">Printful</span>'
+          : '<span style="color:#9e7e82;font-size:.78rem">Manual</span>';
+        return `<tr data-id="${p.id}">
+          <td>${p.id}</td>
+          <td>${escHtml(p.name)}</td>
+          <td>$${Number(p.price).toFixed(2)}</td>
+          <td>${stock}</td>
+          <td>${type}</td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-edit edit-product-btn" data-id="${p.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-product-btn" data-id="${p.id}">🗑️ Delete</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.edit-product-btn').forEach(btn => {
+        btn.addEventListener('click', () => startEditProduct(parseInt(btn.dataset.id)));
+      });
+      tbody.querySelectorAll('.del-product-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteProduct(parseInt(btn.dataset.id)));
+      });
+    }
+
+    const productForm = document.getElementById('product-form');
+
+    function openProductForm(title, p = {}) {
+      document.getElementById('product-form-title').textContent = title;
+      document.getElementById('pf-name').value    = p.name        || '';
+      document.getElementById('pf-price').value   = p.price       !== undefined ? p.price : '';
+      document.getElementById('pf-stock').value   = p.stock_count !== null && p.stock_count !== undefined ? p.stock_count : '';
+      document.getElementById('pf-desc').value    = p.description || '';
+      document.getElementById('pf-image').value   = p.image_url   || '';
+      document.getElementById('pf-printful').checked = !!p.is_printful;
+      document.getElementById('pf-variant').value = p.printful_variant_id || '';
+      document.getElementById('pf-variant-wrap').style.display = p.is_printful ? 'flex' : 'none';
+      document.getElementById('product-form-error').textContent = '';
+      productForm.style.display = 'block';
+      document.getElementById('pf-name').focus();
+    }
+
+    function closeProductForm() { productForm.style.display = 'none'; _editingProductId = null; }
+
+    document.getElementById('pf-printful').addEventListener('change', function () {
+      document.getElementById('pf-variant-wrap').style.display = this.checked ? 'flex' : 'none';
+    });
+
+    document.getElementById('add-product-btn').addEventListener('click', () => {
+      _editingProductId = null;
+      openProductForm('Add Product');
+    });
+    document.getElementById('product-form-cancel-btn').addEventListener('click', closeProductForm);
+
+    document.getElementById('product-form-save-btn').addEventListener('click', async () => {
+      const name       = document.getElementById('pf-name').value.trim();
+      const priceRaw   = document.getElementById('pf-price').value.trim();
+      const stockRaw   = document.getElementById('pf-stock').value.trim();
+      const desc       = document.getElementById('pf-desc').value.trim() || null;
+      const image_url  = document.getElementById('pf-image').value.trim() || null;
+      const is_printful = document.getElementById('pf-printful').checked;
+      const variant    = document.getElementById('pf-variant').value.trim() || null;
+      const errEl      = document.getElementById('product-form-error');
+
+      if (!name) { errEl.textContent = 'Name is required.'; return; }
+      const price = parseFloat(priceRaw);
+      if (isNaN(price) || price < 0) { errEl.textContent = 'A valid price is required.'; return; }
+      if (is_printful && !variant)   { errEl.textContent = 'Printful Variant ID is required for Printful products.'; return; }
+      errEl.textContent = '';
+
+      const body = {
+        name, description: desc, price,
+        image_url, is_printful,
+        printful_variant_id: is_printful ? variant : null,
+        stock_count: stockRaw !== '' ? parseInt(stockRaw) : null,
+      };
+
+      try {
+        const resp = _editingProductId !== null
+          ? await apiPut(`/api/admin/store/products/${_editingProductId}`, body)
+          : await apiPost('/api/admin/store/products', body);
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        closeProductForm();
+        await loadProducts();
+        showToast(_editingProductId !== null ? '🐾 Product updated!' : '🐾 Product added!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      }
+    });
+
+    async function startEditProduct(id) {
+      try {
+        const products = await apiGet('/api/admin/store/products');
+        const p = products.find(x => x.id === id);
+        if (!p) { showToast('Product not found.'); return; }
+        _editingProductId = id;
+        openProductForm('Edit Product', p);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load product.');
+      }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm(`Delete product #${id}? This cannot be undone.`)) return;
+      try {
+        const resp = await apiDelete(`/api/admin/store/products/${id}`);
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadProducts();
+        showToast('🗑️ Product deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    // ── Orders ─────────────────────────────────────────
+    async function loadOrders() {
+      try {
+        const orders = await apiGet('/api/admin/store/orders');
+        renderOrders(orders);
+        document.getElementById('stat-orders').textContent = orders.length;
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load orders.');
+      }
+    }
+
+    function renderOrders(orders) {
+      const tbody = document.getElementById('orders-admin-body');
+      if (!orders.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No orders yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = orders.map(o => {
+        const ts = (o.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const statusCls = ['pending','paid','failed'].includes(o.status) ? o.status : 'unknown';
+        const statusBadge = `<span class="order-status-badge ${statusCls}">${escHtml(o.status)}</span>`;
+        const itemsText = (o.items || []).map(i =>
+          `${escHtml(String(i.quantity))}× ${escHtml(i.product_name)}`
+        ).join(', ') || '—';
+        const txId = o.external_transaction_id
+          ? `<code style="font-size:.75rem;word-break:break-all">${escHtml(o.external_transaction_id)}</code>`
+          : '<span style="color:#5a3a3e">—</span>';
+        return `<tr>
+          <td class="ts-cell">${escHtml(ts)}</td>
+          <td>${escHtml(o.customer_email)}</td>
+          <td class="order-items-detail">${itemsText}</td>
+          <td style="font-weight:700;color:#e8aeb7">$${Number(o.total_amount).toFixed(2)}</td>
+          <td style="font-size:.8rem;color:#9e7e82">${escHtml(o.provider_name)}</td>
+          <td>${statusBadge}</td>
+          <td>${txId}</td>
+        </tr>`;
+      }).join('');
     }
 
     // ── Auto-login if session creds exist ──────────────
