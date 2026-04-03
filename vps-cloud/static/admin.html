@@ -486,6 +486,88 @@
       z-index: 100;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Danger Zone ─────────────────────────────────── */
+    .danger-card {
+      background: #1e1010;
+      border: 1px solid #6b1f1f;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .danger-card .card-header {
+      background: #2a1515;
+      border-bottom: 1px solid #6b1f1f;
+    }
+
+    .danger-card .card-header h2 { color: #f87171; }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .setting-tile {
+      background: #1a1010;
+      border: 1px solid #4b2020;
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+    }
+
+    .setting-tile .setting-label {
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #9e7e82;
+      margin-bottom: .35rem;
+    }
+
+    .setting-tile .setting-value {
+      font-size: .88rem;
+      font-family: monospace;
+      word-break: break-all;
+      color: #f0e6e8;
+    }
+
+    .badge-ok    { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(74,222,128,.12); color:#4ade80; border:1px solid #4ade80; }
+    .badge-warn  { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(251,191,36,.12); color:#fbbf24; border:1px solid #fbbf24; }
+    .badge-error { display:inline-block; padding:.1rem .5rem; border-radius:5px; font-size:.75rem; font-weight:700; background:rgba(248,113,113,.12); color:#f87171; border:1px solid #f87171; }
+
+    .mock-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: .75rem;
+      flex-wrap: wrap;
+    }
+
+    .toggle-btn {
+      padding: .4rem 1rem;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      border: none;
+    }
+    .toggle-btn:disabled { opacity: .55; cursor: not-allowed; }
+    .toggle-btn:active { transform: scale(.97); }
+    .toggle-btn.enable  { background: #f87171; color: #1e1010; }
+    .toggle-btn.disable { background: #4ade80; color: #1e1010; }
+
+    .danger-note {
+      font-size: .78rem;
+      color: #9e7e82;
+      margin-top: 1rem;
+      padding: .65rem .9rem;
+      background: rgba(248,113,113,.06);
+      border: 1px solid #4b2020;
+      border-radius: 8px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -719,6 +801,33 @@
         </div>
       </section>
 
+      <!-- ── Danger Zone – Environment Variable Settings ── -->
+      <section class="danger-card" aria-label="Danger zone settings">
+        <div class="card-header">
+          <h2>⚠️ Danger Zone</h2>
+        </div>
+        <div class="card-body">
+          <div class="settings-grid" id="settings-grid">
+            <!-- populated by loadSettings() -->
+          </div>
+
+          <!-- MOCK_AUTH toggle -->
+          <div class="mock-toggle-row">
+            <span id="mock-auth-status-badge">—</span>
+            <button id="mock-toggle-btn" class="toggle-btn" disabled>Loading…</button>
+          </div>
+
+          <p class="danger-note">
+            🔒 <strong>SECRET_KEY</strong>, <strong>Fanvue OAuth credentials</strong>, and
+            <strong>ADMIN_PASSWORD</strong> must be changed via environment variables and a
+            container restart — they cannot be updated through this panel for security reasons.
+            <br><br>
+            The <strong>MOCK_AUTH</strong> toggle takes effect immediately without a restart.
+            All other settings are read-only here and reflect the current container environment.
+          </p>
+        </div>
+      </section>
+
     </div><!-- /.admin-body -->
   </div><!-- /#admin-panel -->
 
@@ -805,6 +914,16 @@
       return resp;
     }
 
+    async function apiPatch(path, body) {
+      const resp = await fetch(path, {
+        method: 'PATCH',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
+      return resp;
+    }
+
     // ── Login ─────────────────────────────────────────
     document.getElementById('login-btn').addEventListener('click', async () => {
       const user = document.getElementById('admin-username').value.trim();
@@ -846,7 +965,7 @@
 
     // ── Load everything ───────────────────────────────
     async function loadAll() {
-      await Promise.all([loadStats(), loadCameras(), loadQuestions()]);
+      await Promise.all([loadStats(), loadCameras(), loadQuestions(), loadSettings()]);
     }
 
     document.getElementById('refresh-btn').addEventListener('click', loadAll);
@@ -1256,6 +1375,102 @@
         document.getElementById('login-panel').style.display = 'flex';
       }
     })();
+
+    // ── Danger Zone – Settings ────────────────────────
+    let _settingsCache = null;
+
+    function makeBadge(type, label) {
+      return `<span class="badge-${type}">${escHtml(label)}</span>`;
+    }
+
+    async function loadSettings() {
+      try {
+        const s = await apiGet('/api/admin/settings');
+        _settingsCache = s;
+
+        // Build the status tiles
+        const skBadge = s.secret_key_status === 'custom'
+          ? makeBadge('ok', '✔ Custom key set')
+          : s.secret_key_status === 'demo'
+            ? makeBadge('warn', '⚠ Demo key')
+            : makeBadge('error', '✘ Using default key');
+
+        const fanvueBadge = (s.fanvue_client_id_set && s.fanvue_client_secret_set)
+          ? makeBadge('ok', '✔ Configured')
+          : makeBadge('warn', '⚠ Not configured');
+
+        const adminBadge = s.admin_configured
+          ? makeBadge('ok', '✔ Configured')
+          : makeBadge('error', '✘ Not configured');
+
+        const redirectUri = escHtml(s.fanvue_redirect_uri);
+        const go2rtc = escHtml(`${s.go2rtc_host}:${s.go2rtc_port}`);
+
+        document.getElementById('settings-grid').innerHTML = `
+          <div class="setting-tile">
+            <div class="setting-label">Secret Key</div>
+            <div class="setting-value">${skBadge}</div>
+          </div>
+          <div class="setting-tile">
+            <div class="setting-label">Fanvue OAuth</div>
+            <div class="setting-value">${fanvueBadge}</div>
+          </div>
+          <div class="setting-tile">
+            <div class="setting-label">Admin Credentials</div>
+            <div class="setting-value">${adminBadge}</div>
+          </div>
+          <div class="setting-tile">
+            <div class="setting-label">Fanvue Redirect URI</div>
+            <div class="setting-value">${redirectUri}</div>
+          </div>
+          <div class="setting-tile">
+            <div class="setting-label">go2rtc</div>
+            <div class="setting-value">${go2rtc}</div>
+          </div>
+        `;
+
+        // Update MOCK_AUTH toggle
+        renderMockAuthToggle(s.mock_auth_effective);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load settings.');
+      }
+    }
+
+    function renderMockAuthToggle(enabled) {
+      const badge = document.getElementById('mock-auth-status-badge');
+      const btn   = document.getElementById('mock-toggle-btn');
+
+      if (enabled) {
+        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-error">⚠ Mock Auth ENABLED</span>';
+        btn.textContent = 'Disable Mock Auth';
+        btn.className = 'toggle-btn disable';
+      } else {
+        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-ok">✔ Mock Auth Disabled</span>';
+        btn.textContent = 'Enable Mock Auth';
+        btn.className = 'toggle-btn enable';
+      }
+      btn.disabled = false;
+    }
+
+    document.getElementById('mock-toggle-btn').addEventListener('click', async () => {
+      if (!_settingsCache) return;
+      const btn = document.getElementById('mock-toggle-btn');
+      btn.disabled = true;
+      const newVal = !_settingsCache.mock_auth_effective;
+      try {
+        const resp = await apiPatch('/api/admin/settings', { mock_auth: newVal });
+        if (resp.ok) {
+          await loadSettings();
+          showToast(newVal ? '⚠️ Mock Auth enabled.' : '✔ Mock Auth disabled.');
+        } else {
+          showToast('Failed to update setting.');
+          btn.disabled = false;
+        }
+      } catch (err) {
+        if (err.message !== '401') showToast('Request failed.');
+        btn.disabled = false;
+      }
+    });
   </script>
 </body>
 </html>
