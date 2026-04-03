@@ -91,13 +91,19 @@ services:
       # Create an app at https://developer.twitter.com
       # To enable "Login with X" on the admin panel, register
       #   {BASE_URL}/auth/twitter/callback
-      # as an OAuth callback URL in the Twitter Developer Portal app settings.
+      # as an OAuth 1.0a callback URL in the Twitter Developer Portal app settings.
+      # To enable bookmark scraping, also enable OAuth 2.0 User Authentication,
+      # register {BASE_URL}/auth/twitter2/callback as a callback URL, and enable
+      # the bookmark.read scope.  Then set TWITTER_CLIENT_ID and
+      # TWITTER_CLIENT_SECRET below (different from the 1.0a API Key/Secret).
       - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-}
       - TWITTER_USER_ID=${TWITTER_USER_ID:-}
       - TWITTER_API_KEY=${TWITTER_API_KEY:-}
       - TWITTER_API_SECRET=${TWITTER_API_SECRET:-}
       - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN:-}
       - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET:-}
+      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID:-}
+      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET:-}
       # Optional: override which Twitter user ID is allowed to log in as admin.
       # Defaults to TWITTER_USER_ID when not set.
       - TWITTER_ADMIN_USER_ID=${TWITTER_ADMIN_USER_ID:-}

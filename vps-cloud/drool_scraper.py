@@ -20,6 +20,11 @@ TWITTER_API_SECRET     – Twitter/X API Secret
 TWITTER_ACCESS_TOKEN   – Twitter/X Access Token (user auth) – obtained via admin OAuth flow
 TWITTER_ACCESS_SECRET  – Twitter/X Access Token Secret
 
+TWITTER_CLIENT_ID      – OAuth 2.0 Client ID – required for bookmark scraping
+TWITTER_CLIENT_SECRET  – OAuth 2.0 Client Secret – required for bookmark scraping
+                         (OAuth 2.0 tokens are stored in the settings DB after the
+                          /auth/twitter2/login PKCE flow; they are not set via env var)
+
 BSKY_HANDLE            – Bluesky handle (e.g. yourname.bsky.social)
 BSKY_APP_PASSWORD      – Bluesky app password (from Settings → App Passwords)
 
@@ -270,6 +275,90 @@ def _get_tweepy_client() -> Optional[object]:
         return None
 
 
+def _refresh_oauth2_token() -> Optional[str]:
+    """Refresh the OAuth 2.0 access token using the stored refresh token.
+
+    Saves the new access and refresh tokens to the DB and returns the new
+    access token, or None if refresh is not possible.
+    """
+    import sqlite3 as _sqlite3  # noqa: PLC0415
+
+    try:
+        import requests as _requests  # type: ignore[import-untyped]
+    except ImportError:
+        logger.debug("requests library not available; cannot refresh OAuth 2.0 token.")
+        return None
+
+    client_id     = _load_credential("drool_twitter_client_id",            "TWITTER_CLIENT_ID")
+    client_secret = _load_credential("drool_twitter_client_secret",        "TWITTER_CLIENT_SECRET")
+    refresh_token = _load_credential("drool_twitter_oauth2_refresh_token", "")
+
+    if not client_id or not client_secret or not refresh_token:
+        return None
+
+    try:
+        resp = _requests.post(
+            "https://api.twitter.com/2/oauth2/token",
+            data={
+                "grant_type":    "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id":     client_id,
+            },
+            auth=(client_id, client_secret),
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        logger.warning("Twitter OAuth 2.0 token refresh failed: %s", exc)
+        return None
+
+    new_access  = data.get("access_token", "")
+    new_refresh = data.get("refresh_token", "")
+
+    if not new_access:
+        logger.warning("Twitter OAuth 2.0 token refresh returned no access_token.")
+        return None
+
+    try:
+        from db import set_setting as _set_setting  # noqa: PLC0415
+        conn = get_db_connection()
+        _set_setting(conn, "drool_twitter_oauth2_access_token", new_access)
+        if new_refresh:
+            _set_setting(conn, "drool_twitter_oauth2_refresh_token", new_refresh)
+        conn.close()
+        logger.info("Twitter/X OAuth 2.0 access token refreshed successfully.")
+    except _sqlite3.Error as exc:
+        logger.warning("Could not persist refreshed OAuth 2.0 tokens: %s", exc)
+
+    return new_access
+
+
+def _get_oauth2_client() -> Optional[object]:
+    """Return a tweepy.Client authenticated with the OAuth 2.0 user access token.
+
+    If the stored access token is missing, attempts a refresh.  Returns None
+    if no usable token is available (bookmarks scraping will be skipped).
+    """
+    if not _TWEEPY_AVAILABLE:
+        return None
+
+    access_token = _load_credential("drool_twitter_oauth2_access_token", "")
+    if not access_token:
+        access_token = _refresh_oauth2_token() or ""
+    if not access_token:
+        return None
+
+    try:
+        return _tweepy.Client(
+            access_token=access_token,
+            wait_on_rate_limit=False,
+        )
+    except Exception as exc:
+        logger.warning("Could not initialise OAuth 2.0 tweepy Client: %s", exc)
+        return None
+
+
 def _scrape_twitter() -> None:
     """Fetch liked tweets and store new ones in drool_archive."""
     client = _get_tweepy_client()
@@ -318,10 +407,44 @@ def _scrape_twitter() -> None:
         except Exception as exc:
             logger.warning("Twitter scraper: liked tweets fetch failed: %s", exc)
 
-        # Bookmarks require OAuth 2.0 Authorization Code (PKCE) user context,
-        # which is not currently supported by this codebase.  The endpoint
-        # returns a 403 for any other auth method, so we skip it entirely.
-        logger.debug("Twitter scraper: bookmark scraping skipped (requires OAuth 2.0 PKCE).")
+        # Bookmarks – requires OAuth 2.0 PKCE user context.
+        # A separate client authenticated with the stored OAuth 2.0 access
+        # token (obtained via /auth/twitter2/login) is used here because
+        # the bookmarks endpoint returns 403 for bearer tokens and OAuth 1.0a.
+        oauth2_client = _get_oauth2_client()
+        if oauth2_client is not None:
+            try:
+                bk_resp = oauth2_client.get_bookmarks(
+                    id=user_id,
+                    max_results=50,
+                    tweet_fields=["created_at", "text", "attachments"],
+                    expansions=["attachments.media_keys"],
+                    media_fields=["url", "preview_image_url"],
+                )
+                if bk_resp and bk_resp.data:
+                    bk_media_map: dict = {}
+                    if bk_resp.includes and "media" in bk_resp.includes:
+                        for m in bk_resp.includes["media"]:
+                            bk_media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                                m, "preview_image_url", None
+                            )
+                    for tweet in bk_resp.data:
+                        url = f"https://x.com/i/web/status/{tweet.id}"
+                        bk_media_url: Optional[str] = None
+                        att = getattr(tweet, "attachments", None) or {}
+                        mk = (att.get("media_keys") or [None])[0]
+                        if mk:
+                            bk_media_url = bk_media_map.get(mk)
+                        ts = (
+                            tweet.created_at.isoformat()
+                            if tweet.created_at
+                            else datetime.now(timezone.utc).isoformat()
+                        )
+                        items.append(("twitter", url, bk_media_url, tweet.text, ts))
+            except Exception as exc:
+                logger.warning("Twitter scraper: bookmarks fetch failed: %s", exc)
+        else:
+            logger.debug("Twitter scraper: OAuth 2.0 token not configured, skipping bookmarks.")
 
         new_count = 0
         newly_inserted: list[tuple] = []
