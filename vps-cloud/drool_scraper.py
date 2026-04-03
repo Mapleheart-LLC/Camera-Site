@@ -23,6 +23,7 @@ TWITTER_ACCESS_SECRET  – Twitter/X Access Token Secret
 DISCORD_WEBHOOK_URL    – (shared) Discord webhook for new-item pings
 """
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -31,6 +32,22 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from db import get_db_connection
+
+# Optional dependencies – imported at module level with graceful fallback.
+# When credentials are absent the scrapers short-circuit before any API call.
+try:
+    import praw as _praw  # type: ignore[import-untyped]
+    _PRAW_AVAILABLE = True
+except ImportError:  # noqa: BLE001
+    _praw = None  # type: ignore[assignment]
+    _PRAW_AVAILABLE = False
+
+try:
+    import tweepy as _tweepy  # type: ignore[import-untyped]
+    _TWEEPY_AVAILABLE = True
+except ImportError:  # noqa: BLE001
+    _tweepy = None  # type: ignore[assignment]
+    _TWEEPY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +76,6 @@ async def _ping_discord_new_item(platform: str, url: str, text: str) -> None:
 
 def _notify_new_items(new_items: list[tuple]) -> None:
     """Fire Discord pings for each newly inserted item (best-effort, sync wrapper)."""
-    import asyncio  # noqa: PLC0415
-
     for platform, orig_url, _media, text_content, _ts in new_items:
         try:
             loop = asyncio.get_event_loop()
@@ -81,6 +96,10 @@ def _notify_new_items(new_items: list[tuple]) -> None:
 
 def _get_praw_reddit() -> Optional[object]:
     """Return an authenticated praw.Reddit instance or None if creds are missing."""
+    if not _PRAW_AVAILABLE:
+        logger.debug("praw is not installed; Reddit scraper disabled.")
+        return None
+
     client_id = os.environ.get("REDDIT_CLIENT_ID", "")
     client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
     username = os.environ.get("REDDIT_USERNAME", "")
@@ -91,9 +110,7 @@ def _get_praw_reddit() -> Optional[object]:
         return None
 
     try:
-        import praw  # noqa: PLC0415
-
-        return praw.Reddit(
+        return _praw.Reddit(
             client_id=client_id,
             client_secret=client_secret,
             username=username,
@@ -183,6 +200,10 @@ def _scrape_reddit() -> None:
 
 def _get_tweepy_client() -> Optional[object]:
     """Return an authenticated tweepy.Client or None if credentials are missing."""
+    if not _TWEEPY_AVAILABLE:
+        logger.debug("tweepy is not installed; Twitter scraper disabled.")
+        return None
+
     bearer = os.environ.get("TWITTER_BEARER_TOKEN", "")
     api_key = os.environ.get("TWITTER_API_KEY", "")
     api_secret = os.environ.get("TWITTER_API_SECRET", "")
@@ -193,9 +214,7 @@ def _get_tweepy_client() -> Optional[object]:
         return None
 
     try:
-        import tweepy  # noqa: PLC0415
-
-        return tweepy.Client(
+        return _tweepy.Client(
             bearer_token=bearer,
             consumer_key=api_key or None,
             consumer_secret=api_secret or None,

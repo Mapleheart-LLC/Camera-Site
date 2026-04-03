@@ -490,6 +490,28 @@
   <script>
     'use strict';
 
+    // ── Image error handler (safe DOM, no innerHTML) ─────
+    document.addEventListener('error', (e) => {
+      const img = e.target;
+      if (img.tagName !== 'IMG') return;
+      if (img.dataset.fallback === 'whimper') {
+        // For the whimper hero image, just hide it gracefully
+        img.hidden = true;
+        img.setAttribute('aria-hidden', 'true');
+      } else if (img.dataset.fallback === '1') {
+        // Replace the card-media wrapper content with a placeholder div
+        const wrapper = img.closest('.card-media');
+        if (wrapper) {
+          img.remove();
+          const placeholder = document.createElement('div');
+          placeholder.className = 'card-media-placeholder';
+          placeholder.setAttribute('aria-label', 'Media unavailable');
+          placeholder.textContent = '🐾';
+          wrapper.appendChild(placeholder);
+        }
+      }
+    }, true);
+
     // ── SVG icon helpers ─────────────────────────────────
     const ICONS = {
       eye: `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
@@ -552,7 +574,7 @@
         if (isVideo) {
           mediaHtml = `<div class="card-media"><video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="max-height:320px;"></video></div>`;
         } else {
-          mediaHtml = `<div class="card-media"><img src="${escHtml(item.media_url)}" alt="She liked this" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-media-placeholder\\'>🐾</div>'" /></div>`;
+          mediaHtml = `<div class="card-media"><img src="${escHtml(item.media_url)}" alt="She liked this" loading="lazy" data-fallback="1" /></div>`;
         }
       } else {
         mediaHtml = `<div class="card-media"><div class="card-media-placeholder" aria-hidden="true">🐾</div></div>`;
@@ -723,7 +745,7 @@
         if (isVideo) {
           mediaWrap.innerHTML = `<video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;"></video>`;
         } else {
-          mediaWrap.innerHTML = `<img src="${escHtml(item.media_url)}" alt="Weekly Whimper" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" onerror="this.style.display='none'" />`;
+          mediaWrap.innerHTML = `<img src="${escHtml(item.media_url)}" alt="Weekly Whimper – she liked this" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" data-fallback="whimper" />`;
         }
         inner.appendChild(mediaWrap);
       }
