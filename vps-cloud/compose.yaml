@@ -38,6 +38,12 @@ services:
       # Public root URL of the site used to generate deep-links in Discord
       # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
       - BASE_URL=${BASE_URL:-}
+      # CORS: comma-separated list of allowed origins (e.g. https://mochii.live,https://shop.mochii.live).
+      # Leave empty to auto-derive from BASE_URL (root + anon/links/shop subdomains).
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # Cookie domain for cross-subdomain session sharing (e.g. .mochii.live).
+      # Leave empty to auto-derive from BASE_URL.
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
       # ── Store / Payment ───────────────────────────────

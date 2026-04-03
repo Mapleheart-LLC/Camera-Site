@@ -7,12 +7,14 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode, quote as _url_quote
+from urllib.parse import urlencode, urlparse, quote as _url_quote
 
 import httpx
 import html as _html_lib
+
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -69,7 +71,53 @@ MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool
 # Falls back to the request base_url when not set.
 BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 
-# OAuth CSRF state tokens live in memory; entries expire after STATE_TTL seconds.
+# ---------------------------------------------------------------------------
+# CORS / cookie-domain configuration
+#
+# ALLOWED_ORIGINS — comma-separated list of origins that browsers are allowed
+#   to make cross-origin requests from (e.g. "https://mochii.live,https://shop.mochii.live").
+#   When empty, origins are auto-derived from BASE_URL (root + all known subdomains).
+#   Include "http://localhost:8000" here for local development.
+#
+# COOKIE_DOMAIN — value passed as the "domain" attribute on any Set-Cookie header.
+#   When empty, falls back to the public root hostname derived from BASE_URL
+#   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
+# ---------------------------------------------------------------------------
+
+_SUBDOMAIN_PREFIXES = ("anon", "links", "shop")
+
+
+def _build_allowed_origins() -> list[str]:
+    """Derive the CORS allowed-origins list from ALLOWED_ORIGINS env var or BASE_URL."""
+    raw = os.environ.get("ALLOWED_ORIGINS", "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    if not BASE_URL:
+        # Fallback for local development when no BASE_URL is set
+        return ["http://localhost:8000", "http://localhost:3000"]
+    origins = [BASE_URL]  # e.g. https://mochii.live
+    parsed = urlparse(BASE_URL)
+    for prefix in _SUBDOMAIN_PREFIXES:
+        origins.append(f"{parsed.scheme}://{prefix}.{parsed.hostname}")
+    return origins
+
+
+ALLOWED_ORIGINS: list[str] = _build_allowed_origins()
+
+
+def _cookie_domain() -> str:
+    """Return the cookie domain (leading-dot form for subdomain sharing)."""
+    raw = os.environ.get("COOKIE_DOMAIN", "").strip()
+    if raw:
+        return raw
+    if BASE_URL:
+        hostname = urlparse(BASE_URL).hostname or ""
+        # Leading dot lets the cookie be read by all subdomains
+        return f".{hostname}" if hostname and not hostname.startswith(".") else hostname
+    return ""
+
+
+COOKIE_DOMAIN: str = _cookie_domain()
 STATE_TTL: int = 600
 _oauth_states: dict[str, datetime] = {}
 
@@ -335,6 +383,8 @@ async def lifespan(app: FastAPI):
             "Set a strong SECRET_KEY environment variable before deploying to production."
         )
     logger.info("Startup config: MOCK_AUTH=%s  DATABASE_PATH=%s", MOCK_AUTH, DATABASE_PATH)
+    logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
+    logger.info("Cookie domain: %r", COOKIE_DOMAIN or "(not set – browser default)")
     if MOCK_AUTH:
         print("MOCK MODE IS ENABLED")
         logger.warning(
@@ -354,6 +404,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="mochii.live API", lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
+# CORSMiddleware must be registered before the subdomain path-rewriting
+# middleware so that preflight OPTIONS requests are answered immediately and
+# CORS headers are injected on all responses, including those from subdomains.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------------------------
 # Response model
@@ -569,22 +634,29 @@ app.include_router(store_router)
 
 
 @app.middleware("http")
-async def subdomain_redirect(request: Request, call_next):
-    """Redirect bare subdomain roots to their canonical paths on the main domain.
+async def subdomain_routing(request: Request, call_next):
+    """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
-    anon.mochii.live/  → <BASE_URL>/anon
-    links.mochii.live/ → <BASE_URL>/links
+    anon.mochii.live/  → serves /anon content    (URL in browser unchanged)
+    links.mochii.live/ → serves /links content   (URL in browser unchanged)
+    shop.mochii.live/  → serves /store.html      (URL in browser unchanged)
 
-    Only GET requests to exactly "/" are redirected; all other paths and
-    methods are passed through untouched so API calls still work.
+    Only GET requests to exactly "/" are rewritten so that the correct HTML
+    page is returned.  All other paths (API calls, static assets, …) pass
+    through untouched — they work identically on every subdomain.
     """
     if request.method == "GET" and request.url.path == "/":
         host = request.headers.get("host", "").lower().split(":")[0]
-        canonical = BASE_URL or str(request.base_url).rstrip("/")
-        if host.startswith("anon."):
-            return RedirectResponse(url=f"{canonical}/anon", status_code=301)
-        if host.startswith("links."):
-            return RedirectResponse(url=f"{canonical}/links", status_code=301)
+        # Maps subdomain prefix → the path that should be served for that root.
+        _subdomain_map = {
+            "anon.":   "/anon",
+            "links.":  "/links",
+            "shop.":   "/store.html",
+        }
+        for prefix, target_path in _subdomain_map.items():
+            if host.startswith(prefix):
+                request.scope["path"] = target_path
+                break
     return await call_next(request)
 
 
