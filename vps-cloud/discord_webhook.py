@@ -21,9 +21,6 @@ from typing import Optional
 
 import httpx
 
-DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
-BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
-
 # Discord color for mochii.live muted pink (0xE8AEB7 → decimal).
 _MOCHII_PINK: int = 0xE8AEB7
 
@@ -60,7 +57,13 @@ async def send_discord_notification(
     that a Discord outage can never crash the application or fail a user's
     request.
     """
-    if not DISCORD_WEBHOOK_URL:
+    # Read env vars at call time so values injected by Docker / Komodo at
+    # container startup are always picked up (module-level reads would capture
+    # an empty string if the module is imported before the vars are set).
+    webhook_url: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
+    base_url: str = os.environ.get("BASE_URL", "").rstrip("/")
+
+    if not webhook_url:
         return
 
     payload: dict = {"content": content}
@@ -77,8 +80,8 @@ async def send_discord_notification(
             "footer": {"text": "Log into the Alpha Kennel to reply."},
         }
 
-        if question_id and BASE_URL:
-            reply_url = f"{BASE_URL}/admin/questions/{question_id}"
+        if question_id and base_url:
+            reply_url = f"{base_url}/admin/questions/{question_id}"
             embed["url"] = reply_url
             embed["fields"] = [
                 {
@@ -92,7 +95,7 @@ async def send_discord_notification(
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(DISCORD_WEBHOOK_URL, json=payload)
+            resp = await client.post(webhook_url, json=payload)
             if resp.status_code not in (200, 204):
                 logger.warning(
                     "Discord webhook returned unexpected status %s: %s",

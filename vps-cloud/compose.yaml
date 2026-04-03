@@ -31,6 +31,13 @@ services:
       # Admin panel credentials – must be set or /api/admin/* returns 503
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Discord webhook – set to a Discord Incoming Webhook URL to receive
+      # notifications when new questions are submitted to the Puppy Pouch.
+      # Leave empty to disable notifications.
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # Public root URL of the site used to generate deep-links in Discord
+      # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
+      - BASE_URL=${BASE_URL:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
     volumes:

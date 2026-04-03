@@ -1,3 +1,4 @@
+import io
 import logging
 import os
 import sys
@@ -10,8 +11,9 @@ from urllib.parse import urlencode, quote as _url_quote
 
 import httpx
 import html as _html_lib
+from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -25,6 +27,7 @@ from dependencies import (
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.questions import router as questions_router
+from routers.links import router as links_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -58,6 +61,12 @@ _mock_auth_raw = os.environ.get("MOCK_AUTH", "")
 MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool/str check
     isinstance(_mock_auth_raw, str) and _mock_auth_raw.lower() == "true"
 )
+
+# Canonical public root URL of the site (e.g. https://mochii.live).
+# Used for OG image URLs and share-page links so they are always absolute
+# HTTPS URLs even when the backend is behind a reverse proxy or tunnel.
+# Falls back to the request base_url when not set.
+BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 
 # OAuth CSRF state tokens live in memory; entries expire after STATE_TTL seconds.
 STATE_TTL: int = 600
@@ -139,6 +148,19 @@ def init_db() -> None:
             access_level INTEGER NOT NULL,
             camera_count INTEGER NOT NULL,
             accessed_at  TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS links (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT    NOT NULL,
+            url         TEXT    NOT NULL,
+            emoji       TEXT,
+            sort_order  INTEGER NOT NULL DEFAULT 0,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL
         )
         """
     )
@@ -502,6 +524,27 @@ def get_my_cameras(
 app.include_router(interactive_router)
 app.include_router(admin_router)
 app.include_router(questions_router)
+app.include_router(links_router)
+
+
+@app.middleware("http")
+async def subdomain_redirect(request: Request, call_next):
+    """Redirect bare subdomain roots to their canonical paths on the main domain.
+
+    anon.mochii.live/  → <BASE_URL>/anon
+    links.mochii.live/ → <BASE_URL>/links
+
+    Only GET requests to exactly "/" are redirected; all other paths and
+    methods are passed through untouched so API calls still work.
+    """
+    if request.method == "GET" and request.url.path == "/":
+        host = request.headers.get("host", "").lower().split(":")[0]
+        canonical = BASE_URL or str(request.base_url).rstrip("/")
+        if host.startswith("anon."):
+            return RedirectResponse(url=f"{canonical}/anon", status_code=301)
+        if host.startswith("links."):
+            return RedirectResponse(url=f"{canonical}/links", status_code=301)
+    return await call_next(request)
 
 
 @app.get("/admin", include_in_schema=False)
@@ -515,6 +558,225 @@ def admin_page_redirect(request: Request):
 # ---------------------------------------------------------------------------
 # Puppy Pouch share page
 # ---------------------------------------------------------------------------
+
+# OG image dimensions (Twitter / Open Graph recommended: 1200×630)
+_OG_IMG_W = 1200
+_OG_IMG_H = 630
+
+# Vertical spacing constants used when laying out text inside bubbles
+_LABEL_TEXT_GAP = 8   # pixels between a label line and the first body line
+_LINE_SPACING   = 6   # pixels between consecutive body text lines
+
+# Brand colours matching the HTML card
+_BG_OUTER   = (26,  26,  26)   # #1a1a1a – page background
+_BG_CARD    = (36,  36,  36)   # #242424 – card background
+_BG_Q       = (61,  32,  40)   # #3d2028 – question bubble
+_BORDER_Q   = (196, 154, 159)  # #c49a9f
+_BORDER_CARD= (61,  42,  46)   # #3d2a2e
+_BG_A       = (44,  44,  44)   # #2c2c2c – answer bubble
+_BORDER_A   = (74,  74,  74)   # #4a4a4a
+_FG_MAIN    = (240, 230, 232)  # #f0e6e8
+_FG_Q_LABEL = (196, 154, 159)  # #c49a9f
+_FG_A_LABEL = (158, 126, 130)  # #9e7e82
+_FG_FOOTER  = (106,  74,  78)  # #6a4a4e
+_FG_TITLE   = (158, 126, 130)  # #9e7e82
+
+# Pre-built 1×1 fallback PNG returned when a question isn't public/answered
+def _make_fallback_png() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (1, 1), _BG_OUTER).save(buf, format="PNG")
+    return buf.getvalue()
+
+_FALLBACK_PNG = _make_fallback_png()
+
+
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return the best available font at the requested size.
+
+    Falls back to Pillow's built-in bitmap font when no TrueType font is found;
+    that font ignores *size* and renders at a fixed small size.
+    """
+    candidates = [
+        # Common sans-serif fonts that are typically installed on Linux/Debian
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    logging.warning(
+        "No TrueType font found; falling back to Pillow default bitmap font "
+        "(size parameter %d ignored – text may render very small).", size
+    )
+    return ImageFont.load_default()
+
+
+def _wrap_text(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
+    """Word-wrap *text* so that each rendered line fits within *max_w* pixels.
+
+    Words wider than *max_w* are split character-by-character to prevent overflow.
+    """
+    def _text_w(s: str) -> int:
+        bb = draw.textbbox((0, 0), s, font=font)
+        return bb[2] - bb[0]
+
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        # Split overlong single words character-by-character
+        if _text_w(word) > max_w:
+            if current:
+                lines.append(current)
+                current = ""
+            chunk = ""
+            for ch in word:
+                if _text_w(chunk + ch) <= max_w:
+                    chunk += ch
+                else:
+                    if chunk:
+                        lines.append(chunk)
+                    chunk = ch
+            if chunk:
+                current = chunk
+            continue
+
+        test = (current + " " + word).strip()
+        if _text_w(test) <= max_w:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def _truncate_line(line: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw) -> str:
+    """Truncate *line* with an ellipsis so it fits within *max_w* pixels."""
+    ellipsis = "…"
+
+    def _text_w(s: str) -> int:
+        bb = draw.textbbox((0, 0), s, font=font)
+        return bb[2] - bb[0]
+
+    if _text_w(line) <= max_w:
+        return line
+    # Binary-search for the longest prefix that fits with the ellipsis appended
+    lo, hi = 0, len(line)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if _text_w(line[:mid] + ellipsis) <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return line[:lo] + ellipsis
+
+
+def _generate_og_image(q_text: str, a_text: str) -> bytes:
+    """Render a 1200×630 PNG card matching the site's dark-pink aesthetic."""
+    img = Image.new("RGB", (_OG_IMG_W, _OG_IMG_H), _BG_OUTER)
+    draw = ImageDraw.Draw(img)
+
+    # Card bounds
+    margin = 60
+    card_x1, card_y1 = margin, margin
+    card_x2, card_y2 = _OG_IMG_W - margin, _OG_IMG_H - margin
+    card_w = card_x2 - card_x1
+    pad = 36  # inner padding
+
+    # Draw card background + border
+    draw.rounded_rectangle(
+        [card_x1, card_y1, card_x2, card_y2],
+        radius=24,
+        fill=_BG_CARD,
+        outline=_BORDER_CARD,
+        width=2,
+    )
+
+    # Fonts
+    font_label  = _load_font(20)
+    font_body   = _load_font(30)
+    font_footer = _load_font(22)
+    font_title  = _load_font(22)
+
+    cur_y = card_y1 + pad
+
+    # ── Card title ──────────────────────────────────────────────────────────
+    title_text = "PUPPY POUCH 🐾 ANONYMOUS Q&A"
+    draw.text((card_x1 + pad, cur_y), title_text, font=font_title, fill=_FG_TITLE)
+    cur_y += 30 + 20  # title height + gap
+
+    # ── Question bubble ─────────────────────────────────────────────────────
+    inner_w = card_w - pad * 2
+
+    # Measure label
+    label_q = "🐾 QUESTION"
+    lq_bbox = draw.textbbox((0, 0), label_q, font=font_label)
+    lq_h = lq_bbox[3] - lq_bbox[1]
+
+    # Wrap question text
+    q_lines = _wrap_text(q_text, font_body, inner_w - 24, draw)
+    # Cap at 3 lines to avoid overflow; pixel-accurate ellipsis on last line
+    if len(q_lines) > 3:
+        q_lines = q_lines[:3]
+        q_lines[-1] = _truncate_line(q_lines[-1], font_body, inner_w - 24, draw)
+    body_q_bbox = draw.textbbox((0, 0), q_lines[0], font=font_body)
+    line_h = body_q_bbox[3] - body_q_bbox[1]
+    bubble_q_h = pad // 2 + lq_h + _LABEL_TEXT_GAP + line_h * len(q_lines) + (len(q_lines) - 1) * _LINE_SPACING + pad // 2
+
+    bx1, by1 = card_x1 + pad, cur_y
+    bx2, by2 = card_x2 - pad, cur_y + bubble_q_h
+    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=14, fill=_BG_Q, outline=_BORDER_Q, width=1)
+    ty = by1 + pad // 2
+    draw.text((bx1 + 14, ty), label_q, font=font_label, fill=_FG_Q_LABEL)
+    ty += lq_h + _LABEL_TEXT_GAP
+    for line in q_lines:
+        draw.text((bx1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
+        ty += line_h + _LINE_SPACING
+
+    cur_y = by2 + 16  # gap between bubbles
+
+    # ── Answer bubble ────────────────────────────────────────────────────────
+    label_a = "💬 ANSWER"
+    la_bbox = draw.textbbox((0, 0), label_a, font=font_label)
+    la_h = la_bbox[3] - la_bbox[1]
+
+    remaining_h = (card_y2 - pad - 40) - cur_y  # leave room for footer
+    a_lines = _wrap_text(a_text, font_body, inner_w - 24, draw)
+    max_a_lines = max(1, (remaining_h - la_h - _LABEL_TEXT_GAP - pad) // (line_h + _LINE_SPACING))
+    if len(a_lines) > max_a_lines:
+        a_lines = a_lines[:max_a_lines]
+        a_lines[-1] = _truncate_line(a_lines[-1], font_body, inner_w - 24, draw)
+
+    bubble_a_h = pad // 2 + la_h + _LABEL_TEXT_GAP + line_h * len(a_lines) + (len(a_lines) - 1) * _LINE_SPACING + pad // 2
+    ax1, ay1 = card_x1 + pad, cur_y
+    ax2, ay2 = card_x2 - pad, cur_y + bubble_a_h
+    draw.rounded_rectangle([ax1, ay1, ax2, ay2], radius=14, fill=_BG_A, outline=_BORDER_A, width=1)
+    ty = ay1 + pad // 2
+    draw.text((ax1 + 14, ty), label_a, font=font_label, fill=_FG_A_LABEL)
+    ty += la_h + _LABEL_TEXT_GAP
+    for line in a_lines:
+        draw.text((ax1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
+        ty += line_h + _LINE_SPACING
+
+    # ── Footer ───────────────────────────────────────────────────────────────
+    footer_text = "Ask me anything at mochii.live 🐾"
+    ft_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    ft_w = ft_bbox[2] - ft_bbox[0]
+    draw.text(
+        (card_x1 + (card_w - ft_w) // 2, card_y2 - pad - (ft_bbox[3] - ft_bbox[1])),
+        footer_text,
+        font=font_footer,
+        fill=_FG_FOOTER,
+    )
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
 
 def _html_escape(text: str) -> str:
     """Escape HTML special characters to prevent XSS in the share page."""
@@ -562,6 +824,30 @@ def _render_404_html(heading: str, message: str) -> str:
 </html>"""
 
 
+@app.get("/q/{question_id}/og-image.png", response_class=None)
+def question_og_image(
+    question_id: str,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return a dynamically generated PNG suitable for og:image / twitter:image."""
+    row = db.execute(
+        "SELECT text, answer, is_public FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+
+    if not row or not row["is_public"] or not row["answer"]:
+        # Return a minimal 1×1 PNG rather than an error status so scrapers
+        # don't cache a 404 against the image URL.
+        return Response(content=_FALLBACK_PNG, media_type="image/png")
+
+    png_bytes = _generate_og_image(row["text"], row["answer"])
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @app.get("/q/{question_id}", response_class=None)
 def question_share_page(
     question_id: str,
@@ -589,10 +875,11 @@ def question_share_page(
 
     q_text = _html_escape(row["text"])
     a_text = _html_escape(row["answer"])
-    base_url = str(request.base_url).rstrip("/")
+    base_url = BASE_URL or str(request.base_url).rstrip("/")
     # URL-encode the question_id for the share URL, then HTML-escape the full URL
     # to safely embed it in HTML attributes.
     page_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}")
+    og_image_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}/og-image.png")
     og_title = "Puppy Pouch 🐾 – mochii.live"
     # Truncate for OG description (keep within typical 155-char limit after joining)
     _OG_PREVIEW_LEN = 120
@@ -608,14 +895,20 @@ def question_share_page(
   <title>Puppy Pouch 🐾 – mochii.live</title>
 
   <!-- OpenGraph / Twitter Card -->
-  <meta property="og:type"        content="website" />
-  <meta property="og:url"         content="{page_url}" />
-  <meta property="og:title"       content="{og_title}" />
-  <meta property="og:description" content="{og_description}" />
-  <meta property="og:site_name"   content="mochii.live" />
-  <meta name="twitter:card"        content="summary" />
+  <meta property="og:type"         content="website" />
+  <meta property="og:url"          content="{page_url}" />
+  <meta property="og:site_name"    content="mochii.live" />
+  <meta property="og:locale"       content="en_US" />
+  <meta property="og:title"        content="{og_title}" />
+  <meta property="og:description"  content="{og_description}" />
+  <meta property="og:image"        content="{og_image_url}" />
+  <meta property="og:image:width"  content="{_OG_IMG_W}" />
+  <meta property="og:image:height" content="{_OG_IMG_H}" />
+  <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="{og_title}" />
   <meta name="twitter:description" content="{og_description}" />
+  <meta name="twitter:image"       content="{og_image_url}" />
+  <link rel="canonical"            href="{page_url}" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -717,12 +1010,520 @@ def question_share_page(
     <p class="card-title">Puppy Pouch 🐾 Anonymous Q&amp;A</p>
     <div class="bubble bubble-q">{q_text}</div>
     <div class="bubble bubble-a">{a_text}</div>
-    <p class="card-footer">Ask me anything at <a href="https://mochii.live">mochii.live</a> 🐾</p>
+    <p class="card-footer">Ask me anything at <a href="{_html_escape(base_url)}/anon">the Puppy Pouch</a> 🐾</p>
   </div>
 </body>
 </html>"""
     return HTMLResponse(content=html)
 
+
+# ---------------------------------------------------------------------------
+# Anonymous Q&A page  –  /anon  (also reached via anon.mochii.live/)
+# ---------------------------------------------------------------------------
+
+@app.get("/anon", response_class=None)
+def anon_page(request: Request):
+    """Standalone Puppy Pouch page: submit a question + browse all answered Q&A."""
+    canonical = BASE_URL or str(request.base_url).rstrip("/")
+    page_url  = _html_escape(f"{canonical}/anon")
+    og_title  = "Puppy Pouch 🐾 – Ask mochii.live Anything"
+    og_desc   = _html_escape(
+        "Drop an anonymous question into the Puppy Pouch and browse every answered note."
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{og_title}</title>
+
+  <!-- Primary meta -->
+  <meta name="description" content="{og_desc}" />
+  <link rel="canonical" href="{page_url}" />
+
+  <!-- OpenGraph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="{page_url}" />
+  <meta property="og:site_name"   content="mochii.live" />
+  <meta property="og:locale"      content="en_US" />
+  <meta property="og:title"       content="{og_title}" />
+  <meta property="og:description" content="{og_desc}" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="{og_title}" />
+  <meta name="twitter:description" content="{og_desc}" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    body {{
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem 3rem;
+    }}
+
+    .page-header {{
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }}
+
+    .page-header h1 {{
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }}
+
+    .back-link {{
+      font-size: .82rem;
+      color: #9e7e82;
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      padding: .3rem .75rem;
+      transition: border-color .2s, color .2s;
+    }}
+    .back-link:hover {{ border-color: #c49a9f; color: #e8aeb7; }}
+
+    .card {{
+      width: 100%;
+      max-width: 560px;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 20px;
+      padding: 1.75rem 1.75rem 1.5rem;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.10);
+      margin-bottom: 1.5rem;
+    }}
+
+    .card h2 {{
+      font-size: 1rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .3rem;
+    }}
+
+    .card p.tagline {{
+      font-size: .82rem;
+      color: #9e7e82;
+      margin-bottom: 1rem;
+    }}
+
+    textarea {{
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .92rem;
+      padding: .65rem .85rem;
+      resize: vertical;
+      min-height: 90px;
+      outline: none;
+      transition: border-color .2s;
+    }}
+    textarea:focus {{ border-color: #c49a9f; }}
+
+    .note-footer-row {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: .5rem;
+      gap: .75rem;
+    }}
+
+    #char-count {{
+      font-size: .75rem;
+      color: #6a4a4e;
+      white-space: nowrap;
+    }}
+    #char-count.warn {{ color: #f0b040; }}
+    #char-count.over {{ color: #f87171; }}
+
+    #send-btn {{
+      padding: .5rem 1.2rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 8px;
+      color: #e8aeb7;
+      font-family: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }}
+    #send-btn:hover:not(:disabled) {{ background: #e8aeb7; color: #1a1a1a; }}
+    #send-btn:disabled {{ opacity: .5; cursor: not-allowed; }}
+
+    #send-msg {{
+      font-size: .8rem;
+      min-height: 1em;
+      margin-top: .4rem;
+    }}
+    #send-msg.success {{ color: #67d399; }}
+    #send-msg.error   {{ color: #f87171; }}
+
+    /* Q&A feed */
+    .feed-header {{
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #9e7e82;
+      margin-bottom: 1rem;
+    }}
+
+    .qa-item {{
+      margin-bottom: 1rem;
+    }}
+
+    .bubble {{
+      border-radius: 12px;
+      padding: .85rem 1rem;
+      font-size: .92rem;
+      line-height: 1.55;
+      margin-bottom: .35rem;
+      word-break: break-word;
+    }}
+
+    .bubble-q {{
+      background: #3d2028;
+      border: 1px solid #c49a9f;
+      color: #f5d5da;
+    }}
+    .bubble-q::before {{
+      content: "🐾 Question";
+      display: block;
+      font-size: .68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #c49a9f;
+      margin-bottom: .4rem;
+    }}
+
+    .bubble-a {{
+      background: #2c2c2c;
+      border: 1px solid #4a4a4a;
+      color: #e0d4d6;
+    }}
+    .bubble-a::before {{
+      content: "💬 Answer";
+      display: block;
+      font-size: .68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #9e7e82;
+      margin-bottom: .4rem;
+    }}
+
+    .share-link {{
+      display: inline-block;
+      margin-top: .3rem;
+      font-size: .75rem;
+      color: #9e7e82;
+      text-decoration: none;
+      font-weight: 700;
+      transition: color .2s;
+    }}
+    .share-link:hover {{ color: #c49a9f; }}
+
+    #feed-loading {{
+      font-size: .88rem;
+      color: #9e7e82;
+      text-align: center;
+      padding: 1rem 0;
+    }}
+
+    #empty-feed {{
+      display: none;
+      font-size: .88rem;
+      color: #5a3a3e;
+      text-align: center;
+      padding: 1rem 0;
+    }}
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>🐾 Puppy Pouch</h1>
+    <a class="back-link" href="/">← Back to mochii.live</a>
+  </div>
+
+  <!-- Submit form -->
+  <div class="card">
+    <h2>Drop a Note 🐾</h2>
+    <p class="tagline">Ask anything anonymously – no sign-in needed.</p>
+    <textarea id="note-textarea" maxlength="280" placeholder="What's on your mind? 🐾" aria-label="Your question"></textarea>
+    <div class="note-footer-row">
+      <span id="char-count">0 / 280</span>
+      <button id="send-btn" disabled>Send 🐾</button>
+    </div>
+    <p id="send-msg" role="alert" aria-live="polite"></p>
+  </div>
+
+  <!-- Answered Q&A feed -->
+  <div class="card">
+    <p class="feed-header">Answered Notes 🐾</p>
+    <p id="feed-loading">Loading… 🐾</p>
+    <p id="empty-feed">No answered notes yet – be the first to ask! 🐾</p>
+    <div id="qa-list"></div>
+  </div>
+
+  <script>
+    const MAX = 280;
+    const textarea  = document.getElementById('note-textarea');
+    const charCount = document.getElementById('char-count');
+    const sendBtn   = document.getElementById('send-btn');
+    const sendMsg   = document.getElementById('send-msg');
+
+    textarea.addEventListener('input', () => {{
+      const len = textarea.value.length;
+      charCount.textContent = `${{len}} / ${{MAX}}`;
+      charCount.className = len >= MAX ? 'over' : len >= MAX * 0.85 ? 'warn' : '';
+      sendBtn.disabled = len === 0 || len > MAX;
+    }});
+
+    sendBtn.addEventListener('click', async () => {{
+      const text = textarea.value.trim();
+      if (!text || text.length > MAX) return;
+      sendBtn.disabled = true;
+      sendMsg.textContent = '';
+      sendMsg.className = '';
+      try {{
+        const resp = await fetch('/api/questions', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify({{ text }}),
+        }});
+        if (resp.ok) {{
+          textarea.value = '';
+          charCount.textContent = `0 / ${{MAX}}`;
+          charCount.className = '';
+          sendMsg.textContent = '🐾 Your note was sent!';
+          sendMsg.className = 'success';
+          setTimeout(() => {{ sendMsg.textContent = ''; sendMsg.className = ''; }}, 3500);
+        }} else {{
+          const data = await resp.json().catch(() => ({{}}));
+          sendMsg.textContent = data.detail || 'Something went wrong. Please try again.';
+          sendMsg.className = 'error';
+          sendBtn.disabled = false;
+        }}
+      }} catch {{
+        sendMsg.textContent = 'Could not send. Please try again.';
+        sendMsg.className = 'error';
+        sendBtn.disabled = textarea.value.trim().length === 0;
+      }}
+    }});
+
+    function esc(str) {{
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }}
+
+    (async function loadFeed() {{
+      try {{
+        const resp = await fetch('/api/questions/public');
+        document.getElementById('feed-loading').style.display = 'none';
+        if (!resp.ok) return;
+        const qs = await resp.json();
+        if (!qs.length) {{
+          document.getElementById('empty-feed').style.display = 'block';
+          return;
+        }}
+        const list = document.getElementById('qa-list');
+        qs.forEach(q => {{
+          const div = document.createElement('div');
+          div.className = 'qa-item';
+          div.innerHTML =
+            `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
+            `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
+            `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
+          list.appendChild(div);
+        }});
+      }} catch {{
+        document.getElementById('feed-loading').textContent = 'Could not load notes.';
+      }}
+    }})();
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Links page  –  /links  (also reached via links.mochii.live/)
+# ---------------------------------------------------------------------------
+
+@app.get("/links", response_class=None)
+def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
+    """Render a Linktree-style page of all active links from the database."""
+    canonical = BASE_URL or str(request.base_url).rstrip("/")
+    page_url  = _html_escape(f"{canonical}/links")
+    og_title  = "mochii.live 🐾 – Links"
+    og_desc   = _html_escape("All the links you need in one place.")
+
+    rows = db.execute(
+        """
+        SELECT title, url, emoji
+        FROM links
+        WHERE is_active = 1
+        ORDER BY sort_order ASC, id ASC
+        """
+    ).fetchall()
+
+    link_items_html = ""
+    for row in rows:
+        emoji = _html_escape(row["emoji"] or "")
+        title = _html_escape(row["title"])
+        url   = _html_escape(row["url"])
+        label = f"{emoji} {title}".strip() if emoji else title
+        link_items_html += (
+            f'<a class="link-btn" href="{url}" target="_blank" rel="noopener noreferrer">'
+            f'{label}</a>\n'
+        )
+
+    if not link_items_html:
+        link_items_html = '<p class="empty-msg">No links yet – check back soon 🐾</p>\n'
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{og_title}</title>
+
+  <!-- Primary meta -->
+  <meta name="description" content="{og_desc}" />
+  <link rel="canonical" href="{page_url}" />
+
+  <!-- OpenGraph -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:url"         content="{page_url}" />
+  <meta property="og:site_name"   content="mochii.live" />
+  <meta property="og:locale"      content="en_US" />
+  <meta property="og:title"       content="{og_title}" />
+  <meta property="og:description" content="{og_desc}" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="{og_title}" />
+  <meta name="twitter:description" content="{og_desc}" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+
+    body {{
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2.5rem 1rem;
+    }}
+
+    .container {{
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .9rem;
+    }}
+
+    .site-name {{
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      text-align: center;
+    }}
+
+    .tagline {{
+      font-size: .88rem;
+      color: #9e7e82;
+      text-align: center;
+      margin-top: -.25rem;
+      margin-bottom: .5rem;
+    }}
+
+    .link-btn {{
+      display: block;
+      width: 100%;
+      padding: .85rem 1.25rem;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 14px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+      box-shadow: 0 2px 12px rgba(232,174,183,0.06);
+    }}
+    .link-btn:hover {{
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
+      box-shadow: 0 4px 20px rgba(232,174,183,0.18);
+    }}
+
+    .empty-msg {{
+      font-size: .9rem;
+      color: #5a3a3e;
+      text-align: center;
+    }}
+
+    .page-footer {{
+      margin-top: 1.5rem;
+      font-size: .75rem;
+      color: #4a3234;
+      text-align: center;
+    }}
+    .page-footer a {{
+      color: #6a4a4e;
+      text-decoration: none;
+    }}
+    .page-footer a:hover {{ color: #c49a9f; }}
+  </style>
+</head>
+<body>
+  <div class="container" role="main">
+    <p class="site-name">🐾 mochii.live</p>
+    <p class="tagline">All the links in one place.</p>
+    {link_items_html}
+    <p class="page-footer"><a href="/">← Back to mochii.live</a></p>
+  </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
