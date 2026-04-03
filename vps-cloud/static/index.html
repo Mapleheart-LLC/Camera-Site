@@ -151,6 +151,11 @@
       padding: 0 1.5rem 3rem;
     }
 
+    .links-section + .links-section {
+      margin-top: .5rem;
+      padding-top: 0;
+    }
+
     .links-section-label {
       font-size: .7rem;
       font-weight: 800;
@@ -729,6 +734,23 @@
       <p class="links-section-label">explore ✦</p>
       <div id="links-list" class="links-list">
         <div class="links-empty"><span class="paw-loading" aria-label="Loading">🐾</span></div>
+      </div>
+    </div>
+
+    <!-- Static nav cards -->
+    <div class="links-section">
+      <p class="links-section-label">pages ✦</p>
+      <div class="links-list">
+        <a class="link-card" href="/links">
+          <span class="link-card-emoji" aria-hidden="true">🔗</span>
+          <span class="link-card-title">All Links</span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" href="/anon">
+          <span class="link-card-emoji" aria-hidden="true">🐾</span>
+          <span class="link-card-title">Ask a Question</span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
       </div>
     </div>
 
