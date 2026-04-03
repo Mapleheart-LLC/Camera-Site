@@ -68,15 +68,21 @@ logger = logging.getLogger(__name__)
 
 def _load_credential(db_key: str, env_key: str) -> str:
     """Return a scraper credential from the settings table, falling back to env."""
+    import sqlite3 as _sqlite3  # noqa: PLC0415 – local import avoids top-level circular risk
     try:
         conn = get_db_connection()
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (db_key,)).fetchone()
         conn.close()
         if row and row[0]:
             return row[0]
-    except Exception as exc:  # noqa: BLE001
+    except _sqlite3.Error as exc:
         logger.debug("Could not read credential '%s' from DB: %s", db_key, exc)
     return os.environ.get(env_key, "")
+
+
+def _reddit_mode() -> str:
+    """Return 'api' or 'ifttt' based on the stored drool_reddit_mode setting."""
+    return _load_credential("drool_reddit_mode", "REDDIT_MODE") or "api"
 
 # ---------------------------------------------------------------------------
 # Scheduler (module-level singleton; started / stopped by main.py lifespan)
@@ -150,7 +156,15 @@ def _get_praw_reddit() -> Optional[object]:
 
 
 def _scrape_reddit() -> None:
-    """Fetch upvoted and saved Reddit items and store new ones in drool_archive."""
+    """Fetch upvoted and saved Reddit items and store new ones in drool_archive.
+
+    Skipped when reddit_mode is 'ifttt' (items arrive via the webhook endpoint
+    instead of being polled).
+    """
+    if _reddit_mode() == "ifttt":
+        logger.debug("Reddit scraper: mode is 'ifttt', skipping poll.")
+        return
+
     reddit = _get_praw_reddit()
     if reddit is None:
         logger.debug("Reddit scraper: credentials not configured, skipping.")

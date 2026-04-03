@@ -78,11 +78,15 @@ services:
       - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
       # ── The Drool Log – Reddit scraper credentials ────
       # Register a Reddit OAuth app at https://www.reddit.com/prefs/apps
+      # Set REDDIT_MODE=ifttt to receive posts via IFTTT webhooks instead of polling
+      - REDDIT_MODE=${REDDIT_MODE:-api}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
       - REDDIT_USERNAME=${REDDIT_USERNAME:-}
       - REDDIT_PASSWORD=${REDDIT_PASSWORD:-}
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-drool-log/1.0}
+      # Shared secret for the IFTTT webhook URL (?secret=...) – only needed when REDDIT_MODE=ifttt
+      - REDDIT_IFTTT_SECRET=${REDDIT_IFTTT_SECRET:-}
       # ── The Drool Log – Twitter/X scraper credentials ─
       # Create an app at https://developer.twitter.com
       - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-}

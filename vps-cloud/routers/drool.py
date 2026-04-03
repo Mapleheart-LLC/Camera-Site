@@ -5,14 +5,17 @@ Public endpoints (no authentication required):
   GET  /api/drool                    – paginated feed; 'Weekly Whimper' pinned first
   POST /api/drool/{id}/comment       – post an anonymous comment (rate-limited 5/min per IP)
   POST /api/drool/{id}/react         – one-tap reaction (rate-limited 20/hour per IP)
+  POST /api/drool/ifttt/reddit       – IFTTT webhook receiver for Reddit (secured by ?secret=)
 """
 
 import hashlib
+import hmac
+import json
 import logging
 import os
 import sqlite3
 from datetime import datetime, timezone
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -282,3 +285,107 @@ async def post_reaction(
         ) from exc
 
     return {"message": f"Reacted with '{payload.reaction_type}' 🐾", "pack_member_id": pack_id}
+
+
+# ---------------------------------------------------------------------------
+# IFTTT webhook receiver – Reddit
+# ---------------------------------------------------------------------------
+
+
+def _ifttt_secret() -> str:
+    """Return the shared secret used to validate incoming IFTTT webhook requests."""
+    from db import get_db_connection as _gdc  # local import avoids circular
+    try:
+        conn = _gdc()
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'drool_reddit_ifttt_secret'"
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:  # noqa: BLE001
+        pass
+    return os.environ.get("REDDIT_IFTTT_SECRET", "")
+
+
+@router.post("/ifttt/reddit", status_code=status.HTTP_201_CREATED)
+async def ifttt_reddit_webhook(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Receive an IFTTT Webhooks payload for a Reddit upvote or save.
+
+    Security: the caller must pass ``?secret=<shared_secret>`` in the URL.
+    IFTTT lets you embed this in the webhook URL when you set up the applet.
+
+    Expected JSON body (IFTTT Maker Webhooks format)::
+
+        {
+            "value1": "<reddit post URL>",
+            "value2": "<post title>",
+            "value3": "<media/thumbnail URL or empty>"
+        }
+
+    Map your IFTTT applet ingredients accordingly:
+      - value1 → {{PostURL}}  (or {{Permalink}})
+      - value2 → {{Title}}
+      - value3 → {{ImageURL}}  (leave blank if not available)
+    """
+    secret = _ifttt_secret()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IFTTT mode is not configured (no secret set).",
+        )
+
+    incoming = request.query_params.get("secret", "")
+    if not hmac.compare_digest(incoming, secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid webhook secret.",
+        )
+
+    try:
+        body: dict[str, Any] = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body must be valid JSON.",
+        )
+
+    original_url: str = (body.get("value1") or "").strip()
+    text_content: Optional[str] = (body.get("value2") or "").strip() or None
+    media_url:    Optional[str] = (body.get("value3") or "").strip() or None
+
+    if not original_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="value1 (post URL) is required.",
+        )
+
+    ts = datetime.now(timezone.utc).isoformat()
+
+    existing = db.execute(
+        "SELECT id FROM drool_archive WHERE original_url = ?", (original_url,)
+    ).fetchone()
+    if existing:
+        return {"message": "Already archived.", "id": existing["id"]}
+
+    cursor = db.execute(
+        """
+        INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
+        VALUES ('reddit', ?, ?, ?, ?)
+        """,
+        (original_url, media_url, text_content, ts),
+    )
+    db.commit()
+
+    new_id = cursor.lastrowid
+    logger.info("IFTTT Reddit webhook: archived item #%d – %s", new_id, original_url)
+
+    await send_discord_notification(
+        content=f"🐾 A new Reddit secret has been logged in the Drool Archive! {(text_content or original_url)[:200]}",
+        is_embed=False,
+    )
+
+    return {"message": "Archived 🐾", "id": new_id}
