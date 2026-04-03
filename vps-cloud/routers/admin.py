@@ -612,13 +612,13 @@ def admin_update_product(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
 
-    new_name        = payload.name               if payload.name        is not None else row["name"]
-    new_desc        = payload.description        if payload.description is not None else row["description"]
-    new_price       = payload.price              if payload.price       is not None else row["price"]
-    new_image       = payload.image_url          if payload.image_url   is not None else row["image_url"]
-    new_printful    = payload.is_printful        if payload.is_printful is not None else bool(row["is_printful"])
-    new_variant     = payload.printful_variant_id if payload.printful_variant_id is not None else row["printful_variant_id"]
-    new_stock       = payload.stock_count        if payload.stock_count is not None else row["stock_count"]
+    new_name = payload.name if payload.name is not None else row["name"]
+    new_desc = payload.description if payload.description is not None else row["description"]
+    new_price = payload.price if payload.price is not None else row["price"]
+    new_image = payload.image_url if payload.image_url is not None else row["image_url"]
+    new_printful = payload.is_printful if payload.is_printful is not None else bool(row["is_printful"])
+    new_variant = payload.printful_variant_id if payload.printful_variant_id is not None else row["printful_variant_id"]
+    new_stock = payload.stock_count if payload.stock_count is not None else row["stock_count"]
 
     try:
         db.execute(

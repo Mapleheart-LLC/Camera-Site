@@ -1551,7 +1551,7 @@
       document.getElementById('product-form-title').textContent = title;
       document.getElementById('pf-name').value    = p.name        || '';
       document.getElementById('pf-price').value   = p.price       !== undefined ? p.price : '';
-      document.getElementById('pf-stock').value   = p.stock_count !== null && p.stock_count !== undefined ? p.stock_count : '';
+      document.getElementById('pf-stock').value   = p.stock_count != null ? p.stock_count : '';
       document.getElementById('pf-desc').value    = p.description || '';
       document.getElementById('pf-image').value   = p.image_url   || '';
       document.getElementById('pf-printful').checked = !!p.is_printful;
