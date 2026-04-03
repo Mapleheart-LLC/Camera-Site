@@ -795,9 +795,26 @@
               <div class="form-row" style="margin-top:.75rem">
                 <a href="/auth/twitter/login" class="btn-x" style="width:auto;margin-top:0;padding:.35rem .9rem;font-size:.82rem">
                   <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>
-                  Connect Twitter/X (OAuth)
+                  Connect Twitter/X (OAuth 1.0a – Likes)
                 </a>
-                <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">Authorizes scraper access to likes &amp; bookmarks. Saves Access Token, Access Token Secret, and User ID automatically.</p>
+                <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">Saves Access Token, Access Token Secret, and User ID for liked-tweet scraping.</p>
+              </div>
+              <hr style="border:none;border-top:1px solid #3a2a2e;margin:.75rem 0" />
+              <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">OAuth 2.0 credentials — required for bookmark scraping (<code>bookmark.read</code> scope)</p>
+              <div class="form-row">
+                <div class="form-field"><label for="dc-tw-client-id">Client ID</label><input id="dc-tw-client-id" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
+                <div class="form-field"><label for="dc-tw-client-secret">Client Secret</label><input id="dc-tw-client-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
+              </div>
+              <div class="form-row" style="margin-top:.5rem">
+                <button id="dc-twitter2-save-btn" class="btn-sm btn-edit">Save OAuth 2.0 Credentials 🔑</button>
+                <p id="dc-twitter2-cred-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+              </div>
+              <div class="form-row" style="margin-top:.75rem">
+                <a href="/auth/twitter2/login" class="btn-x" style="width:auto;margin-top:0;padding:.35rem .9rem;font-size:.82rem">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 1200 1227" fill="currentColor" aria-hidden="true"><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.779 327.181 476.779H1200L714.137 519.284zM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854z"/></svg>
+                  Connect Twitter/X Bookmarks (OAuth 2.0)
+                </a>
+                <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">Authorizes bookmark scraping. Requires Client ID &amp; Secret saved above. Register <code>{BASE_URL}/auth/twitter2/callback</code> as a callback URL in your Twitter app (replace <code>{BASE_URL}</code> with your site's root URL, e.g. <code>https://mochii.live</code>).</p>
               </div>
             </div>
           </div>
@@ -1905,6 +1922,7 @@
           'Reddit (API)':   ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password','reddit_user_agent'],
           'Reddit (IFTTT)': ['reddit_ifttt_secret'],
           'Twitter / X':    ['twitter_bearer_token','twitter_user_id','twitter_api_key','twitter_api_secret','twitter_access_token','twitter_access_secret'],
+          'Twitter Bookmarks (OAuth 2.0)': ['twitter_client_id','twitter_client_secret','twitter_oauth2_access_token','twitter_oauth2_refresh_token'],
           Bluesky:          ['bsky_handle','bsky_app_password'],
         };
         grid.innerHTML = Object.entries(platforms).map(([label, fields]) => {
@@ -2010,6 +2028,11 @@
       twitter_access_secret: 'dc-tw-access-secret',
     }, 'dc-twitter-error'));
 
+    document.getElementById('dc-twitter2-save-btn').addEventListener('click', () => saveDroolCreds({
+      twitter_client_id:     'dc-tw-client-id',
+      twitter_client_secret: 'dc-tw-client-secret',
+    }, 'dc-twitter2-cred-error'));
+
     document.getElementById('dc-bsky-save-btn').addEventListener('click', () => saveDroolCreds({
       bsky_handle:       'dc-bsky-handle',
       bsky_app_password: 'dc-bsky-app-password',
@@ -2018,19 +2041,24 @@
     // ── Auto-login if session creds exist ──────────────
     (function init() {
       const queryParams = new URLSearchParams(window.location.search);
-      const oauthError       = queryParams.get('error');
-      const twitterConnected = queryParams.get('twitter_connected');
+      const oauthError        = queryParams.get('error');
+      const twitterConnected  = queryParams.get('twitter_connected');
+      const twitter2Connected = queryParams.get('twitter2_connected');
 
       // Strip any OAuth callback params from the URL before showing the panel.
-      if (oauthError || twitterConnected) {
+      if (oauthError || twitterConnected || twitter2Connected) {
         history.replaceState({}, '', '/admin.html');
       }
 
       const _oauthMessages = {
         twitter_cancelled:    'Twitter authorization was cancelled.',
+        twitter2_cancelled:   'Twitter bookmark authorization was cancelled.',
         invalid_state:        'OAuth session expired. Please try again.',
         token_exchange_failed:'Could not complete Twitter authorization. Please try again.',
         oauth_init_failed:    'Could not connect to Twitter. Please try again later.',
+        oauth2_not_configured:'Twitter OAuth 2.0 is not configured. Set Client ID and Client Secret first.',
+        oauth2_init_failed:   'Could not build Twitter OAuth 2.0 authorization URL. Please try again later.',
+        oauth2_token_failed:  'Could not complete Twitter OAuth 2.0 authorization. Please try again.',
         profile_fetch_failed: 'Could not fetch your Twitter profile. Please try again.',
         not_configured:       'Twitter login is not fully configured. Set your API Key and API Secret in the Twitter/X settings first.',
         tweepy_missing:       'Server error: Twitter library is missing.',
@@ -2044,6 +2072,8 @@
               showAdminPanel();
               if (twitterConnected === '1') {
                 showToast('🐦 Twitter/X connected! Access token & User ID saved.');
+              } else if (twitter2Connected === '1') {
+                showToast('🔖 Twitter/X bookmarks connected! OAuth 2.0 tokens saved.');
               } else if (oauthError) {
                 showToast('❌ ' + (_oauthMessages[oauthError] || `Twitter error: ${oauthError}`));
               }

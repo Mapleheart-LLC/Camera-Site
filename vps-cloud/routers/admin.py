@@ -723,12 +723,17 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
     "reddit_user_agent":     ("drool_reddit_user_agent",     "REDDIT_USER_AGENT",     False),
     # Reddit IFTTT secret (used when reddit_mode == 'ifttt')
     "reddit_ifttt_secret":   ("drool_reddit_ifttt_secret",   "REDDIT_IFTTT_SECRET",   True),
-    "twitter_bearer_token":  ("drool_twitter_bearer_token",  "TWITTER_BEARER_TOKEN",  True),
-    "twitter_user_id":       ("drool_twitter_user_id",       "TWITTER_USER_ID",       False),
-    "twitter_api_key":       ("drool_twitter_api_key",       "TWITTER_API_KEY",       True),
-    "twitter_api_secret":    ("drool_twitter_api_secret",    "TWITTER_API_SECRET",    True),
-    "twitter_access_token":  ("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN",  True),
-    "twitter_access_secret": ("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET", True),
+    "twitter_bearer_token":       ("drool_twitter_bearer_token",        "TWITTER_BEARER_TOKEN",   True),
+    "twitter_user_id":            ("drool_twitter_user_id",              "TWITTER_USER_ID",        False),
+    "twitter_api_key":            ("drool_twitter_api_key",              "TWITTER_API_KEY",        True),
+    "twitter_api_secret":         ("drool_twitter_api_secret",           "TWITTER_API_SECRET",     True),
+    "twitter_access_token":       ("drool_twitter_access_token",         "TWITTER_ACCESS_TOKEN",   True),
+    "twitter_access_secret":      ("drool_twitter_access_secret",        "TWITTER_ACCESS_SECRET",  True),
+    # OAuth 2.0 credentials for bookmark scraping (PKCE flow)
+    "twitter_client_id":          ("drool_twitter_client_id",            "TWITTER_CLIENT_ID",      False),
+    "twitter_client_secret":      ("drool_twitter_client_secret",        "TWITTER_CLIENT_SECRET",  True),
+    "twitter_oauth2_access_token":  ("drool_twitter_oauth2_access_token",  "",                     True),
+    "twitter_oauth2_refresh_token": ("drool_twitter_oauth2_refresh_token", "",                     True),
     "bsky_handle":           ("drool_bsky_handle",           "BSKY_HANDLE",           False),
     "bsky_app_password":     ("drool_bsky_app_password",     "BSKY_APP_PASSWORD",     True),
 }
@@ -748,14 +753,18 @@ class DroolCredsUpdate(BaseModel):
     reddit_password:       Optional[str] = None
     reddit_user_agent:     Optional[str] = None
     reddit_ifttt_secret:   Optional[str] = None
-    twitter_bearer_token:  Optional[str] = None
-    twitter_user_id:       Optional[str] = None
-    twitter_api_key:       Optional[str] = None
-    twitter_api_secret:    Optional[str] = None
-    twitter_access_token:  Optional[str] = None
-    twitter_access_secret: Optional[str] = None
-    bsky_handle:           Optional[str] = None
-    bsky_app_password:     Optional[str] = None
+    twitter_bearer_token:          Optional[str] = None
+    twitter_user_id:               Optional[str] = None
+    twitter_api_key:               Optional[str] = None
+    twitter_api_secret:            Optional[str] = None
+    twitter_access_token:          Optional[str] = None
+    twitter_access_secret:         Optional[str] = None
+    twitter_client_id:             Optional[str] = None
+    twitter_client_secret:         Optional[str] = None
+    twitter_oauth2_access_token:   Optional[str] = None
+    twitter_oauth2_refresh_token:  Optional[str] = None
+    bsky_handle:                   Optional[str] = None
+    bsky_app_password:             Optional[str] = None
 
 
 @router.get("/drool/credentials")
