@@ -883,7 +883,7 @@
             'Content-Type': 'application/x-www-form-urlencoded',
             'Authorization': `Bearer ${getToken()}`,
           },
-          body: new URLSearchParams({ data: pc.localDescription.sdp }),
+          body: new URLSearchParams({ offer: pc.localDescription.sdp }),
         });
 
         if (!response.ok) {
