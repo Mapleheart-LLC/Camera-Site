@@ -58,7 +58,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 _ADMIN_TOKEN_EXPIRE_MINUTES: int = int(
-    os.environ.get("TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES", "1440")
+    os.environ.get("TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES") or "1440"
 )
 
 # ---------------------------------------------------------------------------
