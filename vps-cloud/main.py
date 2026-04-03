@@ -523,6 +523,10 @@ def admin_page_redirect(request: Request):
 _OG_IMG_W = 1200
 _OG_IMG_H = 630
 
+# Vertical spacing constants used when laying out text inside bubbles
+_LABEL_TEXT_GAP = 8   # pixels between a label line and the first body line
+_LINE_SPACING   = 6   # pixels between consecutive body text lines
+
 # Brand colours matching the HTML card
 _BG_OUTER   = (26,  26,  26)   # #1a1a1a – page background
 _BG_CARD    = (36,  36,  36)   # #242424 – card background
@@ -562,6 +566,10 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     for path in candidates:
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
+    logging.warning(
+        "No TrueType font found; falling back to Pillow default bitmap font "
+        "(size parameter %d ignored – text may render very small).", size
+    )
     return ImageFont.load_default()
 
 
@@ -678,17 +686,17 @@ def _generate_og_image(q_text: str, a_text: str) -> bytes:
         q_lines[-1] = _truncate_line(q_lines[-1], font_body, inner_w - 24, draw)
     body_q_bbox = draw.textbbox((0, 0), q_lines[0], font=font_body)
     line_h = body_q_bbox[3] - body_q_bbox[1]
-    bubble_q_h = pad // 2 + lq_h + 8 + line_h * len(q_lines) + (len(q_lines) - 1) * 6 + pad // 2
+    bubble_q_h = pad // 2 + lq_h + _LABEL_TEXT_GAP + line_h * len(q_lines) + (len(q_lines) - 1) * _LINE_SPACING + pad // 2
 
     bx1, by1 = card_x1 + pad, cur_y
     bx2, by2 = card_x2 - pad, cur_y + bubble_q_h
     draw.rounded_rectangle([bx1, by1, bx2, by2], radius=14, fill=_BG_Q, outline=_BORDER_Q, width=1)
     ty = by1 + pad // 2
     draw.text((bx1 + 14, ty), label_q, font=font_label, fill=_FG_Q_LABEL)
-    ty += lq_h + 8
+    ty += lq_h + _LABEL_TEXT_GAP
     for line in q_lines:
         draw.text((bx1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
-        ty += line_h + 6
+        ty += line_h + _LINE_SPACING
 
     cur_y = by2 + 16  # gap between bubbles
 
@@ -699,21 +707,21 @@ def _generate_og_image(q_text: str, a_text: str) -> bytes:
 
     remaining_h = (card_y2 - pad - 40) - cur_y  # leave room for footer
     a_lines = _wrap_text(a_text, font_body, inner_w - 24, draw)
-    max_a_lines = max(1, (remaining_h - la_h - 8 - pad) // (line_h + 6))
+    max_a_lines = max(1, (remaining_h - la_h - _LABEL_TEXT_GAP - pad) // (line_h + _LINE_SPACING))
     if len(a_lines) > max_a_lines:
         a_lines = a_lines[:max_a_lines]
         a_lines[-1] = _truncate_line(a_lines[-1], font_body, inner_w - 24, draw)
 
-    bubble_a_h = pad // 2 + la_h + 8 + line_h * len(a_lines) + (len(a_lines) - 1) * 6 + pad // 2
+    bubble_a_h = pad // 2 + la_h + _LABEL_TEXT_GAP + line_h * len(a_lines) + (len(a_lines) - 1) * _LINE_SPACING + pad // 2
     ax1, ay1 = card_x1 + pad, cur_y
     ax2, ay2 = card_x2 - pad, cur_y + bubble_a_h
     draw.rounded_rectangle([ax1, ay1, ax2, ay2], radius=14, fill=_BG_A, outline=_BORDER_A, width=1)
     ty = ay1 + pad // 2
     draw.text((ax1 + 14, ty), label_a, font=font_label, fill=_FG_A_LABEL)
-    ty += la_h + 8
+    ty += la_h + _LABEL_TEXT_GAP
     for line in a_lines:
         draw.text((ax1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
-        ty += line_h + 6
+        ty += line_h + _LINE_SPACING
 
     # ── Footer ───────────────────────────────────────────────────────────────
     footer_text = "Ask me anything at mochii.live 🐾"
@@ -852,8 +860,8 @@ def question_share_page(
   <meta property="og:title"       content="{og_title}" />
   <meta property="og:description" content="{og_description}" />
   <meta property="og:image"       content="{og_image_url}" />
-  <meta property="og:image:width"  content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:image:width"  content="{_OG_IMG_W}" />
+  <meta property="og:image:height" content="{_OG_IMG_H}" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="{og_title}" />
