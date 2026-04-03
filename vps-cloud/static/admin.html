@@ -236,9 +236,40 @@
     .q-answer-preview { font-size: .83rem; color: #9e7e82; max-width: 360px; word-break: break-word; font-style: italic; }
     .q-ts { font-size: .75rem; color: #9e7e82; font-family: monospace; white-space: nowrap; }
 
-    #answer-form-wrap { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
-    #answer-form-wrap h3 { font-size: .78rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
-    #answer-textarea { width: 100%; background: #242424; border: 1px solid #3d2a2e; border-radius: 7px; color: #f0e6e8; font-family: inherit; font-size: .88rem; padding: .5rem .75rem; resize: vertical; min-height: 70px; outline: none; transition: border-color .2s; margin-bottom: .6rem; }
+    /* ── Reply modal ─────────────────────────────────── */
+    #reply-modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      z-index: 900; align-items: center; justify-content: center;
+    }
+    #reply-modal-backdrop.open { display: flex; }
+    #reply-modal {
+      background: #242424; border: 1px solid #3d2a2e; border-radius: 14px;
+      padding: 1.5rem 1.6rem; width: 100%; max-width: 520px; margin: 1rem;
+      box-shadow: 0 12px 48px rgba(0,0,0,.5); position: relative;
+    }
+    #reply-modal h3 {
+      font-size: .78rem; font-weight: 800; color: #e8aeb7;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    #reply-modal .modal-close {
+      position: absolute; top: .75rem; right: .9rem;
+      background: none; border: none; color: #9e7e82; font-size: 1.2rem;
+      cursor: pointer; line-height: 1; padding: .2rem .4rem; border-radius: 4px;
+    }
+    #reply-modal .modal-close:hover { color: #f0e6e8; }
+    #answer-question-preview {
+      font-size: .85rem; color: #c49a9f; margin-bottom: .8rem;
+      font-style: italic; word-break: break-word;
+      background: #1a1a1a; border-left: 3px solid #e8aeb7;
+      padding: .5rem .75rem; border-radius: 0 6px 6px 0;
+    }
+    #answer-textarea {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e;
+      border-radius: 7px; color: #f0e6e8; font-family: inherit;
+      font-size: .88rem; padding: .5rem .75rem; resize: vertical;
+      min-height: 90px; outline: none; transition: border-color .2s;
+      margin-bottom: .6rem;
+    }
     #answer-textarea:focus { border-color: #e8aeb7; }
     .answer-form-actions { display: flex; gap: .5rem; }
     #answer-form-error { font-size: .78rem; color: #f87171; min-height: 1em; margin-top: .4rem; }
@@ -462,17 +493,6 @@
             <div class="card">
               <div class="card-header"><h2>Awaiting Your Reply</h2></div>
               <div class="card-body">
-                <div id="answer-form-wrap">
-                  <h3 id="answer-form-title">Reply to Question</h3>
-                  <p id="answer-question-preview" style="font-size:.85rem;color:#c49a9f;margin-bottom:.6rem;font-style:italic;word-break:break-word;"></p>
-                  <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
-                  <div class="answer-form-actions">
-                    <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
-                    <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
-                  </div>
-                  <p id="answer-form-error"></p>
-                </div>
-
                 <div style="overflow-x:auto">
                   <table class="admin-table" aria-label="Unanswered questions">
                     <thead><tr><th>Question</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
@@ -1162,6 +1182,9 @@
       void row.offsetWidth;
       row.classList.add('deep-linked');
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Auto-open the reply modal so the admin can answer immediately
+      const text = row.dataset?.text || row.querySelector('.q-text')?.textContent || '';
+      openAnswerForm(targetId, text);
     }
 
     function renderQuestions(questions) {
@@ -1172,7 +1195,7 @@
       }
       tbody.innerHTML = questions.map(q => {
         const ts = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
-        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+        return `<tr class="question-row" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">
           <td><div class="q-text">${escHtml(q.text)}</div></td>
           <td class="q-ts">${escHtml(ts)}</td>
           <td><div class="action-cell">
@@ -1195,16 +1218,23 @@
       document.getElementById('answer-question-preview').textContent = `"${text}"`;
       document.getElementById('answer-textarea').value = '';
       document.getElementById('answer-form-error').textContent = '';
-      document.getElementById('answer-form-wrap').style.display = 'block';
+      document.getElementById('reply-modal-backdrop').classList.add('open');
       document.getElementById('answer-textarea').focus();
     }
 
     function closeAnswerForm() {
       _answeringId = null;
-      document.getElementById('answer-form-wrap').style.display = 'none';
+      document.getElementById('reply-modal-backdrop').classList.remove('open');
     }
 
     document.getElementById('answer-cancel-btn').addEventListener('click', closeAnswerForm);
+    document.getElementById('reply-modal-close-btn').addEventListener('click', closeAnswerForm);
+    document.getElementById('reply-modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('reply-modal-backdrop')) closeAnswerForm();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('reply-modal-backdrop').classList.contains('open')) closeAnswerForm();
+    });
 
     document.getElementById('answer-save-btn').addEventListener('click', async () => {
       const answer  = document.getElementById('answer-textarea').value.trim();
@@ -1702,5 +1732,20 @@
       }
     })();
   </script>
+
+  <!-- ── Reply modal ──────────────────────────────────── -->
+  <div id="reply-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reply-modal-title">
+    <div id="reply-modal">
+      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">✕</button>
+      <h3 id="reply-modal-title">Reply to Note</h3>
+      <p id="answer-question-preview"></p>
+      <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+      <div class="answer-form-actions">
+        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
+        <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+      </div>
+      <p id="answer-form-error"></p>
+    </div>
+  </div>
 </body>
 </html>

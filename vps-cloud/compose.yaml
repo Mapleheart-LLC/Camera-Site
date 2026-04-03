@@ -35,6 +35,10 @@ services:
       # notifications when new questions are submitted to the Puppy Pouch.
       # Leave empty to disable notifications.
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      # Ed25519 public key from the Discord Developer Portal (Application →
+      # General Information → Public Key).  Required for the reply button /
+      # modal feature.  Leave empty to disable Discord interactions.
+      - DISCORD_PUBLIC_KEY=${DISCORD_PUBLIC_KEY:-}
       # Public root URL of the site used to generate deep-links in Discord
       # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
       - BASE_URL=${BASE_URL:-}

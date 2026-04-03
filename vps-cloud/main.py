@@ -31,6 +31,7 @@ from routers.admin import router as admin_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
+from routers.discord_interactions import router as discord_interactions_router
 from redis_client import close_redis
 
 # ---------------------------------------------------------------------------
@@ -631,6 +632,7 @@ app.include_router(admin_router)
 app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
+app.include_router(discord_interactions_router)
 
 
 @app.middleware("http")
