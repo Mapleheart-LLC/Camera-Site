@@ -324,9 +324,12 @@ def twitter2_login():
             client_secret=client_secret,
         )
         # tweepy generates the PKCE code verifier/challenge internally.
+        # The actual state string lives in _state; the public .state attribute
+        # is the state-generator callable.  The code verifier is stored on the
+        # underlying oauthlib WebApplicationClient (_client.code_verifier).
         auth_url = oauth2_handler.get_authorization_url()
-        state = oauth2_handler.state
-        code_verifier = oauth2_handler.code_verifier
+        state = oauth2_handler._state
+        code_verifier = oauth2_handler._client.code_verifier
     except Exception as exc:
         logger.error("Failed to build Twitter OAuth 2.0 authorization URL: %s", exc)
         return RedirectResponse(
@@ -379,9 +382,11 @@ def twitter2_callback(
             scope=_PKCE_SCOPES.split(),
             client_secret=client_secret,
         )
-        # Restore the code verifier and state so tweepy can complete the exchange.
-        oauth2_handler.code_verifier = code_verifier
-        oauth2_handler.state = state
+        # Restore the code verifier and state so tweepy can complete the
+        # exchange.  These must be set on the underlying oauthlib client /
+        # session internals, not as plain instance attributes.
+        oauth2_handler._client.code_verifier = code_verifier
+        oauth2_handler._state = state
         authorization_response = f"{callback_url}?code={code}&state={state}"
         token_data = oauth2_handler.fetch_token(authorization_response=authorization_response)
     except Exception as exc:

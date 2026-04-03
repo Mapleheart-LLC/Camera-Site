@@ -375,10 +375,23 @@ def _scrape_twitter() -> None:
     try:
         items: list[tuple] = []
 
+        # Determine whether to use OAuth 1.0a user context for the liked-tweets
+        # call.  tweepy.Client.get_liked_tweets() defaults to user_auth=False,
+        # which makes it send "Authorization: Bearer <bearer_token>".  When no
+        # bearer token is configured (only access_token + access_secret), that
+        # header becomes "Authorization: Bearer None" and the API returns 401.
+        # Passing user_auth=True tells tweepy to sign the request with the
+        # OAuth 1.0a credentials instead.
+        use_user_auth = bool(
+            _load_credential("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN")
+            and _load_credential("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET")
+        )
+
         # Liked tweets
         try:
             resp = client.get_liked_tweets(
                 id=user_id,
+                user_auth=use_user_auth,
                 max_results=50,
                 tweet_fields=["created_at", "text", "attachments"],
                 expansions=["attachments.media_keys"],
