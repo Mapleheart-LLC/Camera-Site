@@ -89,12 +89,20 @@ services:
       - REDDIT_IFTTT_SECRET=${REDDIT_IFTTT_SECRET:-}
       # ── The Drool Log – Twitter/X scraper credentials ─
       # Create an app at https://developer.twitter.com
+      # To enable "Login with X" on the admin panel, register
+      #   {BASE_URL}/auth/twitter/callback
+      # as an OAuth callback URL in the Twitter Developer Portal app settings.
       - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN:-}
       - TWITTER_USER_ID=${TWITTER_USER_ID:-}
       - TWITTER_API_KEY=${TWITTER_API_KEY:-}
       - TWITTER_API_SECRET=${TWITTER_API_SECRET:-}
       - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN:-}
       - TWITTER_ACCESS_SECRET=${TWITTER_ACCESS_SECRET:-}
+      # Optional: override which Twitter user ID is allowed to log in as admin.
+      # Defaults to TWITTER_USER_ID when not set.
+      - TWITTER_ADMIN_USER_ID=${TWITTER_ADMIN_USER_ID:-}
+      # Optional: admin JWT lifetime in minutes (default 1440 = 24 h).
+      - TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES=${TWITTER_ADMIN_TOKEN_EXPIRE_MINUTES:-}
       # ── The Drool Log – Bluesky scraper credentials ───
       # Create an app password at https://bsky.app/settings/app-passwords
       - BSKY_HANDLE=${BSKY_HANDLE:-}
