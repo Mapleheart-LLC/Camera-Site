@@ -1,8 +1,10 @@
+import io
 import logging
 import os
 import sys
 import secrets
 import sqlite3
+import textwrap
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -10,8 +12,9 @@ from urllib.parse import urlencode, quote as _url_quote
 
 import httpx
 import html as _html_lib
+from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -516,6 +519,161 @@ def admin_page_redirect(request: Request):
 # Puppy Pouch share page
 # ---------------------------------------------------------------------------
 
+# OG image dimensions (Twitter / Open Graph recommended: 1200×630)
+_OG_IMG_W = 1200
+_OG_IMG_H = 630
+
+# Brand colours matching the HTML card
+_BG_OUTER   = (26,  26,  26)   # #1a1a1a – page background
+_BG_CARD    = (36,  36,  36)   # #242424 – card background
+_BG_Q       = (61,  32,  40)   # #3d2028 – question bubble
+_BORDER_Q   = (196, 154, 159)  # #c49a9f
+_BORDER_CARD= (61,  42,  46)   # #3d2a2e
+_BG_A       = (44,  44,  44)   # #2c2c2c – answer bubble
+_BORDER_A   = (74,  74,  74)   # #4a4a4a
+_FG_MAIN    = (240, 230, 232)  # #f0e6e8
+_FG_Q_LABEL = (196, 154, 159)  # #c49a9f
+_FG_A_LABEL = (158, 126, 130)  # #9e7e82
+_FG_FOOTER  = (106,  74,  78)  # #6a4a4e
+_FG_TITLE   = (158, 126, 130)  # #9e7e82
+
+
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return the best available font at the requested size."""
+    candidates = [
+        # Common sans-serif fonts that are typically installed on Linux/Debian
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+
+def _wrap_text(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
+    """Word-wrap *text* so that each rendered line fits within *max_w* pixels."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        test = (current + " " + word).strip()
+        bbox = draw.textbbox((0, 0), test, font=font)
+        if bbox[2] - bbox[0] <= max_w:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def _generate_og_image(q_text: str, a_text: str) -> bytes:
+    """Render a 1200×630 PNG card matching the site's dark-pink aesthetic."""
+    img = Image.new("RGB", (_OG_IMG_W, _OG_IMG_H), _BG_OUTER)
+    draw = ImageDraw.Draw(img)
+
+    # Card bounds
+    margin = 60
+    card_x1, card_y1 = margin, margin
+    card_x2, card_y2 = _OG_IMG_W - margin, _OG_IMG_H - margin
+    card_w = card_x2 - card_x1
+    pad = 36  # inner padding
+
+    # Draw card background + border
+    draw.rounded_rectangle(
+        [card_x1, card_y1, card_x2, card_y2],
+        radius=24,
+        fill=_BG_CARD,
+        outline=_BORDER_CARD,
+        width=2,
+    )
+
+    # Fonts
+    font_label  = _load_font(20)
+    font_body   = _load_font(30)
+    font_footer = _load_font(22)
+    font_title  = _load_font(22)
+
+    cur_y = card_y1 + pad
+
+    # ── Card title ──────────────────────────────────────────────────────────
+    title_text = "PUPPY POUCH 🐾 ANONYMOUS Q&A"
+    draw.text((card_x1 + pad, cur_y), title_text, font=font_title, fill=_FG_TITLE)
+    cur_y += 30 + 20  # title height + gap
+
+    # ── Question bubble ─────────────────────────────────────────────────────
+    inner_w = card_w - pad * 2
+
+    # Measure label
+    label_q = "🐾 QUESTION"
+    lq_bbox = draw.textbbox((0, 0), label_q, font=font_label)
+    lq_h = lq_bbox[3] - lq_bbox[1]
+
+    # Wrap question text
+    q_lines = _wrap_text(q_text, font_body, inner_w - 24, draw)
+    # Cap at 3 lines to avoid overflow
+    if len(q_lines) > 3:
+        q_lines = q_lines[:3]
+        q_lines[-1] = q_lines[-1][:max(0, len(q_lines[-1]) - 1)] + "…"
+    body_q_bbox = draw.textbbox((0, 0), q_lines[0], font=font_body)
+    line_h = body_q_bbox[3] - body_q_bbox[1]
+    bubble_q_h = pad // 2 + lq_h + 8 + line_h * len(q_lines) + (len(q_lines) - 1) * 6 + pad // 2
+
+    bx1, by1 = card_x1 + pad, cur_y
+    bx2, by2 = card_x2 - pad, cur_y + bubble_q_h
+    draw.rounded_rectangle([bx1, by1, bx2, by2], radius=14, fill=_BG_Q, outline=_BORDER_Q, width=1)
+    ty = by1 + pad // 2
+    draw.text((bx1 + 14, ty), label_q, font=font_label, fill=_FG_Q_LABEL)
+    ty += lq_h + 8
+    for line in q_lines:
+        draw.text((bx1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
+        ty += line_h + 6
+
+    cur_y = by2 + 16  # gap between bubbles
+
+    # ── Answer bubble ────────────────────────────────────────────────────────
+    label_a = "💬 ANSWER"
+    la_bbox = draw.textbbox((0, 0), label_a, font=font_label)
+    la_h = la_bbox[3] - la_bbox[1]
+
+    remaining_h = (card_y2 - pad - 40) - cur_y  # leave room for footer
+    a_lines = _wrap_text(a_text, font_body, inner_w - 24, draw)
+    max_a_lines = max(1, (remaining_h - la_h - 8 - pad) // (line_h + 6))
+    if len(a_lines) > max_a_lines:
+        a_lines = a_lines[:max_a_lines]
+        a_lines[-1] = a_lines[-1][:max(0, len(a_lines[-1]) - 1)] + "…"
+
+    bubble_a_h = pad // 2 + la_h + 8 + line_h * len(a_lines) + (len(a_lines) - 1) * 6 + pad // 2
+    ax1, ay1 = card_x1 + pad, cur_y
+    ax2, ay2 = card_x2 - pad, cur_y + bubble_a_h
+    draw.rounded_rectangle([ax1, ay1, ax2, ay2], radius=14, fill=_BG_A, outline=_BORDER_A, width=1)
+    ty = ay1 + pad // 2
+    draw.text((ax1 + 14, ty), label_a, font=font_label, fill=_FG_A_LABEL)
+    ty += la_h + 8
+    for line in a_lines:
+        draw.text((ax1 + 14, ty), line, font=font_body, fill=_FG_MAIN)
+        ty += line_h + 6
+
+    # ── Footer ───────────────────────────────────────────────────────────────
+    footer_text = "Ask me anything at mochii.live 🐾"
+    ft_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    ft_w = ft_bbox[2] - ft_bbox[0]
+    draw.text(
+        (card_x1 + (card_w - ft_w) // 2, card_y2 - pad - (ft_bbox[3] - ft_bbox[1])),
+        footer_text,
+        font=font_footer,
+        fill=_FG_FOOTER,
+    )
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
 def _html_escape(text: str) -> str:
     """Escape HTML special characters to prevent XSS in the share page."""
     return _html_lib.escape(text, quote=True)
@@ -562,6 +720,32 @@ def _render_404_html(heading: str, message: str) -> str:
 </html>"""
 
 
+@app.get("/q/{question_id}/og-image.png", response_class=None)
+def question_og_image(
+    question_id: str,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return a dynamically generated PNG suitable for og:image / twitter:image."""
+    row = db.execute(
+        "SELECT text, answer, is_public FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+
+    if not row or not row["is_public"] or not row["answer"]:
+        # Return a minimal 1×1 transparent PNG rather than an error status,
+        # so scrapers don't cache a 404 against the image URL.
+        buf = io.BytesIO()
+        Image.new("RGB", (1, 1), _BG_OUTER).save(buf, format="PNG")
+        return Response(content=buf.getvalue(), media_type="image/png")
+
+    png_bytes = _generate_og_image(row["text"], row["answer"])
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @app.get("/q/{question_id}", response_class=None)
 def question_share_page(
     question_id: str,
@@ -593,6 +777,7 @@ def question_share_page(
     # URL-encode the question_id for the share URL, then HTML-escape the full URL
     # to safely embed it in HTML attributes.
     page_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}")
+    og_image_url = _html_escape(f"{base_url}/q/{_url_quote(question_id, safe='')}/og-image.png")
     og_title = "Puppy Pouch 🐾 – mochii.live"
     # Truncate for OG description (keep within typical 155-char limit after joining)
     _OG_PREVIEW_LEN = 120
@@ -612,10 +797,14 @@ def question_share_page(
   <meta property="og:url"         content="{page_url}" />
   <meta property="og:title"       content="{og_title}" />
   <meta property="og:description" content="{og_description}" />
+  <meta property="og:image"       content="{og_image_url}" />
+  <meta property="og:image:width"  content="1200" />
+  <meta property="og:image:height" content="630" />
   <meta property="og:site_name"   content="mochii.live" />
-  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:card"        content="summary_large_image" />
   <meta name="twitter:title"       content="{og_title}" />
   <meta name="twitter:description" content="{og_description}" />
+  <meta name="twitter:image"       content="{og_image_url}" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
