@@ -97,40 +97,18 @@ _ADMIN_AUTH_REQUIRED = HTTPException(
 
 
 def get_admin_user(
-    bearer: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     credentials: Optional[HTTPBasicCredentials] = Depends(_http_basic),
 ) -> str:
     """
-    Authenticate an admin request via either:
+    Authenticate an admin request via HTTP Basic Auth.
 
-    1. **Bearer JWT** – a short-lived token issued by the Twitter/X OAuth
-       callback (``{"sub": "twitter_admin", "is_admin": true}``).  This lets
-       the site owner log in with their Twitter account instead of a password.
+    Uses ``secrets.compare_digest`` for timing-safe credential comparisons.
 
-    2. **HTTP Basic Auth** – the traditional username / password pair set via
-       ``ADMIN_USERNAME`` / ``ADMIN_PASSWORD`` environment variables.
-
-    Uses ``secrets.compare_digest`` for Basic Auth comparisons to prevent
-    timing attacks.
-
-    Returns the authenticated identity string on success.
+    Returns the authenticated username on success.
     Raises 401 if credentials are missing or invalid.
-    Raises 503 if neither auth method is configured.
+    Raises 503 if admin auth is not configured.
     """
-    # ── 1. Bearer JWT (Twitter OAuth admin login) ─────────────────────────
-    if bearer and bearer.scheme.lower() == "bearer":
-        try:
-            payload = jwt.decode(
-                bearer.credentials, SECRET_KEY, algorithms=[ALGORITHM]
-            )
-            if payload.get("is_admin") is True:
-                return str(payload.get("sub", "twitter_admin"))
-        except jwt.ExpiredSignatureError:
-            raise _ADMIN_AUTH_REQUIRED
-        except jwt.InvalidTokenError:
-            raise _ADMIN_AUTH_REQUIRED
-
-    # ── 2. HTTP Basic Auth ────────────────────────────────────────────────
+    # ── HTTP Basic Auth ────────────────────────────────────────────────────
     if not ADMIN_PASSWORD or not ADMIN_USERNAME:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
