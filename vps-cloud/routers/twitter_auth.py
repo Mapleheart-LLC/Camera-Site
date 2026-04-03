@@ -6,7 +6,7 @@ Twitter/X likes and bookmarks via two separate flows:
 
 OAuth 1.0a flow (likes)
 -----------------------
-1. Admin clicks "Connect Twitter/X" in the admin panel Drool Log → Twitter/X
+1. Admin clicks "Connect Twitter/X" in the admin panel, Drool Log → Twitter/X
    settings, which hits ``GET /auth/twitter/login``.
 2. The backend obtains a request token from Twitter and redirects to the
    Twitter authorization page.

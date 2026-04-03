@@ -360,7 +360,7 @@ def _get_oauth2_client() -> Optional[object]:
 
 
 def _scrape_twitter() -> None:
-    """Fetch liked tweets and store new ones in drool_archive."""
+    """Fetch liked and bookmarked tweets and store new ones in drool_archive."""
     client = _get_tweepy_client()
     if client is None:
         logger.debug("Twitter scraper: credentials not configured, skipping.")
