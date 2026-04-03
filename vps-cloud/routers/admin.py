@@ -370,6 +370,23 @@ def admin_list_unanswered_questions(
     return [dict(row) for row in rows]
 
 
+@router.get("/questions/answered")
+def admin_list_answered_questions(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all questions that have already been answered."""
+    rows = db.execute(
+        """
+        SELECT id, text, answer, is_public, created_at
+        FROM questions
+        WHERE answer IS NOT NULL
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 @router.post("/questions/{question_id}/answer", status_code=status.HTTP_200_OK)
 def admin_answer_question(
     question_id: str,
