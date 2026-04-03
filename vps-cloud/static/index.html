@@ -28,8 +28,8 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      align-items: stretch;
+      justify-content: flex-start;
     }
 
     /* ── Pulsing paw loading animation ─────────────── */
@@ -39,68 +39,193 @@
     }
     .paw-loading { display: inline-block; animation: pawPulse 1.1s ease-in-out infinite; }
 
-    /* ── Login card ─────────────────────────────────── */
+    /* ── Guest landing page ─────────────────────────── */
     #login-section {
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 16px;
-      padding: 2.5rem 2rem;
+      display: flex;
+      flex-direction: column;
       width: 100%;
-      max-width: 380px;
-      box-shadow: 0 8px 40px rgba(232,174,183,0.12);
-      text-align: center;
+      min-height: 100vh;
     }
 
-    #login-section h1 {
-      font-size: 1.8rem;
+    /* Sticky nav */
+    .landing-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.75rem;
+      background: #1e1e1e;
+      border-bottom: 1px solid #3d2a2e;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .landing-logo {
+      font-size: 1.15rem;
       font-weight: 800;
-      margin-bottom: .75rem;
       color: #e8aeb7;
+      letter-spacing: .01em;
     }
 
-    #login-section p.tagline {
-      font-size: .9rem;
-      color: #9e7e82;
-      margin-bottom: 2rem;
-    }
-
-    /* Fanvue brand button */
+    /* Sign-in button in nav */
     #fanvue-login-btn {
       display: inline-flex;
       align-items: center;
-      gap: .6rem;
-      padding: .75rem 1.5rem;
-      background: #e8aeb7;
-      border: none;
+      gap: .5rem;
+      padding: .5rem 1.1rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
       border-radius: 10px;
-      color: #1a1a1a;
-      font-size: 1rem;
+      color: #e8aeb7;
+      font-size: .88rem;
       font-weight: 700;
       font-family: inherit;
       cursor: pointer;
       text-decoration: none;
-      transition: background .2s, transform .1s, box-shadow .2s;
+      transition: background .2s, color .2s, box-shadow .2s;
     }
 
-    #fanvue-login-btn:hover  { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,0.35); }
-    #fanvue-login-btn:active { transform: scale(.97); }
+    #fanvue-login-btn:hover {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+    }
 
     #fanvue-login-btn svg {
-      width: 20px;
-      height: 20px;
+      width: 17px;
+      height: 17px;
       fill: currentColor;
       flex-shrink: 0;
     }
 
+    /* Hero section */
+    .landing-hero {
+      text-align: center;
+      padding: 4rem 1.5rem 2.5rem;
+    }
+
+    .hero-paw {
+      font-size: 3.5rem;
+      display: block;
+      margin-bottom: 1rem;
+      animation: pawFloat 3s ease-in-out infinite;
+    }
+
+    @keyframes pawFloat {
+      0%, 100% { transform: translateY(0) rotate(-4deg); }
+      50%       { transform: translateY(-10px) rotate(4deg); }
+    }
+
+    .landing-hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .5rem;
+      letter-spacing: -.01em;
+    }
+
+    .landing-hero .hero-tagline {
+      font-size: .95rem;
+      color: #9e7e82;
+      font-weight: 600;
+    }
+
+    /* OAuth error/info message */
     #login-message {
-      margin-top: 1.25rem;
+      text-align: center;
       font-size: .85rem;
       min-height: 1.2em;
+      padding: 0 1.5rem .5rem;
     }
 
     #login-message.error   { color: #f87171; }
     #login-message.info    { color: #9e7e82; }
     #login-message.upgrade { color: #e8aeb7; }
+
+    /* ── Links section ──────────────────────────────── */
+    .links-section {
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 0 1.5rem 3rem;
+    }
+
+    .links-section-label {
+      font-size: .7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .13em;
+      color: #6a4a4e;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .links-list {
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+    }
+
+    .link-card {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 14px;
+      color: #f0e6e8;
+      text-decoration: none;
+      font-size: .95rem;
+      font-weight: 700;
+      transition: background .18s, border-color .18s, transform .15s, box-shadow .18s, color .18s;
+    }
+
+    .link-card:hover {
+      background: #2d1f22;
+      border-color: #e8aeb7;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 28px rgba(232,174,183,.16);
+      color: #f5d5da;
+    }
+
+    .link-card:active { transform: translateY(0); }
+
+    .link-card-emoji {
+      font-size: 1.45rem;
+      width: 2rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .link-card-title { flex: 1; }
+
+    .link-card-arrow {
+      color: #6a4a4e;
+      font-size: .9rem;
+      flex-shrink: 0;
+      transition: color .18s, transform .18s;
+    }
+
+    .link-card:hover .link-card-arrow {
+      color: #e8aeb7;
+      transform: translateX(3px);
+    }
+
+    .links-empty {
+      text-align: center;
+      color: #6a4a4e;
+      font-size: .9rem;
+      padding: 2rem;
+    }
+
+    /* Landing footer */
+    .landing-footer {
+      margin-top: auto;
+      text-align: center;
+      padding: 1.5rem;
+    }
 
     /* ── Dashboard ──────────────────────────────────── */
     #dashboard-section {
@@ -373,8 +498,9 @@
     #drop-a-note-section {
       display: none;
       width: 100%;
-      max-width: 480px;
-      margin-top: 1.5rem;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 0 1.5rem 4rem;
     }
 
     #drop-a-note-card {
@@ -498,38 +624,130 @@
       border: 1px solid #4a4a4a;
       color: #d0c4c6;
     }
+    /* ── Heat ───────────────────────────────────────── */
+
+    /* Smoldering background bloom behind the hero */
+    #login-section {
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 10%, rgba(120, 20, 35, 0.22) 0%, transparent 70%),
+        #1a1a1a;
+    }
+
+    /* Glowing hero paw shadow */
+    .hero-paw {
+      filter: drop-shadow(0 0 18px rgba(220, 80, 100, 0.45));
+    }
+
+    /* Hero heading — warm glow on the text */
+    .landing-hero h1 {
+      text-shadow: 0 0 40px rgba(232, 100, 120, 0.35);
+    }
+
+    /* Link cards — deep ember on hover, crimson border pulse */
+    .link-card:hover {
+      background: #2a1520;
+      border-color: #d4667a;
+      box-shadow: 0 8px 36px rgba(200, 60, 85, 0.22), 0 2px 8px rgba(232, 174, 183, 0.1);
+    }
+
+    /* Subtle shimmer sweep across link cards on hover */
+    .link-card {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .link-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 40%, rgba(220, 100, 120, 0.07) 50%, transparent 60%);
+      transform: translateX(-100%);
+      transition: transform .55s ease;
+    }
+
+    .link-card:hover::after {
+      transform: translateX(100%);
+    }
+
+    /* Nav — very subtle warm top border glow */
+    .landing-nav {
+      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160, 30, 50, 0.12);
+    }
+
+    /* Drop a Note card — warm inner glow on focus */
+    #note-textarea:focus {
+      border-color: #c4607a;
+      box-shadow: 0 0 0 2px rgba(196, 96, 122, 0.15);
+    }
+
+    /* Send button — ember fill on hover */
+    #note-submit-btn:hover:not(:disabled) {
+      background: #c4607a;
+      border-color: #c4607a;
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(196, 96, 122, 0.3);
+    }
+
+    /* Sign-in nav button — hot pink on hover */
+    #fanvue-login-btn:hover {
+      background: #d4667a;
+      border-color: #d4667a;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(212, 102, 122, 0.35);
+    }
+
   </style>
 </head>
 <body>
 
-  <!-- ── Login Section ─────────────────────────────── -->
+  <!-- ── Guest Landing Section ──────────────────────── -->
   <section id="login-section">
-    <h1 aria-label="mochii.live">🐾 mochii.live</h1>
-    <p class="tagline">Sign in to join the pack and access live streams.</p>
 
-    <a id="fanvue-login-btn" href="/auth/login">
-      <!-- Fanvue-style F icon -->
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 3h18v3H9v3h9v3H9v9H6V9H3V3z"/>
-      </svg>
-      Get Treats with Fanvue 🐾
-    </a>
+    <!-- Sticky nav -->
+    <nav class="landing-nav">
+      <span class="landing-logo">🐾 mochii.live</span>
+      <a id="fanvue-login-btn" href="/auth/login">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 3h18v3H9v3h9v3H9v9H6V9H3V3z"/>
+        </svg>
+        Sign In 🐾
+      </a>
+    </nav>
 
+    <!-- Hero -->
+    <div class="landing-hero">
+      <span class="hero-paw" aria-hidden="true">🐾</span>
+      <h1 aria-label="mochii.live">mochii.live</h1>
+      <p class="hero-tagline">come find your place in the pack. 🐾</p>
+    </div>
+
+    <!-- OAuth error/info message -->
     <p id="login-message" role="alert" aria-live="polite"></p>
 
+    <!-- Links grid (populated from /api/links) -->
+    <div class="links-section">
+      <p class="links-section-label">explore ✦</p>
+      <div id="links-list" class="links-list">
+        <div class="links-empty"><span class="paw-loading" aria-label="Loading">🐾</span></div>
+      </div>
+    </div>
+
+    <!-- Landing footer (hidden admin link) -->
     <!-- Intentionally invisible to screen readers and keyboard navigation:
          this link is security-through-obscurity only. Anyone who discovers /admin.html
          still needs valid admin credentials to access any protected functionality. -->
-    <footer style="margin-top:2rem;font-size:.7rem;">
-      <a href="/admin.html" style="color:#2a1a1d;text-decoration:none;" tabindex="-1" aria-hidden="true">🐾</a>
+    <footer class="landing-footer">
+      <a href="/admin.html" style="color:#1a1a1a;text-decoration:none;" tabindex="-1" aria-hidden="true">🐾</a>
     </footer>
+
   </section>
 
   <!-- ── Drop a Note (Puppy Pouch) ───────────────────── -->
   <section id="drop-a-note-section" aria-label="Drop a note">
+    <hr style="border:none;border-top:1px solid #2d1a1d;margin-bottom:1.5rem;" />
     <div id="drop-a-note-card">
       <h2>Drop a Note 🐾</h2>
-      <p class="note-tagline">Ask anything anonymously – no sign-in needed. <a href="/anon" style="color:#c49a9f;font-weight:700;text-decoration:none;">Browse all answered notes →</a></p>
+      <p class="note-tagline">whisper something. no sign-in needed. <a href="/anon" style="color:#c49a9f;font-weight:700;text-decoration:none;">browse answered notes →</a></p>
       <textarea id="note-textarea" maxlength="280" placeholder="What's on your mind? 🐾" aria-label="Your question"></textarea>
       <div class="note-footer-row">
         <span id="note-char-count">0 / 280</span>
@@ -611,8 +829,8 @@
       document.getElementById('login-section').style.display     = 'block';
       document.getElementById('drop-a-note-section').style.display = 'block';
       document.getElementById('dashboard-section').style.display = 'none';
-      document.body.style.alignItems = 'center';
-      document.body.style.justifyContent = 'center';
+      document.body.style.alignItems = 'stretch';
+      document.body.style.justifyContent = 'flex-start';
 
       const msgEl = document.getElementById('login-message');
       if (msg) {
@@ -622,6 +840,61 @@
         msgEl.textContent = '';
         msgEl.className   = '';
       }
+
+      loadLinks();
+    }
+
+    // ── Load public links for the landing page ────────
+    let _linksLoading = false;
+
+    async function loadLinks() {
+      const container = document.getElementById('links-list');
+      if (!container) return;
+      if (_linksLoading) return;                            // prevent concurrent fetches
+      if (container.querySelector('.link-card')) return;   // already successfully loaded
+
+      _linksLoading = true;
+
+      try {
+        const resp = await fetch('/api/links');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const links = await resp.json();
+        container.innerHTML = '';
+
+        if (!links.length) {
+          container.innerHTML = '<p class="links-empty">nothing here yet… check back soon 🐾</p>';
+          _linksLoading = false;
+          return;
+        }
+
+        links.forEach(link => {
+          const a = document.createElement('a');
+          a.className = 'link-card';
+          a.href = escHtmlAttr(link.url);
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          const emoji = link.emoji
+            ? `<span class="link-card-emoji" aria-hidden="true">${escHtmlNote(link.emoji)}</span>`
+            : '';
+          a.innerHTML =
+            emoji +
+            `<span class="link-card-title">${escHtmlNote(link.title)}</span>` +
+            `<span class="link-card-arrow" aria-hidden="true">→</span>`;
+          container.appendChild(a);
+        });
+      } catch {
+        container.innerHTML = '<p class="links-empty">couldn\'t load links… try refreshing 🐾</p>';
+        _linksLoading = false; // allow retry after error
+      }
+    }
+
+    function escHtmlAttr(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     }
 
     // ── Active WebRTC peer connection ─────────────────
