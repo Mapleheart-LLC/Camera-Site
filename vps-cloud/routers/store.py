@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from db import get_db
-from discord_webhook import send_discord_notification
+from discord_webhook import send_admin_notification, send_discord_notification
 from payments import get_payment_provider
 
 logger = logging.getLogger(__name__)
@@ -339,10 +339,9 @@ async def payment_webhook(
         if needs_printful:
             await _trigger_printful_order(order_id, db)
 
-        # Notify the Puppy Pouch Discord channel.
-        await send_discord_notification(
-            content="🐾 A new treat has been purchased! Check the Kennel for details.",
-            is_embed=False,
+        # Notify the admin Discord channel.
+        await send_admin_notification(
+            "🛒 A new treat has been purchased! Check the Kennel for details."
         )
 
     return {"received": True}

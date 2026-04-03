@@ -34,6 +34,7 @@ from routers.store import router as store_router
 from routers.discord_interactions import router as discord_interactions_router
 from routers.drool import router as drool_router, limiter as drool_limiter
 from drool_scraper import start_drool_scheduler, stop_drool_scheduler
+from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -248,6 +249,20 @@ def init_db() -> None:
     )
     conn.execute(
         """
+        CREATE TABLE IF NOT EXISTS discord_accounts (
+            discord_id               TEXT PRIMARY KEY,
+            user_id                  TEXT REFERENCES users(id),
+            discord_username         TEXT NOT NULL,
+            discord_avatar           TEXT,
+            discord_access_token     TEXT NOT NULL,
+            discord_refresh_token    TEXT,
+            discord_token_expires_at TEXT,
+            linked_at                TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
         CREATE TABLE IF NOT EXISTS order_items (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             order_id    TEXT    NOT NULL REFERENCES orders(id),
@@ -441,6 +456,7 @@ async def lifespan(app: FastAPI):
     init_db()
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
+    await register_metadata_schema()
     yield
     stop_drool_scheduler()
     # Close the Redis connection pool on shutdown to release resources.
@@ -677,6 +693,7 @@ app.include_router(links_router)
 app.include_router(store_router)
 app.include_router(discord_interactions_router)
 app.include_router(drool_router)
+app.include_router(discord_oauth_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
