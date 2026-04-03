@@ -570,21 +570,26 @@ app.include_router(store_router)
 
 @app.middleware("http")
 async def subdomain_redirect(request: Request, call_next):
-    """Redirect bare subdomain roots to their canonical paths on the main domain.
+    """Serve subdomain roots in-place by rewriting the path internally.
 
-    anon.mochii.live/  → <BASE_URL>/anon
-    links.mochii.live/ → <BASE_URL>/links
+    anon.mochii.live/  → serves /anon content   (URL stays on subdomain)
+    links.mochii.live/ → serves /links content  (URL stays on subdomain)
+    shop.mochii.live/  → serves /store.html     (URL stays on subdomain)
 
-    Only GET requests to exactly "/" are redirected; all other paths and
+    Only GET requests to exactly "/" are rewritten; all other paths and
     methods are passed through untouched so API calls still work.
     """
     if request.method == "GET" and request.url.path == "/":
         host = request.headers.get("host", "").lower().split(":")[0]
-        canonical = BASE_URL or str(request.base_url).rstrip("/")
-        if host.startswith("anon."):
-            return RedirectResponse(url=f"{canonical}/anon", status_code=301)
-        if host.startswith("links."):
-            return RedirectResponse(url=f"{canonical}/links", status_code=301)
+        _subdomain_map = {
+            "anon.": "/anon",
+            "links.": "/links",
+            "shop.": "/store.html",
+        }
+        for prefix, target_path in _subdomain_map.items():
+            if host.startswith(prefix):
+                request.scope["path"] = target_path
+                break
     return await call_next(request)
 
 
