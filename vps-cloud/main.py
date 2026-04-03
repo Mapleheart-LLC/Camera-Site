@@ -537,9 +537,21 @@ _FG_A_LABEL = (158, 126, 130)  # #9e7e82
 _FG_FOOTER  = (106,  74,  78)  # #6a4a4e
 _FG_TITLE   = (158, 126, 130)  # #9e7e82
 
+# Pre-built 1×1 fallback PNG returned when a question isn't public/answered
+def _make_fallback_png() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (1, 1), _BG_OUTER).save(buf, format="PNG")
+    return buf.getvalue()
+
+_FALLBACK_PNG = _make_fallback_png()
+
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Return the best available font at the requested size."""
+    """Return the best available font at the requested size.
+
+    Falls back to Pillow's built-in bitmap font when no TrueType font is found;
+    that font ignores *size* and renders at a fixed small size.
+    """
     candidates = [
         # Common sans-serif fonts that are typically installed on Linux/Debian
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -554,14 +566,37 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 
 def _wrap_text(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw) -> list[str]:
-    """Word-wrap *text* so that each rendered line fits within *max_w* pixels."""
+    """Word-wrap *text* so that each rendered line fits within *max_w* pixels.
+
+    Words wider than *max_w* are split character-by-character to prevent overflow.
+    """
+    def _text_w(s: str) -> int:
+        bb = draw.textbbox((0, 0), s, font=font)
+        return bb[2] - bb[0]
+
     words = text.split()
     lines: list[str] = []
     current = ""
     for word in words:
+        # Split overlong single words character-by-character
+        if _text_w(word) > max_w:
+            if current:
+                lines.append(current)
+                current = ""
+            chunk = ""
+            for ch in word:
+                if _text_w(chunk + ch) <= max_w:
+                    chunk += ch
+                else:
+                    if chunk:
+                        lines.append(chunk)
+                    chunk = ch
+            if chunk:
+                current = chunk
+            continue
+
         test = (current + " " + word).strip()
-        bbox = draw.textbbox((0, 0), test, font=font)
-        if bbox[2] - bbox[0] <= max_w:
+        if _text_w(test) <= max_w:
             current = test
         else:
             if current:
@@ -570,6 +605,27 @@ def _wrap_text(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, ma
     if current:
         lines.append(current)
     return lines or [""]
+
+
+def _truncate_line(line: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont, max_w: int, draw: ImageDraw.ImageDraw) -> str:
+    """Truncate *line* with an ellipsis so it fits within *max_w* pixels."""
+    ellipsis = "…"
+
+    def _text_w(s: str) -> int:
+        bb = draw.textbbox((0, 0), s, font=font)
+        return bb[2] - bb[0]
+
+    if _text_w(line) <= max_w:
+        return line
+    # Binary-search for the longest prefix that fits with the ellipsis appended
+    lo, hi = 0, len(line)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if _text_w(line[:mid] + ellipsis) <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return line[:lo] + ellipsis
 
 
 def _generate_og_image(q_text: str, a_text: str) -> bytes:
@@ -616,10 +672,10 @@ def _generate_og_image(q_text: str, a_text: str) -> bytes:
 
     # Wrap question text
     q_lines = _wrap_text(q_text, font_body, inner_w - 24, draw)
-    # Cap at 3 lines to avoid overflow
+    # Cap at 3 lines to avoid overflow; pixel-accurate ellipsis on last line
     if len(q_lines) > 3:
         q_lines = q_lines[:3]
-        q_lines[-1] = q_lines[-1][:max(0, len(q_lines[-1]) - 1)] + "…"
+        q_lines[-1] = _truncate_line(q_lines[-1], font_body, inner_w - 24, draw)
     body_q_bbox = draw.textbbox((0, 0), q_lines[0], font=font_body)
     line_h = body_q_bbox[3] - body_q_bbox[1]
     bubble_q_h = pad // 2 + lq_h + 8 + line_h * len(q_lines) + (len(q_lines) - 1) * 6 + pad // 2
@@ -646,7 +702,7 @@ def _generate_og_image(q_text: str, a_text: str) -> bytes:
     max_a_lines = max(1, (remaining_h - la_h - 8 - pad) // (line_h + 6))
     if len(a_lines) > max_a_lines:
         a_lines = a_lines[:max_a_lines]
-        a_lines[-1] = a_lines[-1][:max(0, len(a_lines[-1]) - 1)] + "…"
+        a_lines[-1] = _truncate_line(a_lines[-1], font_body, inner_w - 24, draw)
 
     bubble_a_h = pad // 2 + la_h + 8 + line_h * len(a_lines) + (len(a_lines) - 1) * 6 + pad // 2
     ax1, ay1 = card_x1 + pad, cur_y
@@ -732,11 +788,9 @@ def question_og_image(
     ).fetchone()
 
     if not row or not row["is_public"] or not row["answer"]:
-        # Return a minimal 1×1 transparent PNG rather than an error status,
-        # so scrapers don't cache a 404 against the image URL.
-        buf = io.BytesIO()
-        Image.new("RGB", (1, 1), _BG_OUTER).save(buf, format="PNG")
-        return Response(content=buf.getvalue(), media_type="image/png")
+        # Return a minimal 1×1 PNG rather than an error status so scrapers
+        # don't cache a 404 against the image URL.
+        return Response(content=_FALLBACK_PNG, media_type="image/png")
 
     png_bytes = _generate_og_image(row["text"], row["answer"])
     return Response(
