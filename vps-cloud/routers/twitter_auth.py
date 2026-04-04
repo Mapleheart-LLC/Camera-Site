@@ -1,51 +1,28 @@
 """
-routers/twitter_auth.py – Twitter/X OAuth credential authorization.
+routers/twitter_auth.py – Twitter/X OAuth 2.0 PKCE credential authorization.
 
-Allows the site owner to authorize the Drool Log scraper to access their
-Twitter/X likes and bookmarks via two separate flows:
+A single OAuth 2.0 Authorization Code + PKCE flow covers all Twitter/X
+functionality: liked-tweet scraping, bookmark scraping, and tweeting answers.
 
-OAuth 1.0a flow (likes)
------------------------
-1. Admin clicks "Connect Twitter/X" in the admin panel, Drool Log → Twitter/X
-   settings, which hits ``GET /auth/twitter/login``.
-2. The backend obtains a request token from Twitter and redirects to the
-   Twitter authorization page.
-3. Twitter redirects back to ``GET /auth/twitter/callback`` with an
-   ``oauth_verifier``.
-4. The backend exchanges the verifier for an access token, fetches the
-   authenticated user's numeric Twitter ID, and saves the access token,
-   access token secret, and user ID to the settings database
-   (``drool_twitter_access_token``, ``drool_twitter_access_secret``,
-   ``drool_twitter_user_id``).
-5. On success the browser is redirected to
-   ``/admin.html?twitter_connected=1``.
-
-OAuth 2.0 PKCE flow (bookmarks)
---------------------------------
-Twitter's ``GET /2/users/:id/bookmarks`` endpoint requires OAuth 2.0
-Authorization Code with PKCE – bearer tokens and OAuth 1.0a both return 403.
-
-1. Admin clicks "Connect Twitter/X Bookmarks" in the admin panel, which hits
-   ``GET /auth/twitter2/login``.
+Flow
+----
+1. Admin clicks "Connect Twitter/X" in the admin panel (Drool Log → Twitter/X),
+   which hits ``GET /auth/twitter2/login``.
 2. The backend generates a PKCE ``code_verifier``/``code_challenge``, builds
-   the authorization URL with ``bookmark.read tweet.read users.read`` scopes,
-   stores the verifier keyed by ``state``, and redirects to Twitter.
+   the authorization URL with the required scopes, stores the verifier keyed
+   by ``state``, and redirects the browser to Twitter.
 3. Twitter redirects back to ``GET /auth/twitter2/callback`` with ``code``
    and ``state``.
 4. The backend exchanges the code+verifier for an access+refresh token pair,
-   saves both to the settings database
-   (``drool_twitter_oauth2_access_token``,
-   ``drool_twitter_oauth2_refresh_token``).
-5. On success the browser is redirected to
-   ``/admin.html?twitter2_connected=1``.
+   then calls ``GET /2/users/me`` to resolve the authenticated user's numeric
+   ID.  All four values are saved to the settings database:
+   - ``drool_twitter_oauth2_access_token``
+   - ``drool_twitter_oauth2_refresh_token``
+   - ``drool_twitter_user_id``
+5. On success the browser is redirected to ``/admin.html?twitter2_connected=1``.
 
-Required env vars (shared with the Drool Log scraper)
-------------------------------------------------------
-- ``TWITTER_API_KEY``    – OAuth 1.0a consumer key
-- ``TWITTER_API_SECRET`` – OAuth 1.0a consumer secret
-
-Required env vars for OAuth 2.0 PKCE
---------------------------------------
+Required env vars / DB settings
+---------------------------------
 - ``TWITTER_CLIENT_ID``     – OAuth 2.0 client ID
 - ``TWITTER_CLIENT_SECRET`` – OAuth 2.0 client secret
 
@@ -157,139 +134,18 @@ def _load_cred(db_key: str, env_key: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Routes – OAuth 1.0a (liked tweets)
+# Routes – OAuth 2.0 PKCE (likes, bookmarks, and tweeting)
 # ---------------------------------------------------------------------------
 
-
-@router.get("/auth/twitter/login", include_in_schema=False)
-def twitter_login():
-    """Redirect the admin browser to Twitter's OAuth 1.0a authorization page."""
-    try:
-        import tweepy  # type: ignore[import-untyped]
-    except ImportError:
-        return RedirectResponse(
-            url="/admin.html?error=tweepy_missing", status_code=302
-        )
-
-    api_key = _load_cred("drool_twitter_api_key", "TWITTER_API_KEY")
-    api_secret = _load_cred("drool_twitter_api_secret", "TWITTER_API_SECRET")
-    if not api_key or not api_secret:
-        return RedirectResponse(
-            url="/admin.html?error=not_configured", status_code=302
-        )
-
-    base_url = os.environ.get("BASE_URL", "").rstrip("/")
-    callback_url = (
-        f"{base_url}/auth/twitter/callback"
-        if base_url
-        else "/auth/twitter/callback"
-    )
-
-    try:
-        auth = tweepy.OAuth1UserHandler(
-            consumer_key=api_key,
-            consumer_secret=api_secret,
-            callback=callback_url,
-        )
-        redirect_url = auth.get_authorization_url()
-        oauth_token = auth.request_token["oauth_token"]
-        oauth_token_secret = auth.request_token["oauth_token_secret"]
-    except Exception as exc:
-        logger.error("Failed to obtain Twitter request token: %s", exc)
-        return RedirectResponse(
-            url="/admin.html?error=oauth_init_failed", status_code=302
-        )
-
-    _store_pending(oauth_token, oauth_token_secret)
-    return RedirectResponse(url=redirect_url, status_code=302)
-
-
-@router.get("/auth/twitter/callback", include_in_schema=False)
-def twitter_callback(
-    oauth_token: Optional[str] = None,
-    oauth_verifier: Optional[str] = None,
-    denied: Optional[str] = None,
-):
-    """Handle the OAuth 1.0a callback redirect from Twitter."""
-    # User cancelled the authorization on Twitter's page
-    if denied or not oauth_token or not oauth_verifier:
-        return RedirectResponse(
-            url="/admin.html?error=twitter_cancelled", status_code=302
-        )
-
-    oauth_token_secret = _pop_pending(oauth_token)
-    if not oauth_token_secret:
-        return RedirectResponse(
-            url="/admin.html?error=invalid_state", status_code=302
-        )
-
-    try:
-        import tweepy  # type: ignore[import-untyped]
-    except ImportError:
-        return RedirectResponse(
-            url="/admin.html?error=tweepy_missing", status_code=302
-        )
-
-    api_key = _load_cred("drool_twitter_api_key", "TWITTER_API_KEY")
-    api_secret = _load_cred("drool_twitter_api_secret", "TWITTER_API_SECRET")
-
-    # Exchange verifier for an access token
-    try:
-        auth = tweepy.OAuth1UserHandler(
-            consumer_key=api_key, consumer_secret=api_secret
-        )
-        auth.request_token = {
-            "oauth_token": oauth_token,
-            "oauth_token_secret": oauth_token_secret,
-        }
-        access_token, access_token_secret = auth.get_access_token(oauth_verifier)
-    except Exception as exc:
-        logger.error("Twitter access-token exchange failed: %s", exc)
-        return RedirectResponse(
-            url="/admin.html?error=token_exchange_failed", status_code=302
-        )
-
-    # Extract the authenticated user's numeric Twitter ID directly from the
-    # access token (Twitter OAuth 1.0a tokens have the format
-    # "{user_id}-{random_string}"), avoiding a Twitter API v2 call that
-    # requires the app to be attached to a Project.
-    try:
-        if not access_token:
-            raise ValueError("Access token is empty")
-        twitter_user_id = access_token.split("-")[0]
-        if not twitter_user_id.isdigit():
-            raise ValueError("Could not parse numeric user ID from access token")
-    except Exception as exc:
-        logger.error("Failed to extract Twitter user ID from token: %s", exc)
-        return RedirectResponse(
-            url="/admin.html?error=profile_fetch_failed", status_code=302
-        )
-
-    # Save the obtained credentials to the settings database so the Drool Log
-    # scraper can use them immediately without any manual credential entry.
-    try:
-        conn = get_db_connection()
-        set_setting(conn, "drool_twitter_access_token", access_token)
-        set_setting(conn, "drool_twitter_access_secret", access_token_secret)
-        set_setting(conn, "drool_twitter_user_id", twitter_user_id)
-        conn.close()
-        logger.info(
-            "Twitter/X scraper credentials saved for user ID %s", twitter_user_id
-        )
-    except Exception as exc:
-        logger.error("Failed to save Twitter credentials to DB: %s", exc)
-        return RedirectResponse(
-            url="/admin.html?error=db_save_failed", status_code=302
-        )
-
-    return RedirectResponse(url="/admin.html?twitter_connected=1", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Routes – OAuth 2.0 PKCE (bookmarks)
-# ---------------------------------------------------------------------------
-
-_PKCE_SCOPES = "bookmark.read tweet.read users.read offline.access"
+# Scopes requested during the OAuth 2.0 PKCE flow.  All Twitter/X features
+# used by this site are covered by a single connection:
+#   like.read      – fetch liked tweets (Drool Log scraper)
+#   bookmark.read  – fetch bookmarks   (Drool Log scraper)
+#   tweet.read     – required alongside like.read / bookmark.read
+#   tweet.write    – post tweets when an answer is published
+#   users.read     – resolve the authenticated user's ID
+#   offline.access – obtain a refresh token for long-lived access
+_PKCE_SCOPES = "like.read bookmark.read tweet.read tweet.write users.read offline.access"
 
 
 @router.get("/auth/twitter2/login", include_in_schema=False)
@@ -403,13 +259,29 @@ def twitter2_callback(
             url="/admin.html?error=oauth2_token_failed", status_code=302
         )
 
+    # Resolve the authenticated user's numeric ID from the /2/users/me endpoint.
+    try:
+        me_resp = httpx.get(
+            "https://api.twitter.com/2/users/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15.0,
+        )
+        me_resp.raise_for_status()
+        twitter_user_id = str(me_resp.json()["data"]["id"])
+    except Exception as exc:
+        logger.error("Twitter OAuth 2.0 callback: failed to fetch user ID: %s", exc)
+        return RedirectResponse(
+            url="/admin.html?error=profile_fetch_failed", status_code=302
+        )
+
     try:
         conn = get_db_connection()
         set_setting(conn, "drool_twitter_oauth2_access_token", access_token)
         if refresh_token:
             set_setting(conn, "drool_twitter_oauth2_refresh_token", refresh_token)
+        set_setting(conn, "drool_twitter_user_id", twitter_user_id)
         conn.close()
-        logger.info("Twitter/X OAuth 2.0 tokens saved for bookmark scraping.")
+        logger.info("Twitter/X OAuth 2.0 tokens saved for user ID %s", twitter_user_id)
     except Exception as exc:
         logger.error("Failed to save Twitter OAuth 2.0 tokens to DB: %s", exc)
         return RedirectResponse(

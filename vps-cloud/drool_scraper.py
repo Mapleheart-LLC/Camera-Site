@@ -361,35 +361,40 @@ def _get_oauth2_client() -> Optional[object]:
 
 def _scrape_twitter() -> None:
     """Fetch liked and bookmarked tweets and store new ones in drool_archive."""
-    client = _get_tweepy_client()
-    if client is None:
-        logger.debug("Twitter scraper: credentials not configured, skipping.")
-        return
-
     user_id = _load_credential("drool_twitter_user_id", "TWITTER_USER_ID")
     if not user_id:
         logger.debug("Twitter scraper: TWITTER_USER_ID not set, skipping.")
         return
 
+    # Prefer OAuth 2.0 user context (single connection covers both liked tweets
+    # and bookmarks).  Fall back to the legacy OAuth 1.0a / bearer-token client
+    # if OAuth 2.0 credentials have not been configured yet.
+    oauth2_client = _get_oauth2_client()
+    legacy_client = None
+    if oauth2_client is None:
+        legacy_client = _get_tweepy_client()
+        if legacy_client is None:
+            logger.debug("Twitter scraper: credentials not configured, skipping.")
+            return
+
     conn = get_db_connection()
     try:
         items: list[tuple] = []
 
-        # Determine whether to use OAuth 1.0a user context for the liked-tweets
-        # call.  tweepy.Client.get_liked_tweets() defaults to user_auth=False,
-        # which makes it send "Authorization: Bearer <bearer_token>".  When no
-        # bearer token is configured (only access_token + access_secret), that
-        # header becomes "Authorization: Bearer None" and the API returns 401.
-        # Passing user_auth=True tells tweepy to sign the request with the
-        # OAuth 1.0a credentials instead.
-        use_user_auth = bool(
+        # Liked tweets – use OAuth 2.0 when available; otherwise fall back to
+        # OAuth 1.0a / bearer token.  When using the OAuth 2.0 client tweepy
+        # sends the user-context access token as the Bearer header, which
+        # satisfies the like.read scope requirement.
+        likes_client = oauth2_client if oauth2_client is not None else legacy_client
+        # user_auth=True is only meaningful for OAuth 1.0a; always False here.
+        use_user_auth = oauth2_client is None and bool(
             _load_credential("drool_twitter_access_token",  "TWITTER_ACCESS_TOKEN")
             and _load_credential("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET")
         )
 
         # Liked tweets
         try:
-            resp = client.get_liked_tweets(
+            resp = likes_client.get_liked_tweets(
                 id=user_id,
                 user_auth=use_user_auth,
                 max_results=50,
@@ -420,11 +425,8 @@ def _scrape_twitter() -> None:
         except Exception as exc:
             logger.warning("Twitter scraper: liked tweets fetch failed: %s", exc)
 
-        # Bookmarks – requires OAuth 2.0 PKCE user context.
-        # A separate client authenticated with the stored OAuth 2.0 access
-        # token (obtained via /auth/twitter2/login) is used here because
-        # the bookmarks endpoint returns 403 for bearer tokens and OAuth 1.0a.
-        oauth2_client = _get_oauth2_client()
+        # Bookmarks – always uses OAuth 2.0 PKCE user context (the bookmarks
+        # endpoint returns 403 for bearer tokens and OAuth 1.0a).
         if oauth2_client is not None:
             try:
                 bk_resp = oauth2_client.get_bookmarks(
