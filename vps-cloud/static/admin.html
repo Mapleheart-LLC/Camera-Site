@@ -2003,9 +2003,10 @@
       const queryParams = new URLSearchParams(window.location.search);
       const oauthError        = queryParams.get('error');
       const twitter2Connected = queryParams.get('twitter2_connected');
+      const oauthWarn         = queryParams.get('warn');
 
       // Strip any OAuth callback params from the URL before showing the panel.
-      if (oauthError || twitter2Connected) {
+      if (oauthError || twitter2Connected || oauthWarn) {
         history.replaceState({}, '', '/admin.html');
       }
 
@@ -2026,7 +2027,11 @@
             if (r.ok) {
               showAdminPanel();
               if (twitter2Connected === '1') {
-                showToast('🐦 Twitter/X connected! Likes, bookmarks & tweeting enabled.');
+                if (oauthWarn === 'user_id_missing') {
+                  showToast('🐦 Twitter/X tokens saved! User ID could not be fetched automatically — set it manually in the Twitter credentials form.');
+                } else {
+                  showToast('🐦 Twitter/X connected! Likes, bookmarks & tweeting enabled.');
+                }
               } else if (oauthError) {
                 showToast('❌ ' + (_oauthMessages[oauthError] || `Twitter error: ${oauthError}`));
               }
