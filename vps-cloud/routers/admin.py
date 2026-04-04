@@ -436,10 +436,13 @@ def _post_answer_tweet(question_id: str, answer_text: str) -> bool:
         logger.debug("Tweet post: no OAuth 2.0 access token configured.")
         return False
 
-    base_url  = os.environ.get("BASE_URL", "").rstrip("/")
-    share_url = f"{base_url}/q/{question_id}" if base_url else f"/q/{question_id}"
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if not base_url:
+        logger.warning("Tweet post: BASE_URL not set – cannot build an absolute share URL; skipping tweet.")
+        return False
+    share_url = f"{base_url}/q/{question_id}"
 
-    truncated = answer_text[:_TWEET_MAX_TEXT] + "…" if len(answer_text) > _TWEET_MAX_TEXT else answer_text
+    truncated = answer_text[:_TWEET_MAX_TEXT] + "..." if len(answer_text) > _TWEET_MAX_TEXT else answer_text
     tweet_text = f"{truncated}\n\n{share_url}"
 
     status_code = _do_post(access_token, tweet_text)
