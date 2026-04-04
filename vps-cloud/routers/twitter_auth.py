@@ -55,12 +55,14 @@ Optional env vars
                  URL registered in the Twitter Developer Portal.
 """
 
+import base64
 import logging
 import os
 import sqlite3 as _sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
@@ -247,20 +249,18 @@ def twitter_callback(
             url="/admin.html?error=token_exchange_failed", status_code=302
         )
 
-    # Fetch the authenticated user's numeric Twitter ID
+    # Extract the authenticated user's numeric Twitter ID directly from the
+    # access token (Twitter OAuth 1.0a tokens have the format
+    # "{user_id}-{random_string}"), avoiding a Twitter API v2 call that
+    # requires the app to be attached to a Project.
     try:
-        client = tweepy.Client(
-            consumer_key=api_key,
-            consumer_secret=api_secret,
-            access_token=access_token,
-            access_token_secret=access_token_secret,
-        )
-        me = client.get_me()
-        if not me or not me.data:
-            raise ValueError("Empty response from Twitter get_me()")
-        twitter_user_id = str(me.data.id)
+        twitter_user_id = access_token.split("-")[0]
+        if not twitter_user_id.isdigit():
+            raise ValueError(
+                f"Could not parse user ID from access token: {access_token[:10]}..."
+            )
     except Exception as exc:
-        logger.error("Failed to fetch Twitter user info: %s", exc)
+        logger.error("Failed to extract Twitter user ID from token: %s", exc)
         return RedirectResponse(
             url="/admin.html?error=profile_fetch_failed", status_code=302
         )
@@ -358,13 +358,6 @@ def twitter2_callback(
             url="/admin.html?error=invalid_state", status_code=302
         )
 
-    try:
-        import tweepy  # type: ignore[import-untyped]
-    except ImportError:
-        return RedirectResponse(
-            url="/admin.html?error=tweepy_missing", status_code=302
-        )
-
     client_id = _load_cred("drool_twitter_client_id", "TWITTER_CLIENT_ID")
     client_secret = _load_cred("drool_twitter_client_secret", "TWITTER_CLIENT_SECRET")
 
@@ -376,19 +369,24 @@ def twitter2_callback(
     )
 
     try:
-        oauth2_handler = tweepy.OAuth2UserHandler(
-            client_id=client_id,
-            redirect_uri=callback_url,
-            scope=_PKCE_SCOPES.split(),
-            client_secret=client_secret,
+        credentials = base64.b64encode(
+            f"{client_id}:{client_secret}".encode()
+        ).decode()
+        resp = httpx.post(
+            "https://api.twitter.com/2/oauth2/token",
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": callback_url,
+                "code_verifier": code_verifier,
+            },
         )
-        # Restore the code verifier and state so tweepy can complete the
-        # exchange.  These must be set on the underlying oauthlib client /
-        # session internals, not as plain instance attributes.
-        oauth2_handler._client.code_verifier = code_verifier
-        oauth2_handler._state = state
-        authorization_response = f"{callback_url}?code={code}&state={state}"
-        token_data = oauth2_handler.fetch_token(authorization_response=authorization_response)
+        resp.raise_for_status()
+        token_data = resp.json()
     except Exception as exc:
         logger.error("Twitter OAuth 2.0 token exchange failed: %s", exc)
         return RedirectResponse(
