@@ -259,7 +259,10 @@ def twitter2_callback(
             url="/admin.html?error=oauth2_token_failed", status_code=302
         )
 
-    # Resolve the authenticated user's numeric ID from the /2/users/me endpoint.
+    # Attempt to resolve the authenticated user's numeric ID from /2/users/me.
+    # This call may return 403 on restricted Twitter API tiers; treat it as
+    # non-fatal so the OAuth tokens are always saved even when it fails.
+    twitter_user_id: Optional[str] = None
     try:
         me_resp = httpx.get(
             "https://api.twitter.com/2/users/me",
@@ -269,9 +272,10 @@ def twitter2_callback(
         me_resp.raise_for_status()
         twitter_user_id = str(me_resp.json()["data"]["id"])
     except Exception as exc:
-        logger.error("Twitter OAuth 2.0 callback: failed to fetch user ID: %s", exc)
-        return RedirectResponse(
-            url="/admin.html?error=profile_fetch_failed", status_code=302
+        logger.warning(
+            "Twitter OAuth 2.0 callback: could not fetch user ID (will continue "
+            "without it – set twitter_user_id manually in credentials): %s",
+            exc,
         )
 
     try:
@@ -279,13 +283,24 @@ def twitter2_callback(
         set_setting(conn, "drool_twitter_oauth2_access_token", access_token)
         if refresh_token:
             set_setting(conn, "drool_twitter_oauth2_refresh_token", refresh_token)
-        set_setting(conn, "drool_twitter_user_id", twitter_user_id)
+        if twitter_user_id:
+            set_setting(conn, "drool_twitter_user_id", twitter_user_id)
         conn.close()
-        logger.info("Twitter/X OAuth 2.0 tokens saved for user ID %s", twitter_user_id)
+        if twitter_user_id:
+            logger.info("Twitter/X OAuth 2.0 tokens saved for user ID %s", twitter_user_id)
+        else:
+            logger.info(
+                "Twitter/X OAuth 2.0 tokens saved (user ID not fetched – "
+                "set it manually via the credentials form)"
+            )
     except Exception as exc:
         logger.error("Failed to save Twitter OAuth 2.0 tokens to DB: %s", exc)
         return RedirectResponse(
             url="/admin.html?error=db_save_failed", status_code=302
         )
 
-    return RedirectResponse(url="/admin.html?twitter2_connected=1", status_code=302)
+    if twitter_user_id:
+        return RedirectResponse(url="/admin.html?twitter2_connected=1", status_code=302)
+    return RedirectResponse(
+        url="/admin.html?twitter2_connected=1&warn=user_id_missing", status_code=302
+    )
