@@ -254,11 +254,11 @@ def twitter_callback(
     # "{user_id}-{random_string}"), avoiding a Twitter API v2 call that
     # requires the app to be attached to a Project.
     try:
+        if not access_token:
+            raise ValueError("Access token is empty")
         twitter_user_id = access_token.split("-")[0]
         if not twitter_user_id.isdigit():
-            raise ValueError(
-                f"Could not parse user ID from access token: {access_token[:10]}..."
-            )
+            raise ValueError("Could not parse numeric user ID from access token")
     except Exception as exc:
         logger.error("Failed to extract Twitter user ID from token: %s", exc)
         return RedirectResponse(
@@ -384,6 +384,7 @@ def twitter2_callback(
                 "redirect_uri": callback_url,
                 "code_verifier": code_verifier,
             },
+            timeout=15.0,
         )
         resp.raise_for_status()
         token_data = resp.json()
