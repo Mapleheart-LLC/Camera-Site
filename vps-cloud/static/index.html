@@ -30,6 +30,7 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-start;
+      padding-bottom: 68px;
     }
 
     /* ── Pulsing paw loading animation ─────────────── */
@@ -502,6 +503,176 @@
       transition: width 1s linear;
     }
 
+    /* ── Spotify bar ────────────────────────────────────── */
+    #spotify-bar {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      align-items: center;
+      gap: 1rem;
+      padding: .75rem 1.5rem;
+      border-top: 1px solid #3d2a2e;
+      background: #202020;
+      flex-wrap: wrap;
+    }
+
+    #spotify-bar h2 {
+      font-size: .75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #9e7e82;
+      white-space: nowrap;
+      margin: 0;
+    }
+
+    #now-playing-section {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    #np-album-art {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    #np-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      max-width: 200px;
+    }
+
+    #np-track-name {
+      font-size: .85rem;
+      font-weight: 700;
+      color: #f0e6e8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #np-artist-name {
+      font-size: .75rem;
+      color: #9e7e82;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #np-open-link {
+      font-size: .75rem;
+      color: #1db954;
+      text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+      padding: .15rem .4rem;
+      border: 1px solid #1db954;
+      border-radius: 4px;
+      transition: background .15s;
+    }
+
+    #np-open-link:hover {
+      background: rgba(29, 185, 84, 0.15);
+    }
+
+    #queue-section {
+      display: flex;
+      flex-direction: column;
+      gap: .45rem;
+      min-width: 240px;
+      max-width: 480px;
+      flex: 2;
+    }
+
+    #queue-search-row {
+      display: flex;
+      gap: .5rem;
+    }
+
+    #queue-search-input {
+      flex: 1;
+      padding: .45rem .75rem;
+      background: #2a1a1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-size: .85rem;
+      font-family: inherit;
+      outline: none;
+    }
+
+    #queue-search-input:focus {
+      border-color: #e8aeb7;
+    }
+
+    #queue-search-btn {
+      padding: .45rem .85rem;
+      min-width: auto;
+      white-space: nowrap;
+    }
+
+    #queue-results {
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+    }
+
+    .queue-result-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .3rem .5rem;
+      background: #2a1a1e;
+      border-radius: 6px;
+    }
+
+    .queue-result-item img {
+      width: 28px;
+      height: 28px;
+      border-radius: 3px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .queue-result-info {
+      flex: 1;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .queue-result-track {
+      font-size: .8rem;
+      font-weight: 600;
+      color: #f0e6e8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-result-artist {
+      font-size: .72rem;
+      color: #9e7e82;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-add-btn {
+      padding: .25rem .55rem;
+      font-size: .75rem;
+      min-width: auto;
+      flex-shrink: 0;
+    }
+
     /* ── Heat ───────────────────────────────────────── */
 
     /* Smoldering background bloom behind the hero */
@@ -667,6 +838,22 @@
       .control-btn {
         padding: .45rem .9rem;
         font-size: .85rem;
+      }
+
+      /* Spotify bar: tighter, full-width queue section */
+      #spotify-bar {
+        padding: .55rem .75rem;
+        gap: .6rem;
+      }
+
+      #np-info {
+        max-width: 130px;
+      }
+
+      #queue-section {
+        min-width: 0;
+        width: 100%;
+        max-width: none;
       }
 
     }
@@ -1146,6 +1333,170 @@
       });
     }
 
+    // ── Spotify: Now Playing & Add to Queue ───────────
+
+    let _npPollInterval = null;
+
+    async function pollNowPlaying() {
+      try {
+        const resp = await fetch('/api/spotify/now-playing');
+        if (!resp.ok) return;
+        const data = await resp.json();
+
+        const bar = document.getElementById('spotify-bar');
+        if (!data.configured) {
+          bar.style.display = 'none';
+          return;
+        }
+        bar.style.display = 'flex';
+
+        const art      = document.getElementById('np-album-art');
+        const trackEl  = document.getElementById('np-track-name');
+        const artistEl = document.getElementById('np-artist-name');
+        const linkEl   = document.getElementById('np-open-link');
+
+        if (data.is_playing && data.track) {
+          const t = data.track;
+          trackEl.textContent  = t.name;
+          artistEl.textContent = t.artists.join(', ');
+          if (t.album_art) {
+            art.src            = t.album_art;
+            art.alt            = t.album;
+            art.style.display  = 'inline-block';
+          } else {
+            art.style.display  = 'none';
+          }
+          if (t.external_url) {
+            linkEl.href           = t.external_url;
+            linkEl.style.display  = 'inline-block';
+          } else {
+            linkEl.style.display  = 'none';
+          }
+        } else {
+          trackEl.textContent  = 'Nothing playing';
+          artistEl.textContent = '';
+          art.style.display    = 'none';
+          linkEl.style.display = 'none';
+        }
+      } catch (_) {
+        // Silently fail – Spotify errors shouldn't disrupt the rest of the UI
+      }
+    }
+
+    function initSpotify() {
+      // Polling starts unconditionally at page load (see bottom of script).
+      // This function only handles the authenticated Add to Queue feature.
+      const token = getToken();
+      if (!token) return;
+
+      const payload = decodeJwtPayload(token);
+      if (!payload) return;
+
+      // Show Add to Queue for Tier 1+ (access_level >= 2)
+      if ((payload.access_level || 0) >= 2) {
+        const queueSection = document.getElementById('queue-section');
+        if (queueSection) queueSection.style.display = 'flex';
+
+        const searchBtn   = document.getElementById('queue-search-btn');
+        const searchInput = document.getElementById('queue-search-input');
+        if (searchBtn)   searchBtn.addEventListener('click', handleQueueSearch);
+        if (searchInput) searchInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); handleQueueSearch(); }
+        });
+      }
+    }
+
+    async function handleQueueSearch() {
+      const input = document.getElementById('queue-search-input');
+      const q     = (input?.value || '').trim();
+      if (!q) return;
+
+      const btn       = document.getElementById('queue-search-btn');
+      const resultsEl = document.getElementById('queue-results');
+      btn.disabled    = true;
+      btn.textContent = '…';
+      resultsEl.innerHTML = '';
+
+      try {
+        const token = getToken();
+        const resp  = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (resp.status === 401) { clearToken(); showLogin(); return; }
+        if (!resp.ok) {
+          resultsEl.innerHTML = '<span style="color:#9e7e82;font-size:.8rem;">Search failed.</span>';
+          return;
+        }
+
+        const data = await resp.json();
+        if (!data.tracks?.length) {
+          resultsEl.innerHTML = '<span style="color:#9e7e82;font-size:.8rem;">No results found.</span>';
+          return;
+        }
+
+        data.tracks.forEach(track => {
+          const item = document.createElement('div');
+          item.className = 'queue-result-item';
+          item.setAttribute('role', 'listitem');
+
+          const artHtml = track.album_art
+            ? `<img src="${escHtmlNote(track.album_art)}" alt="${escHtmlNote(track.album)}" loading="lazy">`
+            : '';
+          item.innerHTML = `
+            ${artHtml}
+            <div class="queue-result-info">
+              <div class="queue-result-track">${escHtmlNote(track.name)}</div>
+              <div class="queue-result-artist">${escHtmlNote(track.artists.join(', '))}</div>
+            </div>
+            <button class="control-btn queue-add-btn" type="button"
+                    aria-label="Add ${escHtmlNote(track.name)} to queue">Add 🎵</button>
+          `;
+
+          const addBtn = item.querySelector('.queue-add-btn');
+          addBtn.addEventListener('click', () => addToQueue(track.uri, track.name, addBtn));
+          resultsEl.appendChild(item);
+        });
+      } catch (_) {
+        resultsEl.innerHTML = '<span style="color:#9e7e82;font-size:.8rem;">Search failed.</span>';
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Search 🎵';
+      }
+    }
+
+    async function addToQueue(uri, trackName, btn) {
+      const token = getToken();
+      if (!token) return;
+
+      const origLabel  = btn.textContent;
+      btn.disabled     = true;
+      btn.textContent  = '…';
+
+      try {
+        const resp = await fetch('/api/spotify/queue', {
+          method:  'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ uri }),
+        });
+
+        if (resp.status === 401) { clearToken(); showLogin(); return; }
+
+        if (resp.ok) {
+          btn.textContent = '✓ Added!';
+          setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; }, 2000);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          btn.textContent = '✗ Error';
+          btn.title       = err.detail || 'Failed to add to queue.';
+          setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; btn.title = ''; }, 3000);
+        }
+      } catch (_) {
+        btn.textContent = '✗ Error';
+        setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; }, 3000);
+      }
+    }
+
     // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (activePc) { activePc.close(); activePc = null; }
@@ -1158,6 +1509,12 @@
       if (badge) badge.style.display = 'none';
       // Clear persisted cooldown timestamps so a fresh login starts clean
       ['pishock', 'lovense'].forEach(d => sessionStorage.removeItem(`${d}_cooldown_until`));
+      // Hide the queue section and clear its state (bar keeps polling – it's public)
+      const queueSection = document.getElementById('queue-section');
+      if (queueSection) queueSection.style.display = 'none';
+      document.getElementById('queue-results').innerHTML = '';
+      const queueInput = document.getElementById('queue-search-input');
+      if (queueInput) queueInput.value = '';
       clearToken();
       showLogin();
     });
@@ -1187,6 +1544,7 @@
         showDashboard();
         loadCameras();
         initControls();
+        initSpotify();
         return;
       }
 
@@ -1207,11 +1565,37 @@
         showDashboard();
         loadCameras();
         initControls();
+        initSpotify();
       } else {
         showLogin();
       }
+
+      // Start Spotify now-playing polling unconditionally – no auth required.
+      pollNowPlaying();
+      _npPollInterval = setInterval(pollNowPlaying, 5000);
     })();
   </script>
+
+  <!-- ── Spotify bar (fixed bottom, all screens) ────── -->
+  <div id="spotify-bar" aria-label="Spotify">
+    <h2>🎵 Now Playing</h2>
+    <div id="now-playing-section" aria-live="polite" aria-label="Currently playing track">
+      <img id="np-album-art" src="" alt="" style="display:none;" loading="lazy">
+      <div id="np-info">
+        <span id="np-track-name">Nothing playing</span>
+        <span id="np-artist-name"></span>
+      </div>
+      <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;" aria-label="Open in Spotify">↗ Spotify</a>
+    </div>
+    <!-- Add to Queue: only shown for access_level >= 2 -->
+    <div id="queue-section" style="display:none;" aria-label="Add to queue">
+      <div id="queue-search-row">
+        <input id="queue-search-input" type="text" placeholder="Add a song to queue…" maxlength="200" autocomplete="off" aria-label="Search for a song to add to queue">
+        <button id="queue-search-btn" class="control-btn" type="button">Search 🎵</button>
+      </div>
+      <div id="queue-results" role="list" aria-label="Search results"></div>
+    </div>
+  </div>
 </body>
 </html>
 
