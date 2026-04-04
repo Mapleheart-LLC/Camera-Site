@@ -77,8 +77,12 @@ services:
       # Optional: shared secret for Segpay postback HMAC-SHA256 verification
       - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
       # ── The Drool Log – Reddit scraper credentials ────
-      # Register a Reddit OAuth app at https://www.reddit.com/prefs/apps
-      # Set REDDIT_MODE=ifttt to receive posts via IFTTT webhooks instead of polling
+      # Set REDDIT_MODE to control how Reddit items are collected:
+      #   api    – poll Reddit directly via praw (requires OAuth app registration)
+      #   ifttt  – items arrive via POST to /api/drool/ifttt/reddit (may be blocked by WAF/proxy)
+      #   gsheet – poll a Google Sheet that your IFTTT applet writes to (recommended when
+      #            the direct webhook is blocked).  Share the sheet as "Anyone with the link
+      #            can view", then File → Share → Publish to web → CSV and paste the URL below.
       - REDDIT_MODE=${REDDIT_MODE:-api}
       - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
       - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
@@ -87,6 +91,8 @@ services:
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-drool-log/1.0}
       # Shared secret for the IFTTT webhook URL (?secret=...) – only needed when REDDIT_MODE=ifttt
       - REDDIT_IFTTT_SECRET=${REDDIT_IFTTT_SECRET:-}
+      # Google Sheets CSV export URL – only needed when REDDIT_MODE=gsheet
+      - REDDIT_GSHEET_CSV_URL=${REDDIT_GSHEET_CSV_URL:-}
       # ── The Drool Log – Twitter/X scraper credentials ─
       # Create an app at https://developer.twitter.com
       # To enable "Login with X" on the admin panel, register
