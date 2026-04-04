@@ -48,6 +48,7 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      padding-bottom: 68px;
     }
 
     /* scrollbar */
@@ -819,6 +820,54 @@
     // ── Init ──────────────────────────────────────────────────────────────────────
     loadProducts();
     updateCart();
+  </script>
+
+  <!-- ── Spotify Now Playing (fixed bottom bar) ──────── -->
+  <div id="spotify-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:#202020;border-top:1px solid #3d2a2e;padding:.75rem 1.5rem;align-items:center;gap:.75rem;flex-wrap:wrap;font-family:'Nunito',system-ui,sans-serif;" aria-label="Spotify">
+    <span style="font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:#9e7e82;white-space:nowrap;margin:0;">🎵 Now Playing</span>
+    <div style="display:flex;align-items:center;gap:.6rem;flex:1;min-width:0;">
+      <img id="np-album-art" src="" alt="" style="display:none;width:36px;height:36px;border-radius:4px;object-fit:cover;flex-shrink:0;" loading="lazy">
+      <div style="display:flex;flex-direction:column;overflow:hidden;max-width:220px;">
+        <span id="np-track-name" style="font-size:.85rem;font-weight:700;color:#f0e6e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Nothing playing</span>
+        <span id="np-artist-name" style="font-size:.75rem;color:#9e7e82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+      </div>
+      <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;font-size:.75rem;color:#1db954;text-decoration:none;border:1px solid #1db954;border-radius:4px;padding:.15rem .4rem;white-space:nowrap;flex-shrink:0;" aria-label="Open in Spotify">↗ Spotify</a>
+    </div>
+  </div>
+  <script>
+    (function () {
+      function updateNowPlaying(data) {
+        var bar    = document.getElementById('spotify-bar');
+        var art    = document.getElementById('np-album-art');
+        var track  = document.getElementById('np-track-name');
+        var artist = document.getElementById('np-artist-name');
+        var link   = document.getElementById('np-open-link');
+        if (!data || !data.configured) { bar.style.display = 'none'; return; }
+        bar.style.display = 'flex';
+        if (data.is_playing && data.track) {
+          var t = data.track;
+          track.textContent  = t.name;
+          artist.textContent = t.artists.join(', ');
+          if (t.album_art)    { art.src = t.album_art; art.alt = t.album || ''; art.style.display = 'inline-block'; }
+          else                { art.style.display = 'none'; }
+          if (t.external_url) { link.href = t.external_url; link.style.display = 'inline-block'; }
+          else                { link.style.display = 'none'; }
+        } else {
+          track.textContent  = 'Nothing playing';
+          artist.textContent = '';
+          art.style.display  = 'none';
+          link.style.display = 'none';
+        }
+      }
+      function poll() {
+        fetch('/api/spotify/now-playing')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(updateNowPlaying)
+          .catch(function () {});
+      }
+      poll();
+      setInterval(poll, 5000);
+    })();
   </script>
 </body>
 </html>

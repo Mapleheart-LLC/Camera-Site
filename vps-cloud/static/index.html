@@ -30,6 +30,7 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-start;
+      padding-bottom: 68px;
     }
 
     /* ── Pulsing paw loading animation ─────────────── */
@@ -505,12 +506,16 @@
     /* ── Spotify bar ────────────────────────────────────── */
     #spotify-bar {
       display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
       align-items: center;
       gap: 1rem;
       padding: .75rem 1.5rem;
       border-top: 1px solid #3d2a2e;
       background: #202020;
-      flex-shrink: 0;
       flex-wrap: wrap;
     }
 
@@ -964,26 +969,6 @@
         </div>
       </div>
     </div>
-    <!-- ── Spotify bar ───────────────────────────────── -->
-    <div id="spotify-bar" aria-label="Spotify">
-      <h2>🎵 Now Playing</h2>
-      <div id="now-playing-section" aria-live="polite" aria-label="Currently playing track">
-        <img id="np-album-art" src="" alt="" style="display:none;" loading="lazy">
-        <div id="np-info">
-          <span id="np-track-name">Nothing playing</span>
-          <span id="np-artist-name"></span>
-        </div>
-        <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;" aria-label="Open in Spotify">↗ Spotify</a>
-      </div>
-      <!-- Add to Queue: only shown for access_level >= 2 -->
-      <div id="queue-section" style="display:none;" aria-label="Add to queue">
-        <div id="queue-search-row">
-          <input id="queue-search-input" type="text" placeholder="Add a song to queue…" maxlength="200" autocomplete="off" aria-label="Search for a song to add to queue">
-          <button id="queue-search-btn" class="control-btn" type="button">Search 🎵</button>
-        </div>
-        <div id="queue-results" role="list" aria-label="Search results"></div>
-      </div>
-    </div>
   </section>
 
   <script>
@@ -1399,15 +1384,13 @@
     }
 
     function initSpotify() {
+      // Polling starts unconditionally at page load (see bottom of script).
+      // This function only handles the authenticated Add to Queue feature.
       const token = getToken();
       if (!token) return;
 
       const payload = decodeJwtPayload(token);
-      if (!payload || (payload.access_level || 0) < 1) return;
-
-      // Start polling now-playing every 5 seconds
-      pollNowPlaying();
-      _npPollInterval = setInterval(pollNowPlaying, 5000);
+      if (!payload) return;
 
       // Show Add to Queue for Tier 1+ (access_level >= 2)
       if ((payload.access_level || 0) >= 2) {
@@ -1526,10 +1509,10 @@
       if (badge) badge.style.display = 'none';
       // Clear persisted cooldown timestamps so a fresh login starts clean
       ['pishock', 'lovense'].forEach(d => sessionStorage.removeItem(`${d}_cooldown_until`));
-      // Stop Spotify polling and hide the bar
-      if (_npPollInterval) { clearInterval(_npPollInterval); _npPollInterval = null; }
-      document.getElementById('spotify-bar').style.display  = 'none';
-      document.getElementById('queue-results').innerHTML    = '';
+      // Hide the queue section and clear its state (bar keeps polling – it's public)
+      const queueSection = document.getElementById('queue-section');
+      if (queueSection) queueSection.style.display = 'none';
+      document.getElementById('queue-results').innerHTML = '';
       const queueInput = document.getElementById('queue-search-input');
       if (queueInput) queueInput.value = '';
       clearToken();
@@ -1586,8 +1569,33 @@
       } else {
         showLogin();
       }
+
+      // Start Spotify now-playing polling unconditionally – no auth required.
+      pollNowPlaying();
+      _npPollInterval = setInterval(pollNowPlaying, 5000);
     })();
   </script>
+
+  <!-- ── Spotify bar (fixed bottom, all screens) ────── -->
+  <div id="spotify-bar" aria-label="Spotify">
+    <h2>🎵 Now Playing</h2>
+    <div id="now-playing-section" aria-live="polite" aria-label="Currently playing track">
+      <img id="np-album-art" src="" alt="" style="display:none;" loading="lazy">
+      <div id="np-info">
+        <span id="np-track-name">Nothing playing</span>
+        <span id="np-artist-name"></span>
+      </div>
+      <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;" aria-label="Open in Spotify">↗ Spotify</a>
+    </div>
+    <!-- Add to Queue: only shown for access_level >= 2 -->
+    <div id="queue-section" style="display:none;" aria-label="Add to queue">
+      <div id="queue-search-row">
+        <input id="queue-search-input" type="text" placeholder="Add a song to queue…" maxlength="200" autocomplete="off" aria-label="Search for a song to add to queue">
+        <button id="queue-search-btn" class="control-btn" type="button">Search 🎵</button>
+      </div>
+      <div id="queue-results" role="list" aria-label="Search results"></div>
+    </div>
+  </div>
 </body>
 </html>
 
