@@ -1894,6 +1894,12 @@
           'Twitter / X':    ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token','twitter_oauth2_refresh_token'],
           Bluesky:          ['bsky_handle','bsky_app_password'],
         };
+        // Account identifier shown prominently per platform
+        const accountDisplay = {
+          'Reddit (API)':   { field: 'reddit_username', prefix: 'u/' },
+          'Twitter / X':    { field: 'twitter_user_id', prefix: 'User ID ' },
+          Bluesky:          { field: 'bsky_handle',     prefix: '' },
+        };
         grid.innerHTML = Object.entries(platforms).map(([label, fields]) => {
           const allSet = fields.every(f => data[f]?.effective_set);
           const badge  = allSet ? makeBadge('ok', '✔ Configured') : makeBadge('warn', '⚠ Not configured');
@@ -1903,8 +1909,14 @@
             return `<span style="font-size:.72rem;color:#9e7e82">${escHtml(f)}: <strong style="color:#e8aeb7">${escHtml(src)}</strong></span>`;
           }).filter(Boolean).join(' &nbsp; ');
           const modeNote = label.startsWith('Reddit') ? `<span style="font-size:.72rem;color:#9e7e82">mode: <strong style="color:#e8aeb7">${escHtml(mode)}</strong></span>` : '';
+          const acct = accountDisplay[label];
+          const acctVal = acct && data[acct.field]?.value;
+          const acctLine = acctVal
+            ? `<div style="font-size:.8rem;color:#c49ea5;margin-top:.1rem">🎯 Tracking: <strong style="color:#e8aeb7">${escHtml(acct.prefix)}${escHtml(acctVal)}</strong></div>`
+            : '';
           return `<div class="setting-tile" style="flex-direction:column;align-items:flex-start;gap:.35rem">
             <div style="display:flex;align-items:center;gap:.6rem"><div class="setting-label">${escHtml(label)}</div>${badge}${modeNote}</div>
+            ${acctLine}
             ${sources ? `<div style="line-height:1.6">${sources}</div>` : ''}
           </div>`;
         }).join('');

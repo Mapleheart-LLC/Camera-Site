@@ -844,8 +844,13 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
 }
 
 # Fields for which the actual value (not just set/not-set) is safe to expose
-# in the GET response because they are non-sensitive mode flags.
-_DROOL_CRED_EXPOSE_VALUE: set[str] = {"reddit_mode"}
+# in the GET response because they are non-sensitive identifiers/mode flags.
+_DROOL_CRED_EXPOSE_VALUE: set[str] = {
+    "reddit_mode",
+    "reddit_username",
+    "twitter_user_id",
+    "bsky_handle",
+}
 
 _REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt'
 
