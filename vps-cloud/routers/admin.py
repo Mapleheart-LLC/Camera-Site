@@ -37,7 +37,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from db import get_db, get_setting, set_setting
+from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -356,6 +356,109 @@ def admin_control_device(
 # Puppy Pouch – admin question management
 # ---------------------------------------------------------------------------
 
+# Maximum tweet body length for answer text (Twitter limit is 280; reserve
+# space for a newline + the share URL which Twitter counts as ~23 chars).
+_TWEET_MAX_TEXT = 250
+
+
+def _post_answer_tweet(question_id: str, answer_text: str) -> bool:
+    """Post the answer as a tweet using the stored OAuth 2.0 access token.
+
+    Attempts a single token refresh if the first request returns 401.
+    Returns True on success, False on any failure (non-blocking).
+    """
+    db_key_token   = "drool_twitter_oauth2_access_token"
+    db_key_refresh = "drool_twitter_oauth2_refresh_token"
+    db_key_client_id     = "drool_twitter_client_id"
+    db_key_client_secret = "drool_twitter_client_secret"
+
+    def _load(db_key: str, env_key: str = "") -> str:
+        try:
+            conn = get_db_connection()
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?", (db_key,)
+            ).fetchone()
+            conn.close()
+            if row and row[0]:
+                return row[0]
+        except Exception:
+            pass
+        return os.environ.get(env_key, "") if env_key else ""
+
+    def _refresh_token() -> str:
+        client_id     = _load(db_key_client_id,     "TWITTER_CLIENT_ID")
+        client_secret = _load(db_key_client_secret, "TWITTER_CLIENT_SECRET")
+        refresh_tok   = _load(db_key_refresh)
+        if not (client_id and client_secret and refresh_tok):
+            return ""
+        try:
+            import base64
+            creds = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            r = httpx.post(
+                "https://api.twitter.com/2/oauth2/token",
+                headers={"Authorization": f"Basic {creds}",
+                         "Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "refresh_token", "refresh_token": refresh_tok},
+                timeout=15.0,
+            )
+            r.raise_for_status()
+            data = r.json()
+            new_access  = data.get("access_token", "")
+            new_refresh = data.get("refresh_token", "")
+            if new_access:
+                conn = get_db_connection()
+                set_setting(conn, db_key_token, new_access)
+                if new_refresh:
+                    set_setting(conn, db_key_refresh, new_refresh)
+                conn.commit()
+                conn.close()
+            return new_access
+        except Exception as exc:
+            logger.warning("Tweet post: token refresh failed: %s", exc)
+            return ""
+
+    def _do_post(token: str, text: str) -> int:
+        try:
+            r = httpx.post(
+                "https://api.twitter.com/2/tweets",
+                headers={"Authorization": f"Bearer {token}",
+                         "Content-Type": "application/json"},
+                json={"text": text},
+                timeout=15.0,
+            )
+            return r.status_code
+        except Exception as exc:
+            logger.warning("Tweet post HTTP error: %s", exc)
+            return 0
+
+    access_token = _load(db_key_token)
+    if not access_token:
+        logger.debug("Tweet post: no OAuth 2.0 access token configured.")
+        return False
+
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if not base_url:
+        logger.warning("Tweet post: BASE_URL not set – cannot build an absolute share URL; skipping tweet.")
+        return False
+    share_url = f"{base_url}/q/{question_id}"
+
+    truncated = answer_text[:_TWEET_MAX_TEXT] + "..." if len(answer_text) > _TWEET_MAX_TEXT else answer_text
+    tweet_text = f"{truncated}\n\n{share_url}"
+
+    status_code = _do_post(access_token, tweet_text)
+    if status_code == 401:
+        # Token likely expired – refresh once and retry.
+        new_token = _refresh_token()
+        if new_token:
+            status_code = _do_post(new_token, tweet_text)
+
+    if status_code in (200, 201):
+        logger.info("Answer tweeted for question %s", question_id)
+        return True
+
+    logger.warning("Tweet post failed (status %s) for question %s", status_code, question_id)
+    return False
+
 
 class AnswerPayload(BaseModel):
     answer: str
@@ -416,7 +519,12 @@ def admin_answer_question(
         (payload.answer, question_id),
     )
     db.commit()
-    return {"id": question_id, "message": "Answer saved and question is now public 🐾"}
+    tweeted = _post_answer_tweet(question_id, payload.answer)
+    return {
+        "id": question_id,
+        "message": "Answer saved and question is now public 🐾",
+        "tweeted": tweeted,
+    }
 
 
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -723,13 +831,10 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
     "reddit_user_agent":     ("drool_reddit_user_agent",     "REDDIT_USER_AGENT",     False),
     # Reddit IFTTT secret (used when reddit_mode == 'ifttt')
     "reddit_ifttt_secret":   ("drool_reddit_ifttt_secret",   "REDDIT_IFTTT_SECRET",   True),
-    "twitter_bearer_token":       ("drool_twitter_bearer_token",        "TWITTER_BEARER_TOKEN",   True),
     "twitter_user_id":            ("drool_twitter_user_id",              "TWITTER_USER_ID",        False),
-    "twitter_api_key":            ("drool_twitter_api_key",              "TWITTER_API_KEY",        True),
-    "twitter_api_secret":         ("drool_twitter_api_secret",           "TWITTER_API_SECRET",     True),
-    "twitter_access_token":       ("drool_twitter_access_token",         "TWITTER_ACCESS_TOKEN",   True),
-    "twitter_access_secret":      ("drool_twitter_access_secret",        "TWITTER_ACCESS_SECRET",  True),
-    # OAuth 2.0 credentials for bookmark scraping (PKCE flow)
+    # OAuth 2.0 credentials (set Client ID + Secret first, then use the
+    # "Connect Twitter/X" button to complete the PKCE flow and populate the
+    # access/refresh tokens and user ID automatically).
     "twitter_client_id":          ("drool_twitter_client_id",            "TWITTER_CLIENT_ID",      False),
     "twitter_client_secret":      ("drool_twitter_client_secret",        "TWITTER_CLIENT_SECRET",  True),
     "twitter_oauth2_access_token":  ("drool_twitter_oauth2_access_token",  "",                     True),
@@ -753,12 +858,7 @@ class DroolCredsUpdate(BaseModel):
     reddit_password:       Optional[str] = None
     reddit_user_agent:     Optional[str] = None
     reddit_ifttt_secret:   Optional[str] = None
-    twitter_bearer_token:          Optional[str] = None
     twitter_user_id:               Optional[str] = None
-    twitter_api_key:               Optional[str] = None
-    twitter_api_secret:            Optional[str] = None
-    twitter_access_token:          Optional[str] = None
-    twitter_access_secret:         Optional[str] = None
     twitter_client_id:             Optional[str] = None
     twitter_client_secret:         Optional[str] = None
     twitter_oauth2_access_token:   Optional[str] = None
