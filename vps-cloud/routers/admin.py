@@ -834,7 +834,10 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
     # Google Sheets CSV export URL (used when reddit_mode == 'gsheet')
     # Share the sheet as "Anyone with the link can view", then:
     #   File → Share → Publish to web → CSV → copy the link
-    "reddit_gsheet_csv_url": ("drool_reddit_gsheet_csv_url", "REDDIT_GSHEET_CSV_URL", False),
+    "reddit_gsheet_csv_url":   ("drool_reddit_gsheet_csv_url",   "REDDIT_GSHEET_CSV_URL",   False),
+    # Second sheet URL – IFTTT needs a separate applet for upvotes vs saves,
+    # which write to different sheets.  Leave blank if only one sheet is in use.
+    "reddit_gsheet_csv_url_2": ("drool_reddit_gsheet_csv_url_2", "REDDIT_GSHEET_CSV_URL_2", False),
     "twitter_user_id":            ("drool_twitter_user_id",              "TWITTER_USER_ID",        False),
     # OAuth 2.0 credentials (set Client ID + Secret first, then use the
     # "Connect Twitter/X" button to complete the PKCE flow and populate the
@@ -849,7 +852,7 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
 
 # Fields for which the actual value (not just set/not-set) is safe to expose
 # in the GET response because they are non-sensitive mode flags or public URLs.
-_DROOL_CRED_EXPOSE_VALUE: set[str] = {"reddit_mode", "reddit_gsheet_csv_url"}
+_DROOL_CRED_EXPOSE_VALUE: set[str] = {"reddit_mode", "reddit_gsheet_csv_url", "reddit_gsheet_csv_url_2"}
 
 _REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt', 'gsheet'
 
@@ -862,7 +865,8 @@ class DroolCredsUpdate(BaseModel):
     reddit_password:       Optional[str] = None
     reddit_user_agent:     Optional[str] = None
     reddit_ifttt_secret:   Optional[str] = None
-    reddit_gsheet_csv_url: Optional[str] = None
+    reddit_gsheet_csv_url:   Optional[str] = None
+    reddit_gsheet_csv_url_2: Optional[str] = None
     twitter_user_id:               Optional[str] = None
     twitter_client_id:             Optional[str] = None
     twitter_client_secret:         Optional[str] = None

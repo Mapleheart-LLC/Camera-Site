@@ -13,14 +13,19 @@ REDDIT_MODE            – 'api' (default), 'ifttt', or 'gsheet'
                          'gsheet' – poll a Google Sheet that IFTTT writes to (recommended
                                     when the direct webhook is blocked by a proxy/WAF)
 
-REDDIT_GSHEET_CSV_URL  – (mode=gsheet) Public CSV export URL of the Google Sheet that
-                         your IFTTT applet writes to.  Share the sheet as "Anyone with
-                         the link can view", then copy the CSV export URL:
+REDDIT_GSHEET_CSV_URL  – (mode=gsheet) Public CSV export URL of the first Google Sheet that
+                         your IFTTT applet writes to (e.g. upvoted posts).  Share the sheet
+                         as "Anyone with the link can view", then publish as CSV via:
                            File → Share → Publish to web → CSV → copy link
-                         e.g. https://docs.google.com/spreadsheets/d/<ID>/export?format=csv
+                         e.g. https://docs.google.com/spreadsheets/d/<ID>/pub?output=csv
                          The scraper auto-detects IFTTT column headers (Title / PostURL /
                          ImageURL / CreatedAt).  If no headers are recognised it falls back
                          to positional order: col0=title, col1=url, col2=media, col3=timestamp.
+
+REDDIT_GSHEET_CSV_URL_2 – (mode=gsheet, optional) CSV export URL of a second Google Sheet
+                          (e.g. saved posts).  IFTTT requires a separate applet for upvotes
+                          and saves, which write to different sheets – configure both here to
+                          capture everything.  Same column-detection rules apply.
 
 REDDIT_CLIENT_ID       – Reddit OAuth app client ID (mode=api only)
 REDDIT_CLIENT_SECRET   – Reddit OAuth app client secret (mode=api only)
@@ -296,53 +301,51 @@ def _detect_gsheet_columns(header_row: list[str]) -> dict[str, int]:
     return mapping
 
 
-def _scrape_gsheet_reddit() -> None:
-    """Fetch Reddit items from a Google Sheet that IFTTT writes to.
+def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
+    """Fetch Reddit items from a single Google Sheet CSV export URL.
 
-    The sheet must be publicly readable (shared as "Anyone with the link can
-    view") and the CSV export URL must be stored in the
-    ``drool_reddit_gsheet_csv_url`` setting or the ``REDDIT_GSHEET_CSV_URL``
-    environment variable.
+    Returns a list of ``(platform, orig_url, media_url, title, ts)`` tuples
+    for rows that have not yet been inserted into drool_archive.  Insertion
+    itself is left to the caller so that both sheets share one DB commit.
+
+    ``label`` is a human-readable name used in log messages (e.g. 'sheet 1').
 
     Column detection is flexible: any row 0 header matching common IFTTT
     ingredient names (PostURL, Title, ImageURL, CreatedAt …) is used.  If no
     header row is recognised the scraper falls back to positional order:
     col 0 = title, col 1 = url, col 2 = media, col 3 = timestamp.
     """
-    csv_url = _load_credential("drool_reddit_gsheet_csv_url", "REDDIT_GSHEET_CSV_URL")
-    if not csv_url:
-        logger.debug("Reddit gsheet scraper: REDDIT_GSHEET_CSV_URL not configured, skipping.")
-        return
+    tag = f"Reddit gsheet scraper ({label})" if label else "Reddit gsheet scraper"
 
     try:
         resp = httpx.get(csv_url, follow_redirects=True, timeout=20)
         resp.raise_for_status()
     except Exception as exc:
-        logger.warning("Reddit gsheet scraper: failed to fetch CSV: %s", exc)
-        return
+        logger.warning("%s: failed to fetch CSV: %s", tag, exc)
+        return []
 
     try:
         reader = csv.reader(io.StringIO(resp.text))
         rows = list(reader)
     except Exception as exc:
-        logger.warning("Reddit gsheet scraper: failed to parse CSV: %s", exc)
-        return
+        logger.warning("%s: failed to parse CSV: %s", tag, exc)
+        return []
 
     if not rows:
-        logger.debug("Reddit gsheet scraper: CSV is empty.")
-        return
+        logger.debug("%s: CSV is empty.", tag)
+        return []
 
     # Detect whether the first row is a header.
     first = rows[0]
     col_map = _detect_gsheet_columns(first)
     if col_map:
         data_rows = rows[1:]  # skip header
-        logger.debug("Reddit gsheet scraper: detected columns %s", col_map)
+        logger.debug("%s: detected columns %s", tag, col_map)
     else:
         # No recognisable header – treat first row as data and use positional defaults.
         data_rows = rows
         col_map = {"title": 0, "url": 1, "media": 2, "timestamp": 3}
-        logger.debug("Reddit gsheet scraper: no header detected, using positional columns.")
+        logger.debug("%s: no header detected, using positional columns.", tag)
 
     url_col   = col_map.get("url")
     title_col = col_map.get("title")
@@ -351,17 +354,16 @@ def _scrape_gsheet_reddit() -> None:
 
     if url_col is None:
         logger.warning(
-            "Reddit gsheet scraper: could not identify a URL column. "
+            "%s: could not identify a URL column. "
             "Check that the sheet has a header row with a column named "
-            "'PostURL', 'URL', 'Link', or 'Permalink'."
+            "'PostURL', 'URL', 'Link', or 'Permalink'.",
+            tag,
         )
-        return
+        return []
 
     conn = get_db_connection()
+    newly_found: list[tuple] = []
     try:
-        new_count = 0
-        newly_inserted: list[tuple] = []
-
         for row in data_rows:
             if not row or url_col >= len(row):
                 continue
@@ -370,19 +372,19 @@ def _scrape_gsheet_reddit() -> None:
             if not orig_url:
                 continue
 
-            title       = row[title_col].strip() if title_col is not None and title_col < len(row) else ""
-            media_url   = row[media_col].strip() if media_col is not None and media_col < len(row) else ""
-            ts_raw      = row[ts_col].strip()    if ts_col    is not None and ts_col    < len(row) else ""
+            title     = row[title_col].strip() if title_col is not None and title_col < len(row) else ""
+            media_url = row[media_col].strip() if media_col is not None and media_col < len(row) else ""
+            ts_raw    = row[ts_col].strip()    if ts_col    is not None and ts_col    < len(row) else ""
 
             # Parse timestamp; fall back to now if unparseable.
             ts: str
             if ts_raw:
                 try:
-                    # Try ISO format first, then common IFTTT format "April 3, 2025 at 05:00PM"
                     parsed = datetime.fromisoformat(ts_raw)
                     ts = parsed.isoformat()
                 except ValueError:
                     try:
+                        # Common IFTTT format: "April 3, 2025 at 05:00PM"
                         parsed = datetime.strptime(ts_raw, "%B %d, %Y at %I:%M%p")
                         ts = parsed.replace(tzinfo=timezone.utc).isoformat()
                     except ValueError:
@@ -396,22 +398,81 @@ def _scrape_gsheet_reddit() -> None:
             if existing:
                 continue
 
+            newly_found.append(("reddit", orig_url, media_url or None, title or None, ts))
+    except Exception as exc:
+        logger.error("%s: error reading rows: %s", tag, exc)
+    finally:
+        conn.close()
+
+    return newly_found
+
+
+def _scrape_gsheet_reddit() -> None:
+    """Fetch Reddit items from one or two Google Sheets that IFTTT writes to.
+
+    IFTTT typically requires separate applets for upvoted posts and saved posts,
+    each writing to its own sheet.  Configure both URLs to capture everything:
+
+    - ``REDDIT_GSHEET_CSV_URL``   – first sheet (e.g. upvoted posts)
+    - ``REDDIT_GSHEET_CSV_URL_2`` – second sheet (e.g. saved posts), optional
+
+    Each sheet must be publicly readable ("Anyone with the link can view").
+    Publish as CSV via *File → Share → Publish to web → CSV* and paste the URL.
+    """
+    url1 = _load_credential("drool_reddit_gsheet_csv_url",   "REDDIT_GSHEET_CSV_URL")
+    url2 = _load_credential("drool_reddit_gsheet_csv_url_2", "REDDIT_GSHEET_CSV_URL_2")
+
+    if not url1 and not url2:
+        logger.debug("Reddit gsheet scraper: no CSV URLs configured, skipping.")
+        return
+
+    # Collect new items from each configured sheet.
+    all_new: list[tuple] = []
+    if url1:
+        all_new.extend(_scrape_gsheet_from_url(url1, label="sheet 1"))
+    if url2:
+        all_new.extend(_scrape_gsheet_from_url(url2, label="sheet 2"))
+
+    if not all_new:
+        logger.debug("Reddit gsheet scraper: no new items across all sheets.")
+        return
+
+    # De-duplicate across the two sheets (same URL appearing in both).
+    seen: set[str] = set()
+    deduped: list[tuple] = []
+    for item in all_new:
+        orig_url = item[1]
+        if orig_url not in seen:
+            seen.add(orig_url)
+            deduped.append(item)
+
+    conn = get_db_connection()
+    try:
+        new_count = 0
+        newly_inserted: list[tuple] = []
+        for platform, orig_url, media_url, title, ts in deduped:
+            # Re-check DB in case the first sheet already inserted a duplicate
+            # from the second sheet during this same run.
+            existing = conn.execute(
+                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
+            ).fetchone()
+            if existing:
+                continue
             conn.execute(
                 """
                 INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES ('reddit', ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (orig_url, media_url or None, title or None, ts),
+                (platform, orig_url, media_url, title, ts),
             )
-            newly_inserted.append(("reddit", orig_url, media_url or None, title or None, ts))
+            newly_inserted.append((platform, orig_url, media_url, title, ts))
             new_count += 1
-
         conn.commit()
         if new_count:
             logger.info("Reddit gsheet scraper: archived %d new item(s).", new_count)
             _notify_new_items(newly_inserted)
         else:
-            logger.debug("Reddit gsheet scraper: no new items.")
+            logger.debug("Reddit gsheet scraper: no new items after DB dedup.")
     except Exception as exc:
         logger.error("Reddit gsheet scraper error: %s", exc)
     finally:

@@ -91,8 +91,11 @@ services:
       - REDDIT_USER_AGENT=${REDDIT_USER_AGENT:-drool-log/1.0}
       # Shared secret for the IFTTT webhook URL (?secret=...) – only needed when REDDIT_MODE=ifttt
       - REDDIT_IFTTT_SECRET=${REDDIT_IFTTT_SECRET:-}
-      # Google Sheets CSV export URL – only needed when REDDIT_MODE=gsheet
+      # Google Sheets CSV export URLs – only needed when REDDIT_MODE=gsheet
+      # IFTTT needs separate applets for upvotes and saves; each writes to its own sheet.
+      # Publish each sheet via File → Share → Publish to web → CSV and paste the URL here.
       - REDDIT_GSHEET_CSV_URL=${REDDIT_GSHEET_CSV_URL:-}
+      - REDDIT_GSHEET_CSV_URL_2=${REDDIT_GSHEET_CSV_URL_2:-}
       # ── The Drool Log – Twitter/X scraper credentials ─
       # Create an app at https://developer.twitter.com
       # To enable "Login with X" on the admin panel, register
