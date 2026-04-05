@@ -23,7 +23,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from db import get_db
@@ -121,7 +121,7 @@ def dispatch_web_push(
         return
 
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import webpush
     except ImportError:
         logger.warning("pywebpush not installed; skipping push notification")
         return

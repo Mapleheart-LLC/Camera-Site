@@ -956,7 +956,6 @@ _backup_scheduler = None
 def _run_db_backup() -> None:
     """Dump the SQLite database to a gzip file in BACKUPS_DIR."""
     import gzip
-    import shutil
     backup_dir = os.environ.get("BACKUPS_DIR", "/backups")
     os.makedirs(backup_dir, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")

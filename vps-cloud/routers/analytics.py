@@ -13,7 +13,7 @@ Endpoints (all require creator JWT)
 import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+
 
 from fastapi import APIRouter, Depends, Query
 from db import get_db

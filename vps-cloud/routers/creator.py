@@ -43,7 +43,6 @@ from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     get_current_creator,
 )

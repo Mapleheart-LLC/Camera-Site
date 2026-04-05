@@ -18,7 +18,7 @@ Endpoints
 import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
