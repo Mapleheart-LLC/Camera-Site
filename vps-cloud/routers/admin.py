@@ -1063,6 +1063,7 @@ class CreatorUpdate(BaseModel):
     new_password: Optional[str] = Field(None, min_length=8, max_length=128)
     forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     agent_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    allow_free_content: Optional[bool] = None
 
 
 @router.get("/creators")
@@ -1181,6 +1182,8 @@ def admin_update_creator(
         _allowed_columns["agent_email"] = payload.agent_email
         if payload.agent_email != row["agent_email"]:
             email_reprovisioning_needed = True
+    if payload.allow_free_content is not None:
+        _allowed_columns["allow_free_content"] = 1 if payload.allow_free_content else 0
 
     if not _allowed_columns:
         return dict(row)

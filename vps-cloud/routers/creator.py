@@ -493,7 +493,7 @@ def public_creator_profile(
     """
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color
+        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content
           FROM creator_accounts
          WHERE handle = ? AND is_active = 1
         """,
@@ -508,5 +508,6 @@ def public_creator_profile(
 
     return {
         **dict(row),
+        "allow_free_content": bool(row["allow_free_content"]),
         "public_email": public_email,
     }

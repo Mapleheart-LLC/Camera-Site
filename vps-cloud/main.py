@@ -41,6 +41,7 @@ from routers.discord_oauth import register_metadata_schema, router as discord_oa
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
 from routers.cloudflare import router as cloudflare_router
+from routers.member import router as member_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -447,6 +448,52 @@ def init_db() -> None:
         except sqlite3.OperationalError as _e:
             if "duplicate column" not in str(_e).lower():
                 raise
+    # Migration: add member portal columns to site_users.
+    #   display_name               – public name shown in the member portal
+    #   display_name_changed_count – number of changes made in the current year
+    #   display_name_last_reset    – calendar year (YYYY) when the counter was last reset
+    for _col, _defn in [
+        ("display_name",               "TEXT"),
+        ("display_name_changed_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("display_name_last_reset",    "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE site_users ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # Migration: allow_free_content flag on creator_accounts.
+    #   When 1, non-subscribed members can browse this creator's feed.
+    try:
+        conn.execute(
+            "ALTER TABLE creator_accounts ADD COLUMN allow_free_content INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # Member portal tables.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS display_name_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL REFERENCES site_users(id),
+            old_name   TEXT,
+            new_name   TEXT    NOT NULL,
+            changed_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS member_follows (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            followed_at    TEXT    NOT NULL,
+            UNIQUE(user_id, creator_handle)
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -867,6 +914,7 @@ app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
 app.include_router(cloudflare_router)
+app.include_router(member_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
@@ -1973,6 +2021,19 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Member portal  –  /member  (also reached via any subdomain/member)
+# ---------------------------------------------------------------------------
+
+@app.get("/member", response_class=HTMLResponse, include_in_schema=False)
+def member_portal():
+    """Serve the subscriber member portal SPA."""
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), "static", "member.html")
+    with open(_path, encoding="utf-8") as _f:
+        return HTMLResponse(content=_f.read())
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

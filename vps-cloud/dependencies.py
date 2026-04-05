@@ -56,6 +56,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[dict]:
+    """Like get_current_user but returns None instead of raising 401 when unauthenticated."""
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        fanvue_id: Optional[str] = payload.get("sub")
+        access_level: int = int(payload.get("access_level", 0))
+        if fanvue_id is None:
+            return None
+        return {"fanvue_id": fanvue_id, "access_level": access_level}
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
