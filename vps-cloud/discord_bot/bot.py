@@ -491,6 +491,8 @@ async def _api_put(path: str, json_body: dict) -> Optional[dict]:
             resp = await c.put(f"{_backend()}{path}", json=json_body, headers=_bot_headers())
         if resp.status_code == 200:
             return resp.json()
+        if resp.status_code == 204:
+            return {}  # success, no content
     except Exception as exc:  # noqa: BLE001
         logger.warning("PUT %s failed: %s", path, exc)
     return None
@@ -1321,6 +1323,8 @@ async def cmd_rename_server(interaction: discord.Interaction, name: str = None) 
             )
             return
         name = suggested.strip('"\'').strip()
+        if name != suggested.strip():
+            logger.debug("AI server name had surrounding quotes — stripped: %r → %r", suggested, name)
 
     old_name = interaction.guild.name
     try:
@@ -1423,7 +1427,12 @@ async def cmd_add_link(
             f"Return ONLY the single emoji character — nothing else.",
             max_tokens=5,
         )
-        emoji = (suggested_emoji or "🔗").strip()[:4]
+        # Safely extract a single emoji: take text up to the first space (compound
+        # emojis with ZWJ joiners don't contain spaces) and fall back if too long.
+        raw = (suggested_emoji or "").strip()
+        emoji = raw.split()[0] if raw else "🔗"
+        if len(emoji.encode("utf-8")) > 32:  # unreasonably long — not a real emoji
+            emoji = "🔗"
 
     result = await _api_post("/api/discord/bot/links", {
         "title": title, "url": url, "emoji": emoji, "sort_order": 0,
