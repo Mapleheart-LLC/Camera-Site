@@ -1117,31 +1117,29 @@ def admin_update_creator(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
 
-    updates: list[str] = []
-    params: list = []
-
+    # Build update using an explicit column→value map so no user input ever
+    # reaches the SQL column name position (no f-string interpolation on input).
+    _allowed_columns: dict[str, object] = {}
     if payload.display_name is not None:
-        updates.append("display_name = ?")
-        params.append(payload.display_name)
-
+        _allowed_columns["display_name"] = payload.display_name
     if payload.is_active is not None:
-        updates.append("is_active = ?")
-        params.append(1 if payload.is_active else 0)
-
+        _allowed_columns["is_active"] = 1 if payload.is_active else 0
     if payload.new_password is not None:
-        updates.append("hashed_password = ?")
-        params.append(_creator_hash_password(payload.new_password))
+        _allowed_columns["hashed_password"] = _creator_hash_password(payload.new_password)
 
-    if not updates:
+    if not _allowed_columns:
         return dict(row)
 
-    params.append(handle)
+    # Column names come exclusively from the _allowed_columns dict keys above —
+    # they are never derived from user input.
+    set_clause = ", ".join(f"{col} = ?" for col in _allowed_columns)
+    params = list(_allowed_columns.values()) + [handle]
     db.execute(
-        f"UPDATE creator_accounts SET {', '.join(updates)} WHERE handle = ?",
+        f"UPDATE creator_accounts SET {set_clause} WHERE handle = ?",
         params,
     )
     db.commit()
-    logger.info("Admin '%s' updated creator account '%s': %s.", admin_user, handle, ", ".join(updates))
+    logger.info("Admin '%s' updated creator account '%s': %s.", admin_user, handle, ", ".join(_allowed_columns))
 
     updated = db.execute(
         "SELECT handle, display_name, is_active FROM creator_accounts WHERE handle = ?",

@@ -424,8 +424,9 @@ def init_db() -> None:
             conn.execute(
                 f"ALTER TABLE {_table} ADD COLUMN creator_handle TEXT NOT NULL DEFAULT 'mochii'"
             )
-        except Exception:
-            pass  # column already exists
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise  # re-raise unexpected errors; swallow only duplicate-column
     conn.commit()
     conn.close()
 
