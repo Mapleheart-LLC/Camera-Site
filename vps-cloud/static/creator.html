@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Become a creator on mochii.live — own your content, build your den." />
+  <title>Join the Pack — mochii.live Creators</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Nav ──────────────────────────────────────────── */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1.75rem;
+      background: #1e1e1e;
+      border-bottom: 1px solid #3d2a2e;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .nav-logo {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      text-decoration: none;
+      letter-spacing: .01em;
+    }
+
+    .nav-signin {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .5rem 1.1rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-size: .88rem;
+      font-weight: 700;
+      font-family: inherit;
+      text-decoration: none;
+      transition: background .2s, color .2s, box-shadow .2s;
+    }
+
+    .nav-signin:hover {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+    }
+
+    /* ── Hero ─────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 5rem 1.5rem 3.5rem;
+    }
+
+    .hero-paw {
+      font-size: 3.5rem;
+      display: block;
+      margin-bottom: 1rem;
+      animation: pawFloat 3s ease-in-out infinite;
+      filter: drop-shadow(0 0 18px rgba(220, 80, 100, 0.45));
+    }
+
+    @keyframes pawFloat {
+      0%, 100% { transform: translateY(0) rotate(-4deg); }
+      50%       { transform: translateY(-10px) rotate(4deg); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5.5vw, 3.4rem);
+      font-weight: 800;
+      color: #e8aeb7;
+      letter-spacing: -.02em;
+      margin-bottom: .6rem;
+      text-shadow: 0 0 40px rgba(232, 100, 120, 0.35);
+    }
+
+    .hero-tagline {
+      font-size: 1.05rem;
+      color: #9e7e82;
+      font-weight: 600;
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Features ─────────────────────────────────────── */
+    .features {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    .features-label {
+      font-size: .7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .13em;
+      color: #6a4a4e;
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .feature-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .feature-card {
+      flex: 1 1 200px;
+      max-width: 280px;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 1.5rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+    }
+
+    .feature-card:hover {
+      border-color: #6a3a42;
+      box-shadow: 0 6px 24px rgba(232,174,183,.1);
+      transform: translateY(-3px);
+    }
+
+    .feature-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .feature-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    .feature-desc {
+      font-size: .88rem;
+      color: #9e7e82;
+      font-weight: 600;
+      line-height: 1.55;
+    }
+
+    /* ── CTA ──────────────────────────────────────────── */
+    .cta {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .cta-divider {
+      width: 40px;
+      height: 2px;
+      background: #3d2a2e;
+      border-radius: 2px;
+    }
+
+    .cta h2 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 800;
+      color: #f0e6e8;
+      letter-spacing: -.01em;
+    }
+
+    .btn-pink {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .75rem 1.75rem;
+      background: linear-gradient(135deg, #e8aeb7 0%, #d4748a 100%);
+      border-radius: 12px;
+      color: #1a1a1a;
+      font-size: 1rem;
+      font-weight: 800;
+      font-family: inherit;
+      text-decoration: none;
+      transition: opacity .2s, box-shadow .2s, transform .15s;
+      box-shadow: 0 4px 18px rgba(232,174,183,.3);
+    }
+
+    .btn-pink:hover {
+      opacity: .9;
+      box-shadow: 0 6px 26px rgba(232,174,183,.45);
+      transform: translateY(-2px);
+    }
+
+    .cta-apply {
+      font-size: .88rem;
+      color: #9e7e82;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+
+    .cta-apply a {
+      color: #e8aeb7;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .cta-apply a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── Footer ───────────────────────────────────────── */
+    footer {
+      margin-top: auto;
+      border-top: 1px solid #3d2a2e;
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .footer-copy {
+      font-size: .78rem;
+      color: #6a4a4e;
+      font-weight: 600;
+    }
+
+    .footer-back {
+      font-size: .82rem;
+      color: #9e7e82;
+      text-decoration: none;
+      font-weight: 700;
+      transition: color .18s;
+    }
+
+    .footer-back:hover {
+      color: #e8aeb7;
+    }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 500px) {
+      .feature-card {
+        max-width: 100%;
+      }
+
+      .hero {
+        padding: 3.5rem 1.25rem 2.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="nav">
+    <a href="https://mochii.live/" class="nav-logo">🐾 mochii.live</a>
+    <a href="/creator-dash.html" class="nav-signin">Sign In</a>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="hero-paw" aria-hidden="true">🐾</span>
+    <h1>Join the Pack</h1>
+    <p class="hero-tagline">become a creator on mochii.live and own your content.</p>
+  </section>
+
+  <!-- Features -->
+  <section class="features" aria-labelledby="features-label">
+    <p class="features-label" id="features-label">what you get</p>
+    <div class="feature-cards">
+
+      <div class="feature-card">
+        <span class="feature-icon" aria-hidden="true">🎥</span>
+        <p class="feature-title">Your Own Space</p>
+        <p class="feature-desc">Your own subdomain — <em>yourhandle.mochii.live</em> — and a personal dashboard to manage everything.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon" aria-hidden="true">💬</span>
+        <p class="feature-title">Q&amp;A Built-In</p>
+        <p class="feature-desc">Anonymous question inbox ready out of the box. Answer at your own pace, on your own terms.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon" aria-hidden="true">💧</span>
+        <p class="feature-title">Drool Log</p>
+        <p class="feature-desc">Your curated stream of moments from the web. Share what inspires you, all in one place.</p>
+      </div>
+
+      <div class="feature-card">
+        <span class="feature-icon" aria-hidden="true">💳</span>
+        <p class="feature-title">Subscriptions</p>
+        <p class="feature-desc">Segpay-powered subscription payments. No middleman, no platform cut eating into your earnings.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="cta-divider" aria-hidden="true"></div>
+    <h2>Ready to build your den?</h2>
+    <a href="/creator-dash.html" class="btn-pink">Access Your Dashboard →</a>
+    <p class="cta-apply">
+      New here? To apply for a creator account, reach out at
+      <a href="mailto:[CONTACT]">[CONTACT]</a>.
+    </p>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p class="footer-copy">© mochii.live — powered by passion 🐾</p>
+    <a href="https://mochii.live/" class="footer-back">← back to mochii.live</a>
+  </footer>
+
+</body>
+</html>
