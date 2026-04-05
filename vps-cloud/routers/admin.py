@@ -821,7 +821,7 @@ def admin_list_orders(
 
 # Mapping: request field → (settings_table_key, env_var_fallback, is_secret)
 _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
-    # Reddit mode toggle – value is 'api' (default) or 'ifttt'
+    # Reddit mode toggle – value is 'api' (default), 'ifttt', or 'gsheet'
     "reddit_mode":           ("drool_reddit_mode",           "REDDIT_MODE",           False),
     # Reddit API credentials (used when reddit_mode == 'api')
     "reddit_client_id":      ("drool_reddit_client_id",      "REDDIT_CLIENT_ID",      False),
@@ -831,6 +831,13 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
     "reddit_user_agent":     ("drool_reddit_user_agent",     "REDDIT_USER_AGENT",     False),
     # Reddit IFTTT secret (used when reddit_mode == 'ifttt')
     "reddit_ifttt_secret":   ("drool_reddit_ifttt_secret",   "REDDIT_IFTTT_SECRET",   True),
+    # Google Sheets CSV export URL (used when reddit_mode == 'gsheet')
+    # Share the sheet as "Anyone with the link can view", then:
+    #   File → Share → Publish to web → CSV → copy the link
+    "reddit_gsheet_csv_url":   ("drool_reddit_gsheet_csv_url",   "REDDIT_GSHEET_CSV_URL",   False),
+    # Second sheet URL – IFTTT needs a separate applet for upvotes vs saves,
+    # which write to different sheets.  Leave blank if only one sheet is in use.
+    "reddit_gsheet_csv_url_2": ("drool_reddit_gsheet_csv_url_2", "REDDIT_GSHEET_CSV_URL_2", False),
     "twitter_user_id":            ("drool_twitter_user_id",              "TWITTER_USER_ID",        False),
     # OAuth 2.0 credentials (set Client ID + Secret first, then use the
     # "Connect Twitter/X" button to complete the PKCE flow and populate the
@@ -844,25 +851,30 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
 }
 
 # Fields for which the actual value (not just set/not-set) is safe to expose
-# in the GET response because they are non-sensitive identifiers/mode flags.
+# in the GET response because they are non-sensitive identifiers, mode flags,
+# or public URLs.
 _DROOL_CRED_EXPOSE_VALUE: set[str] = {
     "reddit_mode",
     "reddit_username",
+    "reddit_gsheet_csv_url",
+    "reddit_gsheet_csv_url_2",
     "twitter_user_id",
     "bsky_handle",
 }
 
-_REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt'
+_REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt', 'gsheet'
 
 
 class DroolCredsUpdate(BaseModel):
-    reddit_mode:           Optional[str] = None  # 'api' or 'ifttt'
+    reddit_mode:           Optional[str] = None  # 'api', 'ifttt', or 'gsheet'
     reddit_client_id:      Optional[str] = None
     reddit_client_secret:  Optional[str] = None
     reddit_username:       Optional[str] = None
     reddit_password:       Optional[str] = None
     reddit_user_agent:     Optional[str] = None
     reddit_ifttt_secret:   Optional[str] = None
+    reddit_gsheet_csv_url:   Optional[str] = None
+    reddit_gsheet_csv_url_2: Optional[str] = None
     twitter_user_id:               Optional[str] = None
     twitter_client_id:             Optional[str] = None
     twitter_client_secret:         Optional[str] = None
@@ -921,10 +933,10 @@ def put_drool_credentials(
         if value is None:
             continue  # not provided – leave unchanged
         # Validate the mode field
-        if field == "reddit_mode" and value not in (_REDDIT_MODE_DEFAULT, "ifttt", ""):
+        if field == "reddit_mode" and value not in (_REDDIT_MODE_DEFAULT, "ifttt", "gsheet", ""):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="reddit_mode must be 'api' or 'ifttt'.",
+                detail="reddit_mode must be 'api', 'ifttt', or 'gsheet'.",
             )
         if value == "":
             # Empty string → delete the DB entry (revert to env fallback)

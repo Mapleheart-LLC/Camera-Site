@@ -726,6 +726,9 @@
                 <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
                   <input type="radio" name="reddit-mode" id="reddit-mode-ifttt" value="ifttt" /> ⚡ IFTTT Webhook
                 </label>
+                <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
+                  <input type="radio" name="reddit-mode" id="reddit-mode-gsheet" value="gsheet" /> 📊 Google Sheets
+                </label>
                 <button id="dc-reddit-mode-save-btn" class="btn-sm btn-edit" style="margin-left:auto">Save Mode 🐾</button>
                 <p id="dc-reddit-mode-error" style="font-size:.82rem;color:#f87171;align-self:center"></p>
               </div>
@@ -770,11 +773,32 @@
                   </p>
                 </div>
               </div>
+              <!-- GSheet fields (shown when mode = gsheet) -->
+              <div id="reddit-gsheet-fields" style="display:none">
+                <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.75rem">
+                  Share each Google Sheet as <em>Anyone with the link can view</em>, then publish it as CSV via
+                  <em>File → Share → Publish to web → CSV</em> and paste the URL below.
+                  IFTTT requires separate applets for upvoted posts and saved posts, each writing to its own sheet.
+                </p>
+                <div class="form-row">
+                  <div class="form-field" style="flex:1">
+                    <label for="dc-reddit-gsheet-url">Sheet 1 CSV URL (e.g. upvotes)</label>
+                    <input id="dc-reddit-gsheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-field" style="flex:1">
+                    <label for="dc-reddit-gsheet-url-2">Sheet 2 CSV URL (e.g. saves, optional)</label>
+                    <input id="dc-reddit-gsheet-url-2" type="text" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="form-row" style="margin-top:.5rem">
+                  <button id="dc-reddit-gsheet-save-btn" class="btn-sm btn-edit">Save GSheet URLs 🐾</button>
+                  <p id="dc-reddit-gsheet-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div class="card">
-            <div class="card-header"><h2>🐦 Twitter / X</h2></div>
             <div class="card-body">
               <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">OAuth 2.0 — a single connection covers liked-tweet scraping, bookmark scraping, and auto-tweeting answers. Set your Client ID &amp; Secret first, then click <em>Connect</em>.</p>
               <div class="form-row">
@@ -1865,11 +1889,14 @@
 
     // ── Drool Log credentials ─────────────────────────
     function _redditModeSwitch(mode) {
-      const isIfttt = mode === 'ifttt';
-      document.getElementById('reddit-mode-api').checked   = !isIfttt;
-      document.getElementById('reddit-mode-ifttt').checked = isIfttt;
-      document.getElementById('reddit-api-fields').style.display   = isIfttt ? 'none' : '';
-      document.getElementById('reddit-ifttt-fields').style.display = isIfttt ? '' : 'none';
+      const isIfttt  = mode === 'ifttt';
+      const isGsheet = mode === 'gsheet';
+      document.getElementById('reddit-mode-api').checked    = !isIfttt && !isGsheet;
+      document.getElementById('reddit-mode-ifttt').checked  = isIfttt;
+      document.getElementById('reddit-mode-gsheet').checked = isGsheet;
+      document.getElementById('reddit-api-fields').style.display    = (!isIfttt && !isGsheet) ? '' : 'none';
+      document.getElementById('reddit-ifttt-fields').style.display  = isIfttt  ? '' : 'none';
+      document.getElementById('reddit-gsheet-fields').style.display = isGsheet ? '' : 'none';
     }
 
     document.querySelectorAll('input[name="reddit-mode"]').forEach(r => {
@@ -1889,10 +1916,11 @@
         _refreshIftttUrl();
 
         const platforms = {
-          'Reddit (API)':   ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password','reddit_user_agent'],
-          'Reddit (IFTTT)': ['reddit_ifttt_secret'],
-          'Twitter / X':    ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token','twitter_oauth2_refresh_token'],
-          Bluesky:          ['bsky_handle','bsky_app_password'],
+          'Reddit (API)':    ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password','reddit_user_agent'],
+          'Reddit (IFTTT)':  ['reddit_ifttt_secret'],
+          'Reddit (GSheet)': ['reddit_gsheet_csv_url','reddit_gsheet_csv_url_2'],
+          'Twitter / X':     ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token','twitter_oauth2_refresh_token'],
+          Bluesky:           ['bsky_handle','bsky_app_password'],
         };
         // Account identifier shown prominently per platform
         const accountDisplay = {
@@ -1999,6 +2027,11 @@
     document.getElementById('dc-reddit-ifttt-save-btn').addEventListener('click', () => saveDroolCreds({
       reddit_ifttt_secret: 'dc-reddit-ifttt-secret',
     }, 'dc-reddit-ifttt-error'));
+
+    document.getElementById('dc-reddit-gsheet-save-btn').addEventListener('click', () => saveDroolCreds({
+      reddit_gsheet_csv_url:   'dc-reddit-gsheet-url',
+      reddit_gsheet_csv_url_2: 'dc-reddit-gsheet-url-2',
+    }, 'dc-reddit-gsheet-error'));
 
     document.getElementById('dc-twitter2-save-btn').addEventListener('click', () => saveDroolCreds({
       twitter_client_id:     'dc-tw-client-id',
