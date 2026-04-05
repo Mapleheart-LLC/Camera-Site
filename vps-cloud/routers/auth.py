@@ -74,16 +74,18 @@ def _check_lockout(identifier: str) -> None:
     if not entry:
         return
     locked_until = entry.get("locked_until")
-    if locked_until and datetime.now(timezone.utc) < locked_until:
-        retry_after = int((locked_until - datetime.now(timezone.utc)).total_seconds())
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                f"Account temporarily locked due to too many failed login attempts. "
-                f"Try again in {retry_after // 60 + 1} minute(s)."
-            ),
-            headers={"Retry-After": str(retry_after)},
-        )
+    if locked_until:
+        now = datetime.now(timezone.utc)
+        if now < locked_until:
+            retry_after = int((locked_until - now).total_seconds())
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=(
+                    f"Account temporarily locked due to too many failed login attempts. "
+                    f"Try again in {retry_after // 60 + 1} minute(s)."
+                ),
+                headers={"Retry-After": str(retry_after)},
+            )
 
 
 def _clear_lockout(identifier: str) -> None:
@@ -141,15 +143,16 @@ class RegisterRequest(BaseModel):
         """Enforce a minimum password complexity policy."""
         errors = []
         if not re.search(r"[A-Z]", v):
-            errors.append("at least one uppercase letter")
+            errors.append("an uppercase letter")
         if not re.search(r"[a-z]", v):
-            errors.append("at least one lowercase letter")
+            errors.append("a lowercase letter")
         if not re.search(r"\d", v):
-            errors.append("at least one digit")
+            errors.append("a digit (0-9)")
         if not re.search(r"[^A-Za-z0-9]", v):
-            errors.append("at least one special character")
+            errors.append("a special character (e.g. !@#$%)")
         if errors:
-            raise ValueError("Password must contain " + ", ".join(errors) + ".")
+            missing = "; ".join(errors)
+            raise ValueError(f"Password does not meet complexity requirements. Missing: {missing}.")
         return v
 
 
