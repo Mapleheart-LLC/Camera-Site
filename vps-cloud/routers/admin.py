@@ -37,7 +37,7 @@ from urllib.parse import quote as _url_quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
@@ -1006,4 +1006,163 @@ def purge_bad_drool_entries(
         bad_ids,
     )
     return {"deleted": len(bad_ids), "ids": bad_ids}
+
+
+# ---------------------------------------------------------------------------
+# Pack Members – creator account management
+# ---------------------------------------------------------------------------
+
+# Reserved subdomains that can never be used as creator handles.
+_RESERVED_HANDLES = frozenset({
+    "anon", "links", "shop", "drool", "creator", "www",
+    "api", "admin", "static", "media",
+})
+
+
+def _creator_hash_password(password: str) -> str:
+    """Hash a password for a creator account (reuses the same PBKDF2 helper)."""
+    from routers.auth import _hash_password
+    return _hash_password(password)
+
+
+class CreatorCreate(BaseModel):
+    handle: str = Field(..., min_length=1, max_length=32, pattern=r"^[a-z0-9-]+$")
+    display_name: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class CreatorUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, max_length=64)
+    is_active: Optional[bool] = None
+    new_password: Optional[str] = Field(None, min_length=8, max_length=128)
+
+
+@router.get("/creators")
+def admin_list_creators(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all creator accounts (passwords never included)."""
+    rows = db.execute(
+        """
+        SELECT handle, display_name, bio, avatar_url, accent_color, is_active, created_at
+          FROM creator_accounts
+         ORDER BY created_at DESC
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/creators", status_code=status.HTTP_201_CREATED)
+def admin_create_creator(
+    payload: CreatorCreate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Create a new creator account.  Handle must be unique and not reserved."""
+    import uuid
+    from datetime import datetime, timezone
+
+    handle = payload.handle.lower().strip()
+
+    if handle in _RESERVED_HANDLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"'{handle}' is a reserved subdomain and cannot be used as a handle.",
+        )
+
+    conflict = db.execute(
+        "SELECT handle FROM creator_accounts WHERE handle = ?", (handle,)
+    ).fetchone()
+    if conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A creator with that handle already exists.",
+        )
+
+    hashed = _creator_hash_password(payload.password)
+    now = datetime.now(timezone.utc).isoformat()
+    creator_id = str(uuid.uuid4())
+
+    db.execute(
+        """
+        INSERT INTO creator_accounts
+            (id, handle, display_name, hashed_password, is_active, created_at)
+        VALUES (?, ?, ?, ?, 1, ?)
+        """,
+        (creator_id, handle, payload.display_name, hashed, now),
+    )
+    db.commit()
+    logger.info("Admin '%s' created creator account '%s'.", admin_user, handle)
+    return {
+        "handle": handle,
+        "display_name": payload.display_name,
+        "is_active": True,
+        "created_at": now,
+    }
+
+
+@router.put("/creators/{handle}")
+def admin_update_creator(
+    handle: str,
+    payload: CreatorUpdate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update a creator account: change display name, deactivate/reactivate, or reset password."""
+    row = db.execute(
+        "SELECT handle, display_name, is_active FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+
+    updates: list[str] = []
+    params: list = []
+
+    if payload.display_name is not None:
+        updates.append("display_name = ?")
+        params.append(payload.display_name)
+
+    if payload.is_active is not None:
+        updates.append("is_active = ?")
+        params.append(1 if payload.is_active else 0)
+
+    if payload.new_password is not None:
+        updates.append("hashed_password = ?")
+        params.append(_creator_hash_password(payload.new_password))
+
+    if not updates:
+        return dict(row)
+
+    params.append(handle)
+    db.execute(
+        f"UPDATE creator_accounts SET {', '.join(updates)} WHERE handle = ?",
+        params,
+    )
+    db.commit()
+    logger.info("Admin '%s' updated creator account '%s': %s.", admin_user, handle, ", ".join(updates))
+
+    updated = db.execute(
+        "SELECT handle, display_name, is_active FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+    return dict(updated)
+
+
+@router.delete("/creators/{handle}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_creator(
+    handle: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Permanently remove a creator account."""
+    row = db.execute(
+        "SELECT handle FROM creator_accounts WHERE handle = ?", (handle,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+    db.execute("DELETE FROM creator_accounts WHERE handle = ?", (handle,))
+    db.commit()
+    logger.info("Admin '%s' deleted creator account '%s'.", admin_user, handle)
 

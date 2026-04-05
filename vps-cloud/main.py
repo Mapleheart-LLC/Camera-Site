@@ -29,6 +29,7 @@ from dependencies import (
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.auth import router as auth_router
+from routers.creator import router as creator_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
@@ -338,6 +339,22 @@ def init_db() -> None:
         )
         """
     )
+    # ── Creator accounts (separate from site_users – one per subdomain) ───
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS creator_accounts (
+            id              TEXT    PRIMARY KEY,
+            handle          TEXT    NOT NULL UNIQUE,
+            display_name    TEXT    NOT NULL,
+            bio             TEXT,
+            avatar_url      TEXT,
+            accent_color    TEXT,
+            hashed_password TEXT    NOT NULL,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL
+        )
+        """
+    )
     # ── Segpay subscription audit log ─────────────────────────────────────
     # Each Segpay postback is recorded here.  The current access_level lives
     # on site_users; this table is for history and manual reconciliation.
@@ -396,6 +413,15 @@ def init_db() -> None:
         conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
+    # Migration: add creator_handle column to questions and drool_archive so
+    # queries can be scoped per creator.  Existing rows default to 'mochii'.
+    for _table in ("questions", "drool_archive"):
+        try:
+            conn.execute(
+                f"ALTER TABLE {_table} ADD COLUMN creator_handle TEXT NOT NULL DEFAULT 'mochii'"
+            )
+        except Exception:
+            pass  # column already exists
     conn.commit()
     conn.close()
 
@@ -804,6 +830,7 @@ async def proxy_webrtc(
 app.include_router(interactive_router)
 app.include_router(admin_router)
 app.include_router(auth_router)
+app.include_router(creator_router)
 app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
@@ -837,10 +864,11 @@ async def subdomain_routing(request: Request, call_next):
         host = request.headers.get("host", "").lower().split(":")[0]
         # Maps subdomain prefix → the path that should be served for that root.
         _subdomain_map = {
-            "anon.":   "/anon",
-            "links.":  "/links",
-            "shop.":   "/store.html",
-            "drool.":  "/drool.html",
+            "anon.":    "/anon",
+            "links.":   "/links",
+            "shop.":    "/store.html",
+            "drool.":   "/drool.html",
+            "creator.": "/creator.html",
         }
         for prefix, target_path in _subdomain_map.items():
             if host.startswith(prefix):
