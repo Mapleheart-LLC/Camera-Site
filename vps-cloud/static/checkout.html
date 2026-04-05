@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="mochii.live – Secure Checkout 🐾" />
   <meta name="robots" content="noindex" />
   <title>mochii.live 🐾 – Checkout</title>
@@ -40,7 +40,7 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      padding-bottom: 68px;
+      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
     }
 
     ::-webkit-scrollbar { width: 5px; }
@@ -215,7 +215,7 @@
       padding: .6rem .88rem;
       color: var(--text);
       font-family: inherit;
-      font-size: .88rem;
+      font-size: 1rem;
       outline: none;
       transition: border-color .2s, box-shadow .2s;
     }
@@ -264,6 +264,11 @@
     }
     .store-footer a { color: var(--text-muted); text-decoration: none; transition: color .15s; }
     .store-footer a:hover { color: var(--pink); }
+
+    /* ── iPhone safe-area: push bar content above home indicator ── */
+    #spotify-bar {
+      padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
 
     @media (max-width: 640px) {
       .store-nav     { padding: .75rem 1rem; }

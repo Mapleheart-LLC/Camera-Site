@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="mochii.live – Join the pack and access live streams. Sign in with Fanvue." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
@@ -30,7 +30,7 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-start;
-      padding-bottom: 68px;
+      padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
     }
 
     /* ── Pulsing paw loading animation ─────────────── */
@@ -514,6 +514,7 @@
       align-items: center;
       gap: 1rem;
       padding: .75rem 1.5rem;
+      padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px));
       border-top: 1px solid #3d2a2e;
       background: #202020;
       flex-wrap: wrap;
@@ -605,7 +606,7 @@
       border: 1px solid #3d2a2e;
       border-radius: 8px;
       color: #f0e6e8;
-      font-size: .85rem;
+      font-size: 1rem;
       font-family: inherit;
       outline: none;
     }
