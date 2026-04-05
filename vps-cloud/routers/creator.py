@@ -11,8 +11,9 @@ All endpoints under ``/api/creator/`` (except login) are protected by
 Endpoints
 ---------
   POST   /api/creator/login                     – authenticate; returns creator JWT
-  GET    /api/creator/me                        – own profile
-  PATCH  /api/creator/me                        – update bio / avatar / accent colour
+  GET    /api/creator/me                        – own profile (includes forwarding_email)
+  PATCH  /api/creator/me                        – update bio / avatar / accent colour / forwarding_email
+  POST   /api/creator/email/send                – send email FROM handle@domain via SMTP
   GET    /api/creator/questions                 – unanswered questions (own only)
   GET    /api/creator/questions/answered        – answered questions (own only)
   POST   /api/creator/questions/{id}/answer     – answer a question
@@ -20,12 +21,20 @@ Endpoints
   GET    /api/creator/drool                     – Drool Log entries (own only)
   DELETE /api/creator/drool/{id}                – remove a Drool Log entry
   GET    /api/creator/stats                     – subscriber count, recent tips, Q count
+
+Public (no auth required)
+--------------------------
+  GET    /api/creators/{handle}                 – public creator profile (includes public_email)
 """
 
 import logging
+import os
+import smtplib
 import sqlite3
 from datetime import timedelta
+from email.message import EmailMessage
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -63,10 +72,17 @@ class ProfilePatch(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     avatar_url: Optional[str] = Field(None, max_length=512)
     accent_color: Optional[str] = Field(None, max_length=16, pattern=r"^#[0-9a-fA-F]{3,8}$")
+    forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class AnswerPayload(BaseModel):
     answer: str = Field(..., min_length=1, max_length=2000)
+
+
+class SendEmailPayload(BaseModel):
+    to: str = Field(..., max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    subject: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=10000)
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +154,7 @@ def get_my_profile(
     """Return the creator's public + editable profile fields."""
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color
+        SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email
           FROM creator_accounts
          WHERE handle = ?
         """,
@@ -155,28 +171,52 @@ def patch_my_profile(
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Update the creator's editable profile fields (bio, avatar URL, accent colour)."""
+    """Update the creator's editable profile fields (bio, avatar URL, accent colour, forwarding email)."""
     row = db.execute(
-        "SELECT handle, display_name, bio, avatar_url, accent_color FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
 
-    new_display_name = payload.display_name if payload.display_name is not None else row["display_name"]
-    new_bio          = payload.bio          if payload.bio          is not None else row["bio"]
-    new_avatar_url   = payload.avatar_url   if payload.avatar_url   is not None else row["avatar_url"]
-    new_accent_color = payload.accent_color if payload.accent_color is not None else row["accent_color"]
+    new_display_name    = payload.display_name    if payload.display_name    is not None else row["display_name"]
+    new_bio             = payload.bio             if payload.bio             is not None else row["bio"]
+    new_avatar_url      = payload.avatar_url      if payload.avatar_url      is not None else row["avatar_url"]
+    new_accent_color    = payload.accent_color    if payload.accent_color    is not None else row["accent_color"]
+    new_forwarding_email = payload.forwarding_email if payload.forwarding_email is not None else row["forwarding_email"]
+    forwarding_email_changed = (
+        payload.forwarding_email is not None
+        and payload.forwarding_email != row["forwarding_email"]
+    )
 
     db.execute(
         """
         UPDATE creator_accounts
-           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?
+           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?, forwarding_email = ?
          WHERE handle = ?
         """,
-        (new_display_name, new_bio, new_avatar_url, new_accent_color, handle),
+        (new_display_name, new_bio, new_avatar_url, new_accent_color, new_forwarding_email, handle),
     )
     db.commit()
+
+    # Re-provision Cloudflare email routing when the forwarding address changed.
+    if forwarding_email_changed:
+        base_url = os.environ.get("BASE_URL", "").rstrip("/")
+        if base_url:
+            from routers.cloudflare import deprovision_creator_subdomain, provision_creator_subdomain
+            root_domain = urlparse(base_url).hostname or ""
+            if root_domain:
+                # Fetch current agent_email (admin-controlled) to preserve it.
+                agent_row = db.execute(
+                    "SELECT agent_email FROM creator_accounts WHERE handle = ?", (handle,)
+                ).fetchone()
+                agent_email = agent_row["agent_email"] if agent_row else None
+                deprovision_creator_subdomain(handle, root_domain)
+                provision_creator_subdomain(
+                    handle, root_domain,
+                    forwarding_email=new_forwarding_email,
+                    agent_email=agent_email,
+                )
 
     return {
         "handle": handle,
@@ -184,7 +224,78 @@ def patch_my_profile(
         "bio": new_bio,
         "avatar_url": new_avatar_url,
         "accent_color": new_accent_color,
+        "forwarding_email": new_forwarding_email,
     }
+
+
+# ---------------------------------------------------------------------------
+# SMTP send-as
+# ---------------------------------------------------------------------------
+
+def _smtp_send(from_addr: str, to_addr: str, subject: str, body: str) -> None:
+    """Send a plain-text email via SMTP using environment credentials.
+
+    Required env vars: SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD.
+    Optional: SMTP_PORT (default 587).
+    Raises ``RuntimeError`` when SMTP is not configured or delivery fails.
+    """
+    host = os.environ.get("SMTP_HOST", "").strip()
+    username = os.environ.get("SMTP_USERNAME", "").strip()
+    password = os.environ.get("SMTP_PASSWORD", "").strip()
+    port = int(os.environ.get("SMTP_PORT", "587"))
+
+    if not host or not username or not password:
+        raise RuntimeError("SMTP is not configured (SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD).")
+
+    msg = EmailMessage()
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    with smtplib.SMTP(host, port) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.login(username, password)
+        smtp.send_message(msg)
+
+
+@router.post("/email/send", status_code=status.HTTP_200_OK)
+def creator_send_email(
+    payload: SendEmailPayload,
+    handle: str = Depends(get_current_creator),
+):
+    """Send an email FROM ``handle@domain`` to any address.
+
+    The FROM address is derived automatically from the creator's handle and
+    the site's root domain (``BASE_URL``).  Requires the ``SMTP_HOST``,
+    ``SMTP_USERNAME``, and ``SMTP_PASSWORD`` environment variables to be set.
+    """
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    root_domain = urlparse(base_url).hostname if base_url else ""
+    if not root_domain:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BASE_URL is not configured; cannot derive sender address.",
+        )
+
+    from_addr = f"{handle}@{root_domain}"
+    try:
+        _smtp_send(from_addr, payload.to, payload.subject, payload.body)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error("SMTP send failed for creator @%s: %s", handle, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Email delivery failed. Check SMTP configuration.",
+        ) from exc
+
+    logger.info("Creator @%s sent email from %s to %s.", handle, from_addr, payload.to)
+    return {"from": from_addr, "to": payload.to, "subject": payload.subject}
 
 
 # ---------------------------------------------------------------------------
@@ -357,4 +468,45 @@ def creator_stats(
         "unanswered_questions": unanswered_count,
         "answered_questions": answered_count,
         "drool_entries": drool_count,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Public creator profile
+# ---------------------------------------------------------------------------
+
+# Use a separate router with no prefix so the path is /api/creators/{handle}
+# (distinct from the authenticated /api/creator/* namespace).
+public_router = APIRouter(prefix="/api/creators", tags=["creator-public"])
+
+
+@public_router.get("/{handle}")
+def public_creator_profile(
+    handle: str,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return publicly available information about a creator.
+
+    Includes ``public_email`` — the computed ``handle@domain`` address that
+    fans can use to contact the creator.  Never reveals the private
+    ``forwarding_email`` or ``agent_email`` stored in the database.
+    """
+    row = db.execute(
+        """
+        SELECT handle, display_name, bio, avatar_url, accent_color
+          FROM creator_accounts
+         WHERE handle = ? AND is_active = 1
+        """,
+        (handle,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    root_domain = urlparse(base_url).hostname if base_url else ""
+    public_email = f"{handle}@{root_domain}" if root_domain else None
+
+    return {
+        **dict(row),
+        "public_email": public_email,
     }

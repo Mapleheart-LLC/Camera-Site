@@ -1053,12 +1053,16 @@ class CreatorCreate(BaseModel):
     handle: str = Field(..., min_length=1, max_length=32, pattern=r"^[a-z0-9-]+$")
     display_name: str = Field(..., min_length=1, max_length=64)
     password: str = Field(..., min_length=8, max_length=128)
+    forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    agent_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class CreatorUpdate(BaseModel):
     display_name: Optional[str] = Field(None, max_length=64)
     is_active: Optional[bool] = None
     new_password: Optional[str] = Field(None, min_length=8, max_length=128)
+    forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    agent_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 @router.get("/creators")
@@ -1069,7 +1073,8 @@ def admin_list_creators(
     """Return all creator accounts (passwords never included)."""
     rows = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, is_active, created_at
+        SELECT handle, display_name, bio, avatar_url, accent_color,
+               forwarding_email, agent_email, is_active, created_at
           FROM creator_accounts
          ORDER BY created_at DESC
         """
@@ -1111,10 +1116,11 @@ def admin_create_creator(
     db.execute(
         """
         INSERT INTO creator_accounts
-            (id, handle, display_name, hashed_password, is_active, created_at)
-        VALUES (?, ?, ?, ?, 1, ?)
+            (id, handle, display_name, hashed_password, forwarding_email, agent_email, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
         """,
-        (creator_id, handle, payload.display_name, hashed, now),
+        (creator_id, handle, payload.display_name, hashed,
+         payload.forwarding_email, payload.agent_email, now),
     )
     db.commit()
     logger.info("Admin '%s' created creator account '%s'.", admin_user, handle)
@@ -1126,11 +1132,17 @@ def admin_create_creator(
         from routers.cloudflare import provision_creator_subdomain
         root_domain = _urlparse(base_url).hostname or ""
         if root_domain:
-            provision_creator_subdomain(handle, root_domain)
+            provision_creator_subdomain(
+                handle, root_domain,
+                forwarding_email=payload.forwarding_email,
+                agent_email=payload.agent_email,
+            )
 
     return {
         "handle": handle,
         "display_name": payload.display_name,
+        "forwarding_email": payload.forwarding_email,
+        "agent_email": payload.agent_email,
         "is_active": True,
         "created_at": now,
     }
@@ -1145,7 +1157,7 @@ def admin_update_creator(
 ):
     """Update a creator account: change display name, deactivate/reactivate, or reset password."""
     row = db.execute(
-        "SELECT handle, display_name, is_active FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, forwarding_email, agent_email, is_active FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
     if not row:
@@ -1160,6 +1172,15 @@ def admin_update_creator(
         _allowed_columns["is_active"] = 1 if payload.is_active else 0
     if payload.new_password is not None:
         _allowed_columns["hashed_password"] = _creator_hash_password(payload.new_password)
+    email_reprovisioning_needed = False
+    if payload.forwarding_email is not None:
+        _allowed_columns["forwarding_email"] = payload.forwarding_email
+        if payload.forwarding_email != row["forwarding_email"]:
+            email_reprovisioning_needed = True
+    if payload.agent_email is not None:
+        _allowed_columns["agent_email"] = payload.agent_email
+        if payload.agent_email != row["agent_email"]:
+            email_reprovisioning_needed = True
 
     if not _allowed_columns:
         return dict(row)
@@ -1176,9 +1197,25 @@ def admin_update_creator(
     logger.info("Admin '%s' updated creator account '%s': %s.", admin_user, handle, ", ".join(_allowed_columns))
 
     updated = db.execute(
-        "SELECT handle, display_name, is_active FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, forwarding_email, agent_email, is_active FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
+
+    # Re-provision Cloudflare email routing when per-creator addresses changed.
+    if email_reprovisioning_needed:
+        base_url = os.environ.get("BASE_URL", "").rstrip("/")
+        if base_url:
+            from urllib.parse import urlparse as _urlparse
+            from routers.cloudflare import deprovision_creator_subdomain, provision_creator_subdomain
+            root_domain = _urlparse(base_url).hostname or ""
+            if root_domain:
+                deprovision_creator_subdomain(handle, root_domain)
+                provision_creator_subdomain(
+                    handle, root_domain,
+                    forwarding_email=updated["forwarding_email"],
+                    agent_email=updated["agent_email"],
+                )
+
     return dict(updated)
 
 

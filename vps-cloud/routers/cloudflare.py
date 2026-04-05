@@ -19,10 +19,11 @@ CLAPI_TUNNEL_HOSTNAME
     proxied CNAME records pointing at the tunnel on creation and removed
     on deletion.  Leave empty to manage DNS records manually.
 CLAPI_EMAIL_ROUTING_DEST
-    E-mail address that per-creator routing rules should forward to
-    (e.g. ``admin@mochii.live``).  When set, a catch-all rule for
-    ``{handle}@{root_domain}`` is created on creator provisioning and
-    deleted on de-provisioning.  Leave empty to skip auto-email-routing.
+    Global fallback e-mail address for per-creator routing rules (e.g.
+    ``admin@mochii.live``).  Used only when a creator has no
+    ``forwarding_email`` and no ``agent_email`` set.  When set, a catch-all
+    rule for ``{handle}@{root_domain}`` is created on creator provisioning
+    and deleted on de-provisioning.  Leave empty to skip auto-email-routing.
 
 Admin-protected endpoints
 -------------------------
@@ -204,14 +205,26 @@ async def _cf_request_async(method: str, path: str, **kwargs) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def provision_creator_subdomain(handle: str, root_domain: str) -> bool:
+def provision_creator_subdomain(
+    handle: str,
+    root_domain: str,
+    forwarding_email: Optional[str] = None,
+    agent_email: Optional[str] = None,
+) -> bool:
     """Provision Cloudflare resources for a newly created creator.
 
     Creates:
     - A proxied CNAME record ``{handle}.{root_domain}`` → ``CLAPI_TUNNEL_HOSTNAME``
       (only when ``CLAPI_TUNNEL_HOSTNAME`` is configured).
-    - An email routing rule forwarding ``{handle}@{root_domain}`` to
-      ``CLAPI_EMAIL_ROUTING_DEST`` (only when that env var is configured).
+    - An email routing rule forwarding ``{handle}@{root_domain}`` to the
+      appropriate destinations, resolved in this order:
+
+      1. If *forwarding_email* or *agent_email* are given, the routing rule
+         forwards to those addresses (both when both are present, otherwise
+         whichever is set).
+      2. Falls back to ``CLAPI_EMAIL_ROUTING_DEST`` only when neither
+         per-creator address is provided.
+      3. Skips email routing entirely when no destination is available.
 
     Both operations are best-effort: failures are logged as warnings but do
     not raise so that creator creation never blocks on Cloudflare.
@@ -255,8 +268,15 @@ def provision_creator_subdomain(handle: str, root_domain: str) -> bool:
         )
 
     # ── Email routing rule ─────────────────────────────────────────────────
-    email_dest = _email_routing_dest()
-    if email_dest:
+    # Build destination list: per-creator addresses take precedence; fall back
+    # to the global CLAPI_EMAIL_ROUTING_DEST only when neither is supplied.
+    destinations: list[str] = [e for e in [forwarding_email, agent_email] if e]
+    if not destinations:
+        global_dest = _email_routing_dest()
+        if global_dest:
+            destinations = [global_dest]
+
+    if destinations:
         try:
             _cf_request(
                 "POST",
@@ -272,12 +292,12 @@ def provision_creator_subdomain(handle: str, root_domain: str) -> bool:
                             "value": f"{handle}@{root_domain}",
                         }
                     ],
-                    "actions": [{"type": "forward", "value": [email_dest]}],
+                    "actions": [{"type": "forward", "value": destinations}],
                 },
             )
             logger.info(
                 "CF: created email routing rule %s@%s → %s",
-                handle, root_domain, email_dest,
+                handle, root_domain, destinations,
             )
         except HTTPException as exc:
             logger.warning(
@@ -285,7 +305,7 @@ def provision_creator_subdomain(handle: str, root_domain: str) -> bool:
             )
     else:
         logger.debug(
-            "CLAPI_EMAIL_ROUTING_DEST not set – skipping email routing for @%s.", handle
+            "No email destination configured – skipping email routing for @%s.", handle
         )
 
     return dns_ok

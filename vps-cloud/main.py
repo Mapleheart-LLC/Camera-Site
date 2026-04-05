@@ -29,7 +29,7 @@ from dependencies import (
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.auth import router as auth_router
-from routers.creator import router as creator_router
+from routers.creator import router as creator_router, public_router as creator_public_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
@@ -435,6 +435,15 @@ def init_db() -> None:
     ]:
         try:
             conn.execute(f"ALTER TABLE products ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # Migration: add per-creator email columns to creator_accounts.
+    #   forwarding_email – creator's private inbox (inbound CF routing destination)
+    #   agent_email      – optional agent inbox that also receives a copy
+    for _col in ("forwarding_email", "agent_email"):
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} TEXT")
         except sqlite3.OperationalError as _e:
             if "duplicate column" not in str(_e).lower():
                 raise
@@ -847,6 +856,7 @@ app.include_router(interactive_router)
 app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(creator_router)
+app.include_router(creator_public_router)
 app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
