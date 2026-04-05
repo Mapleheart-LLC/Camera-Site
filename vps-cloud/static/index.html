@@ -1392,8 +1392,8 @@
       const payload = decodeJwtPayload(token);
       if (!payload) return;
 
-      // Show Add to Queue for Tier 1+ (access_level >= 2)
-      if ((payload.access_level || 0) >= 2) {
+      // Show Add to Queue for all followers (access_level >= 1)
+      if ((payload.access_level || 0) >= 1) {
         const queueSection = document.getElementById('queue-section');
         if (queueSection) queueSection.style.display = 'flex';
 

@@ -5,8 +5,8 @@ Endpoints
 GET  /auth/spotify/login       Admin-initiated OAuth authorization redirect
 GET  /auth/spotify/callback    OAuth callback – exchanges code and stores tokens
 GET  /api/spotify/now-playing  Current playback state (no viewer auth required)
-GET  /api/spotify/search       Search for tracks (access_level >= 2)
-POST /api/spotify/queue        Add a track to the creator's queue (access_level >= 2)
+GET  /api/spotify/search       Search for tracks (access_level >= 1)
+POST /api/spotify/queue        Add a track to the creator's queue (access_level >= 1)
 """
 
 import logging
@@ -253,7 +253,7 @@ async def now_playing(db: sqlite3.Connection = Depends(get_db)):
     return result
 
 
-# ── Authenticated search & queue (access_level >= 2) ─────────────────────────
+# ── Authenticated search & queue (access_level >= 1) ─────────────────────────
 
 @router.get("/api/spotify/search")
 async def search_tracks(
@@ -261,11 +261,11 @@ async def search_tracks(
     user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Search Spotify for tracks. Requires access_level >= 2 (Tier 1+)."""
-    if (user.get("access_level") or 0) < 2:
+    """Search Spotify for tracks. Requires access_level >= 1 (free follower+)."""
+    if (user.get("access_level") or 0) < 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tier 1 subscription required.",
+            detail="Must be a follower to search tracks.",
         )
 
     access_token = await _get_valid_access_token(db)
@@ -315,11 +315,11 @@ async def add_to_queue(
     user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Add a track to the creator's Spotify queue. Requires access_level >= 2 (Tier 1+)."""
-    if (user.get("access_level") or 0) < 2:
+    """Add a track to the creator's Spotify queue. Requires access_level >= 1 (free follower+)."""
+    if (user.get("access_level") or 0) < 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tier 1 subscription required.",
+            detail="Must be a follower to add to queue.",
         )
 
     if not body.uri.startswith("spotify:track:"):
