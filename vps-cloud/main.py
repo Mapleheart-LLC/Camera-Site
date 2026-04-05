@@ -1725,6 +1725,8 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
         """
     ).fetchall()
 
+    product_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
     link_items_html = ""
     for row in rows:
         emoji = _html_escape(row["emoji"] or "")
@@ -1862,7 +1864,7 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
   <div class="container" role="main">
     <p class="site-name">🐾 mochii.live</p>
     <p class="tagline">All the links in one place.</p>
-    <a class="link-btn shop-link" href="https://shop.mochii.live" target="_blank" rel="noopener noreferrer">🛒 The Pack Shop</a>
+    {'<a class="link-btn shop-link" href="https://shop.mochii.live" target="_blank" rel="noopener noreferrer">🛒 The Pack Shop</a>' if product_count else ''}
     {link_items_html}
     <p class="page-footer"><a href="{_html_escape(canonical)}">← Back to mochii.live</a></p>
   </div>
