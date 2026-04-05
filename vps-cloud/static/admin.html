@@ -1055,7 +1055,7 @@
     }
     function showLoginPanel() {
       clearCreds();
-      window.location.href = '/';
+      window.location.href = '/?admin_msg=Session+expired.+Please+sign+in+again.';
     }
 
     // ── API helpers ────────────────────────────────────
@@ -1107,12 +1107,12 @@
 
     // ── Auto-login from credentials saved by main page ────
     (async () => {
-      if (!getCreds()) { window.location.href = '/'; return; }
+      if (!getCreds()) { window.location.href = '/?admin_msg=Please+sign+in+to+access+the+admin+panel.'; return; }
       try {
         await apiGet('/api/admin/stats');
         showAdminPanel();
       } catch {
-        window.location.href = '/';
+        window.location.href = '/?admin_msg=Session+expired.+Please+sign+in+again.';
       }
     })();
 

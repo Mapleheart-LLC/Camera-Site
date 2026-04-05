@@ -1783,6 +1783,14 @@
         }
       }
 
+      // Handle redirect messages from the admin panel (e.g. session expired)
+      const adminMsg = searchParams.get('admin_msg');
+      if (adminMsg) {
+        history.replaceState(null, '', window.location.pathname);
+        showLogin(adminMsg, 'info');
+        return;
+      }
+
       // Handle legacy Fanvue OAuth callback tokens in the URL fragment
       // (keeps backward compatibility with any existing sessions)
       const hash   = window.location.hash.slice(1);
