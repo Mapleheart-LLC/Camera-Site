@@ -33,12 +33,19 @@ _MOCK_AUTH: bool = _mock_auth_raw.lower() == "true"
 _DEFAULT_KEY = "changeme-replace-in-production!!"
 _DEMO_FALLBACK_KEY = "demo-mode-insecure-do-not-use-in-production"
 
-# Prefer JWT_SECRET, then SECRET_KEY.  If neither is set and MOCK_AUTH is
-# enabled, fall back to an insecure demo key so the app stays up during demos.
+# Prefer JWT_SECRET, then SECRET_KEY.
+# If neither is configured:
+#   - MOCK_AUTH demo mode → use the recognisable insecure demo key (convenient
+#     for demos, startup guard already blocks this in production).
+#   - Otherwise → generate a cryptographically random key per process lifetime.
+#     This is far safer than a well-known hardcoded default: an attacker cannot
+#     pre-compute tokens, and existing tokens are invalidated on each restart
+#     (acceptable because the hardcoded default would be equally unreliable in
+#     a real deployment).
 SECRET_KEY: str = (
     os.environ.get("JWT_SECRET")
     or os.environ.get("SECRET_KEY")
-    or (_DEMO_FALLBACK_KEY if _MOCK_AUTH else _DEFAULT_KEY)
+    or (_DEMO_FALLBACK_KEY if _MOCK_AUTH else secrets.token_hex(32))
 )
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

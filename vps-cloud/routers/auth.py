@@ -19,6 +19,7 @@ import base64
 import hashlib
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import uuid
@@ -27,7 +28,7 @@ from typing import Optional
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -43,6 +44,50 @@ _SEGPAY_PURCHASE_BASE = "https://purchase.segpay.com/hosted/index.asp"
 
 # Rate limiter: max 10 auth attempts per IP per 15 minutes.
 _auth_limiter = Limiter(key_func=get_remote_address)
+
+# ---------------------------------------------------------------------------
+# Account lockout (in-memory, per identifier)
+#
+# After _LOCKOUT_THRESHOLD consecutive failures the identifier is locked for
+# _LOCKOUT_DURATION.  The state lives in process memory; it resets on restart
+# which is acceptable — the rate-limiter provides the persistent layer.
+# ---------------------------------------------------------------------------
+
+_LOCKOUT_THRESHOLD = 5
+_LOCKOUT_DURATION = timedelta(minutes=15)
+
+# identifier → {"count": int, "locked_until": datetime | None}
+_login_attempts: dict[str, dict] = {}
+
+
+def _record_failed_attempt(identifier: str) -> None:
+    entry = _login_attempts.setdefault(identifier, {"count": 0, "locked_until": None})
+    entry["count"] += 1
+    if entry["count"] >= _LOCKOUT_THRESHOLD:
+        entry["locked_until"] = datetime.now(timezone.utc) + _LOCKOUT_DURATION
+        logger.warning("Account locked after %d failed attempts: %s", entry["count"], identifier)
+
+
+def _check_lockout(identifier: str) -> None:
+    """Raise 429 if the identifier is currently locked out."""
+    entry = _login_attempts.get(identifier)
+    if not entry:
+        return
+    locked_until = entry.get("locked_until")
+    if locked_until and datetime.now(timezone.utc) < locked_until:
+        retry_after = int((locked_until - datetime.now(timezone.utc)).total_seconds())
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Account temporarily locked due to too many failed login attempts. "
+                f"Try again in {retry_after // 60 + 1} minute(s)."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _clear_lockout(identifier: str) -> None:
+    _login_attempts.pop(identifier, None)
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +134,23 @@ class RegisterRequest(BaseModel):
     )
     email: str = Field(..., min_length=5, max_length=254)
     password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        """Enforce a minimum password complexity policy."""
+        errors = []
+        if not re.search(r"[A-Z]", v):
+            errors.append("at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            errors.append("at least one lowercase letter")
+        if not re.search(r"\d", v):
+            errors.append("at least one digit")
+        if not re.search(r"[^A-Za-z0-9]", v):
+            errors.append("at least one special character")
+        if errors:
+            raise ValueError("Password must contain " + ", ".join(errors) + ".")
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -163,6 +225,9 @@ def login(
     """Authenticate with username/email + password.  Returns a JWT."""
     identifier = payload.username_or_email.lower().strip()
 
+    # Check lockout before touching the database.
+    _check_lockout(identifier)
+
     row = db.execute(
         """
         SELECT id, username, email, hashed_password, access_level
@@ -181,10 +246,15 @@ def login(
         # Always run the hash so response time doesn't reveal whether the
         # username/email exists (timing-safe user-enumeration prevention).
         _hash_password("__timing_guard__")
+        _record_failed_attempt(identifier)
         raise _invalid
 
     if not _verify_password(payload.password, row["hashed_password"]):
+        _record_failed_attempt(identifier)
         raise _invalid
+
+    # Successful login — clear any lockout state.
+    _clear_lockout(identifier)
 
     token = create_access_token(
         {"sub": row["id"], "access_level": row["access_level"]},

@@ -148,6 +148,13 @@ _oauth_states: dict[str, datetime] = {}
 
 _DEFAULT_KEY = "changeme-replace-in-production!!"
 
+# Whether the JWT secret was explicitly configured in the environment.
+# Imported from dependencies where the actual key is resolved.
+from dependencies import SECRET_KEY as _IMPORTED_SECRET_KEY
+_SECRET_KEY_IS_CONFIGURED: bool = bool(
+    os.environ.get("JWT_SECRET") or os.environ.get("SECRET_KEY")
+)
+
 logger = logging.getLogger(__name__)
 
 # Route all log output to stderr so messages appear in Komodo / container logs.
@@ -1025,17 +1032,18 @@ async def lifespan(app: FastAPI):
             "This grants free premium access to all visitors. "
             "Disable MOCK_AUTH before running in production."
         )
-    if _is_production and SECRET_KEY == _DEFAULT_KEY:
+    if _is_production and not _SECRET_KEY_IS_CONFIGURED:
         raise RuntimeError(
-            "CRITICAL: SECRET_KEY is using the insecure default value while BASE_URL is "
-            "an HTTPS production URL. Set a strong random SECRET_KEY (e.g. via "
-            "`openssl rand -hex 32`) before running in production."
+            "CRITICAL: No JWT_SECRET or SECRET_KEY environment variable is set while "
+            "BASE_URL is an HTTPS production URL. "
+            "Set a strong random secret (e.g. `openssl rand -hex 32`) before deploying."
         )
 
-    if SECRET_KEY == _DEFAULT_KEY:
+    if not _SECRET_KEY_IS_CONFIGURED:
         logger.warning(
-            "SECRET_KEY is set to the default development value. "
-            "Set a strong SECRET_KEY environment variable before deploying to production."
+            "Neither JWT_SECRET nor SECRET_KEY is set. A random key was generated for "
+            "this process lifetime — all sessions will be invalidated on container "
+            "restart. Set a persistent JWT_SECRET before deploying to production."
         )
     logger.info("Startup config: MOCK_AUTH=%s  DATABASE_PATH=%s", MOCK_AUTH, DATABASE_PATH)
     logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
@@ -1098,7 +1106,8 @@ class CameraResponse(BaseModel):
 
 
 @app.get("/auth/login")
-def auth_login(db: sqlite3.Connection = Depends(get_db)):
+@_api_limiter.limit("30/hour")
+def auth_login(request: Request, db: sqlite3.Connection = Depends(get_db)):
     """Redirect the browser to Fanvue's OAuth 2.0 authorization page.
 
     If MOCK_AUTH is enabled (via env var or the admin Danger Zone DB override),
@@ -1138,7 +1147,9 @@ def auth_login(db: sqlite3.Connection = Depends(get_db)):
 
 
 @app.get("/auth/callback")
+@_api_limiter.limit("20/hour")
 async def auth_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     error: Optional[str] = None,
@@ -1387,13 +1398,15 @@ app.include_router(discovery_router)
 # All limiters share the same key function (remote IP) and exception handler.
 from routers.auth import _auth_limiter
 from routers.creator import _creator_limiter as _c_limiter
+from routers.compliance import _compliance_limiter
 
 app.state.limiter = drool_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# Re-attach auth, creator, and API limiters to the app so their state is managed.
+# Re-attach all limiters to the app so their shared state is managed.
 _auth_limiter.app = app  # type: ignore[attr-defined]
 _c_limiter.app = app  # type: ignore[attr-defined]
 _api_limiter.app = app  # type: ignore[attr-defined]
+_compliance_limiter.app = app  # type: ignore[attr-defined]
 
 
 @app.middleware("http")
