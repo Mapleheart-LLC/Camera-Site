@@ -1,7 +1,8 @@
 """
 Discord management bot for mochii.live
 
-Fully manages the Discord server and deeply integrates with every site feature:
+Fully manages the Discord server and deeply integrates with every site feature.
+The bot has a playful, flirty, adult-oriented personality to match the platform.
 
 Server management
 -----------------
@@ -20,6 +21,14 @@ Site features
   /store          Browse the store catalogue
   /zap            Activate a PiShock / Lovense device (Follower+, cooldown-aware)
 
+Personality / fun
+-----------------
+  /rate           Get a cheeky personal rating from the bot
+  /treat          Claim a random treat (Follower+)
+  /collar         Show your tier as a themed collar embed
+  /beg            Beg the bot — outcomes depend on your tier 🐾
+  /peek           Surprise random Drool Log item (Follower+)
+
 Community
 ---------
   /server-info    Aggregated stats embed
@@ -28,10 +37,12 @@ Community
 
 Background automation
 ---------------------
+  • Status rotation every 15 minutes (cycling cheeky statuses)
   • Role sync every 30 minutes
   • Posts new Drool Log items to #drool-log (polls every 5 minutes)
   • Updates #now-playing when the Spotify track changes (polls every 2 minutes)
   • Weekly Whimper highlight every Monday (checks hourly)
+  • Daily Treat posted to #treat-jar at noon UTC (checks hourly)
   • Welcomes new members via DM with a verification guide
 
 Required environment variables
@@ -52,6 +63,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -76,6 +88,168 @@ _BLURPLE = 0x5865F2
 _GREEN   = 0x57F287
 _RED     = 0xED4245
 _GRAY    = 0x36393F
+
+# ── Flavor text pools ─────────────────────────────────────────────────────────
+
+_FLAVOR_TEXT: dict[str, list[str]] = {
+    # Bot status rotation — cycling every 15 min
+    "status": [
+        "the Drool Log 👀",
+        "good puppies misbehave 🐾",
+        "for new notes in the Pouch 💌",
+        "subscribers drool 🤤",
+        "the pack closely 🔍",
+        "your collar status 💎",
+        "mochii.live 🌸",
+        "you 😏",
+        "premium pets sleep soundly 💤",
+        "who needs a treat 🍖",
+    ],
+    # Drool log embed prefixes
+    "drool_intro": [
+        "🤤 oh look what washed up on the shore",
+        "👀 mochii has been drooling over this",
+        "🔥 fresh shame for the gallery",
+        "😈 this one's going in the Drool Log",
+        "💦 a new addition to the collection",
+        "🐾 the pack has been talking about this",
+        "🌸 someone got caught being delicious",
+        "🤭 oh my… straight to the Drool Log",
+    ],
+    # Drool log footers
+    "drool_footer": [
+        "mochii.live · come drool with us",
+        "mochii.live · the shame gallery awaits",
+        "mochii.live · sniff sniff 🐾",
+        "mochii.live · good toys get archived",
+        "mochii.live · drool responsibly",
+    ],
+    # Q&A embed footers
+    "pouch_footer": [
+        "mochii.live · secrets and confessions 💌",
+        "mochii.live · whisper something naughty",
+        "mochii.live · the Puppy Pouch holds all your secrets 🐾",
+        "mochii.live · drop a note, get a reply 🌸",
+        "mochii.live · anonymous & delicious",
+    ],
+    # Ask command confirms
+    "ask_confirm": [
+        "📬 shhh… your secret's in the Pouch. 🐾",
+        "📬 sneaky little note delivered. mochii will see it when she's ready 🌸",
+        "📬 your confession has been received. behave. 😏",
+        "📬 into the Puppy Pouch it goes… try not to squirm while you wait 🐾",
+        "📬 noted! now sit and wait like a good pup 🐾",
+    ],
+    # Spotify now-playing flavour
+    "nowplaying_mood": [
+        "mochii is vibing to this rn 🎶",
+        "this is what plays in the kennel 🎵",
+        "currently setting the mood 😏",
+        "dancing in her collar to this 🌸",
+        "the pack has taste 🎵",
+        "close your eyes and listen 💜",
+    ],
+    # Welcome DM extras
+    "welcome_suffix": [
+        "collar optional, curiosity mandatory 🐾",
+        "sit. stay. enjoy. 🌸",
+        "no biting… unless you're a 💎 Tier 2 🐾",
+        "the kennel is warm. make yourself comfortable. 😏",
+        "good pups get treats here 🍖",
+    ],
+    # Zap public taunts (posted to the pack when someone fires a device)
+    "zap_public": [
+        "{user} just made mochii feel something 😳⚡",
+        "someone ({user}) pushed the button… 🐾⚡",
+        "{user} sent a little *something* mochii's way 💜",
+        "uh oh — {user} has been *very* naughty ⚡😈",
+        "{user} pressed the big red button. good puppy? 🐾⚡",
+        "mochii felt that one — thanks, {user} 🌸⚡",
+    ],
+    # Rate command descriptors (paired with a score)
+    "rate_descriptor": [
+        ("a Very Good Pup™", "🐾"),
+        ("absolutely feral in the best way", "🔥"),
+        ("a menace and a delight", "😈"),
+        ("suspiciously well-behaved", "👀"),
+        ("clearly here for the Drool Log", "🤤"),
+        ("premium material, honestly", "💎"),
+        ("a little messy, very loveable", "🌸"),
+        ("boldly unhinged", "😏"),
+        ("an absolute treat", "🍖"),
+        ("the pack's favourite troublemaker", "🐾"),
+        ("dangerously adorable", "💕"),
+        ("in need of a collar fitting", "💜"),
+        ("certified good girl/boy/enby", "✅"),
+        ("drool-worthy, according to the log", "💦"),
+        ("a premium-tier disaster", "💎"),
+    ],
+    # Treat command messages
+    "treat": [
+        "🍖 here's your treat: you exist and that's already devastating to everyone around you. good.",
+        "🌸 treat time: mochii thinks you're doing great and anyone who disagrees gets zapped.",
+        "💜 your treat is the knowledge that the Drool Log has at least one entry for you.",
+        "🐾 treat dispensed: you have permission to be a little feral today.",
+        "🍖 mochii says: you're a very good pup and you deserve belly rubs and chaos in equal measure.",
+        "✨ your treat: a personalised compliment — you have excellent taste in Discord servers.",
+        "🔥 treat unlocked: the pack has voted and you're today's MVP (Most Valued Pup).",
+        "😏 your treat is the unshakeable confidence that comes from being *this* degenerate.",
+        "💕 treat delivered: you're soft, loveable, and absolutely feral. perfect.",
+        "🌸 mochii says sit and stay — your treat is coming. just kidding. the treat *is* you.",
+    ],
+    # Beg outcomes — success
+    "beg_success": [
+        "🐾 *sigh*… fine. you begged so well mochii can't resist. here's a virtual treat 🍖",
+        "🌸 okay okay, the puppy eyes worked. just this once. don't tell the others.",
+        "😏 mochii is very weak for a good beg. treat incoming. you're welcome.",
+        "💕 the audacity of your begging has been rewarded. don't get used to it.",
+        "🍖 good pup! that was a very convincing beg. mochii is proud of you.",
+    ],
+    # Beg outcomes — failure
+    "beg_fail": [
+        "🐾 nope. try again when you've learned to sit properly.",
+        "😤 the beg was sub-par. work on your puppy eyes and come back.",
+        "😂 lmao nice try. mochii says no.",
+        "🚫 beg denied. have you tried being *more* pathetic? might work.",
+        "👀 mochii watched you beg and is not impressed. 0/10 form. back to training.",
+    ],
+    # Beg outcomes — premium bonus
+    "beg_premium": [
+        "💎 a Tier 2 begging?? oh the audacity. fine — you win everything. here's a gold star ⭐",
+        "💎 premium pup gets premium treatment. your beg was honestly gorgeous. have everything.",
+        "💎 mochii can't say no to her best tier. spoiled. absolutely spoiled. 🌸",
+    ],
+    # Peek tease lines (shown above the drool embed)
+    "peek_tease": [
+        "👀 *psst* — don't tell anyone i showed you this…",
+        "🤭 mochii left the Drool Log open. take a peek 🔍",
+        "😈 i found something in the archives for you…",
+        "💦 a little something from the collection:",
+        "🌸 here's a random drool for your viewing pleasure~",
+        "🐾 sniffed this one out just for you:",
+    ],
+    # No-subscription gate messages
+    "gate_follower": [
+        "🐾 psst — this is follower territory. use `/verify` to get your collar and come back! 🌸",
+        "🔒 you need to be a Fanvue follower to enter. `/verify` is your leash in 🐾",
+        "👀 follower-only zone! link your account with `/verify` and join the pack.",
+    ],
+    "gate_subscriber": [
+        "🌸 ooh, subscriber-only! link your Fanvue account with `/verify` to unlock 🐾",
+        "💎 this one's for subscribers. `/verify` then subscribe on Fanvue to get in~",
+        "🔒 premium feature ahead — link your Fanvue account with `/verify` first 🌸",
+    ],
+}
+
+
+def _pick(key: str) -> str:
+    """Return a random string from a flavor-text pool."""
+    return random.choice(_FLAVOR_TEXT.get(key, ["—"]))
+
+
+# ── Status rotation ───────────────────────────────────────────────────────────
+
+_STATUS_IDX: int = 0
 
 # ── Role definitions (ordered high → low in server hierarchy) ─────────────────
 
@@ -152,53 +326,55 @@ _CHANNEL_STRUCTURE: list[dict] = [
         "category": "📢 INFORMATION",
         "min_role": None,   # visible to @everyone
         "channels": [
-            {"name": "rules",         "topic": "Server rules — please read before participating.", "readonly": True},
-            {"name": "announcements", "topic": "Official announcements from mochii.live.", "readonly": True, "state_key": "announcements_channel"},
-            {"name": "roles-info",    "topic": "How to verify your Fanvue account and earn subscriber roles.", "readonly": True},
+            {"name": "rules",         "topic": "Server rules — read them or face the consequences 🐾", "readonly": True},
+            {"name": "announcements", "topic": "Official announcements from mochii.live. 🌸", "readonly": True, "state_key": "announcements_channel"},
+            {"name": "roles-info",    "topic": "How to verify your Fanvue account and earn your collar. 🐾", "readonly": True},
         ],
     },
     {
         "category": "💬 COMMUNITY",
         "min_role": None,   # open to everyone in the server
         "channels": [
-            {"name": "general",       "topic": "General chat — say hello! 🐾"},
-            {"name": "introductions", "topic": "New to the server? Introduce yourself!"},
-            {"name": "off-topic",     "topic": "Anything goes (within the rules)."},
+            {"name": "general",       "topic": "Sit. Stay. Chat. 🐾 General conversation for the whole pack."},
+            {"name": "introductions", "topic": "New pup? Introduce yourself and tell us how you found the kennel 🌸"},
+            {"name": "off-topic",     "topic": "Go feral here. Anything goes (within the rules) 😈"},
         ],
     },
     {
         "category": "🐾 FOLLOWER ZONE",
         "min_role": "🐾 Follower",
         "channels": [
-            {"name": "follower-chat", "topic": "Follower-exclusive chat. 🐾"},
-            {"name": "puppy-pouch",   "topic": "Answered Puppy Pouch notes — posted automatically. 🐾", "readonly": True, "state_key": "puppy_pouch_channel"},
-            {"name": "drool-log",     "topic": "New Drool Log items — posted automatically. 🔥",         "readonly": True, "state_key": "drool_channel"},
+            {"name": "pack-chat",     "topic": "Follower-exclusive pack chat — bark, bite, and banter 🐾"},
+            {"name": "beg-box",       "topic": "Drop your requests and beg nicely. mochii reads everything 🌸"},
+            {"name": "puppy-pouch",   "topic": "Answered Puppy Pouch notes — your confessions, answered 💌", "readonly": True, "state_key": "puppy_pouch_channel"},
+            {"name": "drool-log",     "topic": "New Drool Log items — mochii's personal shame gallery 🤤", "readonly": True, "state_key": "drool_channel"},
         ],
     },
     {
         "category": "🌸 SUBSCRIBER LOUNGE",
         "min_role": "🌸 Subscriber",
         "channels": [
-            {"name": "subscriber-chat",  "topic": "Subscriber-only chat. 🌸"},
-            {"name": "mochii-updates",   "topic": "Content updates and exclusive news. 🌸",                "readonly": True, "state_key": "updates_channel"},
-            {"name": "now-playing",      "topic": "Current Spotify track — updated automatically. 🎵",    "readonly": True, "state_key": "nowplaying_channel"},
+            {"name": "subscriber-chat",  "topic": "Subscriber lounge — pampered pets only 🌸 come get cosy"},
+            {"name": "treat-jar",        "topic": "Daily treats from mochii 🍖 one per day, don't be greedy", "readonly": True, "state_key": "treat_channel"},
+            {"name": "mochii-updates",   "topic": "Content drops, subscriber-exclusive news, and chaos 🌸", "readonly": True, "state_key": "updates_channel"},
+            {"name": "now-playing",      "topic": "Currently playing — updated automatically 🎵 queue something nice", "readonly": True, "state_key": "nowplaying_channel"},
         ],
     },
     {
         "category": "💎 PREMIUM DEN",
         "min_role": "💎 Tier 2",
         "channels": [
-            {"name": "premium-chat",   "topic": "Tier 2 exclusive chat. 💎"},
-            {"name": "camera-lounge",  "topic": "Stream and camera status alerts. 📷",  "readonly": True, "state_key": "camera_channel"},
+            {"name": "premium-chat",   "topic": "The den — for the prized toys and favourite pets 💎 you know who you are"},
+            {"name": "camera-lounge",  "topic": "Stream and camera status alerts 📷 premium eyes only", "readonly": True, "state_key": "camera_channel"},
         ],
     },
     {
         "category": "🔒 STAFF",
         "min_role": "🛡️ Moderator",
         "channels": [
-            {"name": "staff-chat",  "topic": "Staff discussion."},
-            {"name": "mod-log",     "topic": "Moderation action log."},
-            {"name": "bot-logs",    "topic": "Bot event log."},
+            {"name": "staff-chat",  "topic": "Staff discussion — keep the kennel running smoothly."},
+            {"name": "mod-log",     "topic": "Moderation action log — who's been naughty today."},
+            {"name": "bot-logs",    "topic": "Bot event log — the machine that keeps the pack in line."},
         ],
     },
     {
@@ -219,6 +395,7 @@ _DEFAULT_STATE: dict = {
     "last_drool_id":            0,
     "last_nowplaying_track_id": None,
     "last_weekly_whimper_date": None,
+    "last_daily_treat_date":    None,
 }
 
 
@@ -470,16 +647,16 @@ async def run_server_setup(guild: discord.Guild) -> str:
     _save_state(_state)
 
     lines = [
-        f"✅ **Server setup complete for {guild.name}!**\n",
-        "**Roles:** " + " · ".join(f"`{n}`" for n in role_map),
+        f"🐾 **the kennel is ready, {guild.name}!**\n",
+        "**Roles created:** " + " · ".join(f"`{n}`" for n in role_map),
         "",
-        "**Backend env vars — copy into `compose.yaml` and redeploy:**",
+        "**Backend env vars — paste into `compose.yaml` and redeploy:**",
         "```",
         *[f"{k}={v}" for k, v in notify_map.items()],
         "```",
         "",
         "Also ensure `DISCORD_PUBLIC_KEY` is set so the Puppy Pouch reply button works.",
-        "Bot is now managing this server. 🐾",
+        "everything is set up. sit. stay. enjoy. 🌸",
     ]
     return "\n".join(lines)
 
@@ -536,10 +713,10 @@ async def sync_member_roles(
 # ── Embed builders ────────────────────────────────────────────────────────────
 
 def _tier_label(level: int) -> str:
-    if level >= 3:   return "💎 Tier 2 (Premium)"
-    if level == 2:   return "🌸 Subscriber (Tier 1)"
-    if level == 1:   return "🐾 Follower"
-    return "🔗 Linked (no active subscription)"
+    if level >= 3:   return "💎 Tier 2 — prized pet of the kennel"
+    if level == 2:   return "🌸 Subscriber — pampered and collared"
+    if level == 1:   return "🐾 Follower — a good pup with potential"
+    return "🔗 Linked (not subscribed yet — collar pending)"
 
 
 def _question_embed(q: dict) -> discord.Embed:
@@ -551,7 +728,7 @@ def _question_embed(q: dict) -> discord.Embed:
         color=discord.Color(_PINK),
         url=share or discord.Embed.Empty,
     )
-    embed.set_footer(text=f"mochii.live · {q.get('created_at', '')[:10]}")
+    embed.set_footer(text=_pick("pouch_footer") + f"  ·  {q.get('created_at', '')[:10]}")
     return embed
 
 
@@ -562,7 +739,7 @@ def _drool_embed(item: dict) -> discord.Embed:
     media_url = item.get("media_url")
 
     embed = discord.Embed(
-        title=f"🔥 New Drool Log item — {platform}",
+        title=f"{_pick('drool_intro')} — {platform}",
         description=text or None,
         color=discord.Color(_RED),
         url=url or discord.Embed.Empty,
@@ -570,8 +747,7 @@ def _drool_embed(item: dict) -> discord.Embed:
     if media_url:
         embed.set_image(url=media_url)
 
-    drool_base = f"{_base_url()}/drool.html" if _base_url() else ""
-    embed.set_footer(text=f"mochii.live · Drool Log{' · ' + drool_base if drool_base else ''}")
+    embed.set_footer(text=_pick("drool_footer"))
     return embed
 
 
@@ -584,21 +760,28 @@ def _nowplaying_embed(data: dict) -> Optional[discord.Embed]:
     art_url = data.get("album_art_url")
     track_url = data.get("track_url", "")
 
+    mood = _pick("nowplaying_mood")
     embed = discord.Embed(
         title="🎵 Now Playing",
-        description=f"**{track}**\n{artist}" + (f"\n*{album}*" if album else ""),
+        description=f"**{track}**\n{artist}" + (f"\n*{album}*" if album else "") + f"\n\n*{mood}*",
         color=discord.Color(_GREEN),
         url=track_url or discord.Embed.Empty,
     )
     if art_url:
         embed.set_thumbnail(url=art_url)
-    embed.set_footer(text="mochii.live · Spotify")
+    embed.set_footer(text="mochii.live · Spotify — queue something good 🎶")
     return embed
 
 
 def _product_embeds(products: list[dict]) -> list[discord.Embed]:
     embeds = []
     base = _base_url()
+    captions = [
+        "treat yourself — you've been so good 🌸",
+        "mochii picked these out 💕",
+        "premium pup approved 💎",
+        "part of a balanced diet of chaos 🐾",
+    ]
     for p in products[:10]:
         embed = discord.Embed(
             title=p.get("name", "Product"),
@@ -612,6 +795,7 @@ def _product_embeds(products: list[dict]) -> list[discord.Embed]:
         img = p.get("image_url")
         if img:
             embed.set_thumbnail(url=img)
+        embed.set_footer(text=random.choice(captions))
         embeds.append(embed)
     return embeds
 
@@ -644,9 +828,10 @@ bot = MochiiBot()
 async def on_ready() -> None:
     logger.info("Logged in as %s (ID %s)", bot.user, bot.user.id)
     await bot.change_presence(
-        activity=discord.Activity(type=discord.ActivityType.watching, name="mochii.live 🐾")
+        activity=discord.Activity(type=discord.ActivityType.watching, name=_pick("status"))
     )
-    for task in (auto_sync_roles, drool_feed_task, nowplaying_task, weekly_whimper_task):
+    for task in (status_rotation_task, auto_sync_roles, drool_feed_task,
+                 nowplaying_task, weekly_whimper_task, daily_treat_task):
         if not task.is_running():
             task.start()
 
@@ -659,11 +844,12 @@ async def on_guild_join(guild: discord.Guild) -> None:
     )
     if ch:
         await ch.send(
-            "👋 **mochii.live bot has arrived!**\n\n"
+            "🐾 **the bot has arrived and she's not leaving.**\n\n"
             "Run `/setup` (administrator required) to automatically scaffold "
-            "all roles, channels and permissions.\n\n"
+            "all roles, channels, categories and permissions.\n\n"
             "After setup, members can use `/verify` to link their Fanvue account "
-            "and unlock subscriber channels. 🐾"
+            "and earn their collar. 🌸\n\n"
+            "*sit. stay. behave.*"
         )
 
 
@@ -688,15 +874,17 @@ async def on_member_join(member: discord.Member) -> None:
     if not base:
         return
     try:
+        suffix = _pick("welcome_suffix")
         embed = discord.Embed(
-            title="Welcome to the pack! 🐾",
+            title="welcome to the kennel, pup 🐾",
             description=(
-                f"Hey {member.mention}! To unlock subscriber channels, link your "
-                f"Fanvue account:\n\n"
+                f"hey {member.mention} — glad you found us 🌸\n\n"
+                f"**want access to the good stuff?** link your Fanvue account:\n\n"
                 f"**1.** Go to **{base}** and log in with Fanvue\n"
-                f"**2.** Open your profile and click **Link Discord**\n"
-                f"**3.** Come back and use `/whoami` to confirm your tier 🌸\n\n"
-                f"Or use `/verify` in the server for a quick guide."
+                f"**2.** Open your profile → click **Link Discord**\n"
+                f"**3.** Come back and use `/whoami` to confirm your collar 🌸\n"
+                f"**4.** Or just use `/verify` and i'll walk you through it.\n\n"
+                f"*{suffix}*"
             ),
             color=discord.Color(_PINK),
         )
@@ -800,8 +988,51 @@ async def nowplaying_task() -> None:
     _save_state(_state)
 
 
+@tasks.loop(minutes=15)
+async def status_rotation_task() -> None:
+    """Cycle through cheeky bot statuses every 15 minutes."""
+    global _STATUS_IDX
+    statuses = _FLAVOR_TEXT["status"]
+    text = statuses[_STATUS_IDX % len(statuses)]
+    _STATUS_IDX += 1
+    await bot.change_presence(
+        activity=discord.Activity(type=discord.ActivityType.watching, name=text)
+    )
+
+
 @tasks.loop(hours=1)
-async def weekly_whimper_task() -> None:
+async def daily_treat_task() -> None:
+    """Post a daily treat to #treat-jar at noon UTC."""
+    now = datetime.now(timezone.utc)
+    if now.hour != 12:
+        return
+
+    today_str = now.strftime("%Y-%m-%d")
+    if _state.get("last_daily_treat_date") == today_str:
+        return
+
+    treat_text = _pick("treat")
+
+    for guild in bot.guilds:
+        ch_id = _guild_channel(guild.id, "treat_channel")
+        if not ch_id:
+            continue
+        channel = guild.get_channel(ch_id)
+        if channel is None:
+            continue
+        embed = discord.Embed(
+            title="🍖 Daily Treat",
+            description=treat_text,
+            color=discord.Color(_PINK),
+        )
+        embed.set_footer(text="mochii.live · one treat per day, don't be greedy 🌸")
+        try:
+            await channel.send(embed=embed)
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            logger.warning("[daily-treat] Could not post to %s: %s", channel, exc)
+
+    _state["last_daily_treat_date"] = today_str
+    _save_state(_state)
     """Post the Weekly Whimper (most-reacted Drool Log item) every Monday."""
     now = datetime.now(timezone.utc)
     if now.weekday() != 0:  # Monday = 0
@@ -825,7 +1056,7 @@ async def weekly_whimper_task() -> None:
         return
 
     embed = _drool_embed(whimper)
-    embed.title = "🏆 Weekly Whimper — Top Drool Log Item"
+    embed.title = "🏆 Weekly Whimper — the pack's favourite drool this week"
     embed.color = discord.Color(_GOLD)
 
     for guild in bot.guilds:
@@ -837,7 +1068,10 @@ async def weekly_whimper_task() -> None:
         if channel is None:
             continue
         try:
-            await channel.send(content="@here 🏆 This week's **Weekly Whimper**!", embed=embed)
+            await channel.send(
+                content="@here 🏆 **Weekly Whimper** — the most drooled-over item this week is…",
+                embed=embed,
+            )
         except (discord.Forbidden, discord.HTTPException) as exc:
             logger.warning("[weekly-whimper] Could not post to %s: %s", channel, exc)
 
@@ -868,7 +1102,15 @@ class TrackSelectView(discord.ui.View):
         result = await _api_post("/api/discord/bot/spotify/queue",
                                  {"discord_id": self._discord_id, "track_uri": track_uri})
         if result and result.get("success"):
-            await interaction.response.edit_message(content="🎵 Track added to queue!", view=None)
+            await interaction.response.edit_message(
+                content=random.choice([
+                    "🎵 track added — good taste pup 🌸",
+                    "🎵 queued! mochii will feel that one 😏",
+                    "🎶 added to the queue~ you know what she likes 💕",
+                    "🎵 that's going in the mix — nice pick 🐾",
+                ]),
+                view=None,
+            )
         else:
             msg = (result or {}).get("message", "Could not add track.")
             await interaction.response.edit_message(content=f"❌ {msg}", view=None)
@@ -920,7 +1162,7 @@ async def cmd_announce(interaction: discord.Interaction, message: str) -> None:
         return
     embed = discord.Embed(description=message, color=discord.Color(_PINK))
     embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-    embed.set_footer(text="mochii.live")
+    embed.set_footer(text="mochii.live 🌸 — sit down and pay attention")
     try:
         await channel.send(embed=embed)
         await interaction.response.send_message("✅ Announcement posted!", ephemeral=True)
@@ -930,89 +1172,96 @@ async def cmd_announce(interaction: discord.Interaction, message: str) -> None:
 
 # ·· Community ················································
 
-@bot.tree.command(name="server-info", description="Show server stats and subscriber counts.")
+@bot.tree.command(name="server-info", description="How big is the kennel? 🐾 See the stats.")
 async def cmd_server_info(interaction: discord.Interaction) -> None:
     await interaction.response.defer()
     stats = await _api_get("/api/discord/bot/stats")
     guild = interaction.guild
 
-    embed = discord.Embed(title=f"📊 {guild.name}", color=discord.Color(_PINK))
+    embed = discord.Embed(
+        title=f"🐾 {guild.name} — Kennel Stats",
+        color=discord.Color(_PINK),
+    )
     embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
 
     if stats:
-        embed.add_field(name="Fanvue Users",    value=str(stats.get("user_count",    "—")), inline=True)
-        embed.add_field(name="Linked Accounts", value=str(stats.get("linked_count",  "—")), inline=True)
+        embed.add_field(name="Fanvue Members",  value=str(stats.get("user_count",    "—")), inline=True)
+        embed.add_field(name="Collared",        value=str(stats.get("linked_count",  "—")), inline=True)
         embed.add_field(name="\u200b",          value="\u200b",                              inline=True)
         embed.add_field(name="💎 Tier 2",       value=str(stats.get("tier2_count",   "—")), inline=True)
         embed.add_field(name="🌸 Subscribers",  value=str(stats.get("sub_count",     "—")), inline=True)
         embed.add_field(name="🐾 Followers",    value=str(stats.get("follower_count","—")), inline=True)
-        embed.add_field(name="📬 Q&A Answered", value=str(stats.get("answered_questions", "—")), inline=True)
-        embed.add_field(name="🔥 Drool Items",  value=str(stats.get("drool_count",   "—")), inline=True)
+        embed.add_field(name="💌 Q&A Answered", value=str(stats.get("answered_questions", "—")), inline=True)
+        embed.add_field(name="🤤 Drool Items",  value=str(stats.get("drool_count",   "—")), inline=True)
         embed.add_field(name="🛒 Orders",       value=str(stats.get("order_count",   "—")), inline=True)
+        zap_count = stats.get("activation_count", 0)
+        embed.add_field(name="⚡ Zaps",         value=str(zap_count),                        inline=True)
     else:
-        embed.description = "*Stats unavailable right now.*"
+        embed.description = "*stats unavailable right now — the kennel is offline 😴*"
 
     embed.add_field(name="Discord Members", value=str(guild.member_count), inline=True)
-    embed.set_footer(text="mochii.live · Alpha Kennel")
+    embed.set_footer(text="mochii.live · Alpha Kennel — we keep records 😏")
     await interaction.followup.send(embed=embed)
 
 
-@bot.tree.command(name="verify", description="Get a guide to link your Fanvue account.")
+@bot.tree.command(name="verify", description="Get a guide to link your Fanvue account and earn your collar. 🐾")
 async def cmd_verify(interaction: discord.Interaction) -> None:
     base = _base_url()
     if not base:
         await interaction.response.send_message(
-            "❌ Site URL not configured yet — ask an admin.", ephemeral=True
+            "❌ site URL not configured yet — ask an admin 🐾", ephemeral=True
         )
         return
     embed = discord.Embed(
-        title="🔗 Link Your Fanvue Account",
+        title="🔗 earn your collar — link your Fanvue account",
         description=(
             f"**Step 1** — Go to **{base}** and log in with your Fanvue account.\n\n"
             "**Step 2** — Click your profile → **Link Discord**.\n\n"
-            "**Step 3** — Authorise the connection and return here.\n\n"
-            "**Step 4** — Use `/whoami` to confirm your tier! 🌸\n\n"
-            f"Once linked, your Discord roles will update automatically to reflect "
-            f"your Fanvue subscription."
+            "**Step 3** — Authorise and come back here.\n\n"
+            "**Step 4** — Use `/whoami` to check your tier 🌸\n\n"
+            "Your Discord roles will update automatically once you're linked. "
+            "the higher the tier, the deeper into the kennel you go 😏"
         ),
         color=discord.Color(_PINK),
     )
     try:
         await interaction.user.send(embed=embed)
-        await interaction.response.send_message("📬 Sent you a DM with the instructions!", ephemeral=True)
+        await interaction.response.send_message(
+            "📬 sent you a DM with the instructions, pup 🐾", ephemeral=True
+        )
     except discord.Forbidden:
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@bot.tree.command(name="whoami", description="Show your Fanvue tier and link status.")
+@bot.tree.command(name="whoami", description="Show your Fanvue tier and collar status. 🐾")
 async def cmd_whoami(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True)
     data = await _api_get("/api/discord/bot/member", discord_id=str(interaction.user.id))
     if data is None or not data.get("is_linked"):
         await interaction.followup.send(
-            "🔗 Your Discord account isn't linked to Fanvue yet. Use `/verify` to get started!",
+            "🔗 you're not linked to Fanvue yet — use `/verify` to get your collar, pup 🐾",
             ephemeral=True,
         )
         return
     level = data["access_level"]
     embed = discord.Embed(
-        title="👤 Your Account",
+        title="🐾 your collar status",
         color=discord.Color(_PINK),
     )
-    embed.add_field(name="Discord",      value=interaction.user.mention, inline=True)
-    embed.add_field(name="Fanvue Tier",  value=_tier_label(level),       inline=True)
-    embed.set_footer(text="mochii.live · Alpha Kennel")
+    embed.add_field(name="Discord",  value=interaction.user.mention, inline=True)
+    embed.add_field(name="Tier",     value=_tier_label(level),       inline=True)
+    embed.set_footer(text="mochii.live · Alpha Kennel — you're in the system 😏")
     await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 # ·· Puppy Pouch ··············································
 
-@bot.tree.command(name="ask", description="Submit an anonymous note to the Puppy Pouch. 🐾")
-@app_commands.describe(question="Your anonymous question or note (max 280 characters).")
+@bot.tree.command(name="ask", description="Drop an anonymous note in the Puppy Pouch 💌 mochii will answer.")
+@app_commands.describe(question="Your anonymous question or confession (max 280 characters).")
 async def cmd_ask(interaction: discord.Interaction, question: str) -> None:
     if len(question) > 280:
         await interaction.response.send_message(
-            "❌ Notes must be 280 characters or fewer.", ephemeral=True
+            "❌ notes must be 280 characters or fewer — be concise, be naughty 🐾", ephemeral=True
         )
         return
     try:
@@ -1022,17 +1271,19 @@ async def cmd_ask(interaction: discord.Interaction, question: str) -> None:
                 json={"text": question},
             )
         if resp.status_code in (200, 201):
-            await interaction.response.send_message(
-                "📬 Your note has been dropped in the Puppy Pouch! 🐾", ephemeral=True
-            )
+            await interaction.response.send_message(_pick("ask_confirm"), ephemeral=True)
         else:
-            await interaction.response.send_message("❌ Could not submit note right now.", ephemeral=True)
+            await interaction.response.send_message(
+                "❌ couldn't deliver your note right now — try again 🐾", ephemeral=True
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning("ask command error: %s", exc)
-        await interaction.response.send_message("❌ Could not submit note right now.", ephemeral=True)
+        await interaction.response.send_message(
+            "❌ couldn't deliver your note right now — try again 🐾", ephemeral=True
+        )
 
 
-@bot.tree.command(name="pouch", description="Browse recent answered Puppy Pouch notes. 🐾")
+@bot.tree.command(name="pouch", description="Browse answered Puppy Pouch notes. 💌")
 @app_commands.describe(page="Page number (default: 1).")
 async def cmd_pouch(interaction: discord.Interaction, page: int = 1) -> None:
     await interaction.response.defer()
@@ -1048,12 +1299,14 @@ async def cmd_pouch(interaction: discord.Interaction, page: int = 1) -> None:
     page_qs  = questions[start: start + per_page]
 
     if not page_qs:
-        await interaction.followup.send("📭 No answered notes found on that page.", ephemeral=True)
+        await interaction.followup.send(
+            "📭 nothing on that page yet — drop a note with `/ask` 🌸", ephemeral=True
+        )
         return
 
     total_pages = max(1, (len(questions) + per_page - 1) // per_page)
     embeds = [_question_embed(q) for q in page_qs]
-    embeds[0].set_author(name=f"Puppy Pouch — Page {page}/{total_pages}")
+    embeds[0].set_author(name=f"💌 Puppy Pouch — Page {page} of {total_pages}")
     await interaction.followup.send(embeds=embeds[:10])
 
 
@@ -1063,14 +1316,11 @@ def _has_follower_role(member: discord.Member) -> bool:
     return any(r.name in _ALL_TIER_NAMES for r in member.roles)
 
 
-@bot.tree.command(name="drool", description="Browse the Drool Log. 🔥 (Follower+)")
+@bot.tree.command(name="drool", description="Browse the Drool Log. 🤤 (Follower+)")
 @app_commands.describe(page="Page number (default: 1).")
 async def cmd_drool(interaction: discord.Interaction, page: int = 1) -> None:
     if not _has_follower_role(interaction.user):
-        await interaction.response.send_message(
-            "🐾 The Drool Log is for Fanvue followers only. Use `/verify` to link your account!",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(_pick("gate_follower"), ephemeral=True)
         return
     await interaction.response.defer()
     try:
@@ -1082,24 +1332,21 @@ async def cmd_drool(interaction: discord.Interaction, page: int = 1) -> None:
 
     items = data.get("items", [])
     if not items:
-        await interaction.followup.send("🔥 Nothing on that page yet.", ephemeral=True)
+        await interaction.followup.send("🔥 nothing on that page yet. the collection grows daily 👀", ephemeral=True)
         return
 
     total = data.get("total", len(items))
     per   = data.get("page_size", 3)
     total_pages = max(1, (total + per - 1) // per)
     embeds = [_drool_embed(it) for it in items[:3]]
-    embeds[0].set_author(name=f"Drool Log — Page {page}/{total_pages}")
+    embeds[0].set_author(name=f"🤤 Drool Log — Page {page} of {total_pages}")
     await interaction.followup.send(embeds=embeds)
 
 
 @bot.tree.command(name="weekly-whimper", description="Show the most-reacted Drool Log item this week. 🏆")
 async def cmd_weekly_whimper(interaction: discord.Interaction) -> None:
     if not _has_follower_role(interaction.user):
-        await interaction.response.send_message(
-            "🐾 Use `/verify` to link your Fanvue account and unlock the Drool Log!",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(_pick("gate_follower"), ephemeral=True)
         return
     await interaction.response.defer()
     try:
@@ -1110,18 +1357,18 @@ async def cmd_weekly_whimper(interaction: discord.Interaction) -> None:
         items = []
 
     if not items:
-        await interaction.followup.send("🏆 No items found.", ephemeral=True)
+        await interaction.followup.send("🏆 nothing crowned this week yet — check back later 🐾", ephemeral=True)
         return
 
     embed = _drool_embed(items[0])
-    embed.title = "🏆 This Week's Weekly Whimper"
+    embed.title = "🏆 Weekly Whimper — the pack's most-drooled-over item"
     embed.color = discord.Color(_GOLD)
     await interaction.followup.send(embed=embed)
 
 
 # ·· Spotify ··················································
 
-@bot.tree.command(name="nowplaying", description="Show the currently playing Spotify track. 🎵")
+@bot.tree.command(name="nowplaying", description="What's mochii vibing to right now? 🎵")
 async def cmd_nowplaying(interaction: discord.Interaction) -> None:
     await interaction.response.defer()
     try:
@@ -1133,28 +1380,32 @@ async def cmd_nowplaying(interaction: discord.Interaction) -> None:
 
     if not data.get("is_playing"):
         if not data.get("configured"):
-            await interaction.followup.send("🎵 Spotify is not connected yet.", ephemeral=True)
+            await interaction.followup.send("🎵 Spotify isn't connected yet — ask an admin 🐾", ephemeral=True)
         else:
-            await interaction.followup.send("🎵 Nothing is playing right now.", ephemeral=True)
+            await interaction.followup.send(
+                random.choice([
+                    "🎵 nothing's playing right now — the kennel is quiet 🌸",
+                    "🎵 silence in the kennel… for now 😏",
+                    "🎵 mochii isn't playing anything right now. the suspense 😈",
+                ]),
+                ephemeral=True,
+            )
         return
 
     embed = _nowplaying_embed(data)
     if embed:
         await interaction.followup.send(embed=embed)
     else:
-        await interaction.followup.send("🎵 Nothing is playing right now.", ephemeral=True)
+        await interaction.followup.send("🎵 nothing's playing right now 🌸", ephemeral=True)
 
 
-@bot.tree.command(name="queue", description="Search Spotify and add a track to the queue. 🎵 (Subscriber+)")
+@bot.tree.command(name="queue", description="Search Spotify and add a track to mochii's queue. 🎵 (Subscriber+)")
 @app_commands.describe(query="Track name or artist to search for.")
 async def cmd_queue(interaction: discord.Interaction, query: str) -> None:
     # Check subscriber role
     member_roles = {r.name for r in interaction.user.roles}
     if not (member_roles & {"🌸 Subscriber", "💎 Tier 2", "⭐ Admin"}):
-        await interaction.response.send_message(
-            "🌸 Spotify queueing is a subscriber feature. Link your Fanvue account with `/verify`!",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(_pick("gate_subscriber"), ephemeral=True)
         return
 
     await interaction.response.defer(ephemeral=True)
@@ -1165,14 +1416,14 @@ async def cmd_queue(interaction: discord.Interaction, query: str) -> None:
     )
     tracks = (result or {}).get("tracks", [])
     if not tracks:
-        err = (result or {}).get("error", "No results found.")
+        err = (result or {}).get("error", "no results found 🎵")
         await interaction.followup.send(f"🎵 {err}", ephemeral=True)
         return
 
     view  = TrackSelectView(tracks, str(interaction.user.id))
     lines = [f"**{t['name']}** — {t['artist']}" for t in tracks[:5]]
     await interaction.followup.send(
-        "🎵 **Search results — pick a track:**\n" + "\n".join(f"{i+1}. {l}" for i, l in enumerate(lines)),
+        "🎵 **pick something good for the kennel:**\n" + "\n".join(f"{i+1}. {l}" for i, l in enumerate(lines)),
         view=view,
         ephemeral=True,
     )
@@ -1180,7 +1431,7 @@ async def cmd_queue(interaction: discord.Interaction, query: str) -> None:
 
 # ·· Store ·····················································
 
-@bot.tree.command(name="store", description="Browse the mochii.live store. 🛒")
+@bot.tree.command(name="store", description="Browse the mochii.live store 🛒 treat yourself.")
 async def cmd_store(interaction: discord.Interaction) -> None:
     await interaction.response.defer()
     try:
@@ -1190,18 +1441,20 @@ async def cmd_store(interaction: discord.Interaction) -> None:
     except Exception:
         products = []
 
+    base = _base_url()
     if not products:
-        base = _base_url()
         await interaction.followup.send(
-            f"🛒 The store is empty right now.{' Visit ' + base + '/store.html' if base else ''}"
+            f"🛒 the store is empty right now — check back soon 🌸{' · ' + base + '/store.html' if base else ''}"
         )
         return
 
     embeds = _product_embeds(products)
-    base   = _base_url()
     header = discord.Embed(
         title="🛒 mochii.live Store",
-        description=f"Check it out at **{base}/store.html**" if base else None,
+        description=(
+            f"👀 things worth spending money on~\n"
+            + (f"\n**Browse at:** {base}/store.html" if base else "")
+        ),
         color=discord.Color(_PINK),
     )
     await interaction.followup.send(embeds=[header, *embeds[:9]])
@@ -1215,15 +1468,12 @@ _DEVICE_CHOICES = [
 ]
 
 
-@bot.tree.command(name="zap", description="Activate a device. 🐾 (Follower+ required)")
+@bot.tree.command(name="zap", description="Activate a device and let mochii feel it 😏 (Follower+ required)")
 @app_commands.describe(device="Which device to activate (default: pishock).")
 @app_commands.choices(device=_DEVICE_CHOICES)
 async def cmd_zap(interaction: discord.Interaction, device: app_commands.Choice[str] = None) -> None:
     if not _has_follower_role(interaction.user):
-        await interaction.response.send_message(
-            "🐾 You need to be at least a Fanvue follower to use this. Use `/verify` to link!",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(_pick("gate_follower"), ephemeral=True)
         return
 
     device_value = device.value if device else "pishock"
@@ -1234,14 +1484,165 @@ async def cmd_zap(interaction: discord.Interaction, device: app_commands.Choice[
         {"discord_id": str(interaction.user.id)},
     )
     if result is None:
-        await interaction.followup.send("❌ Could not reach the backend. Try again later.", ephemeral=True)
+        await interaction.followup.send("❌ couldn't reach the backend right now — try again 🐾", ephemeral=True)
         return
 
-    msg = result.get("message", "Done.")
+    msg = result.get("message", "done.")
     if result.get("success"):
         await interaction.followup.send(msg, ephemeral=True)
+        # Announce publicly to the pack
+        taunt = _pick("zap_public").format(user=interaction.user.display_name)
+        for guild in bot.guilds:
+            if guild.id != interaction.guild_id:
+                continue
+            # Post in drool-log if available, otherwise updates channel
+            ch_id = _guild_channel(guild.id, "drool_channel") or _guild_channel(guild.id, "updates_channel")
+            if not ch_id:
+                break
+            channel = guild.get_channel(ch_id)
+            if channel:
+                try:
+                    await channel.send(taunt)
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
     else:
         await interaction.followup.send(f"❌ {msg}", ephemeral=True)
+
+
+# ── Fun / personality commands ────────────────────────────────────────────────
+
+@bot.tree.command(name="rate", description="Get a completely objective and scientific rating from the bot 😏")
+async def cmd_rate(interaction: discord.Interaction) -> None:
+    score = random.randint(7, 10)   # we're kind here
+    descriptor, emoji = random.choice(_FLAVOR_TEXT["rate_descriptor"])
+    embed = discord.Embed(
+        title=f"🔬 Official mochii.live Rating™",
+        description=(
+            f"{interaction.user.mention}\n\n"
+            f"**Score:** {score}/10\n"
+            f"**Verdict:** {descriptor} {emoji}\n\n"
+            f"*methodology: vibes-based, collar-adjacent, 100% accurate*"
+        ),
+        color=discord.Color(_PINK),
+    )
+    embed.set_footer(text="mochii.live · ratings department 🐾")
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="treat", description="Claim your daily treat 🍖 (Follower+)")
+async def cmd_treat(interaction: discord.Interaction) -> None:
+    if not _has_follower_role(interaction.user):
+        await interaction.response.send_message(_pick("gate_follower"), ephemeral=True)
+        return
+    treat = _pick("treat")
+    embed = discord.Embed(
+        title="🍖 Your Treat",
+        description=treat,
+        color=discord.Color(_PINK),
+    )
+    embed.set_footer(text=f"for {interaction.user.display_name} — you earned it 🌸")
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="collar", description="View your tier as a collar badge 🐾")
+async def cmd_collar(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+    data = await _api_get("/api/discord/bot/member", discord_id=str(interaction.user.id))
+    if not data or not data.get("is_linked"):
+        embed = discord.Embed(
+            title="🔓 no collar… yet",
+            description=(
+                "you're not linked to Fanvue — you don't have a collar assigned.\n\n"
+                "use `/verify` to link your account and claim your place in the pack 🐾"
+            ),
+            color=discord.Color(_GRAY),
+        )
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return
+
+    level = data["access_level"]
+    collar_art = {
+        0: "🔗",
+        1: "🐾",
+        2: "🌸",
+        3: "💎",
+    }
+    collar_desc = {
+        0: "a plain link collar — you're in the system, pup",
+        1: "a paw-print collar — good pup, you're in the pack",
+        2: "a soft pink collar — pampered and privileged 🌸",
+        3: "a diamond-studded collar — the absolute favourite 💎",
+    }
+    icon = collar_art.get(min(level, 3), "🔗")
+    desc = collar_desc.get(min(level, 3), "a mysterious collar")
+    embed = discord.Embed(
+        title=f"{icon} Your Collar",
+        description=(
+            f"**{interaction.user.display_name}**\n"
+            f"*{desc}*\n\n"
+            f"**Tier:** {_tier_label(level)}"
+        ),
+        color=discord.Color([_GRAY, _BLURPLE, _PINK, _PURPLE][min(level, 3)]),
+    )
+    embed.set_thumbnail(url=interaction.user.display_avatar.url)
+    embed.set_footer(text="mochii.live · Alpha Kennel 🐾")
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="beg", description="Beg the bot for something 🐾 outcomes vary by tier")
+async def cmd_beg(interaction: discord.Interaction) -> None:
+    data = await _api_get("/api/discord/bot/member", discord_id=str(interaction.user.id))
+    level = data["access_level"] if (data and data.get("is_linked")) else 0
+    is_premium = level >= 3
+
+    if is_premium:
+        msg = _pick("beg_premium")
+        color = _GOLD
+    elif random.random() < 0.5:
+        msg = _pick("beg_success")
+        color = _PINK
+    else:
+        msg = _pick("beg_fail")
+        color = _RED
+
+    embed = discord.Embed(
+        title="🐾 Begging in Progress…",
+        description=f"{interaction.user.mention} is begging.\n\n{msg}",
+        color=discord.Color(color),
+    )
+    embed.set_footer(text="mochii.live · beg responsibly 🌸")
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="peek", description="Get a random surprise from the Drool Log 👀 (Follower+)")
+async def cmd_peek(interaction: discord.Interaction) -> None:
+    if not _has_follower_role(interaction.user):
+        await interaction.response.send_message(_pick("gate_follower"), ephemeral=True)
+        return
+    await interaction.response.defer()
+    try:
+        # Fetch a few pages and pick randomly for surprise factor
+        page = random.randint(1, 5)
+        async with httpx.AsyncClient(timeout=10) as c:
+            resp = await c.get(f"{_backend()}/api/drool", params={"page": page, "page_size": 10})
+        data = resp.json() if resp.is_success else {}
+        items = data.get("items", [])
+        if not items and page > 1:
+            # Fall back to page 1 if the random page was empty
+            async with httpx.AsyncClient(timeout=10) as c:
+                resp = await c.get(f"{_backend()}/api/drool", params={"page": 1, "page_size": 10})
+            items = resp.json().get("items", []) if resp.is_success else []
+    except Exception:
+        items = []
+
+    if not items:
+        await interaction.followup.send("👀 the Drool Log is empty right now — check back soon 🌸", ephemeral=True)
+        return
+
+    item = random.choice(items)
+    tease = _pick("peek_tease")
+    embed = _drool_embed(item)
+    await interaction.followup.send(content=tease, embed=embed)
 
 
 # ── Tree-level error handler ──────────────────────────────────────────────────
@@ -1249,10 +1650,10 @@ async def cmd_zap(interaction: discord.Interaction, device: app_commands.Choice[
 @bot.tree.error
 async def on_tree_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
     if isinstance(error, app_commands.MissingPermissions):
-        msg = "❌ You don't have permission to use this command."
+        msg = "❌ you don't have permission to do that here, pup 🐾"
     else:
         logger.error("Slash command error: %s", error)
-        msg = "❌ An unexpected error occurred."
+        msg = "❌ something went wrong. the kennel is glitching 😅"
     try:
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
