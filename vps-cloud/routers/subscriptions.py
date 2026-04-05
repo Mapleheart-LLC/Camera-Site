@@ -166,9 +166,9 @@ async def segpay_subscription_webhook(
             INSERT INTO segpay_subscriptions
                 (user_id, segpay_subscription_id, trans_type, status,
                  access_level_granted, email, created_at)
-            VALUES (NULL, ?, ?, 'unmatched', NULL, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (subscription_id, trans_type, email, now),
+            (None, subscription_id, trans_type, "unmatched", None, email, now),
         )
         db.commit()
         return {"status": "no_user", "email": email}
@@ -187,9 +187,9 @@ async def segpay_subscription_webhook(
             INSERT INTO segpay_subscriptions
                 (user_id, segpay_subscription_id, trans_type, status,
                  access_level_granted, email, created_at)
-            VALUES (?, ?, ?, 'active', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, subscription_id, trans_type, new_level, email, now),
+            (user_id, subscription_id, trans_type, "active", new_level, email, now),
         )
         db.commit()
         logger.info(
@@ -212,9 +212,9 @@ async def segpay_subscription_webhook(
             INSERT INTO segpay_subscriptions
                 (user_id, segpay_subscription_id, trans_type, status,
                  access_level_granted, email, created_at)
-            VALUES (?, ?, ?, 'inactive', 0, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, subscription_id, trans_type, email, now),
+            (user_id, subscription_id, trans_type, "inactive", 0, email, now),
         )
         db.commit()
         logger.info(
