@@ -546,6 +546,19 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // ── Safe URL (http/https only) ─────────────────────
+    function safeUrl(url) {
+      try {
+        const u = new URL(url);
+        return (u.protocol === 'http:' || u.protocol === 'https:') ? url : null;
+      } catch { return null; }
+    }
+
+    // ── Timestamp formatter ────────────────────────────
+    function fmtTs(isoStr) {
+      return (isoStr || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+    }
+
     // ── Toast helper ───────────────────────────────────
     let _toastTimer = null;
     function showToast(msg, duration = 3000) {
@@ -798,7 +811,7 @@
         return;
       }
       tbody.innerHTML = questions.map(q => {
-        const ts = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const ts = fmtTs(q.created_at);
         return `<tr class="question-row" data-id="${escHtml(q.id)}">
           <td><div class="q-text">${escHtml(q.text)}</div></td>
           <td class="q-ts">${escHtml(ts)}</td>
@@ -832,7 +845,7 @@
         return;
       }
       tbody.innerHTML = questions.map(q => {
-        const ts      = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const ts      = fmtTs(q.created_at);
         const preview = q.answer && q.answer.length > 90
           ? escHtml(q.answer.slice(0, 87)) + '…'
           : escHtml(q.answer || '');
@@ -942,10 +955,10 @@
         return;
       }
       tbody.innerHTML = entries.map(e => {
-        const ts    = (e.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const ts    = fmtTs(e.created_at);
         const label = e.title || e.url || '';
         const display = label.length > 60 ? escHtml(label.slice(0, 57)) + '…' : escHtml(label);
-        const linked = e.url
+        const linked = safeUrl(e.url)
           ? `<a href="${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" style="color:#c49a9f;text-decoration:none;">${display}</a>`
           : display;
         return `<tr>
