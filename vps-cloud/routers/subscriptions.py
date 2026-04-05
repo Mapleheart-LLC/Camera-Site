@@ -94,8 +94,11 @@ async def segpay_subscription_webhook(
 
     # ── HMAC verification (when SEGPAY_SUB_WEBHOOK_SECRET is set) ───────────
     if webhook_secret:
-        headers = dict(request.headers)
-        provided_sig = _first("x-sig") or headers.get("x-sig", "")
+        # Read the signature exclusively from the HTTP header.  Reading it from
+        # the form-encoded body (as the previous code did) allowed an attacker
+        # to inject a forged x-sig field in the POST body, overriding the real
+        # header value and bypassing HMAC verification entirely.
+        provided_sig = request.headers.get("x-sig", "").strip().lower()
         if not provided_sig:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -106,7 +109,7 @@ async def segpay_subscription_webhook(
             raw_body,
             hashlib.sha256,
         ).hexdigest()
-        if not hmac.compare_digest(expected, provided_sig.lower()):
+        if not hmac.compare_digest(expected, provided_sig):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Segpay webhook signature mismatch.",

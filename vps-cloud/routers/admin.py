@@ -628,6 +628,22 @@ def patch_settings(
     """
     updated: list[str] = []
     if body.mock_auth is not None:
+        if body.mock_auth is True:
+            # Enabling mock_auth via the DB is only permitted when the
+            # MOCK_AUTH environment variable is already set to "true".
+            # This prevents a compromised or mistaken admin action from
+            # silently granting free premium access on a production server
+            # where mock_auth was never intended to be usable.
+            mock_env = os.environ.get("MOCK_AUTH", "").lower() == "true"
+            if not mock_env:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "mock_auth can only be enabled via the database when the "
+                        "MOCK_AUTH environment variable is already set to 'true'. "
+                        "This safeguard prevents accidental production exposure."
+                    ),
+                )
         set_setting(db, "mock_auth", "true" if body.mock_auth else "false")
         updated.append("mock_auth")
         logger.info(

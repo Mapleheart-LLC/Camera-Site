@@ -173,7 +173,9 @@ class TwoFAConfirmRequest(BaseModel):
 
 
 @router.post("/2fa/confirm")
+@_creator_limiter.limit("5/15minutes")
 def creator_2fa_confirm(
+    request: Request,
     payload: TwoFAConfirmRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):

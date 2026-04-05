@@ -50,7 +50,8 @@ from routers.analytics import router as analytics_router
 from routers.discovery import router as discovery_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
@@ -146,6 +147,13 @@ STATE_TTL: int = 600
 _oauth_states: dict[str, datetime] = {}
 
 _DEFAULT_KEY = "changeme-replace-in-production!!"
+
+# Whether the JWT secret was explicitly configured in the environment.
+# Imported from dependencies where the actual key is resolved.
+from dependencies import SECRET_KEY as _IMPORTED_SECRET_KEY
+_SECRET_KEY_IS_CONFIGURED: bool = bool(
+    os.environ.get("JWT_SECRET") or os.environ.get("SECRET_KEY")
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1013,10 +1021,29 @@ def _start_backup_scheduler() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if SECRET_KEY == _DEFAULT_KEY:
+    _is_production = BASE_URL.startswith("https")
+
+    # ── Hard production safety guards ─────────────────────────────────────
+    # These intentionally abort startup so a misconfigured production deploy
+    # fails loudly rather than silently exposing the site with broken auth.
+    if _is_production and MOCK_AUTH:
+        raise RuntimeError(
+            "CRITICAL: MOCK_AUTH=true is set while BASE_URL is an HTTPS production URL. "
+            "This grants free premium access to all visitors. "
+            "Disable MOCK_AUTH before running in production."
+        )
+    if _is_production and not _SECRET_KEY_IS_CONFIGURED:
+        raise RuntimeError(
+            "CRITICAL: No JWT_SECRET or SECRET_KEY environment variable is set while "
+            "BASE_URL is an HTTPS production URL. "
+            "Set a strong random secret (e.g. `openssl rand -hex 32`) before deploying."
+        )
+
+    if not _SECRET_KEY_IS_CONFIGURED:
         logger.warning(
-            "SECRET_KEY is set to the default development value. "
-            "Set a strong SECRET_KEY environment variable before deploying to production."
+            "Neither JWT_SECRET nor SECRET_KEY is set. A random key was generated for "
+            "this process lifetime — all sessions will be invalidated on container "
+            "restart. Set a persistent JWT_SECRET before deploying to production."
         )
     logger.info("Startup config: MOCK_AUTH=%s  DATABASE_PATH=%s", MOCK_AUTH, DATABASE_PATH)
     logger.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
@@ -1045,6 +1072,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="mochii.live API", lifespan=lifespan)
 
+# General-purpose rate limiter for protected API endpoints (shared key: remote IP).
+_api_limiter = Limiter(key_func=get_remote_address)
+
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
@@ -1056,8 +1086,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # ---------------------------------------------------------------------------
@@ -1076,7 +1106,8 @@ class CameraResponse(BaseModel):
 
 
 @app.get("/auth/login")
-def auth_login(db: sqlite3.Connection = Depends(get_db)):
+@_api_limiter.limit("30/hour")
+def auth_login(request: Request, db: sqlite3.Connection = Depends(get_db)):
     """Redirect the browser to Fanvue's OAuth 2.0 authorization page.
 
     If MOCK_AUTH is enabled (via env var or the admin Danger Zone DB override),
@@ -1116,7 +1147,9 @@ def auth_login(db: sqlite3.Connection = Depends(get_db)):
 
 
 @app.get("/auth/callback")
+@_api_limiter.limit("20/hour")
 async def auth_callback(
+    request: Request,
     code: Optional[str] = None,
     state: Optional[str] = None,
     error: Optional[str] = None,
@@ -1233,7 +1266,9 @@ async def auth_callback(
 
 
 @app.get("/api/my-cameras", response_model=list[CameraResponse])
+@_api_limiter.limit("60/minute")
 def get_my_cameras(
+    request: Request,
     current_user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -1263,6 +1298,7 @@ def get_my_cameras(
 
 
 @app.post("/api/webrtc")
+@_api_limiter.limit("30/minute")
 async def proxy_webrtc(
     request: Request,
     src: str,
@@ -1362,12 +1398,15 @@ app.include_router(discovery_router)
 # All limiters share the same key function (remote IP) and exception handler.
 from routers.auth import _auth_limiter
 from routers.creator import _creator_limiter as _c_limiter
+from routers.compliance import _compliance_limiter
 
 app.state.limiter = drool_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# Re-attach auth and creator limiters to the app so their state is managed.
+# Re-attach all limiters to the app so their shared state is managed.
 _auth_limiter.app = app  # type: ignore[attr-defined]
 _c_limiter.app = app  # type: ignore[attr-defined]
+_api_limiter.app = app  # type: ignore[attr-defined]
+_compliance_limiter.app = app  # type: ignore[attr-defined]
 
 
 @app.middleware("http")
@@ -1535,8 +1574,67 @@ async def age_gate_middleware(request: Request, call_next):
 
 
 # ---------------------------------------------------------------------------
-# Health endpoint (Phase 7)
+# Security headers middleware
 # ---------------------------------------------------------------------------
+
+# Paths that serve dynamic API data – we want no-store cache control there.
+_API_PATH_PREFIX = "/api/"
+
+# Spoofed server identifier used in responses (security through obscurity:
+# makes automated scanners misidentify the server software).
+_SPOOFED_SERVER = "nginx/1.18.0"
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Inject security-hardening HTTP headers on every outgoing response.
+
+    Layers of defense:
+    - Structural (X-Frame-Options, X-Content-Type-Options) – prevent well-known
+      browser-level attacks regardless of content.
+    - Transport (HSTS) – enforce HTTPS on supporting browsers when running with
+      a production HTTPS BASE_URL.
+    - Policy (Referrer-Policy, Permissions-Policy) – limit information leakage
+      and browser feature access.
+    - Obscurity (Server header) – replace the default server banner with a
+      misleading value to slow down automated scanner fingerprinting.
+    """
+    response = await call_next(request)
+
+    # Prevent the page from being embedded in an iframe (clickjacking).
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Block MIME-type sniffing; browser must respect Content-Type.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Control how much referrer information is passed in cross-origin requests.
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Restrict access to browser features that the site does not need.
+    # Camera is allowed (self-origin only) because the subscriber portal
+    # may need webcam access for content.
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), microphone=(), payment=(), usb=(), camera=(self)"
+    )
+
+    # Enforce HTTPS-only connections for one year (only meaningful under TLS).
+    if BASE_URL.startswith("https"):
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
+
+    # Prevent caching of API responses that may contain personal data.
+    if request.url.path.startswith(_API_PATH_PREFIX):
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
+
+    # Security through obscurity: replace the real server banner so that
+    # automated scanners cannot trivially fingerprint the framework version.
+    response.headers["Server"] = _SPOOFED_SERVER
+
+    # Drop any header that leaks implementation details, if present.
+    response.headers.pop("x-powered-by", None)
+
+    return response
 
 _APP_START_TIME = datetime.now(timezone.utc)
 
@@ -1606,8 +1704,135 @@ def explore_page():
 
 
 # ---------------------------------------------------------------------------
-# Puppy Pouch share page
+# robots.txt & security.txt
 # ---------------------------------------------------------------------------
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    """Disallow automated scraping of sensitive paths."""
+    content = (
+        "User-agent: *\n"
+        "Disallow: /api/\n"
+        "Disallow: /auth/\n"
+        "Disallow: /age-gate/\n"
+        "Disallow: /admin\n"
+        "Disallow: /admin.html\n"
+        "Disallow: /creator-dash.html\n"
+        "\n"
+        "User-agent: *\n"
+        "Allow: /api/health\n"
+    )
+    return Response(content=content, media_type="text/plain")
+
+
+@app.get("/.well-known/security.txt", include_in_schema=False)
+def security_txt():
+    """RFC 9116 security contact disclosure."""
+    expiry = (datetime.now(timezone.utc) + timedelta(days=365)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000Z"
+    )
+    content = (
+        f"Contact: mailto:security@mochii.live\n"
+        f"Expires: {expiry}\n"
+        "Preferred-Languages: en\n"
+        "Policy: https://mochii.live/security-policy\n"
+    )
+    return Response(content=content, media_type="text/plain; charset=utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Honeypot endpoints
+# ---------------------------------------------------------------------------
+# Paths commonly probed by vulnerability scanners, bots, and opportunistic
+# attackers.  Returning a generic 404 gives nothing away while logging the
+# attempt.  Any legitimate client should never hit these routes.
+
+_HONEYPOT_PATHS = [
+    "/.env",
+    "/.env.local",
+    "/.env.production",
+    "/.git/HEAD",
+    "/.git/config",
+    "/wp-admin",
+    "/wp-login.php",
+    "/wp-config.php",
+    "/xmlrpc.php",
+    "/phpmyadmin",
+    "/pma",
+    "/admin/config.php",
+    "/config.php",
+    "/backup.sql",
+    "/dump.sql",
+    "/database.sql",
+    "/shell.php",
+    "/cmd.php",
+    "/server-status",
+    "/server-info",
+    "/.DS_Store",
+    "/web.config",
+    "/composer.json",
+    "/package.json",
+    "/yarn.lock",
+]
+
+_honeypot_logger = logging.getLogger("honeypot")
+
+
+def _register_honeypot(path: str) -> None:
+    """Register a GET+POST route that logs the probe and returns a generic 404."""
+
+    async def _trap(request: Request) -> Response:
+        _honeypot_logger.warning(
+            "Honeypot triggered: method=%s path=%s ip=%s ua=%r",
+            request.method,
+            request.url.path,
+            request.client.host if request.client else "unknown",
+            request.headers.get("user-agent", ""),
+        )
+        # Return a generic response that reveals nothing about the stack.
+        return Response(
+            content="Not Found",
+            status_code=404,
+            media_type="text/plain",
+        )
+
+    # Register for GET, POST, HEAD, PUT, DELETE, PATCH so that scanners using
+    # any common HTTP method are caught and logged.
+    app.add_api_route(
+        path,
+        _trap,
+        methods=["GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"],
+        include_in_schema=False,
+    )
+
+
+for _hp_path in _HONEYPOT_PATHS:
+    _register_honeypot(_hp_path)
+
+
+# ---------------------------------------------------------------------------
+# Custom error handlers (hide framework fingerprints in error responses)
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Generic 404 – does not reveal the server framework or route structure."""
+    return JSONResponse({"detail": "Not found."}, status_code=404)
+
+
+@app.exception_handler(405)
+async def method_not_allowed_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Generic 405 – does not leak allowed-method lists to scanners."""
+    return JSONResponse({"detail": "Method not allowed."}, status_code=405)
+
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Generic 500 – never returns tracebacks or internal paths to clients."""
+    logger.exception("Unhandled internal error for %s %s", request.method, request.url.path)
+    return JSONResponse({"detail": "An unexpected error occurred."}, status_code=500)
 
 # OG image dimensions (Twitter / Open Graph recommended: 1200×630)
 _OG_IMG_W = 1200

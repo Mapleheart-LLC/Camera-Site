@@ -19,8 +19,17 @@ DATABASE_PATH: str = os.environ.get(
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+    # timeout=10 → raise OperationalError instead of blocking forever when the
+    # database file is locked by another writer.
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
+    # WAL (Write-Ahead Logging) allows concurrent reads while a write is in
+    # progress, greatly reducing lock contention under FastAPI's async/thread
+    # pool model.  NORMAL synchronous mode gives a good durability/speed balance.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    # If the WAL file is locked, retry for up to 5 000 ms before giving up.
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 

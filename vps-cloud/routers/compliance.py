@@ -39,8 +39,10 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import pyotp
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import (
@@ -55,6 +57,9 @@ router = APIRouter(tags=["compliance"])
 logger = logging.getLogger(__name__)
 
 _ISSUER_NAME = os.environ.get("SITE_NAME", "mochii.live")
+
+# Rate limiter for public and authenticated compliance endpoints.
+_compliance_limiter = Limiter(key_func=get_remote_address)
 
 # ---------------------------------------------------------------------------
 # SMTP helper (re-uses same env vars as creator email)
@@ -210,7 +215,9 @@ def _hide_content(db: sqlite3.Connection, content_type: str, content_id: str) ->
 # ---------------------------------------------------------------------------
 
 @router.post("/api/dmca", status_code=status.HTTP_201_CREATED)
+@_compliance_limiter.limit("5/hour")
 def submit_dmca(
+    request: Request,
     payload: DmcaRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -240,7 +247,9 @@ def submit_dmca(
 # ---------------------------------------------------------------------------
 
 @router.post("/api/creator/2fa/setup")
+@_compliance_limiter.limit("5/hour")
 def creator_2fa_setup(
+    request: Request,
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -273,7 +282,9 @@ def creator_2fa_setup(
 
 
 @router.post("/api/creator/2fa/verify")
+@_compliance_limiter.limit("10/30minutes")
 def creator_2fa_verify(
+    request: Request,
     payload: TotpVerifyRequest,
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
@@ -299,7 +310,9 @@ def creator_2fa_verify(
 
 
 @router.delete("/api/creator/2fa/disable")
+@_compliance_limiter.limit("5/30minutes")
 def creator_2fa_disable(
+    request: Request,
     payload: TotpDisableRequest,
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
@@ -328,7 +341,9 @@ def creator_2fa_disable(
 # ---------------------------------------------------------------------------
 
 @router.post("/api/creator/apply", status_code=status.HTTP_201_CREATED)
+@_compliance_limiter.limit("3/hour")
 def apply_creator(
+    request: Request,
     payload: CreatorApplicationRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):
