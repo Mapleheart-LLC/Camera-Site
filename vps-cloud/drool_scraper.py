@@ -286,6 +286,9 @@ _GSHEET_MEDIA_ALIASES = {"imageurl", "image url", "image", "media", "mediaurl", 
 _GSHEET_TS_ALIASES    = {"createdat", "created at", "created", "date", "timestamp",
                           "time", "datetime", "date created", "postedat", "posted at"}
 
+# Pre-compiled regex for extracting the URL from an =IMAGE("url";1) formula cell.
+_IMAGE_FORMULA_RE = re.compile(r'=IMAGE\(["\']([^"\']+)["\']', re.IGNORECASE)
+
 
 def _detect_gsheet_columns(header_row: list[str]) -> dict[str, int]:
     """Map field names to column indices from a CSV header row.
@@ -412,7 +415,7 @@ def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
             # (as written by IFTTT into Google Sheets), extract the bare URL.
             media_url = media_raw
             if media_url:
-                _img_match = re.match(r'=IMAGE\(["\']([^"\']+)["\']', media_url, re.IGNORECASE)
+                _img_match = _IMAGE_FORMULA_RE.match(media_url)
                 if _img_match:
                     media_url = _img_match.group(1)
 
