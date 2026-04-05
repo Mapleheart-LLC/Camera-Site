@@ -278,6 +278,20 @@
       #mob-overlay.open { display: block; }
       .admin-main { padding: 1.25rem 1rem; }
     }
+    .field-hint {
+      font-size: .78rem;
+      color: #6a4a4e;
+      font-weight: 600;
+      margin-top: .3rem;
+      line-height: 1.5;
+    }
+    .field-hint code {
+      background: #2a1e20;
+      border-radius: 4px;
+      padding: .05em .3em;
+      font-size: .82em;
+      color: #c49a9f;
+    }
   </style>
 </head>
 <body>
@@ -323,6 +337,7 @@
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
         </button>
         <button class="nav-item" data-target="s-drool">💧 Drool Log</button>
+        <button class="nav-item" data-target="s-email">📧 Email</button>
         <button class="nav-item" data-target="s-stats">📈 Stats</button>
       </nav>
 
@@ -357,6 +372,7 @@
                 <button class="btn-quick" data-jump="s-profile">👤 Edit Profile</button>
                 <button class="btn-quick" data-jump="s-qa">🐾 Answer Questions</button>
                 <button class="btn-quick" data-jump="s-drool">💧 View Drool Log</button>
+                <button class="btn-quick" data-jump="s-email">📧 Send Email</button>
                 <button class="btn-quick" data-jump="s-stats">📈 See Stats</button>
               </div>
             </div>
@@ -390,6 +406,11 @@
                     <span id="accent-swatch" class="accent-swatch" style="background:#e8aeb7;"></span>
                     <span id="accent-hex" style="font-size:.8rem;color:#9e7e82;font-family:monospace;">#e8aeb7</span>
                   </div>
+                </div>
+                <div class="form-field">
+                  <label for="prof-forwarding-email">Forwarding Email</label>
+                  <input id="prof-forwarding-email" type="email" placeholder="your@inbox.com — where fan mail is forwarded" />
+                  <p class="field-hint">Incoming mail sent to your public <code>handle@domain</code> address will be forwarded here. Leave blank to use the platform default.</p>
                 </div>
               </div>
               <p id="profile-error" role="alert" aria-live="polite"></p>
@@ -471,6 +492,51 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Email ──────────────────────────────────── -->
+        <section id="s-email" class="creator-section">
+          <h1 class="section-heading">📧 Email</h1>
+
+          <!-- Public address card -->
+          <div class="card" style="margin-bottom:1.25rem">
+            <div class="card-header"><h2>Your Public Address</h2></div>
+            <div class="card-body">
+              <p style="font-size:.9rem;color:#9e7e82;font-weight:600;margin-bottom:.75rem;">
+                Fans and collaborators can reach you at this address. Incoming mail is forwarded to your private inbox (set in Profile → Forwarding Email).
+              </p>
+              <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+                <code id="email-public-addr" style="font-size:1rem;font-weight:700;color:#e8aeb7;background:#2a1e20;padding:.4rem .85rem;border-radius:8px;letter-spacing:.01em;">loading…</code>
+                <button id="email-copy-btn" class="btn-sm btn-edit">Copy 📋</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Compose / send-as card -->
+          <div class="card">
+            <div class="card-header"><h2>Send an Email</h2></div>
+            <div class="card-body">
+              <p style="font-size:.85rem;color:#9e7e82;font-weight:600;margin-bottom:1rem;">
+                The email will be sent <strong style="color:#e8aeb7">from</strong> your public address. Requires outbound SMTP to be configured by the platform admin.
+              </p>
+              <div class="profile-form-grid">
+                <div class="form-field">
+                  <label for="email-to">To</label>
+                  <input id="email-to" type="email" placeholder="recipient@example.com" />
+                </div>
+                <div class="form-field">
+                  <label for="email-subject">Subject</label>
+                  <input id="email-subject" type="text" placeholder="Subject line…" maxlength="200" />
+                </div>
+                <div class="form-field" style="grid-column:1/-1">
+                  <label for="email-body">Message</label>
+                  <textarea id="email-body" placeholder="Write your message…" maxlength="10000" style="min-height:140px"></textarea>
+                </div>
+              </div>
+              <p id="email-send-error" role="alert" aria-live="polite" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem;"></p>
+              <button id="email-send-btn" class="btn-sm btn-edit" style="margin-top:.5rem">Send Email 📧</button>
             </div>
           </div>
         </section>
@@ -678,6 +744,7 @@
         if (targetId === 's-profile') loadProfile();
         if (targetId === 's-qa') loadQuestions();
         if (targetId === 's-drool') loadDrool();
+        if (targetId === 's-email') loadEmailSection();
         if (targetId === 's-stats') loadStats();
       }
     }
@@ -732,6 +799,7 @@
         document.getElementById('prof-display-name').value  = me.display_name  || '';
         document.getElementById('prof-bio').value           = me.bio            || '';
         document.getElementById('prof-avatar-url').value    = me.avatar_url     || '';
+        document.getElementById('prof-forwarding-email').value = me.forwarding_email || '';
         const color = me.accent_color || '#e8aeb7';
         document.getElementById('prof-accent-color').value  = color;
         document.getElementById('accent-swatch').style.background = color;
@@ -755,10 +823,11 @@
       btn.textContent = 'Saving…';
       try {
         const resp = await apiPatch('/api/creator/me', {
-          display_name: document.getElementById('prof-display-name').value.trim(),
-          bio:          document.getElementById('prof-bio').value.trim(),
-          avatar_url:   document.getElementById('prof-avatar-url').value.trim() || null,
-          accent_color: document.getElementById('prof-accent-color').value,
+          display_name:      document.getElementById('prof-display-name').value.trim(),
+          bio:               document.getElementById('prof-bio').value.trim(),
+          avatar_url:        document.getElementById('prof-avatar-url').value.trim() || null,
+          accent_color:      document.getElementById('prof-accent-color').value,
+          forwarding_email:  document.getElementById('prof-forwarding-email').value.trim() || null,
         });
         if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
         if (!resp.ok) {
@@ -935,6 +1004,62 @@
         if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
       } finally {
         saveBtn.disabled = false;
+      }
+    });
+
+    // ── Email section ──────────────────────────────────
+    async function loadEmailSection() {
+      try {
+        const me = await apiGet('/api/creator/me');
+        // Derive public address from current page hostname (same domain as the API).
+        const domain = location.hostname;
+        const addr = `${me.handle || ''}@${domain}`;
+        document.getElementById('email-public-addr').textContent = addr;
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load email info.');
+      }
+    }
+
+    document.getElementById('email-copy-btn').addEventListener('click', () => {
+      const addr = document.getElementById('email-public-addr').textContent;
+      if (!addr || addr === 'loading…') return;
+      navigator.clipboard.writeText(addr).then(
+        () => showToast('📋 Copied to clipboard!'),
+        () => showToast('Copy failed — please copy manually.'),
+      );
+    });
+
+    document.getElementById('email-send-btn').addEventListener('click', async () => {
+      const to      = document.getElementById('email-to').value.trim();
+      const subject = document.getElementById('email-subject').value.trim();
+      const body    = document.getElementById('email-body').value.trim();
+      const errEl   = document.getElementById('email-send-error');
+      const btn     = document.getElementById('email-send-btn');
+      errEl.textContent = '';
+
+      if (!to)      { errEl.textContent = 'Please enter a recipient address.'; return; }
+      if (!subject) { errEl.textContent = 'Please enter a subject.'; return; }
+      if (!body)    { errEl.textContent = 'Please enter a message body.'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const resp = await apiPost('/api/creator/email/send', { to, subject, body });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        document.getElementById('email-to').value      = '';
+        document.getElementById('email-subject').value = '';
+        document.getElementById('email-body').value    = '';
+        showToast('📧 Email sent!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Send failed. Please try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Email 📧';
       }
     });
 
