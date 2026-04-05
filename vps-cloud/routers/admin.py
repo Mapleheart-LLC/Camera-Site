@@ -647,6 +647,8 @@ class ProductCreate(BaseModel):
     is_printful: bool = False
     printful_variant_id: Optional[str] = None
     stock_count: Optional[int] = None
+    creator_handle: str = "mochii"
+    creator_revenue_pct: float = 0.0
 
 
 class ProductUpdate(BaseModel):
@@ -657,6 +659,8 @@ class ProductUpdate(BaseModel):
     is_printful: Optional[bool] = None
     printful_variant_id: Optional[str] = None
     stock_count: Optional[int] = None
+    creator_handle: Optional[str] = None
+    creator_revenue_pct: Optional[float] = None
 
 
 @router.get("/store/products")
@@ -668,7 +672,8 @@ def admin_list_products(
     rows = db.execute(
         """
         SELECT id, name, description, price, image_url,
-               is_printful, printful_variant_id, stock_count
+               is_printful, printful_variant_id, stock_count,
+               creator_handle, creator_revenue_pct
           FROM products ORDER BY id
         """
     ).fetchall()
@@ -687,8 +692,9 @@ def admin_create_product(
             """
             INSERT INTO products
                 (name, description, price, image_url,
-                 is_printful, printful_variant_id, stock_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 is_printful, printful_variant_id, stock_count,
+                 creator_handle, creator_revenue_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.name,
@@ -698,6 +704,8 @@ def admin_create_product(
                 1 if payload.is_printful else 0,
                 payload.printful_variant_id or None,
                 payload.stock_count,
+                payload.creator_handle,
+                payload.creator_revenue_pct,
             ),
         )
         db.commit()
@@ -707,7 +715,11 @@ def admin_create_product(
             detail=f"Could not create product: {exc}",
         ) from exc
     row = db.execute(
-        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        """
+        SELECT id, name, description, price, image_url, is_printful,
+               printful_variant_id, stock_count, creator_handle, creator_revenue_pct
+          FROM products WHERE id = ?
+        """,
         (cursor.lastrowid,),
     ).fetchone()
     return dict(row)
@@ -732,17 +744,21 @@ def admin_update_product(
     new_printful = payload.is_printful if payload.is_printful is not None else bool(row["is_printful"])
     new_variant = payload.printful_variant_id if payload.printful_variant_id is not None else row["printful_variant_id"]
     new_stock = payload.stock_count if payload.stock_count is not None else row["stock_count"]
+    new_creator = payload.creator_handle if payload.creator_handle is not None else row["creator_handle"]
+    new_rev_pct = payload.creator_revenue_pct if payload.creator_revenue_pct is not None else row["creator_revenue_pct"]
 
     try:
         db.execute(
             """
             UPDATE products
                SET name = ?, description = ?, price = ?, image_url = ?,
-                   is_printful = ?, printful_variant_id = ?, stock_count = ?
+                   is_printful = ?, printful_variant_id = ?, stock_count = ?,
+                   creator_handle = ?, creator_revenue_pct = ?
              WHERE id = ?
             """,
             (new_name, new_desc or None, new_price, new_image or None,
-             1 if new_printful else 0, new_variant or None, new_stock, product_id),
+             1 if new_printful else 0, new_variant or None, new_stock,
+             new_creator, new_rev_pct, product_id),
         )
         db.commit()
     except Exception as exc:
@@ -752,7 +768,11 @@ def admin_update_product(
         ) from exc
 
     updated = db.execute(
-        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        """
+        SELECT id, name, description, price, image_url, is_printful,
+               printful_variant_id, stock_count, creator_handle, creator_revenue_pct
+          FROM products WHERE id = ?
+        """,
         (product_id,),
     ).fetchone()
     return dict(updated)

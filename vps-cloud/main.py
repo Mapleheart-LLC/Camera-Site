@@ -427,6 +427,16 @@ def init_db() -> None:
         except sqlite3.OperationalError as _e:
             if "duplicate column" not in str(_e).lower():
                 raise  # re-raise unexpected errors; swallow only duplicate-column
+    # Migration: add creator attribution columns to products for site-wide store.
+    for _col, _defn in [
+        ("creator_handle",      "TEXT NOT NULL DEFAULT 'mochii'"),
+        ("creator_revenue_pct", "REAL NOT NULL DEFAULT 0.0"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
     conn.commit()
     conn.close()
 
@@ -1765,8 +1775,11 @@ def anon_page(request: Request):
         qs.forEach(q => {{
           const div = document.createElement('div');
           div.className = 'qa-item';
+          const creatorTag = q.creator_handle && q.creator_handle !== 'mochii'
+            ? `<span style="font-size:.7rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:.35rem;">🐾 ${{esc(q.creator_handle)}}</span>`
+            : '';
           div.innerHTML =
-            `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
+            `<div class="bubble bubble-q">${{creatorTag}}${{esc(q.text)}}</div>` +
             `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
             `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
           list.appendChild(div);

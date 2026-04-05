@@ -759,6 +759,7 @@
           card.innerHTML = `
             ${imgHtml}
             <div class="product-body">
+              ${p.creator_handle ? `<p style="font-size:.68rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem;">🐾 ${esc(p.creator_handle)}</p>` : ''}
               <p class="product-name">${esc(p.name)}</p>
               ${p.description ? `<p class="product-desc">${esc(p.description)}</p>` : `<p class="product-desc"></p>`}
               <div class="product-footer">
