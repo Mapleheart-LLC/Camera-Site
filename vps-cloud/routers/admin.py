@@ -823,6 +823,10 @@ def admin_list_orders(
 
 # Mapping: request field → (settings_table_key, env_var_fallback, is_secret)
 _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
+    # Per-platform on/off toggles – '1' = enabled (default), '0' = disabled
+    "reddit_enabled":  ("drool_reddit_enabled",  "REDDIT_ENABLED",  False),
+    "twitter_enabled": ("drool_twitter_enabled",  "TWITTER_ENABLED", False),
+    "bsky_enabled":    ("drool_bsky_enabled",     "BSKY_ENABLED",    False),
     # Reddit mode toggle – value is 'api' (default), 'ifttt', or 'gsheet'
     "reddit_mode":           ("drool_reddit_mode",           "REDDIT_MODE",           False),
     # Reddit API credentials (used when reddit_mode == 'api')
@@ -856,6 +860,9 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
 # in the GET response because they are non-sensitive identifiers, mode flags,
 # or public URLs.
 _DROOL_CRED_EXPOSE_VALUE: set[str] = {
+    "reddit_enabled",
+    "twitter_enabled",
+    "bsky_enabled",
     "reddit_mode",
     "reddit_username",
     "reddit_gsheet_csv_url",
@@ -864,10 +871,17 @@ _DROOL_CRED_EXPOSE_VALUE: set[str] = {
     "bsky_handle",
 }
 
+_DROOL_ENABLED_FIELDS: frozenset[str] = frozenset({
+    "reddit_enabled", "twitter_enabled", "bsky_enabled",
+})
+
 _REDDIT_MODE_DEFAULT = "api"  # valid values: 'api', 'ifttt', 'gsheet'
 
 
 class DroolCredsUpdate(BaseModel):
+    reddit_enabled:  Optional[str] = None  # '1' = enabled (default), '0' = disabled
+    twitter_enabled: Optional[str] = None
+    bsky_enabled:    Optional[str] = None
     reddit_mode:           Optional[str] = None  # 'api', 'ifttt', or 'gsheet'
     reddit_client_id:      Optional[str] = None
     reddit_client_secret:  Optional[str] = None
