@@ -286,7 +286,9 @@ def creator_list_drool(
     """Return Drool Log entries belonging to this creator, newest first."""
     rows = db.execute(
         """
-        SELECT id, platform, original_url, media_url, text_content, view_count, timestamp
+        SELECT id, platform, original_url AS url, media_url,
+               text_content AS title, view_count,
+               timestamp AS created_at
           FROM drool_archive
          WHERE creator_handle = ?
          ORDER BY id DESC
