@@ -957,6 +957,12 @@ def put_drool_credentials(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="reddit_mode must be 'api', 'ifttt', or 'gsheet'.",
             )
+        # Validate enabled flags
+        if field in _DROOL_ENABLED_FIELDS and value not in ("0", "1", ""):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"{field} must be '0' or '1'.",
+            )
         if value == "":
             # Empty string → delete the DB entry (revert to env fallback)
             db.execute("DELETE FROM settings WHERE key = ?", (db_key,))
