@@ -319,6 +319,9 @@ def _pick(key: str) -> str:
 
 _STATUS_IDX: int = 0
 
+# Maximum byte length of an AI-suggested emoji before we treat it as malformed.
+_MAX_EMOJI_BYTES: int = 32
+
 # ── Role definitions (ordered high → low in server hierarchy) ─────────────────
 
 _ROLE_DEFS: list[dict] = [
@@ -451,7 +454,7 @@ _CHANNEL_STRUCTURE: list[dict] = [
         "channels": [
             {"name": "questions",     "topic": "Incoming Puppy Pouch notes. → set DISCORD_QUESTION_CHANNEL_ID to this ID",    "notify_key": "DISCORD_QUESTION_CHANNEL_ID"},
             {"name": "notifications", "topic": "Answer-published events. → set DISCORD_NOTIFICATION_CHANNEL_ID to this ID",   "notify_key": "DISCORD_NOTIFICATION_CHANNEL_ID"},
-            {"name": "admin-alerts",  "topic": "Operational alerts (purchases, activations). → set DISCORD_ADMIN_CHANNEL_ID",  "notify_key": "DISCORD_ADMIN_CHANNEL_ID"},
+            {"name": "admin-alerts",  "topic": "Operational alerts (purchases, activations). → set DISCORD_ADMIN_CHANNEL_ID to this ID",  "notify_key": "DISCORD_ADMIN_CHANNEL_ID"},
         ],
     },
 ]
@@ -1672,8 +1675,8 @@ async def cmd_rename_server(interaction: discord.Interaction, name: str = None) 
             )
             return
         name = suggested.strip('"\'').strip()
-        if name != suggested.strip():
-            logger.debug("AI server name had surrounding quotes — stripped: %r → %r", suggested, name)
+        if name != suggested:
+            logger.debug("AI server name differed after stripping: %r → %r", suggested, name)
 
     old_name = interaction.guild.name
     try:
@@ -1780,7 +1783,7 @@ async def cmd_add_link(
         # emojis with ZWJ joiners don't contain spaces) and fall back if too long.
         raw = (suggested_emoji or "").strip()
         emoji = raw.split()[0] if raw else "🔗"
-        if len(emoji.encode("utf-8")) > 32:  # unreasonably long — not a real emoji
+        if len(emoji.encode("utf-8")) > _MAX_EMOJI_BYTES:  # guard against malformed AI output
             emoji = "🔗"
 
     result = await _api_post("/api/discord/bot/links", {
