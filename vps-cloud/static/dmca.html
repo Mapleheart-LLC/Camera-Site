@@ -400,7 +400,7 @@
           successMsg.style.display = 'block';
           btn.style.display = 'none';
         } else {
-          const data = await res.json().catch(() => ({}));
+          const data = await res.json().catch(() => ({ detail: 'Submission failed (unreadable server response). Please try again or email us directly.' }));
           alert(data.detail || 'Submission failed. Please try again or email us directly.');
           btn.disabled = false;
           btn.textContent = 'Submit Takedown Notice';
