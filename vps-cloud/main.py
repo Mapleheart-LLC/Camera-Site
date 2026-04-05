@@ -1079,7 +1079,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # ---------------------------------------------------------------------------
@@ -1612,7 +1612,7 @@ async def security_headers_middleware(request: Request, call_next):
 
     # Prevent caching of API responses that may contain personal data.
     if request.url.path.startswith(_API_PATH_PREFIX):
-        response.headers.setdefault("Cache-Control", "no-store, max-age=0")
+        response.headers.setdefault("Cache-Control", "no-store, no-cache, must-revalidate")
 
     # Security through obscurity: replace the real server banner so that
     # automated scanners cannot trivially fingerprint the framework version.
@@ -1784,8 +1784,14 @@ def _register_honeypot(path: str) -> None:
             media_type="text/plain",
         )
 
-    # Register for GET and POST so scanners using either method are caught.
-    app.add_api_route(path, _trap, methods=["GET", "POST", "HEAD"], include_in_schema=False)
+    # Register for GET, POST, HEAD, PUT, DELETE, PATCH so that scanners using
+    # any common HTTP method are caught and logged.
+    app.add_api_route(
+        path,
+        _trap,
+        methods=["GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"],
+        include_in_schema=False,
+    )
 
 
 for _hp_path in _HONEYPOT_PATHS:
