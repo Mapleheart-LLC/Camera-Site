@@ -175,6 +175,9 @@ services:
       # Optional: OpenAI API key for AI-powered features (/rename-server, /add-link,
       # /ai-vibe, /ai-announce). Leave empty to disable AI features gracefully.
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Optional: set to "true" to enable weekly AI-driven server renaming (Sundays).
+      # Requires OPENAI_API_KEY to be set. Defaults to disabled.
+      - AUTO_RENAME_SERVER=${AUTO_RENAME_SERVER:-false}
     volumes:
       # Persist drool-feed / now-playing / weekly-whimper state across restarts.
       - bot_state:/app/state

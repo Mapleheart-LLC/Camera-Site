@@ -1,59 +1,70 @@
 """
-Discord management bot for mochii.live
+Discord management bot for mochii.live — FULLY AUTONOMOUS
 
-Fully manages the Discord server and deeply integrates with every site feature.
-The bot has a playful, flirty, adult-oriented personality to match the platform.
+Zero commands required to operate. Drop the bot into a server and it
+configures everything, syncs roles, announces milestones, posts content
+updates, and manages the site's links page — all on its own.
 
-Server management
------------------
-  /setup          Scaffold all roles, categories and channels (idempotent)
-  /sync-roles     Sync Fanvue subscriber roles for all members or a specific one
-  /announce       Post a message to #announcements as a branded embed
-  /rename-server  Rename the Discord server (AI picks a name if none given)
-  /ai-announce    AI writes and posts an announcement given a topic
+Slash commands are supplementary shortcuts, not requirements.
 
-Site features
--------------
+Autonomous behaviours (zero interaction needed)
+------------------------------------------------
+  • Auto-setup on join / startup — scaffolds all roles, categories and
+    channels the moment the bot enters a server (or restarts into one
+    that hasn't been configured yet). Posts the env-var summary to
+    #bot-logs for the admin to copy.
+  • Role sync every 30 minutes — keeps Fanvue subscriber tiers in sync
+    with Discord roles. Detects tier upgrades and shouts them out in
+    #announcements automatically.
+  • Tier upgrade shoutouts — when a member's tier goes up (linked →
+    follower → subscriber → Tier 2), the bot posts a personalised
+    congratulations message to #announcements without being asked.
+  • Subscriber / follower / Tier 2 milestones — watches the counts and
+    auto-announces whenever a threshold is crossed (1, 5, 10, 25, 50…).
+  • New store product alerts — polls the store hourly; when a new product
+    appears it posts a teaser embed to #mochii-updates.
+  • Core links seeding — daily check that the Fanvue page, Q&A, Drool
+    Log and Store links exist on the site's links page; adds any that
+    are missing.
+  • Weekly AI server rename (opt-in) — every Sunday, if
+    AUTO_RENAME_SERVER=true, uses AI to pick a fresh themed server name
+    based on current subscriber stats.
+  • Status rotation every 15 minutes (cycling cheeky statuses).
+  • Drool Log posts to #drool-log (polls every 5 minutes).
+  • Spotify now-playing updates to #now-playing (polls every 2 minutes).
+  • Weekly Whimper to #announcements every Monday (checks hourly).
+  • Daily Treat to #treat-jar at noon UTC (checks hourly).
+  • Welcome DM to every new member with account-linking guide.
+  • Auto role assignment for already-linked members on join.
+
+Slash commands (supplementary shortcuts)
+-----------------------------------------
+  /setup          Re-run the server scaffold (idempotent)
+  /sync-roles     Force an immediate role sync
+  /announce       Post a custom announcement
+  /rename-server  Rename the server (AI-assisted if no name given)
+  /ai-announce    AI writes and posts an announcement
   /ask            Submit an anonymous note to the Puppy Pouch
-  /pouch          Browse recent answered Puppy Pouch notes
+  /pouch          Browse answered notes
   /drool          Browse the Drool Log (Follower+)
-  /weekly-whimper Show the most-reacted Drool Log item this week
-  /nowplaying     Show the currently playing Spotify track
-  /queue          Search Spotify and add a track to the creator's queue (Subscriber+)
-  /store          Browse the store catalogue
-  /zap            Activate a PiShock / Lovense device (Follower+, cooldown-aware)
-
-Personality / fun
------------------
-  /rate           Get a cheeky personal rating from the bot
+  /weekly-whimper Show this week's top Drool Log item
+  /nowplaying     What's playing right now?
+  /queue          Add a track to mochii's queue (Subscriber+)
+  /store          Browse the store
+  /zap            Activate a PiShock / Lovense device (Follower+)
+  /links          Browse the site links page
+  /add-link       Add a link (AI suggests emoji)
+  /remove-link    Remove a link
+  /feature-link   Promote a link to the top
+  /rate           Cheeky personal rating
   /treat          Claim a random treat (Follower+)
-  /collar         Show your tier as a themed collar embed
-  /beg            Beg the bot — outcomes depend on your tier 🐾
-  /peek           Surprise random Drool Log item (Follower+)
-  /ai-vibe        AI reads the current context and describes the kennel vibe
-
-Links page
-----------
-  /links          Browse site links
-  /add-link       Add a link (AI suggests emoji if omitted)
-  /remove-link    Remove a link (select menu)
-  /feature-link   Promote a link to the top of the page
-
-Community
----------
+  /collar         View your tier collar badge
+  /beg            Beg the bot
+  /peek           Random surprise from the Drool Log (Follower+)
+  /ai-vibe        AI describes the current kennel vibe
   /server-info    Aggregated stats embed
-  /verify         DM yourself an account-linking guide
-  /whoami         Show your own Fanvue tier and Discord link status
-
-Background automation
----------------------
-  • Status rotation every 15 minutes (cycling cheeky statuses)
-  • Role sync every 30 minutes
-  • Posts new Drool Log items to #drool-log (polls every 5 minutes)
-  • Updates #now-playing when the Spotify track changes (polls every 2 minutes)
-  • Weekly Whimper highlight every Monday (checks hourly)
-  • Daily Treat posted to #treat-jar at noon UTC (checks hourly)
-  • Welcomes new members via DM with a verification guide
+  /verify         Account-linking guide
+  /whoami         Your Fanvue tier and collar status
 
 Required environment variables
 -------------------------------
@@ -63,12 +74,15 @@ BASE_URL            Public site URL (e.g. https://mochii.live).
 
 Optional environment variables
 -------------------------------
-DISCORD_GUILD_ID    Restrict slash-command registration to one guild so commands
-                    appear instantly instead of waiting up to 1 hour globally.
-BOT_STATE_FILE      Path to the JSON state file
-                    (default: /app/state/bot_state.json).
-OPENAI_API_KEY      Enables AI features (/rename-server auto-name, /add-link emoji
-                    suggestion, /ai-vibe, /ai-announce). Gracefully disabled if unset.
+DISCORD_GUILD_ID        Restrict slash-command registration to one guild for
+                        instant propagation (Discord guild / server ID).
+BOT_STATE_FILE          Path to the JSON state file
+                        (default: /app/state/bot_state.json).
+OPENAI_API_KEY          Enables AI features (auto-rename, /add-link emoji
+                        suggestion, /ai-vibe, /ai-announce). Gracefully
+                        disabled if unset.
+AUTO_RENAME_SERVER      Set to "true" to enable weekly AI server renaming.
+                        Defaults to disabled.
 """
 
 import asyncio
@@ -251,6 +265,48 @@ _FLAVOR_TEXT: dict[str, list[str]] = {
         "💎 this one's for subscribers. `/verify` then subscribe on Fanvue to get in~",
         "🔒 premium feature ahead — link your Fanvue account with `/verify` first 🌸",
     ],
+    # Tier upgrade shoutouts — posted automatically when role sync detects an upgrade
+    "upgrade_to_follower": [
+        "🐾 welcome to the pack, {mention}! your follower collar has arrived — sit, stay, enjoy 🌸",
+        "👀 a new pup joins the pack! welcome, {mention} — your 🐾 collar is ready 💌",
+        "🌸 {mention} just linked up and joined the kennel as a follower! behave. (or don't.) 🐾",
+        "🐾 the pack just got bigger — welcome, {mention}! collar fitted, ID registered 💎",
+    ],
+    "upgrade_to_subscriber": [
+        "🌸 {mention} just subscribed!! welcome to the lounge, you gorgeous pampered pup 💕",
+        "💕 a new subscriber walks in — {mention}, the good stuff is ALL yours now 🌸",
+        "🌸 {mention} levelled up to Subscriber! mochii is SO pleased 💌 come get comfy",
+        "✨ {mention} subscribed and the kennel collectively drooled a little 🌸🐾",
+    ],
+    "upgrade_to_tier2": [
+        "💎 {mention} just went **Tier 2**!! mochii's absolute FAVOURITE. spoiled rotten. 🌸💎",
+        "💎 the den just got a new premium resident — welcome, {mention}! you're the best tier and we all know it 😏",
+        "👑 {mention} is now 💎 Tier 2. mochii may have screamed a little. the pack is jealous.",
+        "💎 {mention} said 'give me everything' and went Tier 2. correct decision. 🌸",
+    ],
+    # Milestone announcements
+    "milestone_sub": [
+        "🌸 milestone unlocked — **{count} subscribers**! mochii is thriving and the kennel smells amazing 💕",
+        "🎉 **{count} subscribers**! the pack is growing and mochii is very, very pleased 🌸🐾",
+        "💕 we just hit **{count} subscribers**!! sit. celebrate. you're all very good pups 🌸",
+    ],
+    "milestone_follower": [
+        "🐾 **{count} followers** in the kennel! the pack is getting big — mochii approves 🌸",
+        "👀 **{count} followers**! the drool log has never been so busy 🤤🐾",
+        "🌱 **{count} followers** and growing — the kennel expands 🐾 welcome, all of you",
+    ],
+    "milestone_tier2": [
+        "💎 **{count} Tier 2 premium members**!! the den is FULL of favourites 💎🌸",
+        "👑 **{count}** diamond-collar holders in the kennel — mochii is extremely spoiled and loving it 💎",
+        "💎 milestone: **{count} Tier 2** members. the premium den has never been this good 🌸",
+    ],
+    # New store product announcement
+    "new_product": [
+        "🛒 **new in the store:** {name}! treat yourself — you've been so well-behaved 🌸",
+        "🛒 mochii just added **{name}** to the store~ go look. you know you want to 👀",
+        "✨ new store drop: **{name}**! the good stuff never stops 🛒🌸",
+        "🛒 **{name}** just landed in the store — mochii picked it out for you personally 💕",
+    ],
 }
 
 
@@ -408,6 +464,16 @@ _DEFAULT_STATE: dict = {
     "last_nowplaying_track_id": None,
     "last_weekly_whimper_date": None,
     "last_daily_treat_date":    None,
+    # Milestone tracking
+    "last_sub_milestone":       0,
+    "last_follower_milestone":  0,
+    "last_tier2_milestone":     0,
+    # New product tracking (list of product IDs seen)
+    "last_store_product_ids":   [],
+    # Per-user tier tracking for upgrade shoutouts {discord_id: access_level}
+    "known_user_tiers":         {},
+    # Auto-rename state
+    "last_auto_rename_date":    None,
 }
 
 
@@ -876,6 +942,111 @@ def _product_embeds(products: list[dict]) -> list[discord.Embed]:
     return embeds
 
 
+# Subscriber / follower counts at which the bot announces milestones.
+_MILESTONE_THRESHOLDS: list[int] = [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+
+# Core site links that should always exist on the links page.
+# Populated lazily from BASE_URL at runtime.
+_CORE_LINK_DEFS: list[tuple[str, str, str]] = [
+    # (title, path-suffix, emoji)
+    ("Fanvue",          "",              "🌸"),
+    ("Q&A — Ask Me",   "/anon",          "💌"),
+    ("Drool Log",      "/drool.html",    "🔥"),
+    ("Store",          "/store.html",    "🛒"),
+]
+
+
+# ── Auto-setup helper ─────────────────────────────────────────────────────────
+
+async def _auto_setup_guild(guild: discord.Guild) -> None:
+    """Run full server scaffold silently; post the env-var summary to #bot-logs."""
+    try:
+        summary = await run_server_setup(guild)
+        logger.info("[auto-setup] %s: scaffold complete", guild.name)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[auto-setup] %s: failed: %s", guild.name, exc)
+        return
+
+    # Post the summary (which includes the backend env-var IDs) to #bot-logs.
+    bot_logs_ch = discord.utils.get(guild.text_channels, name="bot-logs")
+    if bot_logs_ch and bot_logs_ch.permissions_for(guild.me).send_messages:
+        try:
+            await bot_logs_ch.send(
+                f"🤖 **auto-setup complete for `{guild.name}`**\n\n{summary}"
+            )
+            return
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    # Fall back to DM-ing the server owner.
+    if guild.owner:
+        try:
+            await guild.owner.send(
+                f"🤖 **mochii.live bot auto-configured `{guild.name}`**\n\n"
+                f"{summary}\n\n"
+                f"*slash commands exist but you won't need them — the bot runs itself 🌸*"
+            )
+        except discord.Forbidden:
+            pass
+
+
+# ── Tier upgrade announcement ─────────────────────────────────────────────────
+
+async def _announce_tier_upgrade(
+    guild: discord.Guild,
+    member: discord.Member,
+    old_level: int,
+    new_level: int,
+) -> None:
+    """Post a personalised tier-upgrade shoutout to #announcements."""
+    if new_level >= 3:
+        pool = "upgrade_to_tier2"
+    elif new_level >= 2:
+        pool = "upgrade_to_subscriber"
+    elif new_level >= 1:
+        pool = "upgrade_to_follower"
+    else:
+        return
+
+    msg = _pick(pool).format(mention=member.mention)
+    ch_id = _guild_channel(guild.id, "announcements_channel")
+    if not ch_id:
+        return
+    channel = guild.get_channel(ch_id)
+    if channel:
+        try:
+            await channel.send(msg)
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            logger.warning("[upgrade-shoutout] Could not post to %s: %s", channel, exc)
+
+
+# ── Milestone announcement helper ─────────────────────────────────────────────
+
+async def _check_and_announce_milestone(
+    current: int,
+    state_key: str,
+    pool_key: str,
+) -> None:
+    """Announce if *current* has crossed any milestone threshold not yet announced."""
+    last = _state.get(state_key, 0)
+    for threshold in _MILESTONE_THRESHOLDS:
+        if last < threshold <= current:
+            _state[state_key] = threshold
+            _save_state(_state)
+            msg = _pick(pool_key).format(count=threshold)
+            for guild in bot.guilds:
+                ch_id = _guild_channel(guild.id, "announcements_channel")
+                if not ch_id:
+                    continue
+                channel = guild.get_channel(ch_id)
+                if channel:
+                    try:
+                        await channel.send(msg)
+                    except (discord.Forbidden, discord.HTTPException) as exc:
+                        logger.warning("[milestone] Could not post to %s: %s", channel, exc)
+            break  # only the highest newly-crossed threshold per tick
+
+
 # ── Bot ───────────────────────────────────────────────────────────────────────
 
 class MochiiBot(commands.Bot):
@@ -907,26 +1078,25 @@ async def on_ready() -> None:
         activity=discord.Activity(type=discord.ActivityType.watching, name=_pick("status"))
     )
     for task in (status_rotation_task, auto_sync_roles, drool_feed_task,
-                 nowplaying_task, weekly_whimper_task, daily_treat_task):
+                 nowplaying_task, weekly_whimper_task, daily_treat_task,
+                 milestone_task, new_products_task, auto_links_task,
+                 auto_rename_task):
         if not task.is_running():
             task.start()
+    # Auto-setup any guilds that haven't been configured yet (handles restarts
+    # into existing guilds that were joined before the bot ran, or before setup
+    # was run).
+    for guild in bot.guilds:
+        if not _guild_channel(guild.id, "announcements_channel"):
+            logger.info("[auto-setup] Guild %s not configured — scheduling setup", guild.name)
+            asyncio.create_task(_auto_setup_guild(guild))
 
 
 @bot.event
 async def on_guild_join(guild: discord.Guild) -> None:
     logger.info("Joined guild: %s (%s)", guild.name, guild.id)
-    ch = guild.system_channel or next(
-        (c for c in guild.text_channels if c.permissions_for(guild.me).send_messages), None
-    )
-    if ch:
-        await ch.send(
-            "🐾 **the bot has arrived and she's not leaving.**\n\n"
-            "Run `/setup` (administrator required) to automatically scaffold "
-            "all roles, channels, categories and permissions.\n\n"
-            "After setup, members can use `/verify` to link their Fanvue account "
-            "and earn their collar. 🌸\n\n"
-            "*sit. stay. behave.*"
-        )
+    # Auto-configure the server immediately — no /setup command needed.
+    await _auto_setup_guild(guild)
 
 
 @bot.event
@@ -975,8 +1145,43 @@ async def on_member_join(member: discord.Member) -> None:
 async def auto_sync_roles() -> None:
     for guild in bot.guilds:
         try:
+            # Fetch linked members once; re-use for both upgrade detection and role sync.
+            linked = await _get_all_linked()
+            new_access_map: dict[str, int] = {
+                str(item["discord_id"]): item["access_level"] for item in linked
+            }
+
+            # ── Detect tier upgrades ──────────────────────────────────────────
+            known_tiers: dict = _state.setdefault("known_user_tiers", {})
+            upgrades: list[tuple[discord.Member, int, int]] = []
+
+            for member in guild.members:
+                if member.bot:
+                    continue
+                sid = str(member.id)
+                new_level = new_access_map.get(sid)
+                if new_level is None:
+                    continue
+                old_level = known_tiers.get(sid)
+                if old_level is None:
+                    # First time we've seen this member — record silently.
+                    known_tiers[sid] = new_level
+                elif new_level > old_level:
+                    upgrades.append((member, old_level, new_level))
+                    known_tiers[sid] = new_level
+                else:
+                    known_tiers[sid] = new_level
+
+            _save_state(_state)
+
+            # ── Do the actual role sync ───────────────────────────────────────
             result = await sync_member_roles(guild)
             logger.info("[auto-sync] %s: %s", guild.name, result)
+
+            # ── Announce any upgrades detected this tick ──────────────────────
+            for member, old_level, new_level in upgrades:
+                await _announce_tier_upgrade(guild, member, old_level, new_level)
+
         except Exception as exc:  # noqa: BLE001
             logger.warning("[auto-sync] %s failed: %s", guild.name, exc)
 
@@ -1159,7 +1364,151 @@ async def weekly_whimper_task() -> None:
     _save_state(_state)
 
 
-# ── Link select view ─────────────────────────────────────────────────────────
+@tasks.loop(hours=1)
+async def milestone_task() -> None:
+    """Auto-announce subscriber / follower / Tier 2 milestone crossings."""
+    stats = await _api_get("/api/discord/bot/stats")
+    if not stats:
+        return
+    await _check_and_announce_milestone(
+        stats.get("sub_count", 0),      "last_sub_milestone",      "milestone_sub",
+    )
+    await _check_and_announce_milestone(
+        stats.get("follower_count", 0), "last_follower_milestone",  "milestone_follower",
+    )
+    await _check_and_announce_milestone(
+        stats.get("tier2_count", 0),    "last_tier2_milestone",     "milestone_tier2",
+    )
+
+
+@tasks.loop(hours=1)
+async def new_products_task() -> None:
+    """Announce new store products to #mochii-updates when they appear."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            resp = await c.get(f"{_backend()}/api/store/products")
+        products = resp.json() if resp.is_success else []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[new-products] Fetch failed: %s", exc)
+        return
+
+    if not products:
+        return
+
+    known_ids: list = _state.get("last_store_product_ids", [])
+    known_set = {str(pid) for pid in known_ids}
+    new_products = [p for p in products if str(p.get("id", "")) not in known_set]
+
+    # Update known IDs regardless.
+    _state["last_store_product_ids"] = [p.get("id") for p in products]
+    _save_state(_state)
+
+    # Skip announcement on the very first run (seeding) or if nothing new.
+    if not known_ids or not new_products:
+        return
+
+    base = _base_url()
+    for guild in bot.guilds:
+        ch_id = _guild_channel(guild.id, "updates_channel")
+        if not ch_id:
+            continue
+        channel = guild.get_channel(ch_id)
+        if not channel:
+            continue
+        for product in new_products[:3]:  # cap at 3 per tick
+            name = product.get("name", "new item")
+            embed = discord.Embed(
+                title=_pick("new_product").format(name=name),
+                description=(product.get("description") or "")[:200] or None,
+                color=discord.Color(_PINK),
+                url=f"{base}/store.html" if base else discord.Embed.Empty,
+            )
+            price = product.get("price")
+            if price is not None:
+                embed.add_field(name="Price", value=f"${price:.2f}", inline=True)
+            img = product.get("image_url")
+            if img:
+                embed.set_image(url=img)
+            embed.set_footer(text="mochii.live · treat yourself 🌸")
+            try:
+                await channel.send(embed=embed)
+            except (discord.Forbidden, discord.HTTPException) as exc:
+                logger.warning("[new-products] Could not post to %s: %s", channel, exc)
+
+
+@tasks.loop(hours=24)
+async def auto_links_task() -> None:
+    """Ensure core site links exist on the links page. Runs at startup then daily."""
+    base = _base_url()
+    if not base:
+        return
+
+    existing = await _api_get("/api/discord/bot/links")
+    if existing is None:
+        return
+
+    existing_urls = {link["url"].rstrip("/") for link in existing}
+    sort_order = 0
+
+    for title, path_suffix, emoji in _CORE_LINK_DEFS:
+        url = f"{base}{path_suffix}"
+        if url.rstrip("/") not in existing_urls:
+            await _api_post("/api/discord/bot/links", {
+                "title": title, "url": url, "emoji": emoji,
+                "sort_order": sort_order, "is_active": True,
+            })
+            logger.info("[auto-links] Added missing core link: %s → %s", title, url)
+        sort_order += 1
+
+
+@tasks.loop(hours=24)
+async def auto_rename_task() -> None:
+    """Weekly AI-driven server rename. Only active when AUTO_RENAME_SERVER=true."""
+    if os.environ.get("AUTO_RENAME_SERVER", "").lower() != "true":
+        return
+
+    now = datetime.now(timezone.utc)
+    if now.weekday() != 6:  # Sunday only
+        return
+
+    today_str = now.strftime("%Y-%m-%d")
+    if _state.get("last_auto_rename_date") == today_str:
+        return
+
+    stats = await _api_get("/api/discord/bot/stats")
+    if not stats:
+        return
+
+    suggested = await _ai(
+        f"Suggest a creative, adult-playful Discord server name for mochii.live. "
+        f"Context: {stats.get('user_count', 0)} Fanvue members, "
+        f"{stats.get('sub_count', 0)} subscribers, "
+        f"{stats.get('tier2_count', 0)} Tier 2 premiums, "
+        f"{stats.get('activation_count', 0)} device activations. "
+        f"Keep it to 3-5 words. Kennel/collar/puppy-play aesthetic. "
+        f"Return ONLY the name — no quotes, no explanation.",
+        max_tokens=20,
+    )
+    if not suggested:
+        return
+
+    name = suggested.strip('"\'').strip()
+    _state["last_auto_rename_date"] = today_str
+    _save_state(_state)
+
+    for guild in bot.guilds:
+        old_name = guild.name
+        try:
+            await guild.edit(name=name, reason="mochii.live weekly auto-rename")
+            logger.info("[auto-rename] %s → %s", old_name, name)
+            # Log to #bot-logs so admins see the change.
+            bot_logs_ch = discord.utils.get(guild.text_channels, name="bot-logs")
+            if bot_logs_ch and bot_logs_ch.permissions_for(guild.me).send_messages:
+                await bot_logs_ch.send(
+                    f"🏷️ weekly auto-rename: **{old_name}** → **{name}** 🐾"
+                )
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            logger.warning("[auto-rename] %s: %s", guild.name, exc)
 
 class LinkSelectView(discord.ui.View):
     """Reusable select menu for /remove-link and /feature-link."""
