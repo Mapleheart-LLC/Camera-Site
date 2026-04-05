@@ -1539,6 +1539,10 @@
         history.replaceState(null, '', window.location.pathname);
       }
 
+      // Start Spotify now-playing polling unconditionally – no auth required.
+      pollNowPlaying();
+      _npPollInterval = setInterval(pollNowPlaying, 5000);
+
       if (token) {
         saveToken(token);
         showDashboard();
@@ -1569,10 +1573,6 @@
       } else {
         showLogin();
       }
-
-      // Start Spotify now-playing polling unconditionally – no auth required.
-      pollNowPlaying();
-      _npPollInterval = setInterval(pollNowPlaying, 5000);
     })();
   </script>
 

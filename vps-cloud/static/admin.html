@@ -394,6 +394,7 @@
         <button class="nav-item" data-target="s-links">🔗 Links</button>
         <button class="nav-item" data-target="s-store">🛍️ Store</button>
         <button class="nav-item" data-target="s-drool">🐾 Drool Log</button>
+        <button class="nav-item" data-target="s-spotify">🎵 Spotify</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
@@ -863,6 +864,24 @@
               <div class="form-row" style="margin-top:.5rem">
                 <button id="dc-bsky-save-btn" class="btn-sm btn-edit">Save Bluesky 🐾</button>
                 <p id="dc-bsky-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Spotify ─────────────────────────────────── -->
+        <section id="s-spotify" class="admin-section">
+          <h1 class="section-heading">🎵 Spotify</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>🎵 Spotify Now Playing</h2></div>
+            <div class="card-body">
+              <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">Connect your Spotify account so viewers can see the currently playing track. Requires <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> environment variables to be set. Register <code>{BASE_URL}/auth/spotify/callback</code> as a Redirect URI in your <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer" style="color:#1db954">Spotify app</a>.</p>
+              <div class="form-row" style="margin-top:.75rem">
+                <a href="/auth/spotify/login" class="btn-sm btn-edit" style="text-decoration:none;display:inline-block">
+                  🎵 Connect Spotify
+                </a>
+                <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">You will be redirected to Spotify to authorize the connection.</p>
               </div>
             </div>
           </div>
@@ -2164,9 +2183,10 @@
       const oauthError        = queryParams.get('error');
       const twitter2Connected = queryParams.get('twitter2_connected');
       const oauthWarn         = queryParams.get('warn');
+      const spotifyConnected  = queryParams.get('spotify');
 
       // Strip any OAuth callback params from the URL before showing the panel.
-      if (oauthError || twitter2Connected || oauthWarn) {
+      if (oauthError || twitter2Connected || oauthWarn || spotifyConnected) {
         history.replaceState({}, '', '/admin.html');
       }
 
