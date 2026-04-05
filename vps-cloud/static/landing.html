@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live — exclusive creator content, live streams, and more." />
+  <meta name="description" content="mochii.live — the creator platform built for fans who want more. Live cams, anonymous Q&A, Drool Log, shared store, and a den all your own." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="Exclusive creator content, live streams, and more." />
+  <meta property="og:description" content="The creator platform built for fans who want more — and creators who want their own den." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"        content="summary" />
   <meta name="twitter:title"       content="mochii.live 🐾" />
-  <meta name="twitter:description" content="Exclusive creator content, live streams, and more." />
+  <meta name="twitter:description" content="The creator platform built for fans who want more — and creators who want their own den." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -359,6 +359,138 @@
       .nav { padding: .75rem 1.1rem; }
       .btn-hero-primary, .btn-hero-ghost { font-size: .9rem; padding: .65rem 1.25rem; }
     }
+
+    /* ── Dual-audience section ───────────────────────────── */
+    .audience-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 640px) {
+      .audience-grid { grid-template-columns: 1fr; }
+    }
+
+    .audience-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 18px;
+      padding: 2rem 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .audience-card.fans  { border-color: #3d2a2e; }
+    .audience-card.creators { border-color: #2a2a3d; }
+
+    .audience-card-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+
+    .audience-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .audience-title {
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    .audience-sub {
+      font-size: .85rem;
+      color: #9e7e82;
+      line-height: 1.6;
+    }
+
+    .audience-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: .55rem;
+    }
+
+    .audience-list li {
+      font-size: .85rem;
+      color: #c8b0b4;
+      display: flex;
+      align-items: flex-start;
+      gap: .55rem;
+      line-height: 1.5;
+    }
+
+    .audience-list li::before {
+      content: '✓';
+      color: #e8aeb7;
+      font-weight: 800;
+      flex-shrink: 0;
+      margin-top: .05rem;
+    }
+
+    .audience-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .6rem 1.25rem;
+      border-radius: 10px;
+      font-size: .88rem;
+      font-weight: 800;
+      font-family: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .2s, color .2s, box-shadow .2s;
+      align-self: flex-start;
+      margin-top: .25rem;
+    }
+
+    .audience-cta.fans-cta {
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      color: #e8aeb7;
+    }
+    .audience-cta.fans-cta:hover {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+    }
+
+    .audience-cta.creators-cta {
+      background: transparent;
+      border: 1px solid #5a5a9e;
+      color: #aab4f0;
+    }
+    .audience-cta.creators-cta:hover {
+      background: #aab4f0;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(170,180,240,.22);
+    }
+
+    /* ── Shared surfaces strip ───────────────────────────── */
+    .shared-strip {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .shared-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .5rem 1rem;
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 700;
+      color: #9e7e82;
+      text-decoration: none;
+      transition: border-color .2s, color .2s;
+    }
+    .shared-pill:hover { border-color: #e8aeb7; color: #e8aeb7; }
   </style>
 </head>
 <body>
@@ -377,14 +509,68 @@
     <span class="hero-paw" aria-hidden="true">🐾</span>
     <h1>the den is open.</h1>
     <p class="hero-tagline">
-      exclusive live streams, anonymous Q&amp;A, the Drool Log, and more —
-      pick a creator and step inside.
+      A platform for creators who want more than just followers —
+      and fans who want to actually be part of the pack.
     </p>
     <div class="hero-ctas">
       <a id="hero-enter-btn" href="#" class="btn-hero-primary">🐾 Enter the Den</a>
       <a href="/creator.html" class="btn-hero-ghost">Become a Creator →</a>
     </div>
   </section>
+
+  <!-- ── Who is this for? ────────────────────────────────── -->
+  <section class="section">
+    <p class="section-label">Who it's for</p>
+    <h2 class="section-title">Built for Both Sides of the Pack</h2>
+    <p class="section-sub">Whether you're here to watch or here to create, there's a place for you.</p>
+
+    <div class="audience-grid">
+      <!-- Fans -->
+      <div class="audience-card fans">
+        <div class="audience-card-header">
+          <span class="audience-icon">🐾</span>
+          <div class="audience-title">For Fans</div>
+        </div>
+        <p class="audience-sub">
+          Get closer to your favourite creators than any other platform allows.
+          No algorithms hiding content, no ads — just direct access to the den.
+        </p>
+        <ul class="audience-list">
+          <li>Live webcam streams, gated to your subscription tier</li>
+          <li>Drop anonymous questions into the Puppy Pouch — no sign-in needed</li>
+          <li>Browse the Drool Log: everything the creator saved and liked, exposed</li>
+          <li>Shop a site-wide store where every purchase directly supports your creator</li>
+          <li>React and comment on Drool Log posts in real-time</li>
+          <li>See what the creator is listening to right now via Spotify</li>
+        </ul>
+        <a id="fans-cta" href="#" class="audience-cta fans-cta">🐾 Find a Creator</a>
+      </div>
+
+      <!-- Creators -->
+      <div class="audience-card creators">
+        <div class="audience-card-header">
+          <span class="audience-icon">🎬</span>
+          <div class="audience-title">For Creators</div>
+        </div>
+        <p class="audience-sub">
+          Your own fully-featured den — live streams, a Q&amp;A inbox, a curated content feed,
+          and a storefront — all on your own subdomain. You own it.
+        </p>
+        <ul class="audience-list">
+          <li>Your own subdomain (you.mochii.live) with a subscriber portal</li>
+          <li>Multi-camera live streaming via WebRTC, tiered by subscription level</li>
+          <li>Anonymous Q&amp;A inbox — answer publicly, share as individual links</li>
+          <li>Drool Log feed: auto-pulls your Reddit, Twitter/X, and Bluesky saves</li>
+          <li>Sell merch on the shared pack store — you set your revenue percentage</li>
+          <li>Subscription billing handled via Segpay — you get paid</li>
+          <li>PiShock and Lovense interactive controls for pack engagement</li>
+        </ul>
+        <a href="/creator.html" class="audience-cta creators-cta">🎬 Apply to Join →</a>
+      </div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
 
   <!-- ── Featured Creators ──────────────────────────────── -->
   <section class="section">
@@ -408,41 +594,58 @@
 
   <!-- ── Features ───────────────────────────────────────── -->
   <section class="section">
-    <p class="section-label">What's inside</p>
-    <h2 class="section-title">Everything in One Place</h2>
-    <p class="section-sub">Every creator den comes fully loaded.</p>
+    <p class="section-label">What's inside every den</p>
+    <h2 class="section-title">The Full Pack Experience</h2>
+    <p class="section-sub">Every creator den ships fully loaded — no extra setup.</p>
 
     <div class="features-grid">
       <div class="feature-card">
         <span class="feature-icon">📷</span>
         <div class="feature-title">Live Cams</div>
-        <div class="feature-desc">Real-time WebRTC streams. Multiple cameras, gated by tier.</div>
+        <div class="feature-desc">Real-time WebRTC streams across multiple cameras, tiered by subscription level.</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🐾</span>
-        <div class="feature-title">Anonymous Q&amp;A</div>
-        <div class="feature-desc">Drop a question anonymously. Answered ones become public.</div>
+        <div class="feature-title">Puppy Pouch</div>
+        <div class="feature-desc">Anonymous Q&amp;A inbox — no sign-in needed to ask. Answered questions become public share pages.</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">💧</span>
         <div class="feature-title">Drool Log</div>
-        <div class="feature-desc">A curated feed of the creator's saved posts from across the web.</div>
+        <div class="feature-desc">Auto-curated feed of everything the creator saved on Reddit, X, and Bluesky — exposed for the pack.</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🛍️</span>
-        <div class="feature-title">Store</div>
-        <div class="feature-desc">Merch, prints, and exclusive drops — Segpay powered.</div>
+        <div class="feature-title">Pack Store</div>
+        <div class="feature-desc">A site-wide storefront. Every creator lists products and earns their own revenue share per sale.</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🎵</span>
         <div class="feature-title">Now Playing</div>
-        <div class="feature-desc">See what the creator is listening to, live via Spotify.</div>
+        <div class="feature-desc">Live Spotify feed — fans always know what the creator is listening to right now.</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🎮</span>
         <div class="feature-title">Interactive</div>
-        <div class="feature-desc">PiShock and Lovense controls — if you dare.</div>
+        <div class="feature-desc">PiShock and Lovense controls — give the pack real-time engagement options if you dare.</div>
       </div>
+    </div>
+  </section>
+
+  <hr class="section-divider" />
+
+  <!-- ── Shared Platform Surfaces ──────────────────────── -->
+  <section class="section">
+    <p class="section-label">Platform-wide</p>
+    <h2 class="section-title">Three Shared Spaces, All Creators</h2>
+    <p class="section-sub">
+      Beyond individual dens, the platform surfaces the best content from every creator in one place —
+      so fans discover more and creators get more visibility.
+    </p>
+    <div class="shared-strip">
+      <a href="/drool.html" class="shared-pill">💧 Drool Log — best posts from every creator</a>
+      <a href="/anon" class="shared-pill">🐾 Puppy Pouch — top answered Q&amp;A from all creators</a>
+      <a href="/store.html" class="shared-pill">🛍️ Pack Store — every creator's merch in one shop</a>
     </div>
   </section>
 
@@ -452,8 +655,12 @@
   <section class="section">
     <div class="cta-banner">
       <h2>ready to join the pack?</h2>
-      <p>Subscribe to a creator's den and unlock everything — live streams, exclusive content, and direct Q&amp;A access.</p>
-      <a id="cta-enter-btn" href="#" class="btn-hero-primary">🐾 Find Your Creator</a>
+      <p>Subscribe to a creator's den and unlock everything — live streams, exclusive content, and direct Q&amp;A access.
+         Or apply to become a creator and build your own den on the platform.</p>
+      <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
+        <a id="cta-enter-btn" href="#" class="btn-hero-primary">🐾 Find Your Creator</a>
+        <a href="/creator.html" class="btn-hero-ghost">Become a Creator →</a>
+      </div>
     </div>
   </section>
 
@@ -494,6 +701,7 @@
       document.getElementById('nav-signin').href      = portalOrigin + '/';
       document.getElementById('hero-enter-btn').href  = portalOrigin + '/';
       document.getElementById('cta-enter-btn').href   = portalOrigin + '/';
+      document.getElementById('fans-cta').href        = portalOrigin + '/';
       document.getElementById('mochii-card').href     = portalOrigin + '/';
     })();
   </script>

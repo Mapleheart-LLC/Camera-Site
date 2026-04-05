@@ -137,6 +137,12 @@ services:
       - DROOL_SALT=${DROOL_SALT:-}
       # Printful API key – required for automatic print-on-demand fulfilment
       - PRINTFUL_API_KEY=${PRINTFUL_API_KEY:-}
+      # ── Cloudflare API ────────────────────────────────
+      # API token used for DNS/load-balancer management and analytics queries.
+      # Required permissions: DNS:Edit, Load Balancers:Edit, Analytics:Read,
+      # Email Routing Rules:Edit.
+      # Generate a scoped token at https://dash.cloudflare.com/profile/api-tokens
+      - CLAPI=${CLAPI:-}
       # ── Spotify – Now Playing & Queue ─────────────────
       # Create an app at https://developer.spotify.com/dashboard and add
       # {BASE_URL}/auth/spotify/callback as a Redirect URI.
