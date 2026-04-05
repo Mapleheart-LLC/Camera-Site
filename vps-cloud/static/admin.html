@@ -21,7 +21,7 @@
 
     /* ── Login panel ─────────────────────────────────────── */
     #login-panel {
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
@@ -1053,11 +1053,9 @@
       document.getElementById('admin-panel').style.display = 'block';
       loadAll();
     }
-    function showLoginPanel(msg) {
-      document.getElementById('login-panel').style.display = 'flex';
-      document.getElementById('admin-panel').style.display = 'none';
-      if (msg) document.getElementById('login-error').textContent = msg;
+    function showLoginPanel() {
       clearCreds();
+      window.location.href = '/';
     }
 
     // ── API helpers ────────────────────────────────────
@@ -1107,39 +1105,20 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // ── Login ──────────────────────────────────────────
-    document.getElementById('login-btn').addEventListener('click', async () => {
-      const user  = document.getElementById('admin-username').value.trim();
-      const pass  = document.getElementById('admin-password').value;
-      const errEl = document.getElementById('login-error');
-      const btn   = document.getElementById('login-btn');
-      errEl.textContent = '';
-      if (!user || !pass) { errEl.textContent = 'Please enter your username and password.'; return; }
-      btn.disabled = true;
-      btn.textContent = 'Sniffing credentials…';
-      saveCreds(user, pass);
+    // ── Auto-login from credentials saved by main page ────
+    (async () => {
+      if (!getCreds()) { window.location.href = '/'; return; }
       try {
         await apiGet('/api/admin/stats');
         showAdminPanel();
       } catch {
-        clearCreds();
-        errEl.textContent = '🐾 Bad Dog! Invalid credentials.';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '🐾 Enter the Kennel';
+        window.location.href = '/';
       }
-    });
-
-    ['admin-username', 'admin-password'].forEach(id => {
-      document.getElementById(id).addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('login-btn').click();
-      });
-    });
+    })();
 
     // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-admin-btn').addEventListener('click', () => {
-      showLoginPanel('');
-      document.getElementById('login-error').textContent = '';
+      showLoginPanel();
     });
 
     // ── Sidebar navigation ─────────────────────────────
