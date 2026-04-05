@@ -604,11 +604,15 @@
         : '';
 
       // Build inner HTML
+      const creatorBadge = item.creator_handle
+        ? `<span style="font-size:.68rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;">🐾 ${escHtml(item.creator_handle)}</span>`
+        : '';
       card.innerHTML = `
         ${mediaHtml}
         <div class="card-body">
           <div class="card-platform-row">
             <span class="platform-chip">${platformIcon}${escHtml(platformLabel)}</span>
+            ${creatorBadge}
             <span class="drool-meter" title="Drool Meter: times she's been caught">${ICONS.eye} ${item.view_count ?? 0}</span>
           </div>
           ${snippet ? `<p class="card-text">"${escHtml(snippet)}"</p>` : ''}
@@ -771,6 +775,7 @@
       body.innerHTML = `
         <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.6rem;flex-wrap:wrap;">
           <span class="platform-chip" style="font-size:.8rem;">${platformIcon}${escHtml(platformLabel)}</span>
+          ${item.creator_handle ? `<span style="font-size:.68rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;">🐾 ${escHtml(item.creator_handle)}</span>` : ''}
           <span class="drool-meter" style="font-size:.82rem;" title="Drool Meter">${ICONS.eye} ${item.view_count ?? 0}</span>
           <span class="drool-meter" style="font-size:.82rem;">${ICONS.msg} ${item.comment_count ?? 0}</span>
           <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer" style="margin:0;font-size:.78rem;max-width:200px;">${escHtml(item.original_url)}</a>

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from db import get_db
 from discord_webhook import send_discord_notification
@@ -36,6 +37,7 @@ class PublicQuestion(BaseModel):
     text: str
     answer: str
     created_at: str
+    creator_handle: str = "mochii"
 
 
 # ---------------------------------------------------------------------------
@@ -74,14 +76,34 @@ async def submit_question(
 
 
 @router.get("/public", response_model=list[PublicQuestion])
-def list_public_questions(db: sqlite3.Connection = Depends(get_db)):
-    """Return all answered questions that are marked as public."""
-    rows = db.execute(
-        """
-        SELECT id, text, answer, created_at
-        FROM questions
-        WHERE is_public = 1 AND answer IS NOT NULL
-        ORDER BY created_at DESC
-        """
-    ).fetchall()
+def list_public_questions(
+    creator_handle: Optional[str] = None,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return answered questions that are marked as public.
+
+    When ``creator_handle`` is provided only that creator's questions are
+    returned.  Without it all answered public questions from every creator are
+    returned (the global / anon.mochii.live view).
+    """
+    if creator_handle:
+        rows = db.execute(
+            """
+            SELECT id, text, answer, created_at, creator_handle
+            FROM questions
+            WHERE is_public = 1 AND answer IS NOT NULL
+              AND creator_handle = ?
+            ORDER BY created_at DESC
+            """,
+            (creator_handle,),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT id, text, answer, created_at, creator_handle
+            FROM questions
+            WHERE is_public = 1 AND answer IS NOT NULL
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
     return [dict(row) for row in rows]

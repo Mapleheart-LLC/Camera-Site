@@ -86,6 +86,7 @@ class DroolItem(BaseModel):
     comment_count: int
     reaction_counts: dict[str, int]
     is_weekly_whimper: bool = False
+    creator_handle: str = "mochii"
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         comment_count=_comment_count(item_id, db),
         reaction_counts=_reaction_counts(item_id, db),
         is_weekly_whimper=(item_id == whimper_id),
+        creator_handle=row["creator_handle"] if "creator_handle" in row else "mochii",
     )
 
 
@@ -180,9 +182,18 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
 def get_drool_feed(
     page: int = 1,
     page_size: int = 20,
+    creator_handle: Optional[str] = None,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Return the shame gallery feed, with the Weekly Whimper pinned first."""
+    """Return the shame gallery feed.
+
+    - If ``creator_handle`` is supplied, items are scoped to that creator and
+      sorted by recency with their own Weekly Whimper pinned first.
+    - When omitted (the global / drool.mochii.live view), items from **all**
+      creators are returned ranked by engagement score (comments × 3 +
+      reactions × 2 + views) so the best content from every creator surfaces
+      near the top.  The site-wide Weekly Whimper is still pinned on page 1.
+    """
     if page < 1:
         page = 1
     if page_size < 1 or page_size > 500:
@@ -191,16 +202,47 @@ def get_drool_feed(
     whimper_id = _weekly_whimper_id(db)
     offset = (page - 1) * page_size
 
-    # Fetch one extra to exclude the whimper from the regular list.
-    rows = db.execute(
-        """
-        SELECT * FROM drool_archive
-        WHERE id != COALESCE(?, -1)
-        ORDER BY timestamp DESC
-        LIMIT ? OFFSET ?
-        """,
-        (whimper_id, page_size, offset),
-    ).fetchall()
+    if creator_handle:
+        # Per-creator feed: recent-first (original behaviour).
+        rows = db.execute(
+            """
+            SELECT * FROM drool_archive
+            WHERE id != COALESCE(?, -1)
+              AND creator_handle = ?
+              AND COALESCE(is_hidden, 0) = 0
+            ORDER BY timestamp DESC
+            LIMIT ? OFFSET ?
+            """,
+            (whimper_id, creator_handle, page_size, offset),
+        ).fetchall()
+    else:
+        # Global cross-creator feed: rank by engagement so the best content
+        # from every creator floats to the top.  Score = views + comments*3 + reactions*2.
+        rows = db.execute(
+            """
+            SELECT da.*,
+                   (da.view_count
+                    + COALESCE(c.cnt, 0) * 3
+                    + COALESCE(r.cnt, 0) * 2
+                   ) AS _score
+            FROM drool_archive da
+            LEFT JOIN (
+                SELECT drool_id, COUNT(*) AS cnt
+                FROM drool_comments
+                GROUP BY drool_id
+            ) c ON c.drool_id = da.id
+            LEFT JOIN (
+                SELECT drool_id, COUNT(*) AS cnt
+                FROM drool_reactions
+                GROUP BY drool_id
+            ) r ON r.drool_id = da.id
+            WHERE da.id != COALESCE(?, -1)
+              AND COALESCE(da.is_hidden, 0) = 0
+            ORDER BY _score DESC, da.timestamp DESC
+            LIMIT ? OFFSET ?
+            """,
+            (whimper_id, page_size, offset),
+        ).fetchall()
 
     feed: list[DroolItem] = []
 

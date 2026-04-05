@@ -26,6 +26,10 @@ Endpoints
                                          (Reddit API, Reddit IFTTT, Twitter, Bluesky)
   DELETE /api/admin/drool/{entry_id}   – delete a single drool archive entry (+ its comments/reactions)
   POST   /api/admin/drool/purge-bad    – delete all entries whose original_url is not a valid http(s) URL
+  GET    /api/admin/creators           – list all creator accounts
+  POST   /api/admin/creators           – create a creator account (auto-provisions Cloudflare DNS + email routing)
+  PUT    /api/admin/creators/{handle}  – update a creator account
+  DELETE /api/admin/creators/{handle}  – delete a creator account (auto-deprovisions Cloudflare DNS + email routing)
 """
 
 import logging
@@ -37,7 +41,7 @@ from urllib.parse import quote as _url_quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
@@ -647,6 +651,8 @@ class ProductCreate(BaseModel):
     is_printful: bool = False
     printful_variant_id: Optional[str] = None
     stock_count: Optional[int] = None
+    creator_handle: str = "mochii"
+    creator_revenue_pct: float = 0.0
 
 
 class ProductUpdate(BaseModel):
@@ -657,6 +663,8 @@ class ProductUpdate(BaseModel):
     is_printful: Optional[bool] = None
     printful_variant_id: Optional[str] = None
     stock_count: Optional[int] = None
+    creator_handle: Optional[str] = None
+    creator_revenue_pct: Optional[float] = None
 
 
 @router.get("/store/products")
@@ -668,7 +676,8 @@ def admin_list_products(
     rows = db.execute(
         """
         SELECT id, name, description, price, image_url,
-               is_printful, printful_variant_id, stock_count
+               is_printful, printful_variant_id, stock_count,
+               creator_handle, creator_revenue_pct
           FROM products ORDER BY id
         """
     ).fetchall()
@@ -687,8 +696,9 @@ def admin_create_product(
             """
             INSERT INTO products
                 (name, description, price, image_url,
-                 is_printful, printful_variant_id, stock_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 is_printful, printful_variant_id, stock_count,
+                 creator_handle, creator_revenue_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.name,
@@ -698,6 +708,8 @@ def admin_create_product(
                 1 if payload.is_printful else 0,
                 payload.printful_variant_id or None,
                 payload.stock_count,
+                payload.creator_handle,
+                payload.creator_revenue_pct,
             ),
         )
         db.commit()
@@ -707,7 +719,11 @@ def admin_create_product(
             detail=f"Could not create product: {exc}",
         ) from exc
     row = db.execute(
-        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        """
+        SELECT id, name, description, price, image_url, is_printful,
+               printful_variant_id, stock_count, creator_handle, creator_revenue_pct
+          FROM products WHERE id = ?
+        """,
         (cursor.lastrowid,),
     ).fetchone()
     return dict(row)
@@ -732,17 +748,21 @@ def admin_update_product(
     new_printful = payload.is_printful if payload.is_printful is not None else bool(row["is_printful"])
     new_variant = payload.printful_variant_id if payload.printful_variant_id is not None else row["printful_variant_id"]
     new_stock = payload.stock_count if payload.stock_count is not None else row["stock_count"]
+    new_creator = payload.creator_handle if payload.creator_handle is not None else row["creator_handle"]
+    new_rev_pct = payload.creator_revenue_pct if payload.creator_revenue_pct is not None else row["creator_revenue_pct"]
 
     try:
         db.execute(
             """
             UPDATE products
                SET name = ?, description = ?, price = ?, image_url = ?,
-                   is_printful = ?, printful_variant_id = ?, stock_count = ?
+                   is_printful = ?, printful_variant_id = ?, stock_count = ?,
+                   creator_handle = ?, creator_revenue_pct = ?
              WHERE id = ?
             """,
             (new_name, new_desc or None, new_price, new_image or None,
-             1 if new_printful else 0, new_variant or None, new_stock, product_id),
+             1 if new_printful else 0, new_variant or None, new_stock,
+             new_creator, new_rev_pct, product_id),
         )
         db.commit()
     except Exception as exc:
@@ -752,7 +772,11 @@ def admin_update_product(
         ) from exc
 
     updated = db.execute(
-        "SELECT id, name, description, price, image_url, is_printful, printful_variant_id, stock_count FROM products WHERE id = ?",
+        """
+        SELECT id, name, description, price, image_url, is_printful,
+               printful_variant_id, stock_count, creator_handle, creator_revenue_pct
+          FROM products WHERE id = ?
+        """,
         (product_id,),
     ).fetchone()
     return dict(updated)
@@ -1026,4 +1050,220 @@ def purge_bad_drool_entries(
         bad_ids,
     )
     return {"deleted": len(bad_ids), "ids": bad_ids}
+
+
+# ---------------------------------------------------------------------------
+# Pack Members – creator account management
+# ---------------------------------------------------------------------------
+
+# Reserved subdomains that can never be used as creator handles.
+_RESERVED_HANDLES = frozenset({
+    "anon", "links", "shop", "drool", "creator", "www",
+    "api", "admin", "static", "media",
+})
+
+
+def _creator_hash_password(password: str) -> str:
+    """Hash a password for a creator account (reuses the same PBKDF2 helper)."""
+    from routers.auth import _hash_password
+    return _hash_password(password)
+
+
+class CreatorCreate(BaseModel):
+    handle: str = Field(..., min_length=1, max_length=32, pattern=r"^[a-z0-9-]+$")
+    display_name: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=8, max_length=128)
+    forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    agent_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class CreatorUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, max_length=64)
+    is_active: Optional[bool] = None
+    new_password: Optional[str] = Field(None, min_length=8, max_length=128)
+    forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    agent_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    allow_free_content: Optional[bool] = None
+
+
+@router.get("/creators")
+def admin_list_creators(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all creator accounts (passwords never included)."""
+    rows = db.execute(
+        """
+        SELECT handle, display_name, bio, avatar_url, accent_color,
+               forwarding_email, agent_email, is_active, created_at
+          FROM creator_accounts
+         ORDER BY created_at DESC
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/creators", status_code=status.HTTP_201_CREATED)
+def admin_create_creator(
+    payload: CreatorCreate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Create a new creator account.  Handle must be unique and not reserved."""
+    import uuid
+    from datetime import datetime, timezone
+
+    handle = payload.handle.lower().strip()
+
+    if handle in _RESERVED_HANDLES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"'{handle}' is a reserved subdomain and cannot be used as a handle.",
+        )
+
+    conflict = db.execute(
+        "SELECT handle FROM creator_accounts WHERE handle = ?", (handle,)
+    ).fetchone()
+    if conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A creator with that handle already exists.",
+        )
+
+    hashed = _creator_hash_password(payload.password)
+    now = datetime.now(timezone.utc).isoformat()
+    creator_id = str(uuid.uuid4())
+
+    db.execute(
+        """
+        INSERT INTO creator_accounts
+            (id, handle, display_name, hashed_password, forwarding_email, agent_email, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        """,
+        (creator_id, handle, payload.display_name, hashed,
+         payload.forwarding_email, payload.agent_email, now),
+    )
+    db.commit()
+    logger.info("Admin '%s' created creator account '%s'.", admin_user, handle)
+
+    # Best-effort: auto-provision Cloudflare DNS + email routing for the new subdomain.
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if base_url:
+        from urllib.parse import urlparse as _urlparse
+        from routers.cloudflare import provision_creator_subdomain
+        root_domain = _urlparse(base_url).hostname or ""
+        if root_domain:
+            provision_creator_subdomain(
+                handle, root_domain,
+                forwarding_email=payload.forwarding_email,
+                agent_email=payload.agent_email,
+            )
+
+    return {
+        "handle": handle,
+        "display_name": payload.display_name,
+        "forwarding_email": payload.forwarding_email,
+        "agent_email": payload.agent_email,
+        "is_active": True,
+        "created_at": now,
+    }
+
+
+@router.put("/creators/{handle}")
+def admin_update_creator(
+    handle: str,
+    payload: CreatorUpdate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update a creator account: change display name, deactivate/reactivate, or reset password."""
+    row = db.execute(
+        "SELECT handle, display_name, forwarding_email, agent_email, is_active FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+
+    # Build update using an explicit column→value map so no user input ever
+    # reaches the SQL column name position (no f-string interpolation on input).
+    _allowed_columns: dict[str, object] = {}
+    if payload.display_name is not None:
+        _allowed_columns["display_name"] = payload.display_name
+    if payload.is_active is not None:
+        _allowed_columns["is_active"] = 1 if payload.is_active else 0
+    if payload.new_password is not None:
+        _allowed_columns["hashed_password"] = _creator_hash_password(payload.new_password)
+    email_reprovisioning_needed = False
+    if payload.forwarding_email is not None:
+        _allowed_columns["forwarding_email"] = payload.forwarding_email
+        if payload.forwarding_email != row["forwarding_email"]:
+            email_reprovisioning_needed = True
+    if payload.agent_email is not None:
+        _allowed_columns["agent_email"] = payload.agent_email
+        if payload.agent_email != row["agent_email"]:
+            email_reprovisioning_needed = True
+    if payload.allow_free_content is not None:
+        _allowed_columns["allow_free_content"] = 1 if payload.allow_free_content else 0
+
+    if not _allowed_columns:
+        return dict(row)
+
+    # Column names come exclusively from the _allowed_columns dict keys above —
+    # they are never derived from user input.
+    set_clause = ", ".join(f"{col} = ?" for col in _allowed_columns)
+    params = list(_allowed_columns.values()) + [handle]
+    db.execute(
+        f"UPDATE creator_accounts SET {set_clause} WHERE handle = ?",
+        params,
+    )
+    db.commit()
+    logger.info("Admin '%s' updated creator account '%s': %s.", admin_user, handle, ", ".join(_allowed_columns))
+
+    updated = db.execute(
+        "SELECT handle, display_name, forwarding_email, agent_email, is_active FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+
+    # Re-provision Cloudflare email routing when per-creator addresses changed.
+    if email_reprovisioning_needed:
+        base_url = os.environ.get("BASE_URL", "").rstrip("/")
+        if base_url:
+            from urllib.parse import urlparse as _urlparse
+            from routers.cloudflare import deprovision_creator_subdomain, provision_creator_subdomain
+            root_domain = _urlparse(base_url).hostname or ""
+            if root_domain:
+                deprovision_creator_subdomain(handle, root_domain)
+                provision_creator_subdomain(
+                    handle, root_domain,
+                    forwarding_email=updated["forwarding_email"],
+                    agent_email=updated["agent_email"],
+                )
+
+    return dict(updated)
+
+
+@router.delete("/creators/{handle}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_creator(
+    handle: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Permanently remove a creator account."""
+    row = db.execute(
+        "SELECT handle FROM creator_accounts WHERE handle = ?", (handle,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+    db.execute("DELETE FROM creator_accounts WHERE handle = ?", (handle,))
+    db.commit()
+    logger.info("Admin '%s' deleted creator account '%s'.", admin_user, handle)
+
+    # Best-effort: remove Cloudflare DNS + email routing for the deleted subdomain.
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if base_url:
+        from urllib.parse import urlparse as _urlparse
+        from routers.cloudflare import deprovision_creator_subdomain
+        root_domain = _urlparse(base_url).hostname or ""
+        if root_domain:
+            deprovision_creator_subdomain(handle, root_domain)
 

@@ -43,7 +43,8 @@ def list_products(db: sqlite3.Connection = Depends(get_db)):
     rows = db.execute(
         """
         SELECT id, name, description, price, image_url,
-               is_printful, printful_variant_id, stock_count
+               is_printful, printful_variant_id, stock_count,
+               creator_handle, creator_revenue_pct
           FROM products
          ORDER BY id
         """

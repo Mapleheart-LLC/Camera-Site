@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live – Join the pack and access live streams. Sign in with Fanvue." />
+  <meta name="description" content="mochii.live – Join the pack and access live streams." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="Join the pack and access live streams. Sign in with Fanvue." />
+  <meta property="og:description" content="Join the pack and access live streams." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="mochii.live 🐾" />
-  <meta name="twitter:description" content="Join the pack and access live streams. Sign in with Fanvue." />
+  <meta name="twitter:description" content="Join the pack and access live streams." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -69,8 +69,8 @@
       letter-spacing: .01em;
     }
 
-    /* Sign-in button in nav */
-    #fanvue-login-btn {
+    /* Sign-in button in nav (scrolls to the auth card) */
+    #nav-signin-btn {
       display: inline-flex;
       align-items: center;
       gap: .5rem;
@@ -87,18 +87,109 @@
       transition: background .2s, color .2s, box-shadow .2s;
     }
 
-    #fanvue-login-btn:hover {
+    #nav-signin-btn:hover {
       background: #e8aeb7;
       color: #1a1a1a;
       box-shadow: 0 4px 18px rgba(232,174,183,.28);
     }
 
-    #fanvue-login-btn svg {
-      width: 17px;
-      height: 17px;
-      fill: currentColor;
-      flex-shrink: 0;
+    /* ── Auth card (login / register) ──────────────────── */
+    #auth-card {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 2rem;
+      padding: 0 1.5rem;
     }
+
+    .auth-tabs {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: 1rem;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: .45rem;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #9e7e82;
+      font-size: .85rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+
+    .auth-tab.active {
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
+    }
+
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+
+    .auth-input {
+      width: 100%;
+      padding: .6rem .9rem;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .auth-input:focus { border-color: #e8aeb7; }
+
+    .auth-input::placeholder { color: #6a4a4e; }
+
+    .auth-submit {
+      padding: .65rem 1.2rem;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 10px;
+      color: #e8aeb7;
+      font-size: .9rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .2s, color .2s, box-shadow .2s;
+    }
+
+    .auth-submit:hover:not(:disabled) {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+    }
+
+    .auth-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+    .subscribe-row {
+      text-align: center;
+      margin-top: .75rem;
+      font-size: .82rem;
+      color: #9e7e82;
+    }
+
+    .subscribe-link {
+      color: #e8aeb7;
+      font-weight: 700;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: inherit;
+      padding: 0;
+    }
+
+    .subscribe-link:hover { text-decoration: underline; }
 
     /* Hero section */
     .landing-hero {
@@ -725,7 +816,7 @@
     }
 
     /* Sign-in nav button — hot pink on hover */
-    #fanvue-login-btn:hover {
+    #nav-signin-btn:hover {
       background: #d4667a;
       border-color: #d4667a;
       color: #fff;
@@ -860,6 +951,8 @@
     }
 
   </style>
+  <link rel="manifest" href="/manifest.json">
+  <script>(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
 
@@ -869,12 +962,9 @@
     <!-- Sticky nav -->
     <nav class="landing-nav">
       <span class="landing-logo">🐾 mochii.live</span>
-      <a id="fanvue-login-btn" href="/auth/login">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3 3h18v3H9v3h9v3H9v9H6V9H3V3z"/>
-        </svg>
+      <button id="nav-signin-btn" onclick="document.getElementById('auth-card').scrollIntoView({behavior:'smooth'})">
         Sign In 🐾
-      </a>
+      </button>
     </nav>
 
     <!-- Hero -->
@@ -886,6 +976,44 @@
 
     <!-- OAuth error/info message -->
     <p id="login-message" role="alert" aria-live="polite"></p>
+
+    <!-- Login / Register card -->
+    <div id="auth-card">
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true"
+                onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" id="tab-register" role="tab" aria-selected="false"
+                onclick="switchAuthTab('register')">Register</button>
+      </div>
+
+      <!-- Login form -->
+      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)" novalidate>
+        <input class="auth-input" id="login-identifier" type="text"
+               placeholder="Username or email" autocomplete="username" required />
+        <input class="auth-input" id="login-password" type="password"
+               placeholder="Password" autocomplete="current-password" required />
+        <button class="auth-submit" type="submit" id="login-btn">Sign In 🐾</button>
+      </form>
+
+      <!-- Register form (hidden until tab is switched) -->
+      <form id="register-form" class="auth-form" style="display:none;"
+            onsubmit="handleRegister(event)" novalidate>
+        <input class="auth-input" id="reg-username" type="text"
+               placeholder="Username (letters, numbers, _ -)" autocomplete="username" required />
+        <input class="auth-input" id="reg-email" type="email"
+               placeholder="Email address" autocomplete="email" required />
+        <input class="auth-input" id="reg-password" type="password"
+               placeholder="Password (8+ characters)" autocomplete="new-password" required />
+        <button class="auth-submit" type="submit" id="register-btn">Create Account 🐾</button>
+      </form>
+
+      <div class="subscribe-row">
+        Not subscribed?
+        <button class="subscribe-link" type="button" onclick="startSubscribe()">
+          Subscribe to unlock streams →
+        </button>
+      </div>
+    </div>
 
     <!-- Static nav cards -->
     <div class="links-section">
@@ -942,10 +1070,10 @@
         <p id="sidebar-message"><span class="paw-loading" role="status" aria-label="Loading cameras">🐾</span></p>
         <div id="upgrade-prompt">
           🐾 Bad Dog! No treats here.<br>
-          <a href="https://fanvue.com" target="_blank" rel="noopener noreferrer">
-            Upgrade your Fanvue subscription
-          </a>
-          to unlock streams.
+          <button class="subscribe-link" type="button" onclick="startSubscribe()">
+            Subscribe to unlock streams
+          </button>
+          🐾
         </div>
       </nav>
       <!-- Viewer -->
@@ -1528,21 +1656,133 @@
         .replace(/"/g, '&quot;');
     }
 
-    // ── Handle OAuth callback (token or error in URL) ─
-    (function handleOAuthCallback() {
-      const hash   = window.location.hash.slice(1);  // strip leading '#'
-      const params = new URLSearchParams(hash);
-      const token  = params.get('token');
-      const err    = params.get('error') || new URLSearchParams(window.location.search).get('error');
+    // ── Auth tab switcher ─────────────────────────────
+    function switchAuthTab(tab) {
+      const isLogin = tab === 'login';
+      document.getElementById('login-form').style.display    = isLogin ? 'flex' : 'none';
+      document.getElementById('register-form').style.display = isLogin ? 'none' : 'flex';
+      document.getElementById('tab-login').classList.toggle('active', isLogin);
+      document.getElementById('tab-register').classList.toggle('active', !isLogin);
+      document.getElementById('tab-login').setAttribute('aria-selected', isLogin);
+      document.getElementById('tab-register').setAttribute('aria-selected', !isLogin);
+    }
 
-      // Clear the fragment/query so tokens aren't left in browser history
-      if (token || err) {
-        history.replaceState(null, '', window.location.pathname);
+    // ── Native sign-in ────────────────────────────────
+    async function handleLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true;
+      btn.textContent = 'Signing in…';
+      const username_or_email = document.getElementById('login-identifier').value.trim();
+      const password          = document.getElementById('login-password').value;
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username_or_email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Sign-in failed. Please try again.', 'error');
+          return;
+        }
+        saveToken(data.access_token);
+        showDashboard();
+        loadCameras();
+        initControls();
+        initSpotify();
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In 🐾';
       }
+    }
 
+    // ── Native registration ───────────────────────────
+    async function handleRegister(e) {
+      e.preventDefault();
+      const btn = document.getElementById('register-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating account…';
+      const username = document.getElementById('reg-username').value.trim();
+      const email    = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Registration failed. Please try again.', 'error');
+          return;
+        }
+        saveToken(data.access_token);
+        showDashboard();
+        loadCameras();
+        initControls();
+        initSpotify();
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Account 🐾';
+      }
+    }
+
+    // ── Subscribe via Segpay ──────────────────────────
+    async function startSubscribe() {
+      const emailEl = document.getElementById('reg-email') ||
+                      document.getElementById('login-identifier');
+      const email = emailEl ? emailEl.value.trim() : '';
+      try {
+        const qs = email ? `?email=${encodeURIComponent(email)}` : '';
+        const res = await fetch(`/api/subscriptions/url${qs}`);
+        if (!res.ok) {
+          showLogin('Subscriptions are not yet configured. Please check back soon.', 'info');
+          return;
+        }
+        const { url } = await res.json();
+        window.location.href = url;
+      } catch {
+        showLogin('Could not load the subscription page. Please try again.', 'error');
+      }
+    }
+
+    // ── Page initialisation ───────────────────────────
+    (function init() {
       // Start Spotify now-playing polling unconditionally – no auth required.
       pollNowPlaying();
       _npPollInterval = setInterval(pollNowPlaying, 5000);
+
+      // Handle Segpay subscription return redirects (?subscribed=1 / ?subscribed=0)
+      const searchParams = new URLSearchParams(window.location.search);
+      const subscribed = searchParams.get('subscribed');
+      if (subscribed !== null) {
+        history.replaceState(null, '', window.location.pathname);
+        if (subscribed === '1') {
+          clearToken();
+          showLogin('🐾 Subscription activated! Please sign in to access your streams.', 'info');
+          return;
+        }
+        if (subscribed === '0') {
+          showLogin('Subscription was cancelled. You can try again anytime.', 'info');
+          return;
+        }
+      }
+
+      // Handle legacy Fanvue OAuth callback tokens in the URL fragment
+      // (keeps backward compatibility with any existing sessions)
+      const hash   = window.location.hash.slice(1);
+      const params = new URLSearchParams(hash);
+      const token  = params.get('token');
+      const err    = params.get('error') || searchParams.get('error');
+
+      if (token || err) {
+        history.replaceState(null, '', window.location.pathname);
+      }
 
       if (token) {
         saveToken(token);
@@ -1554,18 +1794,11 @@
       }
 
       if (err) {
-        const messages = {
-          invalid_state:          'Login session expired. Please try again.',
-          token_exchange_failed:  'Could not complete sign-in with Fanvue. Please try again.',
-          profile_fetch_failed:   'Could not retrieve your Fanvue profile. Please try again.',
-          missing_params:         'Invalid callback. Please try again.',
-          access_denied:          '🐾 Bad Dog! No treats here. Please authorize the app on Fanvue.',
-        };
-        showLogin(messages[err] || `Login error: ${err}`, 'error');
+        showLogin('Login error. Please try again.', 'error');
         return;
       }
 
-      // No callback params – check for an existing session token
+      // No callback params – restore existing session if one is stored
       if (getToken()) {
         showDashboard();
         loadCameras();
@@ -1597,6 +1830,7 @@
       <div id="queue-results" role="list" aria-label="Search results"></div>
     </div>
   </div>
+  <script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}</script>
 </body>
 </html>
 

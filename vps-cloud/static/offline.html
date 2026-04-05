@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>You're Offline – Mapleheart</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#1a1a1a;color:#f0e6e8;font-family:system-ui,sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem;text-align:center}
+  .card{background:#242424;border:1px solid #3d2a2e;border-radius:16px;padding:3rem 2rem;max-width:380px}
+  h1{font-size:2rem;margin-bottom:1rem;color:#c49a9f}
+  p{color:#9e7e82;line-height:1.6;margin-bottom:1.5rem}
+  .btn{display:inline-block;background:#c49a9f;color:#1a1a1a;border-radius:10px;
+       padding:.8rem 2rem;font-weight:700;cursor:pointer;text-decoration:none;border:none;font-size:1rem}
+  .btn:hover{background:#d4b0b5}
+  .icon{font-size:3rem;margin-bottom:1rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📡</div>
+  <h1>You're Offline</h1>
+  <p>It looks like you've lost your internet connection. Check your network and try again.</p>
+  <button class="btn" onclick="window.location.reload()">Try Again</button>
+</div>
+</body>
+</html>

@@ -61,7 +61,7 @@ services:
       # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
       - BASE_URL=${BASE_URL:-}
       # CORS: comma-separated list of allowed origins (e.g. https://mochii.live,https://shop.mochii.live).
-      # Leave empty to auto-derive from BASE_URL (root + anon/links/shop subdomains).
+      # Leave empty to auto-derive from BASE_URL (root + anon/links/shop/drool/mochii/creator subdomains).
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       # Cookie domain for cross-subdomain session sharing (e.g. .mochii.live).
       # Leave empty to auto-derive from BASE_URL.
@@ -72,10 +72,21 @@ services:
       # Payment provider selection (default: segpay)
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-segpay}
       # Segpay credentials – obtain from your Segpay merchant dashboard
+      # Used for one-time store purchases (physical goods).
       - SEGPAY_PACKAGE_ID=${SEGPAY_PACKAGE_ID:-}
       - SEGPAY_PRICE_POINT_ID=${SEGPAY_PRICE_POINT_ID:-}
-      # Optional: shared secret for Segpay postback HMAC-SHA256 verification
+      # Optional: shared secret for Segpay postback HMAC-SHA256 verification (store)
       - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
+      # ── Segpay Subscriptions ──────────────────────────
+      # Separate Segpay package configured for recurring subscription billing.
+      # Set these in the Segpay merchant dashboard as a recurring package.
+      - SEGPAY_SUB_PACKAGE_ID=${SEGPAY_SUB_PACKAGE_ID:-}
+      - SEGPAY_SUB_PRICE_POINT_ID=${SEGPAY_SUB_PRICE_POINT_ID:-}
+      # Access level granted to a subscriber (default: 2).
+      # 0 = free/no access, 1 = free follower, 2 = subscriber, 3 = premium.
+      - SEGPAY_SUB_ACCESS_LEVEL=${SEGPAY_SUB_ACCESS_LEVEL:-2}
+      # Optional: shared secret for subscription postback HMAC-SHA256 verification
+      - SEGPAY_SUB_WEBHOOK_SECRET=${SEGPAY_SUB_WEBHOOK_SECRET:-}
       # ── The Drool Log – Reddit scraper credentials ────
       # Set REDDIT_MODE to control how Reddit items are collected:
       #   api    – poll Reddit directly via praw (requires OAuth app registration)
@@ -126,6 +137,31 @@ services:
       - DROOL_SALT=${DROOL_SALT:-}
       # Printful API key – required for automatic print-on-demand fulfilment
       - PRINTFUL_API_KEY=${PRINTFUL_API_KEY:-}
+      # ── Cloudflare API ────────────────────────────────
+      # API token used for DNS/load-balancer management and analytics queries.
+      # Required permissions: DNS:Edit, Load Balancers:Edit, Analytics:Read,
+      # Email Routing Rules:Edit.
+      # Generate a scoped token at https://dash.cloudflare.com/profile/api-tokens
+      - CLAPI=${CLAPI:-}
+      # Zone ID for the site's domain.  When empty the zone is auto-discovered
+      # from BASE_URL via the Cloudflare API and cached for the process lifetime.
+      - CLAPI_ZONE_ID=${CLAPI_ZONE_ID:-}
+      # Cloudflare Tunnel edge hostname (e.g. <uuid>.cfargotunnel.com).
+      # When set, new creator subdomains are automatically provisioned as
+      # proxied CNAME records pointing at the tunnel.  Leave empty to skip.
+      - CLAPI_TUNNEL_HOSTNAME=${CLAPI_TUNNEL_HOSTNAME:-}
+      # Email address for per-creator routing rules (e.g. admin@mochii.live).
+      # When set, a forwarding rule is auto-created for {handle}@{domain}.
+      # Leave empty to manage email routing manually.
+      - CLAPI_EMAIL_ROUTING_DEST=${CLAPI_EMAIL_ROUTING_DEST:-}
+      # ── Outbound SMTP – send-as for creators ──────────
+      # Required for POST /api/creator/email/send.
+      # Use any SMTP relay (e.g. Mailgun, Postmark, SendGrid, Gmail SMTP).
+      # SMTP_PORT defaults to 587 (STARTTLS) when not set.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       # ── Spotify – Now Playing & Queue ─────────────────
       # Create an app at https://developer.spotify.com/dashboard and add
       # {BASE_URL}/auth/spotify/callback as a Redirect URI.

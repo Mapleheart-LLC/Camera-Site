@@ -28,15 +28,26 @@ from dependencies import (
 )
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
+from routers.auth import router as auth_router
+from routers.creator import router as creator_router, public_router as creator_public_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
+from routers.subscriptions import router as subscriptions_router
 from routers.discord_interactions import router as discord_interactions_router
 from routers.drool import router as drool_router, limiter as drool_limiter
 from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
+from routers.cloudflare import router as cloudflare_router
+from routers.member import router as member_router
+from routers.compliance import router as compliance_router
+from routers.notifications import router as notifications_router
+from routers.community import router as community_router
+from routers.monetization import router as monetization_router
+from routers.analytics import router as analytics_router
+from routers.discovery import router as discovery_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -93,7 +104,11 @@ BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool")
+_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool", "mochii", "creator", "member")
+
+# Root hostname derived from BASE_URL (e.g. "mochii.live" from "https://mochii.live").
+# Used by the subdomain middleware to serve the platform landing page at the bare root.
+_ROOT_HOSTNAME: str = urlparse(BASE_URL).hostname.lower() if BASE_URL else ""
 
 
 def _build_allowed_origins() -> list[str]:
@@ -323,6 +338,52 @@ def init_db() -> None:
         )
         """
     )
+    # ── Native site users (username/password auth, no Fanvue dependency) ──
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_users (
+            id              TEXT    PRIMARY KEY,
+            username        TEXT    NOT NULL UNIQUE,
+            email           TEXT    NOT NULL UNIQUE,
+            hashed_password TEXT    NOT NULL,
+            access_level    INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL
+        )
+        """
+    )
+    # ── Creator accounts (separate from site_users – one per subdomain) ───
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS creator_accounts (
+            id              TEXT    PRIMARY KEY,
+            handle          TEXT    NOT NULL UNIQUE,
+            display_name    TEXT    NOT NULL,
+            bio             TEXT,
+            avatar_url      TEXT,
+            accent_color    TEXT,
+            hashed_password TEXT    NOT NULL,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT    NOT NULL
+        )
+        """
+    )
+    # ── Segpay subscription audit log ─────────────────────────────────────
+    # Each Segpay postback is recorded here.  The current access_level lives
+    # on site_users; this table is for history and manual reconciliation.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS segpay_subscriptions (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id                TEXT    REFERENCES site_users(id),
+            segpay_subscription_id TEXT,
+            trans_type             TEXT    NOT NULL,
+            status                 TEXT    NOT NULL,
+            access_level_granted   INTEGER,
+            email                  TEXT,
+            created_at             TEXT    NOT NULL
+        )
+        """
+    )
     # Idempotent migrations: add stream-source columns to existing databases.
     # Column names and types are hardcoded literals (not user input), so
     # string interpolation here is safe and necessary for DDL statements.
@@ -364,6 +425,422 @@ def init_db() -> None:
         conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
+    # Migration: add creator_handle column to questions and drool_archive so
+    # queries can be scoped per creator.  Existing rows default to 'mochii'.
+    for _table in ("questions", "drool_archive"):
+        try:
+            conn.execute(
+                f"ALTER TABLE {_table} ADD COLUMN creator_handle TEXT NOT NULL DEFAULT 'mochii'"
+            )
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise  # re-raise unexpected errors; swallow only duplicate-column
+    # Migration: add creator attribution columns to products for site-wide store.
+    for _col, _defn in [
+        ("creator_handle",      "TEXT NOT NULL DEFAULT 'mochii'"),
+        ("creator_revenue_pct", "REAL NOT NULL DEFAULT 0.0"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # Migration: add per-creator email columns to creator_accounts.
+    #   forwarding_email – creator's private inbox (inbound CF routing destination)
+    #   agent_email      – optional agent inbox that also receives a copy
+    for _col in ("forwarding_email", "agent_email"):
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} TEXT")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # Migration: add member portal columns to site_users.
+    #   display_name               – public name shown in the member portal
+    #   display_name_changed_count – number of changes made in the current year
+    #   display_name_last_reset    – calendar year (YYYY) when the counter was last reset
+    for _col, _defn in [
+        ("display_name",               "TEXT"),
+        ("display_name_changed_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("display_name_last_reset",    "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE site_users ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # Migration: allow_free_content flag on creator_accounts.
+    #   When 1, non-subscribed members can browse this creator's feed.
+    try:
+        conn.execute(
+            "ALTER TABLE creator_accounts ADD COLUMN allow_free_content INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # Member portal tables.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS display_name_history (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL REFERENCES site_users(id),
+            old_name   TEXT,
+            new_name   TEXT    NOT NULL,
+            changed_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS member_follows (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            followed_at    TEXT    NOT NULL,
+            UNIQUE(user_id, creator_handle)
+        )
+        """
+    )
+    # ── Phase 1: Trust, Safety & Compliance ──────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_reports (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            reporter_user_id TEXT    NOT NULL REFERENCES site_users(id),
+            content_type     TEXT    NOT NULL CHECK(content_type IN ('drool','question','comment','post')),
+            content_id       TEXT    NOT NULL,
+            reason           TEXT    NOT NULL,
+            status           TEXT    NOT NULL DEFAULT 'pending'
+                                 CHECK(status IN ('pending','reviewed','actioned')),
+            created_at       TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS dmca_requests (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            complainant_name TEXT    NOT NULL,
+            complainant_email TEXT   NOT NULL,
+            content_url      TEXT    NOT NULL,
+            description      TEXT    NOT NULL,
+            status           TEXT    NOT NULL DEFAULT 'pending'
+                                 CHECK(status IN ('pending','reviewed','actioned')),
+            created_at       TEXT    NOT NULL,
+            resolved_at      TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS creator_applications (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            handle_requested    TEXT    NOT NULL UNIQUE,
+            display_name        TEXT    NOT NULL,
+            email               TEXT    NOT NULL,
+            bio                 TEXT,
+            social_links_json   TEXT    NOT NULL DEFAULT '{}',
+            age_verified_at     TEXT,
+            status              TEXT    NOT NULL DEFAULT 'pending'
+                                    CHECK(status IN ('pending','approved','rejected')),
+            reject_reason       TEXT,
+            created_at          TEXT    NOT NULL,
+            reviewed_at         TEXT
+        )
+        """
+    )
+    # Idempotent migrations on creator_accounts: 2FA columns + age gate flag.
+    for _col, _defn in [
+        ("totp_secret",       "TEXT"),
+        ("totp_enabled",      "INTEGER NOT NULL DEFAULT 0"),
+        ("require_age_gate",  "INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # ── Phase 2: Engagement & Retention ──────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL REFERENCES site_users(id),
+            type       TEXT    NOT NULL,
+            content_id TEXT,
+            read       INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notification_prefs (
+            user_id          TEXT PRIMARY KEY REFERENCES site_users(id),
+            email_on_answer  INTEGER NOT NULL DEFAULT 1,
+            email_on_drool   INTEGER NOT NULL DEFAULT 1,
+            email_on_merch   INTEGER NOT NULL DEFAULT 1,
+            email_on_post    INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL REFERENCES site_users(id),
+            endpoint   TEXT    NOT NULL,
+            p256dh     TEXT    NOT NULL,
+            auth       TEXT    NOT NULL,
+            created_at TEXT    NOT NULL,
+            UNIQUE(user_id, endpoint)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bookmarks (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      TEXT    NOT NULL REFERENCES site_users(id),
+            content_type TEXT    NOT NULL,
+            content_id   TEXT    NOT NULL,
+            created_at   TEXT    NOT NULL,
+            UNIQUE(user_id, content_type, content_id)
+        )
+        """
+    )
+    # ── Phase 3: Community & Social ───────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_activity_log (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            action_type    TEXT    NOT NULL CHECK(action_type IN ('reaction','comment','question')),
+            month          TEXT    NOT NULL,
+            count          INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(user_id, creator_handle, action_type, month)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_badges (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL REFERENCES site_users(id),
+            badge_slug TEXT    NOT NULL,
+            awarded_at TEXT    NOT NULL,
+            UNIQUE(user_id, badge_slug)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS community_posts (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator_handle    TEXT    NOT NULL,
+            title             TEXT    NOT NULL,
+            body_md           TEXT    NOT NULL,
+            is_subscriber_only INTEGER NOT NULL DEFAULT 0,
+            is_published      INTEGER NOT NULL DEFAULT 0,
+            published_at      TEXT,
+            created_at        TEXT    NOT NULL,
+            view_count        INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    # ── Phase 4: Deeper Monetization ─────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tips (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_user_id   TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            amount_cents   INTEGER NOT NULL,
+            message        TEXT,
+            provider_ref   TEXT,
+            created_at     TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_tiers (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator_handle        TEXT    NOT NULL,
+            name                  TEXT    NOT NULL,
+            description           TEXT,
+            price_cents           INTEGER NOT NULL,
+            access_level          INTEGER NOT NULL DEFAULT 2,
+            is_active             INTEGER NOT NULL DEFAULT 1,
+            segpay_package_id     TEXT,
+            segpay_price_point_id TEXT,
+            created_at            TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            tier_id        INTEGER REFERENCES subscription_tiers(id),
+            status         TEXT    NOT NULL DEFAULT 'active'
+                               CHECK(status IN ('active','cancelled','expired')),
+            started_at     TEXT    NOT NULL,
+            expires_at     TEXT,
+            UNIQUE(user_id, creator_handle)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS subscription_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle TEXT    NOT NULL,
+            tier_id        INTEGER,
+            event_type     TEXT    NOT NULL CHECK(event_type IN ('subscribe','cancel','rebill')),
+            created_at     TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bundles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            description TEXT,
+            price_cents INTEGER NOT NULL,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bundle_creators (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            bundle_id            INTEGER NOT NULL REFERENCES bundles(id),
+            creator_handle       TEXT    NOT NULL,
+            access_level_granted INTEGER NOT NULL DEFAULT 2,
+            UNIQUE(bundle_id, creator_handle)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS bundle_purchases (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      TEXT    NOT NULL REFERENCES site_users(id),
+            bundle_id    INTEGER NOT NULL REFERENCES bundles(id),
+            provider_ref TEXT,
+            purchased_at TEXT    NOT NULL,
+            UNIQUE(user_id, bundle_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ppv_purchases (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      TEXT    NOT NULL REFERENCES site_users(id),
+            camera_id    INTEGER NOT NULL REFERENCES cameras(id),
+            provider_ref TEXT,
+            expires_at   TEXT,
+            created_at   TEXT    NOT NULL,
+            UNIQUE(user_id, camera_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS digital_products (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator_handle    TEXT    NOT NULL,
+            name              TEXT    NOT NULL,
+            description       TEXT,
+            price_cents       INTEGER NOT NULL,
+            file_key          TEXT,
+            is_subscriber_only INTEGER NOT NULL DEFAULT 0,
+            is_active         INTEGER NOT NULL DEFAULT 1,
+            created_at        TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS digital_purchases (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        TEXT    NOT NULL REFERENCES site_users(id),
+            product_id     INTEGER NOT NULL REFERENCES digital_products(id),
+            provider_ref   TEXT,
+            purchased_at   TEXT    NOT NULL,
+            UNIQUE(user_id, product_id)
+        )
+        """
+    )
+    # Migration: ppv_price_cents column on cameras.
+    try:
+        conn.execute("ALTER TABLE cameras ADD COLUMN ppv_price_cents INTEGER")
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # Migration: is_hidden column on drool_archive for compliance/reports.
+    try:
+        conn.execute(
+            "ALTER TABLE drool_archive ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # ── Phase 6: Discovery & SEO ──────────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tags (
+            id    INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug  TEXT    NOT NULL UNIQUE,
+            label TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_tags (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT    NOT NULL,
+            content_id   TEXT    NOT NULL,
+            tag_id       INTEGER NOT NULL REFERENCES tags(id),
+            UNIQUE(content_type, content_id, tag_id)
+        )
+        """
+    )
+    # FTS5 virtual tables for global search (drool, questions, creators, products).
+    # Each FTS table shadows the source table; kept in sync by the search router.
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_drool
+        USING fts5(caption, content='drool_archive', content_rowid='id')
+        """
+    )
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_questions
+        USING fts5(text, content='questions', content_rowid='id')
+        """
+    )
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_creators
+        USING fts5(display_name, bio, content='creator_accounts', content_rowid='id')
+        """
+    )
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts_products
+        USING fts5(name, description, content='products', content_rowid='id')
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -470,6 +947,67 @@ def determine_access_level(profile: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Nightly DB backup (APScheduler)
+# ---------------------------------------------------------------------------
+
+_backup_scheduler = None
+
+
+def _run_db_backup() -> None:
+    """Dump the SQLite database to a gzip file in BACKUPS_DIR."""
+    import gzip
+    import shutil
+    backup_dir = os.environ.get("BACKUPS_DIR", "/backups")
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    dest = os.path.join(backup_dir, f"camera_site_{ts}.db.gz")
+    try:
+        conn = get_db_connection()
+        with gzip.open(dest, "wb") as gz_out:
+            for line in conn.iterdump():
+                gz_out.write((line + "\n").encode("utf-8"))
+        conn.close()
+        # Keep last 30 backups.
+        existing = sorted(
+            f for f in os.listdir(backup_dir) if f.endswith(".db.gz")
+        )
+        for old in existing[:-30]:
+            try:
+                os.remove(os.path.join(backup_dir, old))
+            except OSError:
+                pass
+        logger.info("DB backup written to %s", dest)
+        # Record last backup time in settings table.
+        conn2 = get_db_connection()
+        from db import set_setting
+        set_setting(conn2, "last_backup_at", datetime.now(timezone.utc).isoformat())
+        conn2.close()
+    except Exception as exc:
+        logger.error("DB backup failed: %s", exc)
+
+
+def _start_backup_scheduler() -> None:
+    """Start the APScheduler cron job for nightly backups."""
+    global _backup_scheduler
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        _backup_scheduler = BackgroundScheduler()
+        _backup_scheduler.add_job(
+            _run_db_backup,
+            trigger="cron",
+            hour=3,
+            minute=0,
+            id="nightly_db_backup",
+            replace_existing=True,
+        )
+        _backup_scheduler.start()
+        logger.info("Nightly DB backup scheduler started (03:00 UTC).")
+    except Exception as exc:
+        logger.warning("Failed to start backup scheduler: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app lifecycle
 # ---------------------------------------------------------------------------
 
@@ -499,6 +1037,7 @@ async def lifespan(app: FastAPI):
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
+    _start_backup_scheduler()
     yield
     stop_drool_scheduler()
     # Close the Redis connection pool on shutdown to release resources.
@@ -731,14 +1270,41 @@ async def proxy_webrtc(
     current_user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Proxy the WebRTC SDP exchange to go2rtc, enforcing stream-level access control."""
-    access_level: int = current_user["access_level"]
+    """Proxy the WebRTC SDP exchange to go2rtc, enforcing stream-level access control.
 
-    row = db.execute(
-        "SELECT id FROM cameras WHERE stream_slug = ? AND minimum_access_level <= ?",
-        (src, access_level),
+    Access is granted when EITHER:
+      (a) the user's access_level meets the camera's minimum_access_level, OR
+      (b) the user has a valid (non-expired) PPV purchase for the camera.
+    """
+    access_level: int = current_user["access_level"]
+    user_id: str = current_user["fanvue_id"]
+
+    camera = db.execute(
+        "SELECT id, minimum_access_level, ppv_price_cents FROM cameras WHERE stream_slug = ?",
+        (src,),
     ).fetchone()
-    if not row:
+
+    if not camera:
+        raise HTTPException(status_code=403, detail="Access denied to this stream")
+
+    # Check subscription-level access.
+    has_sub_access = access_level >= camera["minimum_access_level"]
+
+    # Check PPV access.
+    has_ppv_access = False
+    if camera["ppv_price_cents"]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        ppv_row = db.execute(
+            """
+            SELECT id FROM ppv_purchases
+             WHERE user_id = ? AND camera_id = ?
+               AND (expires_at IS NULL OR expires_at > ?)
+            """,
+            (user_id, camera["id"], now_iso),
+        ).fetchone()
+        has_ppv_access = ppv_row is not None
+
+    if not has_sub_access and not has_ppv_access:
         raise HTTPException(status_code=403, detail="Access denied to this stream")
 
     body = await request.body()
@@ -771,29 +1337,51 @@ async def proxy_webrtc(
 
 app.include_router(interactive_router)
 app.include_router(admin_router)
+app.include_router(auth_router)
+app.include_router(creator_router)
+app.include_router(creator_public_router)
 app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
+app.include_router(subscriptions_router)
 app.include_router(discord_interactions_router)
 app.include_router(drool_router)
 app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
+app.include_router(cloudflare_router)
+app.include_router(member_router)
+app.include_router(compliance_router)
+app.include_router(notifications_router)
+app.include_router(community_router)
+app.include_router(monetization_router)
+app.include_router(analytics_router)
+app.include_router(discovery_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
-# that @limiter.limit decorators in the drool router function correctly.
+# that @limiter.limit decorators in all rate-limited routers function correctly.
+# All limiters share the same key function (remote IP) and exception handler.
+from routers.auth import _auth_limiter
+from routers.creator import _creator_limiter as _c_limiter
+
 app.state.limiter = drool_limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Re-attach auth and creator limiters to the app so their state is managed.
+_auth_limiter.app = app  # type: ignore[attr-defined]
+_c_limiter.app = app  # type: ignore[attr-defined]
 
 
 @app.middleware("http")
 async def subdomain_routing(request: Request, call_next):
     """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
-    anon.mochii.live/   → serves /anon content    (URL in browser unchanged)
-    links.mochii.live/  → serves /links content   (URL in browser unchanged)
-    shop.mochii.live/   → serves /store.html      (URL in browser unchanged)
-    drool.mochii.live/  → serves /drool.html      (URL in browser unchanged)
+    mochii.mochii.live/ → serves /index.html   (subscriber portal)
+    anon.mochii.live/   → serves /anon content
+    links.mochii.live/  → serves /links content
+    shop.mochii.live/   → serves /store.html
+    drool.mochii.live/  → serves /drool.html
+    creator.mochii.live/→ serves /creator.html  (creator pitch page)
+    mochii.live/ or www.mochii.live/ → serves /landing.html (platform home)
 
     Only GET requests to exactly "/" are rewritten so that the correct HTML
     page is returned.  All other paths (API calls, static assets, …) pass
@@ -803,16 +1391,199 @@ async def subdomain_routing(request: Request, call_next):
         host = request.headers.get("host", "").lower().split(":")[0]
         # Maps subdomain prefix → the path that should be served for that root.
         _subdomain_map = {
-            "anon.":   "/anon",
-            "links.":  "/links",
-            "shop.":   "/store.html",
-            "drool.":  "/drool.html",
+            "mochii.":  "/index.html",
+            "anon.":    "/anon",
+            "links.":   "/links",
+            "shop.":    "/store.html",
+            "drool.":   "/drool.html",
+            "creator.": "/creator.html",
+            "member.":  "/member.html",
+            "www.":     "/landing.html",
         }
+        matched = False
         for prefix, target_path in _subdomain_map.items():
             if host.startswith(prefix):
                 request.scope["path"] = target_path
+                matched = True
                 break
+        # Bare root domain (e.g. mochii.live) → platform landing page.
+        if not matched and _ROOT_HOSTNAME and host == _ROOT_HOSTNAME:
+            request.scope["path"] = "/landing.html"
     return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Age Gate middleware
+# ---------------------------------------------------------------------------
+
+# Paths that are always exempt from the age gate (static assets, API calls,
+# the gate confirmation endpoint itself, health checks, etc.)
+_AGE_GATE_EXEMPT_PREFIXES = (
+    "/api/",
+    "/auth/",
+    "/static/",
+    "/favicon",
+    "/manifest",
+    "/sw.js",
+    "/offline",
+    "/explore",
+    "/landing",
+    "/age-gate",
+)
+_AGE_GATE_EXEMPT_EXTENSIONS = (".css", ".js", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2")
+
+_AGE_GATE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Age Verification</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#1a1a1a;color:#f0e6e8;font-family:system-ui,sans-serif;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
+  .card{background:#242424;border:1px solid #3d2a2e;border-radius:16px;
+        padding:2.5rem;max-width:420px;width:100%;text-align:center}
+  h1{font-size:1.6rem;margin-bottom:.75rem;color:#c49a9f}
+  p{color:#9e7e82;margin-bottom:1.5rem;line-height:1.6}
+  .btn{display:inline-block;background:#c49a9f;color:#1a1a1a;border:none;
+       border-radius:10px;padding:.85rem 2rem;font-size:1rem;font-weight:700;
+       cursor:pointer;text-decoration:none;width:100%;margin-bottom:.75rem}
+  .btn:hover{background:#d4b0b5}
+  .btn-exit{background:#3d2a2e;color:#c49a9f}
+  .btn-exit:hover{background:#4d3a3e}
+  small{color:#6a4a4e;font-size:.8rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>&#127283; Age Verification</h1>
+  <p>This site contains adult content intended for viewers aged <strong>18 years or older</strong>.
+     By entering you confirm you are at least 18 years of age and it is legal to view adult
+     content in your jurisdiction.</p>
+  <form method="POST" action="/age-gate/confirm">
+    <input type="hidden" name="next" value="{next_url}">
+    <button type="submit" class="btn">I am 18 or older &mdash; Enter</button>
+  </form>
+  <a href="https://www.google.com" class="btn btn-exit">Exit</a>
+  <small>By entering you agree to our Terms of Service and Privacy Policy.</small>
+</div>
+</body>
+</html>"""
+
+
+@app.post("/age-gate/confirm", include_in_schema=False)
+async def age_gate_confirm(request: Request):
+    """Set the age-verified cookie and redirect to the intended destination."""
+    form = await request.form()
+    raw_next = str(form.get("next", "/"))
+    # Sanitise the redirect target strictly: only allow paths starting with /
+    # and strip any scheme/host to prevent open-redirect exploits.
+    parsed = urlparse(raw_next)
+    if parsed.scheme or parsed.netloc or not raw_next.startswith("/") or raw_next.startswith("//"):
+        next_url = "/"
+    else:
+        # Reconstruct from path+query only — drop scheme/netloc/fragment.
+        next_url = parsed.path
+        if parsed.query:
+            next_url += f"?{parsed.query}"
+        if not next_url.startswith("/"):
+            next_url = "/"
+
+    response = RedirectResponse(url=next_url, status_code=303)
+    cookie_domain = COOKIE_DOMAIN or None
+    response.set_cookie(
+        key="age_verified",
+        value="1",
+        max_age=365 * 24 * 3600,
+        httponly=True,
+        samesite="strict",
+        domain=cookie_domain,
+        secure=BASE_URL.startswith("https"),
+    )
+    return response
+
+
+def _requires_age_gate(request: Request) -> bool:
+    """Return True if this request should be intercepted by the age gate."""
+    # Only GET requests to HTML pages trigger the gate.
+    if request.method != "GET":
+        return False
+    path = request.url.path
+    # Exempt API paths, static assets, the gate itself.
+    for prefix in _AGE_GATE_EXEMPT_PREFIXES:
+        if path.startswith(prefix):
+            return False
+    for ext in _AGE_GATE_EXEMPT_EXTENSIONS:
+        if path.endswith(ext):
+            return False
+    # Cookie already set → no gate.
+    if request.cookies.get("age_verified") == "1":
+        return False
+    return True
+
+
+@app.middleware("http")
+async def age_gate_middleware(request: Request, call_next):
+    """Intercept HTML page requests and show the age gate when not yet verified."""
+    if _requires_age_gate(request):
+        next_url = str(request.url.path)
+        if request.url.query:
+            next_url += f"?{request.url.query}"
+        gate_html = _AGE_GATE_HTML.replace("{next_url}", _html_lib.escape(next_url))
+        return HTMLResponse(content=gate_html, status_code=200)
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Health endpoint (Phase 7)
+# ---------------------------------------------------------------------------
+
+_APP_START_TIME = datetime.now(timezone.utc)
+
+
+@app.get("/api/health", tags=["system"])
+async def health_check():
+    """Structured health endpoint.  Returns 503 if DB or go2rtc is unreachable."""
+    uptime_s = int((datetime.now(timezone.utc) - _APP_START_TIME).total_seconds())
+    db_ok = False
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception:
+        pass
+
+    go2rtc_ok = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/streams")
+            go2rtc_ok = resp.is_success
+    except Exception:
+        pass
+
+    # Last backup timestamp.
+    last_backup: Optional[str] = None
+    try:
+        conn = get_db_connection()
+        last_backup = get_setting(conn, "last_backup_at")
+        conn.close()
+    except Exception:
+        pass
+
+    all_ok = db_ok  # go2rtc optional
+    status_code = 200 if all_ok else 503
+    return JSONResponse(
+        content={
+            "status": "ok" if all_ok else "degraded",
+            "db_ok": db_ok,
+            "go2rtc_ok": go2rtc_ok,
+            "uptime_s": uptime_s,
+            "last_backup_at": last_backup,
+        },
+        status_code=status_code,
+    )
 
 
 @app.get("/admin", include_in_schema=False)
@@ -827,6 +1598,12 @@ def admin_page_redirect(request: Request):
 def drool_page_redirect():
     """Redirect /drool to the static drool.html page (Shame Gallery)."""
     return RedirectResponse(url="/drool.html", status_code=301)
+
+
+@app.get("/explore", include_in_schema=False)
+def explore_page():
+    """Serve the public explore page."""
+    return RedirectResponse(url="/explore.html", status_code=301)
 
 
 # ---------------------------------------------------------------------------
@@ -1688,8 +2465,11 @@ def anon_page(request: Request):
         qs.forEach(q => {{
           const div = document.createElement('div');
           div.className = 'qa-item';
+          const creatorTag = q.creator_handle && q.creator_handle !== 'mochii'
+            ? `<span style="font-size:.7rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:.35rem;">🐾 ${{esc(q.creator_handle)}}</span>`
+            : '';
           div.innerHTML =
-            `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
+            `<div class="bubble bubble-q">${{creatorTag}}${{esc(q.text)}}</div>` +
             `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
             `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
           list.appendChild(div);
@@ -1871,6 +2651,19 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Member portal  –  /member  (also reached via any subdomain/member)
+# ---------------------------------------------------------------------------
+
+@app.get("/member", response_class=HTMLResponse, include_in_schema=False)
+def member_portal():
+    """Serve the subscriber member portal SPA."""
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), "static", "member.html")
+    with open(_path, encoding="utf-8") as _f:
+        return HTMLResponse(content=_f.read())
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

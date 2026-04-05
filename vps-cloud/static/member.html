@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Your member portal — browse creators, manage your account, and access subscriber content." />
+  <meta property="og:title" content="Member Portal · mochii.live 🐾" />
+  <meta property="og:description" content="Your member portal on mochii.live" />
+  <title>Member Portal · mochii.live 🐾</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #1a1a1a;
+      --bg2: #1e1e1e;
+      --bg3: #242424;
+      --border: #3d2a2e;
+      --accent: #e8aeb7;
+      --accent2: #c4788a;
+      --muted: #9e7e82;
+      --muted2: #5a3a3e;
+      --text: #f0e6e8;
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top nav ─────────────────────────────────────────────────────────── */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .75rem 1.5rem;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      gap: .75rem;
+    }
+    .nav-left { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+    .nav-logo {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .creator-badge {
+      font-size: .8rem;
+      font-weight: 700;
+      background: #3d2028;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: .2rem .65rem;
+      white-space: nowrap;
+    }
+    .nav-right { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+    .nav-username {
+      font-size: .85rem;
+      font-weight: 700;
+      color: var(--muted);
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .35rem;
+      padding: .55rem 1.1rem;
+      font-family: inherit;
+      font-size: .9rem;
+      font-weight: 700;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      cursor: pointer;
+      transition: background .15s, border-color .15s, color .15s;
+      text-decoration: none;
+    }
+    .btn:hover { background: #3d2028; border-color: var(--accent); color: var(--accent); }
+    .btn-primary { background: var(--accent2); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent); color: #2a1520; }
+    .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+    .btn-ghost:hover { background: var(--bg3); border-color: var(--border); color: var(--text); }
+    .btn-danger { border-color: #7a2030; color: #e8aeb7; }
+    .btn-danger:hover { background: #3d1018; border-color: #c44060; }
+    .btn-sm { padding: .35rem .7rem; font-size: .8rem; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Tab nav ──────────────────────────────────────────────────────────── */
+    .tab-nav {
+      display: flex;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex-shrink: 0;
+      padding: .75rem 1.1rem;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Main content ─────────────────────────────────────────────────────── */
+    .main { flex: 1; padding: 1.25rem 1rem 2rem; max-width: 900px; width: 100%; margin: 0 auto; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Cards ────────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-size: .95rem;
+      font-weight: 800;
+      color: var(--accent);
+      margin-bottom: .75rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    /* ── Creator grid ─────────────────────────────────────────────────────── */
+    .creator-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .creator-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+      transition: border-color .15s;
+    }
+    .creator-card:hover { border-color: var(--accent2); }
+    .creator-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+    }
+    .creator-avatar-placeholder {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #3d2028;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      flex-shrink: 0;
+    }
+    .creator-name { font-weight: 800; font-size: 1rem; }
+    .creator-bio { font-size: .82rem; color: var(--muted); line-height: 1.4; }
+    .free-badge {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 800;
+      background: #1a3020;
+      color: #6de89a;
+      border: 1px solid #2a5030;
+      border-radius: 20px;
+      padding: .15rem .55rem;
+    }
+    .creator-card-footer { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: auto; }
+
+    /* ── Feed items ───────────────────────────────────────────────────────── */
+    .feed-list { display: flex; flex-direction: column; gap: .75rem; }
+    .feed-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .feed-item-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .75rem 1rem .5rem;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    .feed-item-platform {
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: .15rem .5rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .feed-item-body { padding: .5rem 1rem .75rem; }
+    .feed-item-text { font-size: .92rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .feed-item-media { width: 100%; max-height: 340px; object-fit: cover; display: block; margin-top: .5rem; border-radius: var(--radius-sm); }
+    .feed-item-meta { font-size: .78rem; color: var(--muted2); margin-top: .5rem; }
+    .qa-q { font-weight: 700; color: var(--muted); font-size: .9rem; margin-bottom: .4rem; }
+    .qa-a { font-size: .92rem; line-height: 1.55; }
+
+    /* ── Paywall overlay ──────────────────────────────────────────────────── */
+    .paywall-banner {
+      background: #2a1520;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .paywall-banner h3 { font-size: 1.05rem; font-weight: 800; color: var(--accent); margin-bottom: .5rem; }
+    .paywall-banner p { font-size: .88rem; color: var(--muted); margin-bottom: 1rem; }
+
+    /* ── Account section ──────────────────────────────────────────────────── */
+    .field-group { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1rem; }
+    .field-label { font-size: .82rem; font-weight: 700; color: var(--muted); }
+    .field-value { font-size: .95rem; font-weight: 600; }
+    .field-input {
+      width: 100%;
+      padding: .65rem .9rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: .95rem;
+      transition: border-color .15s;
+    }
+    .field-input:focus { outline: none; border-color: var(--accent2); }
+    .field-hint { font-size: .78rem; color: var(--muted2); }
+    .form-row { display: flex; gap: .5rem; align-items: flex-end; }
+    .form-row .field-group { flex: 1; margin-bottom: 0; }
+
+    /* ── Subscription table ───────────────────────────────────────────────── */
+    .billing-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .billing-table th {
+      text-align: left;
+      padding: .5rem .75rem;
+      font-size: .75rem;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      border-bottom: 1px solid var(--border);
+    }
+    .billing-table td { padding: .6rem .75rem; border-bottom: 1px solid #2a1e20; }
+    .billing-table tr:last-child td { border-bottom: none; }
+    .status-active { color: #6de89a; font-weight: 700; }
+    .status-inactive { color: #e87a7a; font-weight: 700; }
+    .status-unmatched { color: var(--muted); font-weight: 700; }
+
+    /* ── Status badge ─────────────────────────────────────────────────────── */
+    .sub-status {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      font-size: .95rem;
+      font-weight: 800;
+      padding: .5rem 1rem;
+      border-radius: 20px;
+    }
+    .sub-status.active { background: #1a3020; color: #6de89a; border: 1px solid #2a5030; }
+    .sub-status.inactive { background: #2a1a1a; color: #e87a7a; border: 1px solid #5a2020; }
+    .sub-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    /* ── Modal ────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 420px;
+      padding: 1.75rem;
+      position: relative;
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--accent); margin-bottom: 1.25rem; }
+    .modal-close {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: .25rem;
+    }
+    .modal-close:hover { color: var(--text); }
+    .auth-tabs { display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+    .auth-tab {
+      flex: 1;
+      padding: .6rem;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      font-family: inherit;
+      font-size: .9rem;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .auth-form { display: flex; flex-direction: column; gap: .75rem; }
+    .auth-form .field-group { margin-bottom: 0; }
+    .error-msg { font-size: .83rem; color: #e87a7a; padding: .4rem .6rem; background: #2a1a1a; border-radius: var(--radius-sm); }
+    .success-msg { font-size: .83rem; color: #6de89a; padding: .4rem .6rem; background: #1a2a1a; border-radius: var(--radius-sm); }
+
+    /* ── Misc ─────────────────────────────────────────────────────────────── */
+    .section-title { font-size: 1.1rem; font-weight: 800; color: var(--accent); margin-bottom: 1rem; }
+    .empty-msg { color: var(--muted2); font-size: .9rem; text-align: center; padding: 2rem 1rem; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-row { text-align: center; padding: 2rem; color: var(--muted); }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+    .follows-list { display: flex; flex-direction: column; gap: .5rem; }
+    .follow-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .6rem .8rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .follow-row-name { font-weight: 700; font-size: .9rem; }
+    .follow-row-date { font-size: .78rem; color: var(--muted2); }
+    .showcase-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .showcase-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .showcase-card:hover { border-color: var(--accent2); }
+    .showcase-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
+    .showcase-card-body { padding: .8rem 1rem; }
+    .showcase-card-creator { font-size: .72rem; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .25rem; }
+    .showcase-card-text { font-size: .85rem; line-height: 1.45; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .page-actions { display: flex; gap: .5rem; justify-content: center; margin-top: 1.25rem; }
+  </style>
+</head>
+<body>
+
+<!-- ── Top nav ──────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-left">
+    <a class="nav-logo" href="/">🐾 mochii.live</a>
+    <span id="creator-badge" class="creator-badge" style="display:none"></span>
+  </div>
+  <div class="nav-right">
+    <span id="nav-username" class="nav-username" style="display:none"></span>
+    <button id="btn-signout" class="btn btn-ghost btn-sm" style="display:none" onclick="signOut()">Sign Out</button>
+    <button id="btn-open-auth" class="btn btn-primary btn-sm" onclick="openAuthModal('login')">Sign In</button>
+  </div>
+</nav>
+
+<!-- ── Tab navigation ───────────────────────────────────────────────────── -->
+<div class="tab-nav" role="tablist">
+  <button class="tab-btn active" data-tab="home"         onclick="showTab('home')">🏠 Home</button>
+  <button class="tab-btn"        data-tab="browse"       onclick="showTab('browse')">🐾 Creators</button>
+  <button class="tab-btn"        data-tab="feed"         onclick="showTab('feed')">📜 Feed</button>
+  <button class="tab-btn"        data-tab="account"      onclick="showTab('account')">👤 Account</button>
+  <button class="tab-btn"        data-tab="subscription" onclick="showTab('subscription')">💎 Subscription</button>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<main class="main" role="main">
+
+  <!-- Home tab -->
+  <div id="tab-home" class="tab-panel active">
+    <div id="home-creator-header" style="display:none" class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:1rem">
+        <div id="home-creator-avatar-wrap"></div>
+        <div>
+          <div id="home-creator-name" style="font-size:1.2rem;font-weight:800"></div>
+          <div id="home-creator-bio" style="font-size:.88rem;color:var(--muted);margin-top:.2rem"></div>
+        </div>
+      </div>
+    </div>
+    <p class="section-title" id="home-section-title">✨ Top Content</p>
+    <div id="home-loading" class="loading-row"><span class="spinner"></span></div>
+    <div id="showcase-grid" class="showcase-grid"></div>
+    <div id="home-empty" class="empty-msg" style="display:none">No content yet — check back soon 🐾</div>
+  </div>
+
+  <!-- Browse creators tab -->
+  <div id="tab-browse" class="tab-panel">
+    <p class="section-title">🐾 All Creators</p>
+    <div id="browse-loading" class="loading-row"><span class="spinner"></span></div>
+    <div id="creator-grid" class="creator-grid"></div>
+    <div id="browse-empty" class="empty-msg" style="display:none">No creators yet.</div>
+  </div>
+
+  <!-- Feed tab -->
+  <div id="tab-feed" class="tab-panel">
+    <div id="feed-paywall" class="paywall-banner" style="display:none">
+      <h3>🔒 Subscriber Content</h3>
+      <p>This creator's full feed is for subscribers only. Subscribe to unlock everything.</p>
+      <button class="btn btn-primary" onclick="openSubscribePage()">Subscribe Now</button>
+    </div>
+    <p class="section-title" id="feed-section-title">📜 Feed</p>
+    <div id="feed-loading" class="loading-row"><span class="spinner"></span></div>
+    <div id="feed-list" class="feed-list"></div>
+    <div id="feed-empty" class="empty-msg" style="display:none">Nothing in the feed yet.</div>
+    <div class="page-actions" id="feed-pagination" style="display:none">
+      <button class="btn btn-ghost btn-sm" id="feed-prev-btn" onclick="feedPage(-1)">← Prev</button>
+      <span id="feed-page-info" style="font-size:.85rem;color:var(--muted);align-self:center"></span>
+      <button class="btn btn-ghost btn-sm" id="feed-next-btn" onclick="feedPage(1)">Next →</button>
+    </div>
+  </div>
+
+  <!-- Account tab -->
+  <div id="tab-account" class="tab-panel">
+    <div id="account-auth-prompt" class="card" style="display:none;text-align:center">
+      <p style="color:var(--muted);margin-bottom:1rem">Sign in to manage your account.</p>
+      <button class="btn btn-primary" onclick="openAuthModal('login')">Sign In</button>
+    </div>
+    <div id="account-content" style="display:none">
+      <div class="card">
+        <div class="card-title">👤 Your Profile</div>
+        <div class="field-group">
+          <span class="field-label">Username</span>
+          <span class="field-value" id="acct-username">—</span>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Email</span>
+          <span class="field-value" id="acct-email">—</span>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Member since</span>
+          <span class="field-value" id="acct-created"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✏️ Display Name</div>
+        <div class="field-group">
+          <span class="field-label">Current display name</span>
+          <span class="field-value" id="acct-display-name">—</span>
+        </div>
+        <p class="field-hint" id="acct-name-remaining" style="margin-bottom:.75rem"></p>
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label" for="input-display-name">New display name</label>
+            <input id="input-display-name" class="field-input" type="text" maxlength="32" placeholder="Your name" autocomplete="off" />
+          </div>
+          <button class="btn btn-primary" onclick="saveDisplayName()">Save</button>
+        </div>
+        <div id="display-name-msg" style="margin-top:.5rem"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔑 Change Password</div>
+        <div class="auth-form">
+          <div class="field-group">
+            <label class="field-label" for="input-cur-pw">Current password</label>
+            <input id="input-cur-pw" class="field-input" type="password" autocomplete="current-password" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="input-new-pw">New password (min 8 chars)</label>
+            <input id="input-new-pw" class="field-input" type="password" autocomplete="new-password" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="input-new-pw2">Confirm new password</label>
+            <input id="input-new-pw2" class="field-input" type="password" autocomplete="new-password" />
+          </div>
+          <div id="pw-change-msg"></div>
+          <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subscription tab -->
+  <div id="tab-subscription" class="tab-panel">
+    <div id="sub-auth-prompt" class="card" style="display:none;text-align:center">
+      <p style="color:var(--muted);margin-bottom:1rem">Sign in to view your subscription.</p>
+      <button class="btn btn-primary" onclick="openAuthModal('login')">Sign In</button>
+    </div>
+    <div id="sub-content" style="display:none">
+      <div class="card">
+        <div class="card-title">💎 Subscription Status</div>
+        <div id="sub-status-badge" style="margin-bottom:1rem"></div>
+        <div id="sub-actions"></div>
+      </div>
+
+      <div class="card" id="sub-follows-card">
+        <div class="card-title">🐾 Followed Creators</div>
+        <div id="follows-loading" class="loading-row" style="padding:.75rem 0"><span class="spinner"></span></div>
+        <div id="follows-list" class="follows-list"></div>
+        <div id="follows-empty" class="empty-msg" style="display:none;padding:.75rem 0">Not following anyone yet — browse creators to follow some! 🐾</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 Billing History</div>
+        <div id="billing-loading" class="loading-row" style="padding:.75rem 0"><span class="spinner"></span></div>
+        <div id="billing-table-wrap" style="overflow-x:auto;display:none">
+          <table class="billing-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Status</th>
+                <th>Subscription ID</th>
+              </tr>
+            </thead>
+            <tbody id="billing-tbody"></tbody>
+          </table>
+        </div>
+        <div id="billing-empty" class="empty-msg" style="display:none;padding:.75rem 0">No billing events yet.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Auth modal ────────────────────────────────────────────────────────── -->
+<div id="modal-auth" class="modal-overlay" onclick="closeAuthOnOverlay(event)">
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <button class="modal-close" onclick="closeAuthModal()" aria-label="Close">✕</button>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="auth-tab-login" onclick="switchAuthForm('login')">Sign In</button>
+      <button class="auth-tab"        id="auth-tab-register" onclick="switchAuthForm('register')">Join Free</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="auth-form-login" class="auth-form">
+      <div class="field-group">
+        <label class="field-label" for="login-identifier">Username or email</label>
+        <input id="login-identifier" class="field-input" type="text" autocomplete="username" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="login-password">Password</label>
+        <input id="login-password" class="field-input" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+      <div id="login-msg"></div>
+      <button class="btn btn-primary" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- Register form -->
+    <div id="auth-form-register" class="auth-form" style="display:none">
+      <div class="field-group">
+        <label class="field-label" for="reg-username">Username (3–32 chars, letters/numbers/_-)</label>
+        <input id="reg-username" class="field-input" type="text" maxlength="32" autocomplete="username" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="reg-email">Email</label>
+        <input id="reg-email" class="field-input" type="email" autocomplete="email" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="reg-password">Password (min 8 chars)</label>
+        <input id="reg-password" class="field-input" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()" />
+      </div>
+      <div id="register-msg"></div>
+      <button class="btn btn-primary" onclick="doRegister()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── State ──────────────────────────────────────────────────────────────── */
+const _LS_TOKEN = 'member_token';
+const _LS_USER  = 'member_user';
+
+let _state = {
+  token:         null,    // JWT string
+  user:          null,    // {username, access_level}
+  creatorHandle: null,    // subdomain handle or null
+  currentTab:    'home',
+  feedPage:      1,
+  feedCreators:  [],      // browsed creator list
+};
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function fmt(isoStr) {
+  if (!isoStr) return '—';
+  try {
+    return new Date(isoStr).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'});
+  } catch { return isoStr.slice(0,10); }
+}
+
+function fmtDatetime(isoStr) {
+  if (!isoStr) return '—';
+  try {
+    return new Date(isoStr).toLocaleString('en-US', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  } catch { return isoStr.slice(0,16); }
+}
+
+async function apiFetch(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (_state.token) headers['Authorization'] = 'Bearer ' + _state.token;
+  const resp = await fetch(path, { ...opts, headers });
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try { const j = await resp.json(); detail = j.detail || detail; } catch {}
+    throw { status: resp.status, detail };
+  }
+  if (resp.status === 204) return null;
+  return resp.json();
+}
+
+/* ── Creator subdomain detection ────────────────────────────────────────── */
+function detectCreatorHandle() {
+  const hostname = window.location.hostname.toLowerCase();
+  const reserved = new Set(['shop','drool','anon','links','creator','www']);
+  const parts = hostname.split('.');
+  if (parts.length >= 3) {
+    const sub = parts[0];
+    if (!reserved.has(sub)) {
+      return sub;
+    }
+  }
+  return null;
+}
+
+/* ── Auth token management ──────────────────────────────────────────────── */
+function loadStoredAuth() {
+  const token = localStorage.getItem(_LS_TOKEN);
+  const userRaw = localStorage.getItem(_LS_USER);
+  if (token && userRaw) {
+    try {
+      _state.token = token;
+      _state.user  = JSON.parse(userRaw);
+    } catch {
+      clearAuth();
+    }
+  }
+}
+
+function storeAuth(token, user) {
+  _state.token = token;
+  _state.user  = user;
+  localStorage.setItem(_LS_TOKEN, token);
+  localStorage.setItem(_LS_USER, JSON.stringify(user));
+}
+
+function clearAuth() {
+  _state.token = null;
+  _state.user  = null;
+  localStorage.removeItem(_LS_TOKEN);
+  localStorage.removeItem(_LS_USER);
+}
+
+function signOut() {
+  clearAuth();
+  updateNavUI();
+  showTab(_state.currentTab);
+}
+
+function updateNavUI() {
+  const loggedIn = !!_state.user;
+  document.getElementById('btn-open-auth').style.display = loggedIn ? 'none' : '';
+  document.getElementById('btn-signout').style.display   = loggedIn ? '' : 'none';
+  const unameEl = document.getElementById('nav-username');
+  if (loggedIn) {
+    unameEl.textContent = '@' + _state.user.username;
+    unameEl.style.display = '';
+  } else {
+    unameEl.style.display = 'none';
+  }
+}
+
+/* ── Tab switching ──────────────────────────────────────────────────────── */
+function showTab(name) {
+  _state.currentTab = name;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+
+  if (name === 'browse')       loadBrowse();
+  if (name === 'feed')         loadFeed();
+  if (name === 'account')      loadAccount();
+  if (name === 'subscription') loadSubscription();
+}
+
+/* ── Home / Showcase ────────────────────────────────────────────────────── */
+async function loadHome() {
+  const loadingEl = document.getElementById('home-loading');
+  const gridEl    = document.getElementById('showcase-grid');
+  const emptyEl   = document.getElementById('home-empty');
+
+  // Show creator header if on a creator subdomain
+  if (_state.creatorHandle) {
+    try {
+      const creator = await apiFetch('/api/creators/' + encodeURIComponent(_state.creatorHandle));
+      const headerEl = document.getElementById('home-creator-header');
+      headerEl.style.display = '';
+      const avatarWrap = document.getElementById('home-creator-avatar-wrap');
+      if (creator.avatar_url) {
+        avatarWrap.innerHTML = `<img src="${esc(creator.avatar_url)}" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border)">`;
+      } else {
+        avatarWrap.innerHTML = `<div class="creator-avatar-placeholder">🐾</div>`;
+      }
+      document.getElementById('home-creator-name').textContent = creator.display_name || _state.creatorHandle;
+      document.getElementById('home-creator-bio').textContent  = creator.bio || '';
+      document.getElementById('home-section-title').textContent = '✨ Top Content from ' + (creator.display_name || _state.creatorHandle);
+    } catch { /* silent */ }
+  }
+
+  try {
+    const params = _state.creatorHandle ? `?creator_handle=${encodeURIComponent(_state.creatorHandle)}&per_page=12` : '?per_page=12';
+    const data   = await apiFetch('/api/drool' + params);
+    const items  = data.items || data || [];
+    loadingEl.style.display = 'none';
+    if (!items.length) { emptyEl.style.display = ''; return; }
+    gridEl.innerHTML = '';
+    items.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'showcase-card';
+      const creator = item.creator_handle && item.creator_handle !== 'mochii' ? item.creator_handle : (_state.creatorHandle || '');
+      const creatorLabel = creator ? `<div class="showcase-card-creator">🐾 ${esc(creator)}</div>` : '';
+      const media = item.media_url ? `<img src="${esc(item.media_url)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+      card.innerHTML = `
+        ${media}
+        <div class="showcase-card-body">
+          ${creatorLabel}
+          <div class="showcase-card-text">${esc(item.text_content || '')}</div>
+        </div>`;
+      card.onclick = () => { window.open(item.original_url, '_blank', 'noopener'); };
+      gridEl.appendChild(card);
+    });
+  } catch (e) {
+    loadingEl.innerHTML = '<span style="color:var(--muted2)">Could not load content.</span>';
+  }
+}
+
+/* ── Browse creators ────────────────────────────────────────────────────── */
+async function loadBrowse() {
+  const loadingEl = document.getElementById('browse-loading');
+  const gridEl    = document.getElementById('creator-grid');
+  const emptyEl   = document.getElementById('browse-empty');
+  loadingEl.style.display = '';
+  gridEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+
+  try {
+    const creators = await apiFetch('/api/member/creators');
+    _state.feedCreators = creators;
+    loadingEl.style.display = 'none';
+    if (!creators.length) { emptyEl.style.display = ''; return; }
+    gridEl.innerHTML = '';
+    creators.forEach(c => {
+      const card = buildCreatorCard(c);
+      gridEl.appendChild(card);
+    });
+  } catch (e) {
+    loadingEl.innerHTML = '<span style="color:var(--muted2)">Could not load creators.</span>';
+  }
+}
+
+function buildCreatorCard(creator) {
+  const card = document.createElement('div');
+  card.className = 'creator-card';
+  const avatar = creator.avatar_url
+    ? `<img class="creator-avatar" src="${esc(creator.avatar_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="creator-avatar-placeholder">🐾</div>`;
+  const freeBadge = creator.allow_free_content ? `<span class="free-badge">✨ Free content</span>` : '';
+  const followBtnId = 'follow-btn-' + esc(creator.handle);
+  const followingClass = creator.is_following ? 'btn-danger' : 'btn';
+  const followText     = creator.is_following ? 'Following ✓' : '+ Follow';
+  const followAuth     = _state.user ? `onclick="toggleFollow('${esc(creator.handle)}')"` : `onclick="openAuthModal('login')"`;
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.75rem">
+      ${avatar}
+      <div style="min-width:0">
+        <div class="creator-name">${esc(creator.display_name || creator.handle)}</div>
+        ${freeBadge}
+      </div>
+    </div>
+    ${creator.bio ? `<p class="creator-bio">${esc(creator.bio)}</p>` : ''}
+    <div class="creator-card-footer">
+      <a class="btn btn-ghost btn-sm" href="${buildCreatorUrl(creator.handle)}" target="_blank" rel="noopener">View 🔗</a>
+      <button id="${followBtnId}" class="btn ${followingClass} btn-sm" data-handle="${esc(creator.handle)}" data-following="${creator.is_following ? '1' : '0'}" ${followAuth}>${followText}</button>
+    </div>`;
+  return card;
+}
+
+function buildCreatorUrl(handle) {
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  if (parts.length >= 2) {
+    const root = parts.slice(-2).join('.');
+    const proto = window.location.protocol;
+    return `${proto}//${handle}.${root}/member`;
+  }
+  return `/${handle}`;
+}
+
+async function toggleFollow(handle) {
+  if (!_state.user) { openAuthModal('login'); return; }
+  const btn = document.getElementById('follow-btn-' + handle);
+  const isFollowing = btn && btn.dataset.following === '1';
+  try {
+    if (isFollowing) {
+      await apiFetch('/api/member/me/follows/' + encodeURIComponent(handle), { method: 'DELETE' });
+      if (btn) { btn.textContent = '+ Follow'; btn.className = 'btn btn-sm'; btn.dataset.following = '0'; }
+    } else {
+      await apiFetch('/api/member/me/follows/' + encodeURIComponent(handle), { method: 'POST' });
+      if (btn) { btn.textContent = 'Following ✓'; btn.className = 'btn btn-danger btn-sm'; btn.dataset.following = '1'; }
+    }
+  } catch (e) {
+    alert(e.detail || 'Could not update follow status.');
+  }
+}
+
+/* ── Feed ───────────────────────────────────────────────────────────────── */
+async function loadFeed() {
+  const loadingEl  = document.getElementById('feed-loading');
+  const listEl     = document.getElementById('feed-list');
+  const emptyEl    = document.getElementById('feed-empty');
+  const paginEl    = document.getElementById('feed-pagination');
+  const paywallEl  = document.getElementById('feed-paywall');
+  const titleEl    = document.getElementById('feed-section-title');
+  loadingEl.style.display = '';
+  listEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+  paginEl.style.display = 'none';
+  paywallEl.style.display = 'none';
+
+  const handle = _state.creatorHandle;
+  if (handle) {
+    titleEl.textContent = `📜 ${handle}'s Feed`;
+    // Check if free content is allowed for this creator
+    try {
+      const creator = await apiFetch('/api/creators/' + encodeURIComponent(handle));
+      const isSubscribed = _state.user && _state.user.access_level > 0;
+      if (!creator.allow_free_content && !isSubscribed) {
+        paywallEl.style.display = '';
+        loadingEl.style.display = 'none';
+        return;
+      }
+    } catch { /* continue */ }
+  } else {
+    titleEl.textContent = '📜 Global Feed';
+  }
+
+  try {
+    const page = _state.feedPage;
+    let url = `/api/drool?page=${page}&per_page=20`;
+    if (handle) url += `&creator_handle=${encodeURIComponent(handle)}`;
+    const data  = await apiFetch(url);
+    const items = data.items || data || [];
+    const total = data.total || items.length;
+    const perPage = 20;
+
+    loadingEl.style.display = 'none';
+    if (!items.length) { emptyEl.style.display = ''; return; }
+
+    items.forEach(item => listEl.appendChild(buildFeedItem(item)));
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (totalPages > 1) {
+      paginEl.style.display = '';
+      document.getElementById('feed-page-info').textContent = `Page ${page} of ${totalPages}`;
+      document.getElementById('feed-prev-btn').disabled = page <= 1;
+      document.getElementById('feed-next-btn').disabled = page >= totalPages;
+    }
+  } catch (e) {
+    loadingEl.innerHTML = '<span style="color:var(--muted2)">Could not load feed.</span>';
+  }
+}
+
+function feedPage(delta) {
+  _state.feedPage = Math.max(1, (_state.feedPage || 1) + delta);
+  loadFeed();
+}
+
+function buildFeedItem(item) {
+  const el = document.createElement('div');
+  el.className = 'feed-item';
+  const platform = item.platform || '';
+  const platformColors = { reddit: '#ff4500', twitter: '#1da1f2', bluesky: '#0085ff', instagram: '#e1306c' };
+  const pColor = platformColors[platform] || 'var(--muted)';
+  const creator = item.creator_handle && item.creator_handle !== 'mochii' ? `· 🐾 ${esc(item.creator_handle)}` : '';
+  const media   = item.media_url ? `<img class="feed-item-media" src="${esc(item.media_url)}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+  el.innerHTML = `
+    <div class="feed-item-header">
+      <span class="feed-item-platform" style="color:${pColor};border-color:${pColor}33">${esc(platform)}</span>
+      <span style="opacity:.6">${fmt(item.timestamp)} ${creator}</span>
+    </div>
+    <div class="feed-item-body">
+      ${item.text_content ? `<p class="feed-item-text">${esc(item.text_content)}</p>` : ''}
+      ${media}
+      ${item.original_url ? `<p class="feed-item-meta"><a href="${esc(item.original_url)}" target="_blank" rel="noopener" style="color:var(--muted2);text-decoration:none">🔗 View original</a></p>` : ''}
+    </div>`;
+  return el;
+}
+
+/* ── Account ────────────────────────────────────────────────────────────── */
+async function loadAccount() {
+  const promptEl  = document.getElementById('account-auth-prompt');
+  const contentEl = document.getElementById('account-content');
+
+  if (!_state.user) {
+    promptEl.style.display  = '';
+    contentEl.style.display = 'none';
+    return;
+  }
+  promptEl.style.display  = 'none';
+  contentEl.style.display = '';
+
+  try {
+    const profile = await apiFetch('/api/member/me');
+    document.getElementById('acct-username').textContent     = '@' + (profile.username || '');
+    document.getElementById('acct-email').textContent        = profile.email || '';
+    document.getElementById('acct-created').textContent      = fmt(profile.created_at);
+    document.getElementById('acct-display-name').textContent = profile.display_name || profile.username || '';
+    document.getElementById('input-display-name').value      = profile.display_name || '';
+    const remaining = profile.display_name_changes_remaining ?? 2;
+    const used      = profile.display_name_changed_count ?? 0;
+    document.getElementById('acct-name-remaining').textContent =
+      `${remaining} change${remaining !== 1 ? 's' : ''} remaining this year (${used} of 2 used)`;
+  } catch (e) {
+    if (e.status === 401) { clearAuth(); updateNavUI(); loadAccount(); }
+  }
+}
+
+async function saveDisplayName() {
+  const val = document.getElementById('input-display-name').value.trim();
+  const msgEl = document.getElementById('display-name-msg');
+  if (!val) { msgEl.innerHTML = `<span class="error-msg">Display name cannot be empty.</span>`; return; }
+  try {
+    const result = await apiFetch('/api/member/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ display_name: val }),
+    });
+    document.getElementById('acct-display-name').textContent = result.display_name;
+    const remaining = result.display_name_changes_remaining ?? 0;
+    document.getElementById('acct-name-remaining').textContent =
+      `${remaining} change${remaining !== 1 ? 's' : ''} remaining this year`;
+    msgEl.innerHTML = `<span class="success-msg">✓ Display name updated!</span>`;
+    setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
+  } catch (e) {
+    msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not update display name.')}</span>`;
+  }
+}
+
+async function changePassword() {
+  const curPw  = document.getElementById('input-cur-pw').value;
+  const newPw  = document.getElementById('input-new-pw').value;
+  const newPw2 = document.getElementById('input-new-pw2').value;
+  const msgEl  = document.getElementById('pw-change-msg');
+  if (!curPw)            { msgEl.innerHTML = `<span class="error-msg">Enter your current password.</span>`; return; }
+  if (newPw.length < 8)  { msgEl.innerHTML = `<span class="error-msg">New password must be at least 8 characters.</span>`; return; }
+  if (newPw !== newPw2)  { msgEl.innerHTML = `<span class="error-msg">Passwords do not match.</span>`; return; }
+  try {
+    await apiFetch('/api/member/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: curPw, new_password: newPw }),
+    });
+    document.getElementById('input-cur-pw').value  = '';
+    document.getElementById('input-new-pw').value  = '';
+    document.getElementById('input-new-pw2').value = '';
+    msgEl.innerHTML = `<span class="success-msg">✓ Password changed successfully.</span>`;
+    setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
+  } catch (e) {
+    msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not change password.')}</span>`;
+  }
+}
+
+/* ── Subscription tab ───────────────────────────────────────────────────── */
+async function loadSubscription() {
+  const promptEl  = document.getElementById('sub-auth-prompt');
+  const contentEl = document.getElementById('sub-content');
+
+  if (!_state.user) {
+    promptEl.style.display  = '';
+    contentEl.style.display = 'none';
+    return;
+  }
+  promptEl.style.display  = 'none';
+  contentEl.style.display = '';
+
+  // Load subscription status + billing
+  try {
+    const data = await apiFetch('/api/member/me/subscriptions');
+    renderSubStatus(data);
+    renderBilling(data.events || []);
+  } catch (e) {
+    if (e.status === 401) { clearAuth(); updateNavUI(); loadSubscription(); }
+  }
+
+  // Load follows
+  try {
+    const follows = await apiFetch('/api/member/me/follows');
+    renderFollows(follows);
+  } catch { /* silent */ }
+}
+
+function renderSubStatus(data) {
+  const badgeEl   = document.getElementById('sub-status-badge');
+  const actionsEl = document.getElementById('sub-actions');
+  if (data.is_subscribed) {
+    badgeEl.innerHTML = `<span class="sub-status active"><span class="sub-dot"></span>Active Subscriber</span>`;
+    actionsEl.innerHTML = '';
+  } else {
+    badgeEl.innerHTML = `<span class="sub-status inactive"><span class="sub-dot"></span>Not Subscribed</span>`;
+    actionsEl.innerHTML = `
+      <p style="font-size:.88rem;color:var(--muted);margin-bottom:.75rem">Subscribe to unlock all creator content.</p>
+      <button class="btn btn-primary" onclick="openSubscribePage()">Subscribe Now</button>`;
+  }
+}
+
+function renderBilling(events) {
+  const loadingEl = document.getElementById('billing-loading');
+  const tableWrap = document.getElementById('billing-table-wrap');
+  const tbody     = document.getElementById('billing-tbody');
+  const emptyEl   = document.getElementById('billing-empty');
+  loadingEl.style.display = 'none';
+  if (!events.length) { emptyEl.style.display = ''; return; }
+  tableWrap.style.display = '';
+  tbody.innerHTML = '';
+  events.forEach(ev => {
+    const tr = document.createElement('tr');
+    const statusClass = ev.status === 'active' ? 'status-active' : ev.status === 'inactive' ? 'status-inactive' : 'status-unmatched';
+    tr.innerHTML = `
+      <td>${fmt(ev.created_at)}</td>
+      <td>${esc(ev.trans_type || '')}</td>
+      <td class="${statusClass}">${esc(ev.status || '')}</td>
+      <td style="font-size:.78rem;color:var(--muted)">${esc(ev.segpay_subscription_id || '—')}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderFollows(follows) {
+  const loadingEl = document.getElementById('follows-loading');
+  const listEl    = document.getElementById('follows-list');
+  const emptyEl   = document.getElementById('follows-empty');
+  loadingEl.style.display = 'none';
+  if (!follows.length) { emptyEl.style.display = ''; return; }
+  listEl.innerHTML = '';
+  follows.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'follow-row';
+    const name = f.display_name || f.creator_handle;
+    const avatar = f.avatar_url
+      ? `<img src="${esc(f.avatar_url)}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border)">`
+      : `<span style="font-size:1.2rem">🐾</span>`;
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:.6rem">
+        ${avatar}
+        <div>
+          <div class="follow-row-name">${esc(name)}</div>
+          <div class="follow-row-date">Following since ${fmt(f.followed_at)}</div>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="unfollowFromSub('${esc(f.creator_handle)}',this)">Unfollow</button>`;
+    listEl.appendChild(row);
+  });
+}
+
+async function unfollowFromSub(handle, btn) {
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/member/me/follows/' + encodeURIComponent(handle), { method: 'DELETE' });
+    const row = btn.closest('.follow-row');
+    if (row) row.remove();
+    const listEl = document.getElementById('follows-list');
+    if (listEl && !listEl.children.length) {
+      document.getElementById('follows-empty').style.display = '';
+    }
+  } catch (e) {
+    btn.disabled = false;
+    alert(e.detail || 'Could not unfollow.');
+  }
+}
+
+async function openSubscribePage() {
+  try {
+    const email = _state.user ? _state.user.username : '';
+    const data  = await apiFetch('/api/subscriptions/url' + (email ? `?email=${encodeURIComponent(email)}` : ''));
+    window.location.href = data.url;
+  } catch (e) {
+    alert(e.detail || 'Subscription checkout is not available right now.');
+  }
+}
+
+/* ── Auth modal ─────────────────────────────────────────────────────────── */
+function openAuthModal(form = 'login') {
+  document.getElementById('modal-auth').classList.add('open');
+  switchAuthForm(form);
+}
+
+function closeAuthModal() {
+  document.getElementById('modal-auth').classList.remove('open');
+  document.getElementById('login-msg').innerHTML    = '';
+  document.getElementById('register-msg').innerHTML = '';
+}
+
+function closeAuthOnOverlay(e) {
+  if (e.target === document.getElementById('modal-auth')) closeAuthModal();
+}
+
+function switchAuthForm(form) {
+  const isLogin = form === 'login';
+  document.getElementById('auth-form-login').style.display    = isLogin ? '' : 'none';
+  document.getElementById('auth-form-register').style.display = isLogin ? 'none' : '';
+  document.getElementById('auth-tab-login').classList.toggle('active', isLogin);
+  document.getElementById('auth-tab-register').classList.toggle('active', !isLogin);
+}
+
+async function doLogin() {
+  const identifier = document.getElementById('login-identifier').value.trim();
+  const password   = document.getElementById('login-password').value;
+  const msgEl      = document.getElementById('login-msg');
+  if (!identifier || !password) { msgEl.innerHTML = `<span class="error-msg">Please fill in all fields.</span>`; return; }
+  try {
+    const data = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username_or_email: identifier, password }),
+    });
+    if (!data.ok) {
+      const j = await data.json().catch(() => ({}));
+      msgEl.innerHTML = `<span class="error-msg">${esc(j.detail || 'Invalid credentials.')}</span>`;
+      return;
+    }
+    const result = await data.json();
+    storeAuth(result.access_token, { username: result.username, access_level: result.access_level });
+    updateNavUI();
+    closeAuthModal();
+    showTab(_state.currentTab);
+  } catch {
+    msgEl.innerHTML = `<span class="error-msg">Login failed. Please try again.</span>`;
+  }
+}
+
+async function doRegister() {
+  const username = document.getElementById('reg-username').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const msgEl    = document.getElementById('register-msg');
+  if (!username || !email || !password) { msgEl.innerHTML = `<span class="error-msg">Please fill in all fields.</span>`; return; }
+  try {
+    const data = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+    if (!data.ok) {
+      const j = await data.json().catch(() => ({}));
+      msgEl.innerHTML = `<span class="error-msg">${esc(j.detail || 'Registration failed.')}</span>`;
+      return;
+    }
+    const result = await data.json();
+    storeAuth(result.access_token, { username: result.username, access_level: result.access_level });
+    updateNavUI();
+    closeAuthModal();
+    showTab(_state.currentTab);
+  } catch {
+    msgEl.innerHTML = `<span class="error-msg">Registration failed. Please try again.</span>`;
+  }
+}
+
+/* ── Init ───────────────────────────────────────────────────────────────── */
+(function init() {
+  loadStoredAuth();
+  _state.creatorHandle = detectCreatorHandle();
+
+  // Show creator badge in nav
+  if (_state.creatorHandle) {
+    const badge = document.getElementById('creator-badge');
+    badge.textContent = '🐾 ' + _state.creatorHandle;
+    badge.style.display = '';
+    document.title = _state.creatorHandle + ' · member portal · mochii.live 🐾';
+  }
+
+  updateNavUI();
+  loadHome();
+
+  // Handle ?tab= deep-link
+  const params = new URLSearchParams(window.location.search);
+  const tabParam = params.get('tab');
+  if (tabParam && ['home','browse','feed','account','subscription'].includes(tabParam)) {
+    showTab(tabParam);
+  }
+})();
+</script>
+</body>
+</html>

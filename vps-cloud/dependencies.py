@@ -6,7 +6,8 @@ dependency so that both ``main.py`` and sub-routers can import them without
 creating circular imports.
 
 Also provides the ``get_admin_user`` HTTP Basic Auth dependency that guards
-all ``/api/admin`` endpoints.
+all ``/api/admin`` endpoints, and the ``get_current_creator`` JWT dependency
+that guards all ``/api/creator`` endpoints.
 """
 
 import os
@@ -55,10 +56,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[dict]:
+    """Like get_current_user but returns None instead of raising 401 when unauthenticated."""
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        fanvue_id: Optional[str] = payload.get("sub")
+        access_level: int = int(payload.get("access_level", 0))
+        if fanvue_id is None:
+            return None
+        return {"fanvue_id": fanvue_id, "access_level": access_level}
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
-    """Decode the Fanvue JWT and return ``{"fanvue_id": ..., "access_level": ...}``."""
+    """Decode the Fanvue/native JWT and return ``{"fanvue_id": ..., "access_level": ...}``."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -75,6 +93,38 @@ def get_current_user(
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         raise credentials_exception
     return {"fanvue_id": fanvue_id, "access_level": access_level}
+
+
+# ---------------------------------------------------------------------------
+# Creator authentication (JWT-based, separate from subscriber + admin auth)
+# ---------------------------------------------------------------------------
+
+_creator_credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Invalid or missing creator token.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+
+def get_current_creator(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> str:
+    """Decode a creator JWT and return the creator's handle.
+
+    The token must carry ``role: creator`` to prevent subscriber or admin
+    tokens from being used as creator tokens (no privilege escalation).
+    """
+    if not credentials:
+        raise _creator_credentials_exception
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        handle: Optional[str] = payload.get("sub")
+        role: str = payload.get("role", "")
+        if not handle or role != "creator":
+            raise _creator_credentials_exception
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        raise _creator_credentials_exception
+    return handle
 
 
 # ---------------------------------------------------------------------------
