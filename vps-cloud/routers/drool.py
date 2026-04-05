@@ -185,7 +185,7 @@ def get_drool_feed(
     """Return the shame gallery feed, with the Weekly Whimper pinned first."""
     if page < 1:
         page = 1
-    if page_size < 1 or page_size > 100:
+    if page_size < 1 or page_size > 500:
         page_size = 20
 
     whimper_id = _weekly_whimper_id(db)
