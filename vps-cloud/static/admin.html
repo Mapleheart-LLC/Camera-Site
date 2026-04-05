@@ -733,15 +733,12 @@
 
           <div class="card">
             <div class="card-header">
-              <h2>🔑 Credential Status</h2>
+              <h2>📡 Sources</h2>
               <button id="refresh-drool-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
             </div>
             <div class="card-body">
-              <div class="settings-grid" id="drool-creds-status-grid" style="margin-bottom:1.25rem"></div>
-              <p style="font-size:.8rem;color:#9e7e82;margin-bottom:1.5rem">
-                🔒 Values stored here override environment variables without requiring a container restart.
-                Leave a field blank and click Save to revert it to its environment variable (or clear it entirely).
-              </p>
+              <p style="font-size:.8rem;color:#9e7e82;margin-bottom:1rem">Toggle which platforms appear in the admin archive. Use the cards below to configure credentials for each source.</p>
+              <div id="drool-source-toggles" style="display:flex;flex-direction:column;gap:.65rem"></div>
             </div>
           </div>
 
@@ -1959,7 +1956,6 @@
     async function loadDroolCredentials() {
       try {
         const data = await apiGet('/api/admin/drool/credentials');
-        const grid = document.getElementById('drool-creds-status-grid');
 
         // Apply the stored mode to the toggle
         const mode = data.reddit_mode?.value || 'api';
@@ -1968,37 +1964,52 @@
         // Update webhook URL box whenever credentials are loaded
         _refreshIftttUrl();
 
-        const platforms = {
-          'Reddit (API)':    ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password','reddit_user_agent'],
-          'Reddit (IFTTT)':  ['reddit_ifttt_secret'],
-          'Reddit (GSheet)': ['reddit_gsheet_csv_url','reddit_gsheet_csv_url_2'],
-          'Twitter / X':     ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token','twitter_oauth2_refresh_token'],
-          Bluesky:           ['bsky_handle','bsky_app_password'],
+        // Render per-platform source toggles
+        // Credential check is mode-aware for Reddit: only validate the fields
+        // that are actually used by the currently active scrape mode.
+        const _redditCredFields = {
+          api:    ['reddit_client_id','reddit_client_secret','reddit_username','reddit_password'],
+          ifttt:  ['reddit_ifttt_secret'],
+          gsheet: ['reddit_gsheet_csv_url'],
         };
-        // Account identifier shown prominently per platform
-        const accountDisplay = {
-          'Reddit (API)':   { field: 'reddit_username', prefix: 'u/' },
-          'Twitter / X':    { field: 'twitter_user_id', prefix: 'User ID ' },
-          Bluesky:          { field: 'bsky_handle',     prefix: '' },
-        };
-        grid.innerHTML = Object.entries(platforms).map(([label, fields]) => {
-          const allSet = fields.every(f => data[f]?.effective_set);
-          const badge  = allSet ? makeBadge('ok', '✔ Configured') : makeBadge('warn', '⚠ Not configured');
-          const sources = fields.map(f => {
-            const src = data[f]?.source || 'none';
-            if (src === 'none') return null;
-            return `<span style="font-size:.72rem;color:#9e7e82">${escHtml(f)}: <strong style="color:#e8aeb7">${escHtml(src)}</strong></span>`;
-          }).filter(Boolean).join(' &nbsp; ');
-          const modeNote = label.startsWith('Reddit') ? `<span style="font-size:.72rem;color:#9e7e82">mode: <strong style="color:#e8aeb7">${escHtml(mode)}</strong></span>` : '';
-          const acct = accountDisplay[label];
-          const acctVal = acct && data[acct.field]?.value;
-          const acctLine = acctVal
-            ? `<div style="font-size:.8rem;color:#c49ea5;margin-top:.1rem">🎯 Tracking: <strong style="color:#e8aeb7">${escHtml(acct.prefix)}${escHtml(acctVal)}</strong></div>`
+        const _SOURCES = [
+          {
+            key: 'reddit',  label: '🟠 Reddit',      enabled_field: 'reddit_enabled',
+            cred_fields: _redditCredFields[mode] || _redditCredFields.api,
+            acct_field: 'reddit_username', acct_prefix: 'u/',
+          },
+          {
+            key: 'twitter', label: '🐦 Twitter / X',  enabled_field: 'twitter_enabled',
+            cred_fields: ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token'],
+            acct_field: 'twitter_user_id', acct_prefix: 'ID ',
+          },
+          {
+            key: 'bluesky', label: '🦋 Bluesky',      enabled_field: 'bsky_enabled',
+            cred_fields: ['bsky_handle','bsky_app_password'],
+            acct_field: 'bsky_handle', acct_prefix: '',
+          },
+        ];
+        const togglesEl = document.getElementById('drool-source-toggles');
+        togglesEl.innerHTML = _SOURCES.map(src => {
+          const enabledVal = data[src.enabled_field]?.value;
+          const isEnabled  = enabledVal !== '0';
+          const credsOk    = src.cred_fields.every(f => data[f]?.effective_set);
+          const acctVal    = data[src.acct_field]?.value;
+          const statusBadge = isEnabled ? makeBadge('ok', '✔ Enabled') : makeBadge('warn', '✘ Disabled');
+          const credBadge   = credsOk   ? makeBadge('ok', '🔑 Configured') : makeBadge('warn', '⚠ No credentials');
+          const acctLine    = acctVal
+            ? `<span style="font-size:.78rem;color:#c49ea5">🎯 ${escHtml(src.acct_prefix)}${escHtml(acctVal)}</span>`
             : '';
-          return `<div class="setting-tile" style="flex-direction:column;align-items:flex-start;gap:.35rem">
-            <div style="display:flex;align-items:center;gap:.6rem"><div class="setting-label">${escHtml(label)}</div>${badge}${modeNote}</div>
-            ${acctLine}
-            ${sources ? `<div style="line-height:1.6">${sources}</div>` : ''}
+          return `<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem .65rem;border-radius:8px;background:rgba(255,255,255,.03)">
+            <span style="font-weight:700;min-width:7.5rem;font-size:.9rem">${escHtml(src.label)}</span>
+            ${statusBadge}${credBadge}${acctLine}
+            <button class="toggle-btn ${isEnabled ? 'disable' : 'enable'} drool-source-toggle-btn"
+                    data-source="${escHtml(src.key)}"
+                    data-enabled-field="${escHtml(src.enabled_field)}"
+                    data-is-enabled="${isEnabled ? '1' : '0'}"
+                    style="font-size:.78rem;padding:.28rem .7rem;margin-left:auto">
+              ${isEnabled ? 'Disable' : 'Enable'}
+            </button>
           </div>`;
         }).join('');
       } catch (err) {
@@ -2050,6 +2061,32 @@
 
     document.getElementById('refresh-drool-btn').addEventListener('click', loadDroolCredentials);
 
+    // Source enable/disable toggles
+    document.getElementById('drool-source-toggles').addEventListener('click', async e => {
+      const btn = e.target.closest('.drool-source-toggle-btn');
+      if (!btn) return;
+      const source       = btn.dataset.source;
+      const enabledField = btn.dataset.enabledField;
+      const isEnabled    = btn.dataset.isEnabled === '1';
+      const newVal       = isEnabled ? '0' : '1';
+      btn.disabled = true;
+      try {
+        const resp = await apiPut('/api/admin/drool/credentials', { [enabledField]: newVal });
+        if (resp.ok) {
+          await loadDroolCredentials();
+          await loadDroolArchive();
+          showToast(newVal === '1' ? `✔ ${source} enabled.` : `✘ ${source} disabled.`);
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
+          btn.disabled = false;
+        }
+      } catch (err) {
+        if (err.message !== '401') showToast('❌ Request failed.');
+        btn.disabled = false;
+      }
+    });
+
     // Save mode radio selection
     document.getElementById('dc-reddit-mode-save-btn').addEventListener('click', async () => {
       const errEl = document.getElementById('dc-reddit-mode-error');
@@ -2097,18 +2134,39 @@
     }, 'dc-bsky-error'));
 
     // ── Drool Archive management ───────────────────────
+    // Map from platform DB value → enabled_field key returned by credentials API
+    const _PLATFORM_ENABLED_FIELD = {
+      reddit:  'reddit_enabled',
+      twitter: 'twitter_enabled',
+      bluesky: 'bsky_enabled',
+    };
+
     async function loadDroolArchive() {
       const tbody   = document.getElementById('drool-archive-body');
       const summary = document.getElementById('drool-archive-summary');
       try {
-        const items = await apiGet('/api/drool?page=1&page_size=200');
-        if (!items.length) {
-          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries yet.</td></tr>';
-          summary.textContent = '0 entries';
+        const [items, creds] = await Promise.all([
+          apiGet('/api/drool?page=1&page_size=200'),
+          apiGet('/api/admin/drool/credentials'),
+        ]);
+
+        // Build set of enabled platforms (default enabled when not explicitly disabled)
+        const enabledPlatforms = new Set(
+          Object.entries(_PLATFORM_ENABLED_FIELD)
+            .filter(([, field]) => creds[field]?.value !== '0')
+            .map(([plat]) => plat)
+        );
+
+        const visible = items.filter(item => enabledPlatforms.has(item.platform));
+
+        if (!visible.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries for enabled sources.</td></tr>';
+          summary.textContent = `0 entries shown (newest first, max 200${items.length ? `; ${items.length} hidden by source filter` : ''})`;
           return;
         }
-        summary.textContent = `${items.length} entr${items.length === 1 ? 'y' : 'ies'} shown (newest first, max 200)`;
-        tbody.innerHTML = items.map(item => {
+        const hiddenCount = items.length - visible.length;
+        summary.textContent = `${visible.length} entr${visible.length === 1 ? 'y' : 'ies'} shown (newest first, max 200${hiddenCount ? `; ${hiddenCount} hidden by source filter` : ''})`;
+        tbody.innerHTML = visible.map(item => {
           const url   = escHtml(item.original_url || '');
           const title = escHtml(item.text_content ? item.text_content.slice(0, 80) : item.original_url || '');
           const ts    = escHtml((item.timestamp || '').replace('T', ' ').slice(0, 16));
