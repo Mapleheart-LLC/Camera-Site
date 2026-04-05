@@ -9,6 +9,8 @@ Server management
   /setup          Scaffold all roles, categories and channels (idempotent)
   /sync-roles     Sync Fanvue subscriber roles for all members or a specific one
   /announce       Post a message to #announcements as a branded embed
+  /rename-server  Rename the Discord server (AI picks a name if none given)
+  /ai-announce    AI writes and posts an announcement given a topic
 
 Site features
 -------------
@@ -28,6 +30,14 @@ Personality / fun
   /collar         Show your tier as a themed collar embed
   /beg            Beg the bot — outcomes depend on your tier 🐾
   /peek           Surprise random Drool Log item (Follower+)
+  /ai-vibe        AI reads the current context and describes the kennel vibe
+
+Links page
+----------
+  /links          Browse site links
+  /add-link       Add a link (AI suggests emoji if omitted)
+  /remove-link    Remove a link (select menu)
+  /feature-link   Promote a link to the top of the page
 
 Community
 ---------
@@ -57,6 +67,8 @@ DISCORD_GUILD_ID    Restrict slash-command registration to one guild so commands
                     appear instantly instead of waiting up to 1 hour globally.
 BOT_STATE_FILE      Path to the JSON state file
                     (default: /app/state/bot_state.json).
+OPENAI_API_KEY      Enables AI features (/rename-server auto-name, /add-link emoji
+                    suggestion, /ai-vibe, /ai-announce). Gracefully disabled if unset.
 """
 
 import asyncio
@@ -470,6 +482,68 @@ async def _api_post(path: str, json_body: dict) -> Optional[dict]:
             return resp.json()
     except Exception as exc:  # noqa: BLE001
         logger.warning("POST %s failed: %s", path, exc)
+    return None
+
+
+async def _api_put(path: str, json_body: dict) -> Optional[dict]:
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            resp = await c.put(f"{_backend()}{path}", json=json_body, headers=_bot_headers())
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("PUT %s failed: %s", path, exc)
+    return None
+
+
+async def _api_delete(path: str) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            resp = await c.delete(f"{_backend()}{path}", headers=_bot_headers())
+        return resp.status_code in (200, 204)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("DELETE %s failed: %s", path, exc)
+    return False
+
+
+# ── AI helper ─────────────────────────────────────────────────────────────────
+
+_AI_SYSTEM = (
+    "You are the mochii.live Discord bot — cheeky, flirty, adult-playful. "
+    "mochii.live is an adult content creator platform with a puppy-play aesthetic "
+    "(collar metaphors, 'the pack', 'kennel', 'Good Girl/Bad Puppy' vibes). "
+    "Keep responses SHORT (1–3 sentences max), punchy and on-brand. "
+    "No markdown headers. Minimal but well-chosen emojis."
+)
+
+
+async def _ai(prompt: str, max_tokens: int = 150) -> Optional[str]:
+    """Call OpenAI gpt-4o-mini. Returns None if OPENAI_API_KEY is not set or the call fails."""
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            resp = await c.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "max_tokens": max_tokens,
+                    "messages": [
+                        {"role": "system", "content": _AI_SYSTEM},
+                        {"role": "user",   "content": prompt},
+                    ],
+                },
+            )
+        if resp.is_success:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        logger.warning("AI API error %s: %s", resp.status_code, resp.text[:200])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("AI call failed: %s", exc)
     return None
 
 
@@ -1033,6 +1107,10 @@ async def daily_treat_task() -> None:
 
     _state["last_daily_treat_date"] = today_str
     _save_state(_state)
+
+
+@tasks.loop(hours=1)
+async def weekly_whimper_task() -> None:
     """Post the Weekly Whimper (most-reacted Drool Log item) every Monday."""
     now = datetime.now(timezone.utc)
     if now.weekday() != 0:  # Monday = 0
@@ -1077,6 +1155,51 @@ async def daily_treat_task() -> None:
 
     _state["last_weekly_whimper_date"] = today_str
     _save_state(_state)
+
+
+# ── Link select view ─────────────────────────────────────────────────────────
+
+class LinkSelectView(discord.ui.View):
+    """Reusable select menu for /remove-link and /feature-link."""
+
+    def __init__(self, links: list[dict], action: str) -> None:
+        super().__init__(timeout=60)
+        options = [
+            discord.SelectOption(
+                label=f"{link.get('emoji') or ''} {link['title']}"[:100].strip(),
+                description=link["url"][:100],
+                value=str(link["id"]),
+            )
+            for link in links[:25]
+        ]
+        self._action = action
+        select = discord.ui.Select(placeholder=f"pick a link to {action}…", options=options)
+        select.callback = self._on_select
+        self.add_item(select)
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        link_id = int(interaction.data["values"][0])
+        if self._action == "delete":
+            ok = await _api_delete(f"/api/discord/bot/links/{link_id}")
+            if ok:
+                await interaction.response.edit_message(
+                    content="✅ link removed from the site 🗑️", view=None
+                )
+            else:
+                await interaction.response.edit_message(
+                    content="❌ couldn't remove the link — try again", view=None
+                )
+        elif self._action == "feature":
+            result = await _api_put(f"/api/discord/bot/links/{link_id}", {"sort_order": 0})
+            if result:
+                title = result.get("title", "link")
+                await interaction.response.edit_message(
+                    content=f"✅ **{title}** is now featured at the top of the links page 🌸", view=None
+                )
+            else:
+                await interaction.response.edit_message(
+                    content="❌ couldn't reorder the link — try again", view=None
+                )
 
 
 # ── Spotify queue view ────────────────────────────────────────────────────────
@@ -1168,6 +1291,173 @@ async def cmd_announce(interaction: discord.Interaction, message: str) -> None:
         await interaction.response.send_message("✅ Announcement posted!", ephemeral=True)
     except discord.Forbidden:
         await interaction.response.send_message("❌ Missing permission to post in `#announcements`.", ephemeral=True)
+
+
+@bot.tree.command(name="rename-server", description="Rename the Discord server. Leave blank and AI picks a name. 🐾")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(name="New server name. Leave blank to let AI generate one.")
+async def cmd_rename_server(interaction: discord.Interaction, name: str = None) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    if not name:
+        stats = await _api_get("/api/discord/bot/stats")
+        members = stats.get("user_count",    0) if stats else 0
+        subs    = stats.get("sub_count",     0) if stats else 0
+        tier2   = stats.get("tier2_count",   0) if stats else 0
+        zaps    = stats.get("activation_count", 0) if stats else 0
+        suggested = await _ai(
+            f"Suggest a creative, adult-playful Discord server name for mochii.live. "
+            f"Context: {members} Fanvue members, {subs} subscribers, {tier2} Tier 2 premiums, "
+            f"{zaps} device activations. "
+            f"Keep it to 3-5 words. Kennel/collar/puppy-play aesthetic. "
+            f"Examples: 'mochii's naughty kennel', 'the drool log lounge', 'alpha kennel premium'. "
+            f"Return ONLY the name — no quotes, no explanation.",
+            max_tokens=20,
+        )
+        if not suggested:
+            await interaction.followup.send(
+                "❌ AI is unavailable (no `OPENAI_API_KEY` set). Provide a name directly: `/rename-server name:...`",
+                ephemeral=True,
+            )
+            return
+        name = suggested.strip('"\'').strip()
+
+    old_name = interaction.guild.name
+    try:
+        await interaction.guild.edit(name=name, reason=f"Renamed by {interaction.user} via bot")
+        await interaction.followup.send(
+            f"✅ kennel renamed: **{old_name}** → **{name}** 🐾", ephemeral=True
+        )
+    except discord.Forbidden:
+        await interaction.followup.send("❌ missing `Manage Server` permission to rename the server.", ephemeral=True)
+    except discord.HTTPException as exc:
+        await interaction.followup.send(f"❌ rename failed: {exc}", ephemeral=True)
+
+
+@bot.tree.command(name="ai-announce", description="Let AI write an announcement and post it. 🌸 (Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(topic="What to announce — AI will write the copy.")
+async def cmd_ai_announce(interaction: discord.Interaction, topic: str) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    text = await _ai(
+        f"Write a short Discord server announcement for mochii.live about: {topic}. "
+        f"2–4 sentences. Flirty and on-brand. End with an emoji.",
+        max_tokens=200,
+    )
+    if not text:
+        await interaction.followup.send(
+            "❌ AI unavailable — write it yourself with `/announce` 🐾", ephemeral=True
+        )
+        return
+
+    ch_id = _guild_channel(interaction.guild.id, "announcements_channel")
+    if not ch_id:
+        await interaction.followup.send(
+            f"📝 AI draft (run `/setup` to create `#announcements`):\n\n{text}", ephemeral=True
+        )
+        return
+
+    channel = interaction.guild.get_channel(ch_id)
+    if not channel:
+        await interaction.followup.send(f"📝 AI draft:\n\n{text}", ephemeral=True)
+        return
+
+    embed = discord.Embed(description=text, color=discord.Color(_PINK))
+    embed.set_footer(text="mochii.live 🌸 · crafted by AI, approved by the kennel")
+    try:
+        await channel.send(embed=embed)
+        await interaction.followup.send(f"✅ posted!\n\n*\"{text}\"*", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.followup.send(f"❌ missing permission\n\nDraft:\n{text}", ephemeral=True)
+
+
+@bot.tree.command(name="links", description="Browse the mochii.live links page. 🔗")
+async def cmd_links(interaction: discord.Interaction) -> None:
+    await interaction.response.defer()
+    links = await _api_get("/api/discord/bot/links")
+    base  = _base_url()
+
+    if not links:
+        await interaction.followup.send(
+            f"🔗 no links set up yet{' — visit ' + base + '/links' if base else ''}.", ephemeral=True
+        )
+        return
+
+    embed = discord.Embed(
+        title="🔗 mochii.live — Links",
+        description=f"{base}/links" if base else None,
+        color=discord.Color(_PINK),
+    )
+    for link in links[:25]:
+        if not link.get("is_active"):
+            continue
+        emoji = link.get("emoji") or "🔗"
+        embed.add_field(
+            name=f"{emoji} {link['title']}",
+            value=link["url"],
+            inline=False,
+        )
+    embed.set_footer(text="mochii.live · link collection 🐾")
+    await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="add-link", description="Add a link to the site's links page. 🔗 (Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(
+    url="The URL to add.",
+    title="Display title for the link.",
+    emoji="Emoji prefix (AI picks one if omitted).",
+)
+async def cmd_add_link(
+    interaction: discord.Interaction,
+    url: str,
+    title: str,
+    emoji: str = None,
+) -> None:
+    await interaction.response.defer(ephemeral=True)
+
+    if not emoji:
+        suggested_emoji = await _ai(
+            f"Pick exactly ONE emoji that best represents this link: title='{title}', url='{url}'. "
+            f"Return ONLY the single emoji character — nothing else.",
+            max_tokens=5,
+        )
+        emoji = (suggested_emoji or "🔗").strip()[:4]
+
+    result = await _api_post("/api/discord/bot/links", {
+        "title": title, "url": url, "emoji": emoji, "sort_order": 0,
+    })
+    if result:
+        await interaction.followup.send(
+            f"✅ link added: {emoji} **{title}** — {url}", ephemeral=True
+        )
+    else:
+        await interaction.followup.send("❌ couldn't add the link right now — try again 🐾", ephemeral=True)
+
+
+@bot.tree.command(name="remove-link", description="Remove a link from the site's links page. 🗑️ (Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+async def cmd_remove_link(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+    links = await _api_get("/api/discord/bot/links")
+    if not links:
+        await interaction.followup.send("🔗 no links to remove.", ephemeral=True)
+        return
+    view = LinkSelectView(links, "delete")
+    await interaction.followup.send("🗑️ pick a link to remove:", view=view, ephemeral=True)
+
+
+@bot.tree.command(name="feature-link", description="Promote a link to the top of the links page. ⭐ (Admin)")
+@app_commands.checks.has_permissions(administrator=True)
+async def cmd_feature_link(interaction: discord.Interaction) -> None:
+    await interaction.response.defer(ephemeral=True)
+    links = await _api_get("/api/discord/bot/links")
+    if not links:
+        await interaction.followup.send("🔗 no links to feature.", ephemeral=True)
+        return
+    view = LinkSelectView(links, "feature")
+    await interaction.followup.send("⭐ pick a link to promote to the top:", view=view, ephemeral=True)
 
 
 # ·· Community ················································
@@ -1510,6 +1800,55 @@ async def cmd_zap(interaction: discord.Interaction, device: app_commands.Choice[
 
 
 # ── Fun / personality commands ────────────────────────────────────────────────
+
+@bot.tree.command(name="ai-vibe", description="Ask AI what the current vibe of the kennel is. ✨")
+async def cmd_ai_vibe(interaction: discord.Interaction) -> None:
+    await interaction.response.defer()
+
+    # Gather live context
+    stats = await _api_get("/api/discord/bot/stats")
+    np_data: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            resp = await c.get(f"{_backend()}/api/spotify/now-playing")
+        np_data = resp.json() if resp.is_success else {}
+    except Exception:  # noqa: BLE001
+        pass
+
+    context_parts: list[str] = []
+    if np_data.get("is_playing"):
+        context_parts.append(
+            f"currently playing '{np_data.get('track_name')}' by {np_data.get('artist_name')}"
+        )
+    if stats:
+        context_parts.append(
+            f"{stats.get('user_count', 0)} Fanvue members, "
+            f"{stats.get('sub_count', 0)} subscribers, "
+            f"{stats.get('tier2_count', 0)} Tier 2, "
+            f"{stats.get('activation_count', 0)} total device activations, "
+            f"{stats.get('drool_count', 0)} drool items archived"
+        )
+    context_str = "; ".join(context_parts) or "not much going on"
+
+    vibe = await _ai(
+        f"Describe the current vibe of mochii.live's kennel in 2-3 short sentences. "
+        f"Context: {context_str}. Be cheeky, specific, and on-brand.",
+        max_tokens=180,
+    )
+    if not vibe:
+        await interaction.followup.send(
+            "🤔 the vibe is… indeterminate right now. AI is taking a nap. 😴",
+            ephemeral=True,
+        )
+        return
+
+    embed = discord.Embed(
+        title="✨ Current Kennel Vibe",
+        description=vibe,
+        color=discord.Color(_PINK),
+    )
+    embed.set_footer(text="mochii.live · AI vibe check — powered by gpt-4o-mini 🌸")
+    await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="rate", description="Get a completely objective and scientific rating from the bot 😏")
 async def cmd_rate(interaction: discord.Interaction) -> None:

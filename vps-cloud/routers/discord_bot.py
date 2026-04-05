@@ -11,12 +11,16 @@ shared secret known only to the ``discord-bot`` container.
 
 Endpoints
 ---------
-GET  /api/discord/bot/member                 Single member access-level lookup
-GET  /api/discord/bot/members                All linked members with access levels
-POST /api/discord/bot/control/{device}       IoT device trigger (cooldown-aware)
-GET  /api/discord/bot/stats                  Aggregated site statistics
-GET  /api/discord/bot/spotify/search         Proxy Spotify track search (level ≥ 2)
-POST /api/discord/bot/spotify/queue          Add track to Spotify queue (level ≥ 2)
+GET    /api/discord/bot/member                 Single member access-level lookup
+GET    /api/discord/bot/members                All linked members with access levels
+POST   /api/discord/bot/control/{device}       IoT device trigger (cooldown-aware)
+GET    /api/discord/bot/stats                  Aggregated site statistics
+GET    /api/discord/bot/spotify/search         Proxy Spotify track search (level ≥ 2)
+POST   /api/discord/bot/spotify/queue          Add track to Spotify queue (level ≥ 2)
+GET    /api/discord/bot/links                  List all links on the site
+POST   /api/discord/bot/links                  Create a new link
+PUT    /api/discord/bot/links/{link_id}        Update an existing link
+DELETE /api/discord/bot/links/{link_id}        Delete a link
 """
 
 import logging
@@ -26,7 +30,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from db import get_db_connection, get_setting
 from redis_client import get_redis
@@ -372,3 +376,112 @@ async def bot_spotify_queue(body: SpotifyQueueBody, request: Request):
     except Exception as exc:  # noqa: BLE001
         logger.warning("Spotify queue error: %s", exc)
         return {"success": False, "message": "Could not add track to queue."}
+
+
+# ── Links CRUD ────────────────────────────────────────────────────────────────
+# The bot manages the site's links page (bio-link directory) via these
+# endpoints, which mirror /api/admin/links but use bot-token auth.
+
+class BotLinkCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    url:   str = Field(..., min_length=1, max_length=2000)
+    emoji: Optional[str] = Field(None, max_length=8)
+    sort_order: int = 0
+    is_active:  bool = True
+
+
+class BotLinkUpdate(BaseModel):
+    title:      Optional[str]  = Field(None, min_length=1, max_length=200)
+    url:        Optional[str]  = Field(None, min_length=1, max_length=2000)
+    emoji:      Optional[str]  = Field(None, max_length=8)
+    sort_order: Optional[int]  = None
+    is_active:  Optional[bool] = None
+
+
+@router.get("/api/discord/bot/links")
+def bot_list_links(request: Request):
+    """Return all links (active and inactive) ordered by sort_order."""
+    _check_bot_auth(request)
+    with get_db_connection() as db:
+        rows = db.execute(
+            """
+            SELECT id, title, url, emoji, sort_order, is_active, created_at
+            FROM links
+            ORDER BY sort_order ASC, id ASC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/discord/bot/links", status_code=status.HTTP_201_CREATED)
+def bot_create_link(body: BotLinkCreate, request: Request):
+    """Create a new link on the site's links page."""
+    _check_bot_auth(request)
+    created_at = datetime.now(timezone.utc).isoformat()
+    try:
+        with get_db_connection() as db:
+            cursor = db.execute(
+                """
+                INSERT INTO links (title, url, emoji, sort_order, is_active, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (body.title, body.url, body.emoji or None,
+                 body.sort_order, 1 if body.is_active else 0, created_at),
+            )
+            db.commit()
+            row = db.execute(
+                "SELECT id, title, url, emoji, sort_order, is_active, created_at FROM links WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not create link: {exc}",
+        ) from exc
+    return dict(row)
+
+
+@router.put("/api/discord/bot/links/{link_id}")
+def bot_update_link(link_id: int, body: BotLinkUpdate, request: Request):
+    """Update one or more fields on an existing link."""
+    _check_bot_auth(request)
+    with get_db_connection() as db:
+        row = db.execute("SELECT * FROM links WHERE id = ?", (link_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found.")
+
+        new_title      = body.title      if body.title      is not None else row["title"]
+        new_url        = body.url        if body.url        is not None else row["url"]
+        new_emoji      = (body.emoji or None) if body.emoji is not None else row["emoji"]
+        new_sort_order = body.sort_order if body.sort_order is not None else row["sort_order"]
+        new_is_active  = (1 if body.is_active else 0) if body.is_active is not None else row["is_active"]
+
+        try:
+            db.execute(
+                "UPDATE links SET title=?, url=?, emoji=?, sort_order=?, is_active=? WHERE id=?",
+                (new_title, new_url, new_emoji, new_sort_order, new_is_active, link_id),
+            )
+            db.commit()
+            updated = db.execute(
+                "SELECT id, title, url, emoji, sort_order, is_active, created_at FROM links WHERE id = ?",
+                (link_id,),
+            ).fetchone()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Could not update link: {exc}",
+            ) from exc
+    return dict(updated)
+
+
+@router.delete("/api/discord/bot/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def bot_delete_link(link_id: int, request: Request):
+    """Delete a link from the site's links page."""
+    _check_bot_auth(request)
+    with get_db_connection() as db:
+        row = db.execute("SELECT id FROM links WHERE id = ?", (link_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found.")
+        db.execute("DELETE FROM links WHERE id = ?", (link_id,))
+        db.commit()
+

@@ -172,6 +172,9 @@ services:
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
       # Path to the JSON state file inside the container.
       - BOT_STATE_FILE=/app/state/bot_state.json
+      # Optional: OpenAI API key for AI-powered features (/rename-server, /add-link,
+      # /ai-vibe, /ai-announce). Leave empty to disable AI features gracefully.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       # Persist drool-feed / now-playing / weekly-whimper state across restarts.
       - bot_state:/app/state
