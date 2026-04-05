@@ -218,9 +218,10 @@ def _scrape_reddit() -> None:
             logger.warning("Reddit scraper: could not authenticate: %s", exc)
             return
 
-        # Upvoted posts
+        # Upvoted posts – use limit=None to capture the full history, not just
+        # the most recent 50 (mirrors the reddit-save library's approach).
         try:
-            for submission in me.upvoted(limit=50):
+            for submission in me.upvoted(limit=None):
                 url = f"https://www.reddit.com{submission.permalink}"
                 media = getattr(submission, "url", None)
                 text = getattr(submission, "title", "") or ""
@@ -231,13 +232,15 @@ def _scrape_reddit() -> None:
         except Exception as exc:
             logger.warning("Reddit scraper: upvoted fetch failed: %s", exc)
 
-        # Saved items
+        # Saved items – filter to Submission objects only; Comment objects also
+        # have a permalink but their .url points back to the parent post which
+        # would store a duplicate of an already-scraped post.
         try:
-            for item in me.saved(limit=50):
-                if hasattr(item, "permalink"):
+            for item in me.saved(limit=None):
+                if item.__class__.__name__ == "Submission":
                     url = f"https://www.reddit.com{item.permalink}"
                     media = getattr(item, "url", None)
-                    text = getattr(item, "title", "") or getattr(item, "body", "") or ""
+                    text = getattr(item, "title", "")
                     ts = datetime.fromtimestamp(
                         item.created_utc, tz=timezone.utc
                     ).isoformat()

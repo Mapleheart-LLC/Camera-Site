@@ -911,8 +911,11 @@ def get_drool_credentials(
             "source":        source,
         }
         # For non-sensitive mode flags, also return the actual current value.
+        # reddit_mode defaults to 'api'; all other exposed fields default to "".
         if field in _DROOL_CRED_EXPOSE_VALUE:
-            entry["value"] = db_val or env_val or _REDDIT_MODE_DEFAULT
+            entry["value"] = db_val or env_val or (
+                _REDDIT_MODE_DEFAULT if field == "reddit_mode" else ""
+            )
         result[field] = entry
     return result
 
