@@ -698,7 +698,37 @@
 
         <!-- ── Drool Log ──────────────────────────────── -->
         <section id="s-drool" class="admin-section">
-          <h1 class="section-heading">🐾 Drool Log – Scraper Credentials</h1>
+          <h1 class="section-heading">🐾 Drool Log</h1>
+
+          <!-- Archive management -->
+          <div class="card">
+            <div class="card-header">
+              <h2>🗂️ Archive</h2>
+              <div style="display:flex;gap:.5rem;align-items:center">
+                <button id="purge-bad-drool-btn" class="btn-sm" style="background:#7a2020;color:#fecaca;border:1px solid #9b3030;border-radius:8px;padding:.3rem .75rem;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer">🗑️ Purge Bad Entries</button>
+                <button id="refresh-drool-archive-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <p id="drool-archive-summary" style="padding:.65rem 1rem;font-size:.8rem;color:#9e7e82;border-bottom:1px solid #2a1e20"></p>
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Drool archive entries">
+                  <thead>
+                    <tr>
+                      <th style="width:3rem">ID</th>
+                      <th style="width:6rem">Platform</th>
+                      <th>URL / Title</th>
+                      <th style="width:10rem">Timestamp</th>
+                      <th style="width:4.5rem"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="drool-archive-body">
+                    <tr class="empty-row"><td colspan="5">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
           <div class="card">
             <div class="card-header">
@@ -1063,7 +1093,7 @@
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
-        loadDroolCredentials(),
+        loadDroolCredentials(), loadDroolArchive(),
       ]);
     }
 
@@ -2047,7 +2077,88 @@
       bsky_app_password: 'dc-bsky-app-password',
     }, 'dc-bsky-error'));
 
-    // ── Auto-login if session creds exist ──────────────
+    // ── Drool Archive management ───────────────────────
+    async function loadDroolArchive() {
+      const tbody   = document.getElementById('drool-archive-body');
+      const summary = document.getElementById('drool-archive-summary');
+      try {
+        const items = await apiGet('/api/drool?page=1&page_size=200');
+        if (!items.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries yet.</td></tr>';
+          summary.textContent = '0 entries';
+          return;
+        }
+        summary.textContent = `${items.length} entr${items.length === 1 ? 'y' : 'ies'} shown (newest first, max 200)`;
+        tbody.innerHTML = items.map(item => {
+          const url   = escHtml(item.original_url || '');
+          const title = escHtml(item.text_content ? item.text_content.slice(0, 80) : item.original_url || '');
+          const ts    = escHtml((item.timestamp || '').replace('T', ' ').slice(0, 16));
+          const plat  = escHtml(item.platform || '');
+          const isBad = !item.original_url.startsWith('http');
+          return `<tr${isBad ? ' style="background:rgba(248,113,113,.06)"' : ''}>
+            <td style="color:#9e7e82;font-size:.8rem">${item.id}</td>
+            <td><span style="font-size:.78rem;color:#c4a0aa">${plat}</span></td>
+            <td style="max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              <a href="${url}" target="_blank" rel="noopener noreferrer"
+                 style="color:#e8aeb7;text-decoration:none;font-size:.85rem"
+                 title="${url}">${title}</a>
+            </td>
+            <td style="font-size:.78rem;color:#9e7e82;white-space:nowrap">${ts}</td>
+            <td>
+              <button class="btn-sm btn-delete drool-delete-btn" data-id="${item.id}"
+                      style="font-size:.75rem;padding:.25rem .55rem">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Failed to load archive.</td></tr>';
+        }
+      }
+    }
+
+    document.getElementById('drool-archive-body').addEventListener('click', async e => {
+      const btn = e.target.closest('.drool-delete-btn');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (!confirm(`Delete drool entry #${id}? This cannot be undone.`)) return;
+      btn.disabled = true;
+      try {
+        const resp = await apiDelete(`/api/admin/drool/${id}`);
+        if (resp.ok) {
+          btn.closest('tr').remove();
+          showToast(`🗑️ Entry #${id} deleted.`);
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
+          btn.disabled = false;
+        }
+      } catch (err) {
+        if (err.message !== '401') showToast('❌ Delete failed.');
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById('purge-bad-drool-btn').addEventListener('click', async () => {
+      if (!confirm('Delete all entries whose URL is not a valid http(s):// link? This removes garbage rows from misconfigured scrapers and cannot be undone.')) return;
+      try {
+        const resp = await apiPost('/api/admin/drool/purge-bad', {});
+        if (resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(`🧹 Purged ${data.deleted ?? 0} bad entr${data.deleted === 1 ? 'y' : 'ies'}.`);
+          await loadDroolArchive();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
+        }
+      } catch (err) {
+        if (err.message !== '401') showToast('❌ Purge failed.');
+      }
+    });
+
+    document.getElementById('refresh-drool-archive-btn').addEventListener('click', loadDroolArchive);
+
+
     (function init() {
       const queryParams = new URLSearchParams(window.location.search);
       const oauthError        = queryParams.get('error');

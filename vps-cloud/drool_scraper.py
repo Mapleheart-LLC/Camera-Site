@@ -18,9 +18,13 @@ REDDIT_GSHEET_CSV_URL  – (mode=gsheet) Public CSV export URL of the first Goog
                          as "Anyone with the link can view", then publish as CSV via:
                            File → Share → Publish to web → CSV → copy link
                          e.g. https://docs.google.com/spreadsheets/d/<ID>/pub?output=csv
+                         IMPORTANT: The URL must end with ?output=csv (or &output=csv).
+                         A plain share link or the editor URL will return HTML, not CSV.
                          The scraper auto-detects IFTTT column headers (Title / PostURL /
-                         ImageURL / CreatedAt).  If no headers are recognised it falls back
-                         to positional order: col0=title, col1=url, col2=media, col3=timestamp.
+                         ImageURL / PostedAt …).  If no headers are recognised it falls back
+                         to the standard IFTTT Reddit ingredient order:
+                           col0=PostedAt, col1=Author, col2=Title, col3=Content,
+                           col4=ImageURL, col5=Subreddit, col6=PostURL.
 
 REDDIT_GSHEET_CSV_URL_2 – (mode=gsheet, optional) CSV export URL of a second Google Sheet
                           (e.g. saved posts).  IFTTT requires a separate applet for upvotes
@@ -56,6 +60,7 @@ import csv
 import io
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -274,11 +279,15 @@ def _scrape_reddit() -> None:
 # Column-header aliases recognised in IFTTT-generated Google Sheets.
 # Keys are normalised lower-case header names; values are the field they map to.
 _GSHEET_URL_ALIASES   = {"posturl", "url", "link", "permalink", "post url", "post link"}
-_GSHEET_TITLE_ALIASES = {"title", "posttitle", "post title", "subject", "name"}
+_GSHEET_TITLE_ALIASES = {"title", "posttitle", "post title", "subject", "name",
+                          "content", "text", "body", "selftext", "self text"}
 _GSHEET_MEDIA_ALIASES = {"imageurl", "image url", "image", "media", "mediaurl", "media url",
                           "thumbnail", "thumbnailurl", "thumbnail url", "imgurl", "img url"}
 _GSHEET_TS_ALIASES    = {"createdat", "created at", "created", "date", "timestamp",
                           "time", "datetime", "date created", "postedat", "posted at"}
+
+# Pre-compiled regex for extracting the URL from an =IMAGE("url";1) formula cell.
+_IMAGE_FORMULA_RE = re.compile(r'=IMAGE\(["\']([^"\']+)["\']', re.IGNORECASE)
 
 
 def _detect_gsheet_columns(header_row: list[str]) -> dict[str, int]:
@@ -311,9 +320,20 @@ def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
     ``label`` is a human-readable name used in log messages (e.g. 'sheet 1').
 
     Column detection is flexible: any row 0 header matching common IFTTT
-    ingredient names (PostURL, Title, ImageURL, CreatedAt …) is used.  If no
-    header row is recognised the scraper falls back to positional order:
-    col 0 = title, col 1 = url, col 2 = media, col 3 = timestamp.
+    ingredient names (PostURL, Title, ImageURL, PostedAt …) is used.  If no
+    header row is recognised the scraper falls back to the standard IFTTT
+    Reddit ingredient order:
+      col 0 = PostedAt (timestamp)
+      col 1 = Author   (ignored)
+      col 2 = Title    (text_content)
+      col 3 = Content  (ignored when Title present)
+      col 4 = ImageURL (media_url)
+      col 5 = Subreddit (ignored)
+      col 6 = PostURL  (original_url)
+
+    The CSV URL MUST end with ``?output=csv`` (or ``&output=csv``).  A plain
+    share/editor URL returns an HTML page instead of CSV data; if the response
+    looks like HTML it is rejected with an error log.
     """
     tag = f"Reddit gsheet scraper ({label})" if label else "Reddit gsheet scraper"
 
@@ -322,6 +342,20 @@ def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
         resp.raise_for_status()
     except Exception as exc:
         logger.warning("%s: failed to fetch CSV: %s", tag, exc)
+        return []
+
+    # Reject HTML responses – these occur when the URL is a share/editor link
+    # instead of a "Publish to web → CSV" link, or when the sheet requires login.
+    content_type = resp.headers.get("content-type", "")
+    text_start = resp.text.lstrip()[:100].lower()
+    if "text/html" in content_type or text_start.startswith(("<!doctype", "<html")):
+        logger.error(
+            "%s: URL returned an HTML page instead of CSV data. "
+            "Make sure you are using a 'Publish to web → CSV' URL "
+            "(File → Share → Publish to web → CSV in Google Sheets) "
+            "and that the sheet is publicly accessible.",
+            tag,
+        )
         return []
 
     try:
@@ -342,10 +376,11 @@ def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
         data_rows = rows[1:]  # skip header
         logger.debug("%s: detected columns %s", tag, col_map)
     else:
-        # No recognisable header – treat first row as data and use positional defaults.
+        # No recognisable header – assume IFTTT Reddit ingredient column order:
+        # PostedAt(0) | Author(1) | Title(2) | Content(3) | ImageURL(4) | Subreddit(5) | PostURL(6)
         data_rows = rows
-        col_map = {"title": 0, "url": 1, "media": 2, "timestamp": 3}
-        logger.debug("%s: no header detected, using positional columns.", tag)
+        col_map = {"timestamp": 0, "title": 2, "media": 4, "url": 6}
+        logger.debug("%s: no header detected, using IFTTT positional columns.", tag)
 
     url_col   = col_map.get("url")
     title_col = col_map.get("title")
@@ -373,8 +408,16 @@ def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
                 continue
 
             title     = row[title_col].strip() if title_col is not None and title_col < len(row) else ""
-            media_url = row[media_col].strip() if media_col is not None and media_col < len(row) else ""
+            media_raw = row[media_col].strip() if media_col is not None and media_col < len(row) else ""
             ts_raw    = row[ts_col].strip()    if ts_col    is not None and ts_col    < len(row) else ""
+
+            # If the media cell is an =IMAGE("url";1) or =IMAGE("url",1) formula
+            # (as written by IFTTT into Google Sheets), extract the bare URL.
+            media_url = media_raw
+            if media_url:
+                _img_match = _IMAGE_FORMULA_RE.match(media_url)
+                if _img_match:
+                    media_url = _img_match.group(1)
 
             # Parse timestamp; fall back to now if unparseable.
             ts: str
