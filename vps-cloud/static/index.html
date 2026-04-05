@@ -1683,6 +1683,16 @@
         });
         const data = await res.json();
         if (!res.ok) {
+          // Check if these are admin credentials before showing an error
+          const adminCreds = btoa(`${username_or_email}:${password}`);
+          const adminRes = await fetch('/api/admin/stats', {
+            headers: { 'Authorization': `Basic ${adminCreds}` },
+          });
+          if (adminRes.ok) {
+            sessionStorage.setItem('mochii_admin_creds', adminCreds);
+            window.location.href = '/admin';
+            return;
+          }
           showLogin(data.detail || 'Sign-in failed. Please try again.', 'error');
           return;
         }
@@ -1771,6 +1781,14 @@
           showLogin('Subscription was cancelled. You can try again anytime.', 'info');
           return;
         }
+      }
+
+      // Handle redirect messages from the admin panel (e.g. session expired)
+      const adminMsg = searchParams.get('admin_msg');
+      if (adminMsg) {
+        history.replaceState(null, '', window.location.pathname);
+        showLogin(adminMsg, 'info');
+        return;
       }
 
       // Handle legacy Fanvue OAuth callback tokens in the URL fragment
