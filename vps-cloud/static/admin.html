@@ -2199,6 +2199,10 @@
         profile_fetch_failed: 'Could not fetch your Twitter profile. Please try again.',
         tweepy_missing:       'Server error: Twitter library is missing.',
         db_save_failed:       'Twitter credentials were obtained but could not be saved. Check server logs.',
+        spotify_cancelled:    'Spotify authorization was cancelled.',
+        spotify_invalid_state:'Spotify OAuth session expired. Please try again.',
+        spotify_token_failed: 'Could not complete Spotify authorization. Please try again.',
+        spotify_not_configured: 'Spotify is not configured. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables first.',
       };
 
       if (getJwt() || getCreds()) {
@@ -2206,21 +2210,23 @@
           .then(r => {
             if (r.ok) {
               showAdminPanel();
-              if (twitter2Connected === '1') {
+              if (spotifyConnected === 'connected') {
+                showToast('🎵 Spotify connected! Now Playing is live.');
+              } else if (twitter2Connected === '1') {
                 if (oauthWarn === 'user_id_missing') {
                   showToast('🐦 Twitter/X tokens saved! User ID could not be fetched automatically — set it manually in the Twitter credentials form.');
                 } else {
                   showToast('🐦 Twitter/X connected! Likes, bookmarks & tweeting enabled.');
                 }
               } else if (oauthError) {
-                showToast('❌ ' + (_oauthMessages[oauthError] || `Twitter error: ${oauthError}`));
+                showToast('❌ ' + (_oauthMessages[oauthError] || `OAuth error: ${oauthError}`));
               }
             } else {
               clearCreds();
               document.getElementById('login-panel').style.display = 'flex';
               if (oauthError) {
                 document.getElementById('login-error').textContent =
-                  _oauthMessages[oauthError] || `Twitter error: ${oauthError}`;
+                  _oauthMessages[oauthError] || `OAuth error: ${oauthError}`;
               }
             }
           })
@@ -2232,7 +2238,7 @@
         document.getElementById('login-panel').style.display = 'flex';
         if (oauthError) {
           document.getElementById('login-error').textContent =
-            _oauthMessages[oauthError] || `Twitter error: ${oauthError}`;
+            _oauthMessages[oauthError] || `OAuth error: ${oauthError}`;
         }
       }
     })();
