@@ -157,6 +157,28 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
 
+  # ── Discord bot – server management & site integration ─
+  discord-bot:
+    build: ./discord_bot
+    environment:
+      # Bot token – same value as DISCORD_BOT_TOKEN above.
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      # Internal URL of the FastAPI backend (don't change unless you rename the service).
+      - BACKEND_API_URL=http://backend:8000
+      # Public site root – used in DMs and embeds.
+      - BASE_URL=${BASE_URL:-}
+      # Optional: restrict slash-command registration to one guild for instant
+      # propagation (Discord guild / server ID). Leave empty for global commands.
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+      # Path to the JSON state file inside the container.
+      - BOT_STATE_FILE=/app/state/bot_state.json
+    volumes:
+      # Persist drool-feed / now-playing / weekly-whimper state across restarts.
+      - bot_state:/app/state
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   # ── Cloudflare Tunnel – VPS to public web ───────────
   # Exposes the backend through a Cloudflare Tunnel without opening inbound
   # firewall ports.  Create a tunnel in the Cloudflare Zero Trust dashboard,
@@ -194,3 +216,4 @@ services:
 volumes:
   camera_data:
   tailscale_state:
+  bot_state:
