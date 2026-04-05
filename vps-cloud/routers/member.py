@@ -129,7 +129,7 @@ def update_display_name(
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Display name can only be changed {_DISPLAY_NAME_MAX_CHANGES_PER_YEAR} "
-                   f"times per calendar year. Try again next year.",
+                   f"times per calendar year. The limit resets on January 1st.",
         )
 
     old_name = row["display_name"] or row["username"]
