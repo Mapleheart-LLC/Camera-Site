@@ -24,6 +24,8 @@ Endpoints
   GET    /api/admin/drool/credentials  – show which drool scraper credentials are configured
   PUT    /api/admin/drool/credentials  – save / clear drool scraper credentials
                                          (Reddit API, Reddit IFTTT, Twitter, Bluesky)
+  DELETE /api/admin/drool/{entry_id}   – delete a single drool archive entry (+ its comments/reactions)
+  POST   /api/admin/drool/purge-bad    – delete all entries whose original_url is not a valid http(s) URL
 """
 
 import logging
@@ -952,4 +954,53 @@ def put_drool_credentials(
             ", ".join(updated),
         )
     return {"updated": updated}
+
+
+@router.delete("/drool/{entry_id}", status_code=status.HTTP_200_OK)
+def delete_drool_entry(
+    entry_id: int,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Delete a single drool archive entry and all its comments and reactions."""
+    row = db.execute("SELECT id FROM drool_archive WHERE id = ?", (entry_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entry not found.")
+    db.execute("DELETE FROM drool_reactions WHERE drool_id = ?", (entry_id,))
+    db.execute("DELETE FROM drool_comments WHERE drool_id = ?", (entry_id,))
+    db.execute("DELETE FROM drool_archive WHERE id = ?", (entry_id,))
+    db.commit()
+    logger.info("Admin '%s' deleted drool entry #%d.", admin_user, entry_id)
+    return {"deleted": entry_id}
+
+
+@router.post("/drool/purge-bad", status_code=status.HTTP_200_OK)
+def purge_bad_drool_entries(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Delete all drool archive entries whose original_url is not a valid http(s):// URL.
+
+    This cleans up garbage rows created when the Google Sheets CSV URL was
+    misconfigured and returned an HTML page that was mistakenly parsed as CSV
+    data (causing JavaScript fragments to be stored as post URLs/titles).
+    """
+    bad_rows = db.execute(
+        "SELECT id FROM drool_archive WHERE original_url NOT LIKE 'http://%' AND original_url NOT LIKE 'https://%'"
+    ).fetchall()
+    bad_ids = [row["id"] for row in bad_rows]
+    if not bad_ids:
+        return {"deleted": 0, "ids": []}
+    placeholders = ",".join("?" * len(bad_ids))
+    db.execute(f"DELETE FROM drool_reactions WHERE drool_id IN ({placeholders})", bad_ids)
+    db.execute(f"DELETE FROM drool_comments WHERE drool_id IN ({placeholders})", bad_ids)
+    db.execute(f"DELETE FROM drool_archive WHERE id IN ({placeholders})", bad_ids)
+    db.commit()
+    logger.info(
+        "Admin '%s' purged %d bad drool entries (non-http URLs): %s",
+        admin_user,
+        len(bad_ids),
+        bad_ids,
+    )
+    return {"deleted": len(bad_ids), "ids": bad_ids}
 
