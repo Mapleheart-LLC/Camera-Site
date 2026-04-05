@@ -143,6 +143,17 @@ services:
       # Email Routing Rules:Edit.
       # Generate a scoped token at https://dash.cloudflare.com/profile/api-tokens
       - CLAPI=${CLAPI:-}
+      # Zone ID for the site's domain.  When empty the zone is auto-discovered
+      # from BASE_URL via the Cloudflare API and cached for the process lifetime.
+      - CLAPI_ZONE_ID=${CLAPI_ZONE_ID:-}
+      # Cloudflare Tunnel edge hostname (e.g. <uuid>.cfargotunnel.com).
+      # When set, new creator subdomains are automatically provisioned as
+      # proxied CNAME records pointing at the tunnel.  Leave empty to skip.
+      - CLAPI_TUNNEL_HOSTNAME=${CLAPI_TUNNEL_HOSTNAME:-}
+      # Email address for per-creator routing rules (e.g. admin@mochii.live).
+      # When set, a forwarding rule is auto-created for {handle}@{domain}.
+      # Leave empty to manage email routing manually.
+      - CLAPI_EMAIL_ROUTING_DEST=${CLAPI_EMAIL_ROUTING_DEST:-}
       # ── Spotify – Now Playing & Queue ─────────────────
       # Create an app at https://developer.spotify.com/dashboard and add
       # {BASE_URL}/auth/spotify/callback as a Redirect URI.

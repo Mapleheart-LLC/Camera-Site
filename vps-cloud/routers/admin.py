@@ -26,6 +26,10 @@ Endpoints
                                          (Reddit API, Reddit IFTTT, Twitter, Bluesky)
   DELETE /api/admin/drool/{entry_id}   – delete a single drool archive entry (+ its comments/reactions)
   POST   /api/admin/drool/purge-bad    – delete all entries whose original_url is not a valid http(s) URL
+  GET    /api/admin/creators           – list all creator accounts
+  POST   /api/admin/creators           – create a creator account (auto-provisions Cloudflare DNS + email routing)
+  PUT    /api/admin/creators/{handle}  – update a creator account
+  DELETE /api/admin/creators/{handle}  – delete a creator account (auto-deprovisions Cloudflare DNS + email routing)
 """
 
 import logging
@@ -1114,6 +1118,16 @@ def admin_create_creator(
     )
     db.commit()
     logger.info("Admin '%s' created creator account '%s'.", admin_user, handle)
+
+    # Best-effort: auto-provision Cloudflare DNS + email routing for the new subdomain.
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if base_url:
+        from urllib.parse import urlparse as _urlparse
+        from routers.cloudflare import provision_creator_subdomain
+        root_domain = _urlparse(base_url).hostname or ""
+        if root_domain:
+            provision_creator_subdomain(handle, root_domain)
+
     return {
         "handle": handle,
         "display_name": payload.display_name,
@@ -1183,4 +1197,13 @@ def admin_delete_creator(
     db.execute("DELETE FROM creator_accounts WHERE handle = ?", (handle,))
     db.commit()
     logger.info("Admin '%s' deleted creator account '%s'.", admin_user, handle)
+
+    # Best-effort: remove Cloudflare DNS + email routing for the deleted subdomain.
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if base_url:
+        from urllib.parse import urlparse as _urlparse
+        from routers.cloudflare import deprovision_creator_subdomain
+        root_domain = _urlparse(base_url).hostname or ""
+        if root_domain:
+            deprovision_creator_subdomain(handle, root_domain)
 
