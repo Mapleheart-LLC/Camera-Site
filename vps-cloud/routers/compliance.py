@@ -36,6 +36,7 @@ import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Optional
+from urllib.parse import urlparse
 
 import pyotp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -538,7 +539,6 @@ def approve_application(
         # Attempt Cloudflare subdomain provisioning.
         try:
             from routers.cloudflare import provision_creator_subdomain
-            from urllib.parse import urlparse
             root_domain = urlparse(base_url).hostname or ""
             if root_domain:
                 provision_creator_subdomain(handle, root_domain, forwarding_email=applicant_email)
