@@ -28,9 +28,11 @@ from dependencies import (
 )
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
+from routers.auth import router as auth_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
 from routers.store import router as store_router
+from routers.subscriptions import router as subscriptions_router
 from routers.discord_interactions import router as discord_interactions_router
 from routers.drool import router as drool_router, limiter as drool_limiter
 from drool_scraper import start_drool_scheduler, stop_drool_scheduler
@@ -320,6 +322,36 @@ def init_db() -> None:
             token      TEXT PRIMARY KEY,
             secret     TEXT NOT NULL,
             expires_at TEXT NOT NULL
+        )
+        """
+    )
+    # ── Native site users (username/password auth, no Fanvue dependency) ──
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_users (
+            id              TEXT    PRIMARY KEY,
+            username        TEXT    NOT NULL UNIQUE,
+            email           TEXT    NOT NULL UNIQUE,
+            hashed_password TEXT    NOT NULL,
+            access_level    INTEGER NOT NULL DEFAULT 0,
+            created_at      TEXT    NOT NULL
+        )
+        """
+    )
+    # ── Segpay subscription audit log ─────────────────────────────────────
+    # Each Segpay postback is recorded here.  The current access_level lives
+    # on site_users; this table is for history and manual reconciliation.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS segpay_subscriptions (
+            id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id                TEXT    REFERENCES site_users(id),
+            segpay_subscription_id TEXT,
+            trans_type             TEXT    NOT NULL,
+            status                 TEXT    NOT NULL,
+            access_level_granted   INTEGER,
+            email                  TEXT,
+            created_at             TEXT    NOT NULL
         )
         """
     )
@@ -771,9 +803,11 @@ async def proxy_webrtc(
 
 app.include_router(interactive_router)
 app.include_router(admin_router)
+app.include_router(auth_router)
 app.include_router(questions_router)
 app.include_router(links_router)
 app.include_router(store_router)
+app.include_router(subscriptions_router)
 app.include_router(discord_interactions_router)
 app.include_router(drool_router)
 app.include_router(discord_oauth_router)

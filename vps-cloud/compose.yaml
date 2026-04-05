@@ -72,10 +72,21 @@ services:
       # Payment provider selection (default: segpay)
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-segpay}
       # Segpay credentials – obtain from your Segpay merchant dashboard
+      # Used for one-time store purchases (physical goods).
       - SEGPAY_PACKAGE_ID=${SEGPAY_PACKAGE_ID:-}
       - SEGPAY_PRICE_POINT_ID=${SEGPAY_PRICE_POINT_ID:-}
-      # Optional: shared secret for Segpay postback HMAC-SHA256 verification
+      # Optional: shared secret for Segpay postback HMAC-SHA256 verification (store)
       - SEGPAY_WEBHOOK_SECRET=${SEGPAY_WEBHOOK_SECRET:-}
+      # ── Segpay Subscriptions ──────────────────────────
+      # Separate Segpay package configured for recurring subscription billing.
+      # Set these in the Segpay merchant dashboard as a recurring package.
+      - SEGPAY_SUB_PACKAGE_ID=${SEGPAY_SUB_PACKAGE_ID:-}
+      - SEGPAY_SUB_PRICE_POINT_ID=${SEGPAY_SUB_PRICE_POINT_ID:-}
+      # Access level granted to a subscriber (default: 2).
+      # 0 = free/no access, 1 = free follower, 2 = subscriber, 3 = premium.
+      - SEGPAY_SUB_ACCESS_LEVEL=${SEGPAY_SUB_ACCESS_LEVEL:-2}
+      # Optional: shared secret for subscription postback HMAC-SHA256 verification
+      - SEGPAY_SUB_WEBHOOK_SECRET=${SEGPAY_SUB_WEBHOOK_SECRET:-}
       # ── The Drool Log – Reddit scraper credentials ────
       # Set REDDIT_MODE to control how Reddit items are collected:
       #   api    – poll Reddit directly via praw (requires OAuth app registration)
