@@ -205,7 +205,7 @@ def bot_get_stats(request: Request):
         linked_count    = db.execute(
             "SELECT COUNT(*) FROM discord_accounts WHERE user_id IS NOT NULL"
         ).fetchone()[0]
-        tier2_count     = db.execute("SELECT COUNT(*) FROM users WHERE access_level >= 3").fetchone()[0]
+        tier2_count     = db.execute("SELECT COUNT(*) FROM users WHERE access_level >= 3").fetchone()[0]  # Tier 2 = level 3+
         sub_count       = db.execute("SELECT COUNT(*) FROM users WHERE access_level = 2").fetchone()[0]
         follower_count  = db.execute("SELECT COUNT(*) FROM users WHERE access_level = 1").fetchone()[0]
         answered_q      = db.execute("SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL").fetchone()[0]

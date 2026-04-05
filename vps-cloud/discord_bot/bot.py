@@ -731,12 +731,13 @@ async def drool_feed_task() -> None:
         return
 
     last_id: int = _state.get("last_drool_id", 0)
-    # Filter to new items only (higher ID = newer).
+    # Skip the pinned "Weekly Whimper" (always first item) to avoid duplication
+    # with the weekly_whimper_task.  Guard against an empty list before indexing.
+    pinned_id: int = items[0].get("id", -1) if items else -1
     new_items = sorted(
-        [it for it in items if it.get("id", 0) > last_id and it.get("id") != items[0].get("id")],
+        [it for it in items if it.get("id", 0) > last_id and it.get("id") != pinned_id],
         key=lambda x: x.get("id", 0),
     )
-    # Always skip the pinned "Weekly Whimper" (first item) to avoid duplication.
 
     if not new_items:
         return
@@ -1215,7 +1216,7 @@ _DEVICE_CHOICES = [
 
 
 @bot.tree.command(name="zap", description="Activate a device. 🐾 (Follower+ required)")
-@app_commands.describe(device="Which device to activate.")
+@app_commands.describe(device="Which device to activate (default: pishock).")
 @app_commands.choices(device=_DEVICE_CHOICES)
 async def cmd_zap(interaction: discord.Interaction, device: app_commands.Choice[str] = None) -> None:
     if not _has_follower_role(interaction.user):
