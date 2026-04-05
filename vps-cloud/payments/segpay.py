@@ -85,6 +85,54 @@ class SegpayProvider(BasePaymentProvider):
         logger.info("Created Segpay checkout URL for order %s", order_id)
         return checkout_url
 
+    async def create_one_time_charge(
+        self,
+        amount_cents: int,
+        metadata: dict,
+        success_url: str,
+        cancel_url: str,
+    ) -> str:
+        """Build a Segpay one-time-charge URL for tips, PPV, and digital downloads.
+
+        Uses a dedicated one-time-charge package/price-point pair configured
+        via ``SEGPAY_OTC_PACKAGE_ID`` / ``SEGPAY_OTC_PRICE_POINT_ID``.
+        Falls back to the standard subscription package when not set.
+        """
+        package_id = (
+            os.environ.get("SEGPAY_OTC_PACKAGE_ID")
+            or os.environ.get("SEGPAY_PACKAGE_ID", "")
+        )
+        price_point_id = (
+            os.environ.get("SEGPAY_OTC_PRICE_POINT_ID")
+            or os.environ.get("SEGPAY_PRICE_POINT_ID", "")
+        )
+        base_url = os.environ.get("BASE_URL", "").rstrip("/")
+        if not package_id or not price_point_id:
+            raise ValueError("Segpay one-time-charge is not configured (missing SEGPAY_OTC_PACKAGE_ID / PRICE_POINT_ID).")
+
+        # Build a stable reference from the metadata so we can reconcile later.
+        import uuid as _uuid
+        ref_id = metadata.get("ref_id") or str(_uuid.uuid4())
+
+        # Amount is encoded as a custom price in cents.
+        amount_dollars = amount_cents / 100
+
+        params: dict = {
+            "x-eticketid": f"{package_id}:{price_point_id}",
+            "x-price": f"{amount_dollars:.2f}",
+            "x-referenceId": ref_id,
+            "x-postbackurl": f"{base_url}/api/webhooks/subscriptions/segpay",
+            "x-successurl": success_url,
+            "x-cancelurl": cancel_url,
+        }
+        if metadata.get("email"):
+            params["x-billemail"] = metadata["email"]
+        description = metadata.get("description", "")[:_SEGPAY_MAX_DESCRIPTION_LENGTH]
+        if description:
+            params["x-description"] = description
+
+        return f"{_SEGPAY_PURCHASE_BASE}?{urlencode(params)}"
+
     async def verify_webhook(self, request_body: bytes, headers: dict) -> dict:
         """Parse and verify a Segpay HTTP postback.
 

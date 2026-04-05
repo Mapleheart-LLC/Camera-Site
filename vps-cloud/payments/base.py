@@ -55,6 +55,34 @@ class BasePaymentProvider(ABC):
         """
 
     @abstractmethod
+    async def create_one_time_charge(
+        self,
+        amount_cents: int,
+        metadata: dict,
+        success_url: str,
+        cancel_url: str,
+    ) -> str:
+        """Create a one-time payment charge (tip, PPV, download, etc.).
+
+        Parameters
+        ----------
+        amount_cents:
+            Amount to charge in cents.
+        metadata:
+            Arbitrary key-value data to pass through to the payment provider
+            (e.g. creator_handle, content_type, user_id).
+        success_url:
+            Redirect URL on successful payment.
+        cancel_url:
+            Redirect URL on cancellation.
+
+        Returns
+        -------
+        str
+            Absolute URL to redirect the user to for payment.
+        """
+
+    @abstractmethod
     async def verify_webhook(self, request_body: bytes, headers: dict) -> dict:
         """Verify an incoming webhook/postback and extract order data.
 

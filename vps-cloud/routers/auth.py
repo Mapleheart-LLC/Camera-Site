@@ -26,8 +26,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
@@ -38,6 +40,9 @@ logger = logging.getLogger(__name__)
 
 _PBKDF2_ITERATIONS = 600_000
 _SEGPAY_PURCHASE_BASE = "https://purchase.segpay.com/hosted/index.asp"
+
+# Rate limiter: max 10 auth attempts per IP per 15 minutes.
+_auth_limiter = Limiter(key_func=get_remote_address)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +102,9 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/api/auth/register", status_code=status.HTTP_201_CREATED)
+@_auth_limiter.limit("10/15minutes")
 def register(
+    request: Request,
     payload: RegisterRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -147,7 +154,9 @@ def register(
 
 
 @router.post("/api/auth/login")
+@_auth_limiter.limit("10/15minutes")
 def login(
+    request: Request,
     payload: LoginRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):

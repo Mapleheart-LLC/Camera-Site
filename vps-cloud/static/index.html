@@ -951,6 +951,8 @@
     }
 
   </style>
+  <link rel="manifest" href="/manifest.json">
+  <script>(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
 
@@ -1828,6 +1830,7 @@
       <div id="queue-results" role="list" aria-label="Search results"></div>
     </div>
   </div>
+  <script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}</script>
 </body>
 </html>
 

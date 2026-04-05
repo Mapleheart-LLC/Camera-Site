@@ -176,10 +176,22 @@ async def segpay_subscription_webhook(
     user_id = row["id"]
 
     # ── Grant or revoke access ──────────────────────────────────────────────
+    # Try to map the Segpay package_id to a tier and creator.
+    package_id = _first("x-packageid") or _first("packageid") or ""
+    tier_row = None
+    if package_id:
+        tier_row = db.execute(
+            "SELECT id, creator_handle, access_level FROM subscription_tiers WHERE segpay_package_id = ?",
+            (package_id,),
+        ).fetchone()
+
+    creator_handle = tier_row["creator_handle"] if tier_row else "mochii"
+    tier_id = tier_row["id"] if tier_row else None
+
     if is_active:
-        new_level = _sub_access_level()
+        new_level = tier_row["access_level"] if tier_row else _sub_access_level()
         db.execute(
-            "UPDATE site_users SET access_level = ? WHERE id = ?",
+            "UPDATE site_users SET access_level = MAX(access_level, ?) WHERE id = ?",
             (new_level, user_id),
         )
         db.execute(
@@ -191,14 +203,33 @@ async def segpay_subscription_webhook(
             """,
             (user_id, subscription_id, trans_type, "active", new_level, email, now),
         )
+        # Upsert user_subscriptions row.
+        db.execute(
+            """
+            INSERT INTO user_subscriptions (user_id, creator_handle, tier_id, status, started_at)
+            VALUES (?, ?, ?, 'active', ?)
+            ON CONFLICT(user_id, creator_handle) DO UPDATE
+               SET status = 'active', tier_id = excluded.tier_id
+            """,
+            (user_id, creator_handle, tier_id, now),
+        )
+        # Log subscription event for analytics.
+        db.execute(
+            """
+            INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at)
+            VALUES (?, ?, ?, 'subscribe', ?)
+            """,
+            (user_id, creator_handle, tier_id, now),
+        )
         db.commit()
         logger.info(
             "Segpay subscription: granted access_level=%d to user %s "
-            "(email=%s, trans_type=%s).",
+            "(email=%s, trans_type=%s, creator=%s).",
             new_level,
             user_id,
             email,
             trans_type,
+            creator_handle,
         )
         return {"status": "granted", "access_level": new_level}
 
@@ -215,6 +246,22 @@ async def segpay_subscription_webhook(
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (user_id, subscription_id, trans_type, "inactive", 0, email, now),
+        )
+        # Update user_subscriptions.
+        db.execute(
+            """
+            UPDATE user_subscriptions SET status = 'cancelled'
+             WHERE user_id = ? AND creator_handle = ?
+            """,
+            (user_id, creator_handle),
+        )
+        # Log cancel event.
+        db.execute(
+            """
+            INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at)
+            VALUES (?, ?, ?, 'cancel', ?)
+            """,
+            (user_id, creator_handle, tier_id, now),
         )
         db.commit()
         logger.info(

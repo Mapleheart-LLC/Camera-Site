@@ -209,6 +209,7 @@ def get_drool_feed(
             SELECT * FROM drool_archive
             WHERE id != COALESCE(?, -1)
               AND creator_handle = ?
+              AND COALESCE(is_hidden, 0) = 0
             ORDER BY timestamp DESC
             LIMIT ? OFFSET ?
             """,
@@ -236,6 +237,7 @@ def get_drool_feed(
                 GROUP BY drool_id
             ) r ON r.drool_id = da.id
             WHERE da.id != COALESCE(?, -1)
+              AND COALESCE(da.is_hidden, 0) = 0
             ORDER BY _score DESC, da.timestamp DESC
             LIMIT ? OFFSET ?
             """,

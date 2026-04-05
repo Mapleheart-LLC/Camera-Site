@@ -36,8 +36,10 @@ from email.message import EmailMessage
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import (
@@ -50,6 +52,8 @@ from routers.auth import _hash_password, _verify_password  # reuse stdlib hashin
 router = APIRouter(prefix="/api/creator", tags=["creator"])
 
 logger = logging.getLogger(__name__)
+
+_creator_limiter = Limiter(key_func=get_remote_address)
 
 # ---------------------------------------------------------------------------
 # Creator JWT lifetime (longer than subscriber tokens — 24 h default)
@@ -91,7 +95,9 @@ class SendEmailPayload(BaseModel):
 
 
 @router.post("/login")
+@_creator_limiter.limit("10/15minutes")
 def creator_login(
+    request: Request,
     payload: CreatorLoginRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -104,7 +110,8 @@ def creator_login(
 
     row = db.execute(
         """
-        SELECT id, handle, display_name, hashed_password, is_active
+        SELECT id, handle, display_name, hashed_password, is_active,
+               COALESCE(totp_enabled, 0) AS totp_enabled
           FROM creator_accounts
          WHERE handle = ?
         """,
@@ -129,6 +136,22 @@ def creator_login(
     if not _verify_password(payload.password, row["hashed_password"]):
         raise _invalid
 
+    # ── 2FA check ──────────────────────────────────────────────────────────
+    totp_enabled = row["totp_enabled"] if "totp_enabled" in row.keys() else 0
+    if totp_enabled:
+        # Issue a short-lived (5-minute) "2FA pending" token that only carries
+        # role:creator_2fa_pending — not role:creator — so it cannot access
+        # any protected endpoints.
+        pending_token = create_access_token(
+            {"sub": row["handle"], "role": "creator_2fa_pending"},
+            expires_delta=timedelta(minutes=5),
+        )
+        return {
+            "requires_2fa": True,
+            "pending_token": pending_token,
+            "handle": row["handle"],
+        }
+
     token = create_access_token(
         {"sub": row["handle"], "role": "creator"},
         expires_delta=timedelta(minutes=_CREATOR_TOKEN_MINUTES),
@@ -137,6 +160,60 @@ def creator_login(
         "access_token": token,
         "token_type": "bearer",
         "handle": row["handle"],
+        "display_name": row["display_name"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2FA second-step confirmation (exchanges pending token for full JWT)
+# ---------------------------------------------------------------------------
+
+class TwoFAConfirmRequest(BaseModel):
+    pending_token: str = Field(..., min_length=10)
+    otp: str = Field(..., min_length=6, max_length=8)
+
+
+@router.post("/2fa/confirm")
+def creator_2fa_confirm(
+    payload: TwoFAConfirmRequest,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Exchange a 2FA-pending token + OTP for a full creator JWT."""
+    import jwt
+    from dependencies import SECRET_KEY, ALGORITHM
+
+    try:
+        decoded = jwt.decode(payload.pending_token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired pending token.",
+        )
+
+    if decoded.get("role") != "creator_2fa_pending":
+        raise HTTPException(status_code=400, detail="Not a 2FA pending token.")
+
+    handle = decoded.get("sub")
+    row = db.execute(
+        "SELECT handle, display_name, totp_secret, totp_enabled FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+    if not row or not row["totp_enabled"]:
+        raise HTTPException(status_code=400, detail="2FA is not enabled for this account.")
+
+    import pyotp
+    totp = pyotp.TOTP(row["totp_secret"])
+    if not totp.verify(payload.otp, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid OTP code.")
+
+    token = create_access_token(
+        {"sub": handle, "role": "creator"},
+        expires_delta=timedelta(minutes=_CREATOR_TOKEN_MINUTES),
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "handle": handle,
         "display_name": row["display_name"],
     }
 

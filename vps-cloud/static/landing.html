@@ -492,6 +492,11 @@
     }
     .shared-pill:hover { border-color: #e8aeb7; color: #e8aeb7; }
   </style>
+  <link rel="manifest" href="/manifest.json">
+  <script>
+    // Apply saved theme before paint to avoid flash
+    (function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+  </script>
 </head>
 <body>
 
@@ -704,6 +709,19 @@
       document.getElementById('fans-cta').href        = portalOrigin + '/';
       document.getElementById('mochii-card').href     = portalOrigin + '/';
     })();
+  </script>
+  <script>
+    // Service worker registration
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('/sw.js').catch(function(){});
+    }
+    // Dark/light mode toggle helper (global)
+    function toggleTheme(){
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    }
   </script>
 
 </body>
