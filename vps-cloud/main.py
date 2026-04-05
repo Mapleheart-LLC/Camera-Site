@@ -96,7 +96,11 @@ BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool")
+_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool", "mochii", "creator")
+
+# Root hostname derived from BASE_URL (e.g. "mochii.live" from "https://mochii.live").
+# Used by the subdomain middleware to serve the platform landing page at the bare root.
+_ROOT_HOSTNAME: str = urlparse(BASE_URL).hostname.lower() if BASE_URL else ""
 
 
 def _build_allowed_origins() -> list[str]:
@@ -851,10 +855,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 async def subdomain_routing(request: Request, call_next):
     """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
-    anon.mochii.live/   → serves /anon content    (URL in browser unchanged)
-    links.mochii.live/  → serves /links content   (URL in browser unchanged)
-    shop.mochii.live/   → serves /store.html      (URL in browser unchanged)
-    drool.mochii.live/  → serves /drool.html      (URL in browser unchanged)
+    mochii.mochii.live/ → serves /index.html   (subscriber portal)
+    anon.mochii.live/   → serves /anon content
+    links.mochii.live/  → serves /links content
+    shop.mochii.live/   → serves /store.html
+    drool.mochii.live/  → serves /drool.html
+    creator.mochii.live/→ serves /creator.html  (creator pitch page)
+    mochii.live/ or www.mochii.live/ → serves /landing.html (platform home)
 
     Only GET requests to exactly "/" are rewritten so that the correct HTML
     page is returned.  All other paths (API calls, static assets, …) pass
@@ -864,16 +871,23 @@ async def subdomain_routing(request: Request, call_next):
         host = request.headers.get("host", "").lower().split(":")[0]
         # Maps subdomain prefix → the path that should be served for that root.
         _subdomain_map = {
+            "mochii.":  "/index.html",
             "anon.":    "/anon",
             "links.":   "/links",
             "shop.":    "/store.html",
             "drool.":   "/drool.html",
             "creator.": "/creator.html",
+            "www.":     "/landing.html",
         }
+        matched = False
         for prefix, target_path in _subdomain_map.items():
             if host.startswith(prefix):
                 request.scope["path"] = target_path
+                matched = True
                 break
+        # Bare root domain (e.g. mochii.live) → platform landing page.
+        if not matched and _ROOT_HOSTNAME and host == _ROOT_HOSTNAME:
+            request.scope["path"] = "/landing.html"
     return await call_next(request)
 
 
