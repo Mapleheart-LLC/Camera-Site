@@ -1,5 +1,5 @@
-/* Mapleheart Service Worker – caches shell and handles push notifications */
-const CACHE_NAME = 'mapleheart-v1';
+/* mochii.live Service Worker – caches shell and handles push notifications */
+const CACHE_NAME = 'mochii-v1';
 const OFFLINE_URL = '/offline.html';
 
 const SHELL_ASSETS = [
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push notifications ────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Mapleheart', body: 'You have a new notification.', url: '/' };
+  let data = { title: 'mochii.live', body: 'You have a new notification.', url: '/' };
   try {
     data = Object.assign(data, event.data.json());
   } catch (_) {}

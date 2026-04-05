@@ -1,7 +1,7 @@
 {
-  "name": "Mapleheart",
-  "short_name": "Mapleheart",
-  "description": "Your exclusive creator community.",
+  "name": "mochii.live",
+  "short_name": "mochii",
+  "description": "Your exclusive creator community on mochii.live.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",

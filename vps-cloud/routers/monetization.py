@@ -44,7 +44,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from db import get_db
-from dependencies import get_admin_user, get_current_creator, get_current_user
+from dependencies import get_admin_user, get_current_creator, get_current_user, get_optional_user
 
 router = APIRouter(tags=["monetization"])
 
@@ -508,10 +508,7 @@ def my_ppv_purchases(
 @router.get("/api/downloads")
 def list_downloads(
     creator_handle: Optional[str] = None,
-    current_user: Optional[dict] = Depends(
-        # Re-use get_optional_user pattern inline
-        __import__("dependencies", fromlist=["get_optional_user"]).get_optional_user
-    ),
+    current_user: Optional[dict] = Depends(get_optional_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Public list of available digital products."""

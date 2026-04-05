@@ -56,7 +56,7 @@ router = APIRouter(tags=["compliance"])
 
 logger = logging.getLogger(__name__)
 
-_ISSUER_NAME = os.environ.get("SITE_NAME", "Mapleheart")
+_ISSUER_NAME = os.environ.get("SITE_NAME", "mochii.live")
 
 # ---------------------------------------------------------------------------
 # SMTP helper (re-uses same env vars as creator email)

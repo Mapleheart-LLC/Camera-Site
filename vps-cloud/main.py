@@ -1476,10 +1476,19 @@ _AGE_GATE_HTML = """<!DOCTYPE html>
 async def age_gate_confirm(request: Request):
     """Set the age-verified cookie and redirect to the intended destination."""
     form = await request.form()
-    next_url = str(form.get("next", "/"))
-    # Sanitise the redirect target: only allow relative paths.
-    if not next_url.startswith("/") or next_url.startswith("//"):
+    raw_next = str(form.get("next", "/"))
+    # Sanitise the redirect target strictly: only allow paths starting with /
+    # and strip any scheme/host to prevent open-redirect exploits.
+    parsed = urlparse(raw_next)
+    if parsed.scheme or parsed.netloc or not raw_next.startswith("/") or raw_next.startswith("//"):
         next_url = "/"
+    else:
+        # Reconstruct from path+query only — drop scheme/netloc/fragment.
+        next_url = parsed.path
+        if parsed.query:
+            next_url += f"?{parsed.query}"
+        if not next_url.startswith("/"):
+            next_url = "/"
 
     response = RedirectResponse(url=next_url, status_code=303)
     cookie_domain = COOKIE_DOMAIN or None
