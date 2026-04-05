@@ -583,15 +583,15 @@ def _get_oauth2_client() -> Optional[object]:
     if not _TWEEPY_AVAILABLE:
         return None
 
-    access_token = _load_credential("drool_twitter_oauth2_access_token", "")
-    if not access_token:
-        access_token = _refresh_oauth2_token() or ""
-    if not access_token:
+    oauth2_token = _load_credential("drool_twitter_oauth2_access_token", "")
+    if not oauth2_token:
+        oauth2_token = _refresh_oauth2_token() or ""
+    if not oauth2_token:
         return None
 
     try:
         return _tweepy.Client(
-            access_token=access_token,
+            bearer_token=oauth2_token,
             wait_on_rate_limit=False,
         )
     except Exception as exc:
@@ -670,7 +670,6 @@ def _scrape_twitter() -> None:
         if oauth2_client is not None:
             try:
                 bk_resp = oauth2_client.get_bookmarks(
-                    id=user_id,
                     max_results=50,
                     tweet_fields=["created_at", "text", "attachments"],
                     expansions=["attachments.media_keys"],
