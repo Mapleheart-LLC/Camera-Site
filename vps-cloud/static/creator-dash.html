@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="mochii.live – Creator dashboard." />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>🐾 Creator Den</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+    }
+
+    /* ── Login panel ─────────────────────────────────────── */
+    #login-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    #login-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 40px rgba(232,174,183,.12);
+      text-align: center;
+    }
+
+    #login-card h1 { font-size: 1.6rem; font-weight: 800; color: #e8aeb7; margin-bottom: .5rem; }
+    #login-card p.subtitle { font-size: .85rem; color: #9e7e82; margin-bottom: 1.75rem; }
+
+    .field-group { text-align: left; margin-bottom: 1rem; }
+    .field-group label {
+      display: block; font-size: .8rem; font-weight: 700; color: #c49a9f;
+      margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .field-group input {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 8px;
+      color: #f0e6e8; font-family: inherit; font-size: 1rem; padding: .6rem .85rem;
+      outline: none; transition: border-color .2s;
+    }
+    .field-group input:focus { border-color: #e8aeb7; }
+
+    #login-error { font-size: .82rem; color: #f87171; min-height: 1.2em; margin-bottom: .75rem; }
+
+    .btn-primary {
+      width: 100%; padding: .7rem 1rem; background: #e8aeb7; border: none; border-radius: 10px;
+      color: #1a1a1a; font-family: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
+      transition: background .2s, box-shadow .2s, transform .1s;
+    }
+    .btn-primary:hover { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,.3); }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── Creator shell ────────────────────────────────────── */
+    #creator-panel { display: none; min-height: 100vh; }
+
+    .admin-topbar {
+      position: sticky; top: 0; z-index: 150;
+      display: flex; align-items: center; gap: .75rem;
+      padding: 0 1.25rem; height: 56px;
+      background: #1c1c1c; border-bottom: 1px solid #3d2a2e;
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    }
+
+    #mob-menu-btn {
+      display: none; background: none; border: none;
+      color: #9e7e82; font-size: 1.4rem; cursor: pointer;
+      padding: .25rem .4rem; border-radius: 6px; transition: color .15s;
+    }
+    #mob-menu-btn:hover { color: #e8aeb7; }
+
+    .topbar-title { font-size: 1.15rem; font-weight: 800; color: #e8aeb7; white-space: nowrap; }
+    .topbar-creator-name {
+      padding: .15rem .6rem; border-radius: 20px;
+      background: rgba(232,174,183,.1); border: 1px solid #e8aeb7;
+      color: #e8aeb7; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    }
+
+    #logout-btn {
+      margin-left: auto; background: transparent; border: 1px solid #4b3538;
+      border-radius: 8px; color: #9e7e82; padding: .35rem .85rem;
+      font-family: inherit; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: border-color .2s, color .2s; white-space: nowrap;
+    }
+    #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    /* ── Layout ──────────────────────────────────────── */
+    .admin-layout { display: flex; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ──────────────────────────────────────── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: #1c1c1c; border-right: 1px solid #3d2a2e;
+      padding: .75rem 0 1.5rem;
+      position: sticky; top: 56px;
+      height: calc(100vh - 56px); overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+
+    .sidebar-section-label {
+      font-size: .63rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: #5a3a3e;
+      padding: .75rem 1.25rem .3rem; margin-top: .5rem;
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: .55rem;
+      width: 100%; padding: .6rem 1.25rem;
+      background: none; border: none; border-left: 3px solid transparent;
+      color: #9e7e82; font-family: inherit; font-size: .88rem; font-weight: 700;
+      cursor: pointer; transition: color .15s, background .15s, border-color .15s;
+      text-align: left;
+    }
+    .nav-item:hover { color: #e8aeb7; background: rgba(232,174,183,.06); }
+    .nav-item.active { color: #e8aeb7; background: rgba(232,174,183,.12); border-left-color: #e8aeb7; }
+
+    .nav-badge {
+      margin-left: auto; background: #e8aeb7; color: #1a1a1a;
+      border-radius: 20px; font-size: .68rem; font-weight: 800;
+      padding: .05rem .42rem; min-width: 1.4em; text-align: center; display: none;
+    }
+    .nav-badge.visible { display: inline-block; }
+
+    /* ── Main content ────────────────────────────────── */
+    .admin-main { flex: 1; padding: 1.75rem 2rem; min-width: 0; }
+
+    .section-heading {
+      font-size: 1.3rem; font-weight: 800; color: #e8aeb7;
+      margin-bottom: 1.5rem; display: flex; align-items: center; gap: .5rem;
+    }
+
+    .creator-section { display: none; }
+    .creator-section.active { display: block; }
+
+    /* ── Sub-tabs ─────────────────────────────────────── */
+    .sub-tabs {
+      display: flex; gap: .5rem; margin-bottom: 1.25rem;
+      border-bottom: 1px solid #3d2a2e; padding-bottom: .75rem;
+    }
+    .sub-tab {
+      padding: .38rem 1rem; background: transparent; border: 1px solid #3d2a2e;
+      border-radius: 20px; color: #9e7e82; font-family: inherit;
+      font-size: .83rem; font-weight: 700; cursor: pointer; transition: all .15s;
+    }
+    .sub-tab:hover { color: #e8aeb7; border-color: #e8aeb7; }
+    .sub-tab.active { background: #e8aeb7; color: #1a1a1a; border-color: #e8aeb7; }
+    .sub-tab-content { display: none; }
+    .sub-tab-content.active { display: block; }
+
+    /* ── Cards ───────────────────────────────────────── */
+    .card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .8rem 1.25rem; border-bottom: 1px solid #3d2a2e; background: #242424;
+    }
+    .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
+    .card-body { padding: 1.25rem; }
+    .card-body.no-pad { padding: 0; }
+
+    /* ── Stats ───────────────────────────────────────── */
+    .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .stat-tile { flex: 1; min-width: 120px; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.25rem; text-align: center; }
+    .stat-tile .stat-value { font-size: 2rem; font-weight: 800; color: #e8aeb7; line-height: 1; }
+    .stat-tile .stat-label { font-size: .73rem; color: #9e7e82; margin-top: .35rem; text-transform: uppercase; letter-spacing: .05em; }
+
+    /* ── Quick actions ────────────────────────────────── */
+    .quick-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+    .btn-quick {
+      padding: .55rem 1.1rem; background: rgba(232,174,183,.08); border: 1px solid #3d2a2e;
+      border-radius: 10px; color: #c49a9f; font-family: inherit; font-size: .88rem;
+      font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+    }
+    .btn-quick:hover { background: rgba(232,174,183,.18); border-color: #e8aeb7; color: #e8aeb7; }
+
+    /* ── Tables ──────────────────────────────────────── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .admin-table th { text-align: left; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; padding: .6rem .85rem; border-bottom: 1px solid #3d2a2e; }
+    .admin-table td { padding: .65rem .85rem; border-bottom: 1px solid #2a1e20; vertical-align: middle; }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .admin-table tr:hover td { background: rgba(232,174,183,.04); }
+    .empty-row td { color: #5a3a3e; text-align: center; padding: 1.5rem; }
+
+    /* ── Buttons ─────────────────────────────────────── */
+    .btn-sm { padding: .3rem .7rem; border-radius: 6px; font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+    .btn-edit { background: transparent; border: 1px solid #e8aeb7; color: #e8aeb7; }
+    .btn-edit:hover { background: #e8aeb7; color: #1a1a1a; }
+    .btn-delete { background: transparent; border: 1px solid #f87171; color: #f87171; }
+    .btn-delete:hover { background: #f87171; color: #1a1a1a; }
+    .action-cell { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+    /* ── Profile form ────────────────────────────────── */
+    .form-field { flex: 1; min-width: 140px; }
+    .form-field label { display: block; font-size: .7rem; font-weight: 700; color: #9e7e82; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+    .form-field input, .form-field textarea {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 7px;
+      color: #f0e6e8; font-family: inherit; font-size: .95rem; padding: .5rem .75rem;
+      outline: none; transition: border-color .2s;
+    }
+    .form-field input:focus, .form-field textarea:focus { border-color: #e8aeb7; }
+    .form-field textarea { resize: vertical; min-height: 80px; }
+    .profile-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .accent-preview-row { display: flex; align-items: center; gap: .75rem; }
+    .accent-swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #3d2a2e; flex-shrink: 0; transition: background .2s; }
+    #profile-error { font-size: .82rem; color: #f87171; min-height: 1.2em; margin-top: .5rem; }
+
+    /* ── Q&A ─────────────────────────────────────────── */
+    .question-row td { vertical-align: top; }
+    .q-text { font-size: .9rem; color: #f0e6e8; max-width: 360px; word-break: break-word; }
+    .q-answer-preview { font-size: .83rem; color: #9e7e82; max-width: 360px; word-break: break-word; font-style: italic; }
+    .q-ts { font-size: .75rem; color: #9e7e82; font-family: monospace; white-space: nowrap; }
+
+    /* ── Answer modal ────────────────────────────────── */
+    #answer-modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      z-index: 900; align-items: center; justify-content: center;
+    }
+    #answer-modal-backdrop.open { display: flex; }
+    #answer-modal {
+      background: #242424; border: 1px solid #3d2a2e; border-radius: 14px;
+      padding: 1.5rem 1.6rem; width: 100%; max-width: 520px; margin: 1rem;
+      box-shadow: 0 12px 48px rgba(0,0,0,.5); position: relative;
+    }
+    #answer-modal h3 {
+      font-size: .78rem; font-weight: 800; color: #e8aeb7;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: .5rem;
+    }
+    #answer-modal-close {
+      position: absolute; top: .75rem; right: .9rem;
+      background: none; border: none; color: #9e7e82; font-size: 1.2rem;
+      cursor: pointer; line-height: 1; padding: .2rem .4rem; border-radius: 4px;
+    }
+    #answer-modal-close:hover { color: #f0e6e8; }
+    #answer-modal-question {
+      font-size: .85rem; color: #c49a9f; margin-bottom: .8rem;
+      font-style: italic; word-break: break-word;
+      background: #1a1a1a; border-left: 3px solid #e8aeb7;
+      padding: .5rem .75rem; border-radius: 0 6px 6px 0;
+    }
+    #answer-modal-textarea {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e;
+      border-radius: 7px; color: #f0e6e8; font-family: inherit;
+      font-size: .88rem; padding: .5rem .75rem; resize: vertical;
+      min-height: 90px; outline: none; transition: border-color .2s;
+      margin-bottom: .6rem;
+    }
+    #answer-modal-textarea:focus { border-color: #e8aeb7; }
+    .answer-form-actions { display: flex; gap: .5rem; }
+    #answer-modal-error { font-size: .78rem; color: #f87171; min-height: 1em; margin-top: .4rem; }
+
+    /* ── Drool ───────────────────────────────────────── */
+    .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
+    .truncate-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Toast ───────────────────────────────────────── */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,.4); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 300; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Mobile ──────────────────────────────────────── */
+    @media (max-width: 740px) {
+      #mob-menu-btn { display: flex; }
+      .topbar-creator-name { display: none; }
+      .sidebar { display: none; position: fixed; top: 56px; left: 0; z-index: 200; height: calc(100vh - 56px); width: 240px; box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+      .sidebar.open { display: flex; }
+      #mob-overlay { display: none; position: fixed; inset: 56px 0 0 0; background: rgba(0,0,0,.45); z-index: 190; }
+      #mob-overlay.open { display: block; }
+      .admin-main { padding: 1.25rem 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Login panel ──────────────────────────────────── -->
+  <div id="login-panel">
+    <div id="login-card">
+      <h1 aria-label="Creator Den">🐾 Creator Den</h1>
+      <p class="subtitle">Your creative space on mochii.live</p>
+      <div class="field-group">
+        <label for="login-handle">Handle</label>
+        <input id="login-handle" type="text" autocomplete="username" placeholder="Your creator handle" />
+      </div>
+      <div class="field-group">
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="Enter password" />
+      </div>
+      <p id="login-error" role="alert" aria-live="polite"></p>
+      <button id="login-btn" class="btn-primary">🐾 Enter the Den</button>
+    </div>
+  </div>
+
+  <!-- ── Creator panel ────────────────────────────────── -->
+  <div id="creator-panel">
+
+    <header class="admin-topbar">
+      <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
+      <span class="topbar-title">🐾 Creator Den</span>
+      <span id="topbar-creator-name" class="topbar-creator-name"></span>
+      <button id="logout-btn">Leave Den 🐾</button>
+    </header>
+
+    <div id="mob-overlay"></div>
+
+    <div class="admin-layout">
+
+      <nav class="sidebar" id="sidebar" aria-label="Creator navigation">
+        <div class="sidebar-section-label">Creator</div>
+        <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
+        <button class="nav-item" data-target="s-profile">👤 Profile</button>
+        <button class="nav-item" data-target="s-qa">
+          🐾 Q&amp;A
+          <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
+        </button>
+        <button class="nav-item" data-target="s-drool">💧 Drool Log</button>
+        <button class="nav-item" data-target="s-stats">📈 Stats</button>
+      </nav>
+
+      <main class="admin-main">
+
+        <!-- ── Dashboard ─────────────────────────────── -->
+        <section id="s-dashboard" class="creator-section active">
+          <h1 class="section-heading">📊 Dashboard</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Overview</h2></div>
+            <div class="card-body">
+              <div class="stats-row">
+                <div class="stat-tile">
+                  <div id="dash-stat-subscribers" class="stat-value">—</div>
+                  <div class="stat-label">Subscribers</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="dash-stat-unanswered" class="stat-value">—</div>
+                  <div class="stat-label">Unanswered Q's</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="dash-stat-answered" class="stat-value">—</div>
+                  <div class="stat-label">Answered Q's</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="dash-stat-drool" class="stat-value">—</div>
+                  <div class="stat-label">Drool Entries</div>
+                </div>
+              </div>
+              <div class="quick-actions">
+                <button class="btn-quick" data-jump="s-profile">👤 Edit Profile</button>
+                <button class="btn-quick" data-jump="s-qa">🐾 Answer Questions</button>
+                <button class="btn-quick" data-jump="s-drool">💧 View Drool Log</button>
+                <button class="btn-quick" data-jump="s-stats">📈 See Stats</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Profile ───────────────────────────────── -->
+        <section id="s-profile" class="creator-section">
+          <h1 class="section-heading">👤 Profile</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Edit Your Profile</h2></div>
+            <div class="card-body">
+              <div class="profile-form-grid">
+                <div class="form-field">
+                  <label for="prof-display-name">Display Name</label>
+                  <input id="prof-display-name" type="text" placeholder="Your display name" maxlength="60" />
+                </div>
+                <div class="form-field" style="grid-column: 1 / -1;">
+                  <label for="prof-bio">Bio</label>
+                  <textarea id="prof-bio" placeholder="Tell your fans a little about yourself…" maxlength="500"></textarea>
+                </div>
+                <div class="form-field">
+                  <label for="prof-avatar-url">Avatar URL</label>
+                  <input id="prof-avatar-url" type="url" placeholder="https://…" />
+                </div>
+                <div class="form-field">
+                  <label for="prof-accent-color">Accent Color</label>
+                  <div class="accent-preview-row">
+                    <input id="prof-accent-color" type="color" value="#e8aeb7" style="width:48px;height:38px;padding:.1rem;cursor:pointer;border-radius:6px;border:1px solid #3d2a2e;background:#1a1a1a;" />
+                    <span id="accent-swatch" class="accent-swatch" style="background:#e8aeb7;"></span>
+                    <span id="accent-hex" style="font-size:.8rem;color:#9e7e82;font-family:monospace;">#e8aeb7</span>
+                  </div>
+                </div>
+              </div>
+              <p id="profile-error" role="alert" aria-live="polite"></p>
+              <button id="profile-save-btn" class="btn-sm btn-edit" style="margin-top:.5rem">Save Profile 🐾</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Q&A ───────────────────────────────────── -->
+        <section id="s-qa" class="creator-section">
+          <h1 class="section-heading">
+            🐾 Q&amp;A
+            <button id="refresh-questions-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="sub-tabs">
+            <button class="sub-tab active" data-qa-tab="unanswered">📬 Unanswered</button>
+            <button class="sub-tab" data-qa-tab="answered">✅ Answered</button>
+          </div>
+
+          <!-- Unanswered -->
+          <div id="qa-tab-unanswered" class="sub-tab-content active">
+            <div class="card">
+              <div class="card-header"><h2>Awaiting Your Answer</h2></div>
+              <div class="card-body no-pad">
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Unanswered questions">
+                    <thead><tr><th>Question</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
+                    <tbody id="unanswered-body">
+                      <tr class="empty-row"><td colspan="3">Loading questions…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Answered -->
+          <div id="qa-tab-answered" class="sub-tab-content">
+            <div class="card">
+              <div class="card-header"><h2>Already Answered</h2></div>
+              <div class="card-body no-pad">
+                <div style="overflow-x:auto">
+                  <table class="admin-table" aria-label="Answered questions">
+                    <thead><tr><th>Question</th><th>Answer</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
+                    <tbody id="answered-body">
+                      <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Drool Log ──────────────────────────────── -->
+        <section id="s-drool" class="creator-section">
+          <h1 class="section-heading">
+            💧 Drool Log
+            <button id="refresh-drool-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Your Drool Entries</h2></div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Drool log">
+                  <thead>
+                    <tr>
+                      <th style="width:3.5rem">ID</th>
+                      <th style="width:7rem">Platform</th>
+                      <th>Title / URL</th>
+                      <th style="width:11rem">Timestamp (UTC)</th>
+                      <th style="width:5rem"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="drool-body">
+                    <tr class="empty-row"><td colspan="5">Loading drool log…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Stats ─────────────────────────────────── -->
+        <section id="s-stats" class="creator-section">
+          <h1 class="section-heading">
+            📈 Stats
+            <button id="refresh-stats-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Your Numbers</h2></div>
+            <div class="card-body">
+              <div class="stats-row">
+                <div class="stat-tile">
+                  <div id="stats-subscribers" class="stat-value">—</div>
+                  <div class="stat-label">Subscribers</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="stats-unanswered" class="stat-value">—</div>
+                  <div class="stat-label">Unanswered Q's</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="stats-answered" class="stat-value">—</div>
+                  <div class="stat-label">Answered Q's</div>
+                </div>
+                <div class="stat-tile">
+                  <div id="stats-drool" class="stat-value">—</div>
+                  <div class="stat-label">Drool Entries</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- ── Answer modal ──────────────────────────────────── -->
+  <div id="answer-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="answer-modal-title">
+    <div id="answer-modal">
+      <button id="answer-modal-close" aria-label="Close">✕</button>
+      <h3 id="answer-modal-title">Answer This Question 🐾</h3>
+      <p id="answer-modal-question"></p>
+      <textarea id="answer-modal-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
+      <div class="answer-form-actions">
+        <button id="answer-modal-save" class="btn-sm btn-edit">Save Answer 🐾</button>
+        <button id="answer-modal-cancel" class="btn-sm btn-delete">Cancel</button>
+      </div>
+      <p id="answer-modal-error"></p>
+    </div>
+  </div>
+
+  <script>
+    // ── Token storage ──────────────────────────────────
+    const TOKEN_KEY = 'creator_jwt';
+    function getJwt()    { return localStorage.getItem(TOKEN_KEY); }
+    function setJwt(t)   { localStorage.setItem(TOKEN_KEY, t); }
+    function clearJwt()  { localStorage.removeItem(TOKEN_KEY); }
+    function authHeader() {
+      const t = getJwt();
+      return t ? { Authorization: `Bearer ${t}` } : {};
+    }
+
+    // ── HTML escape ────────────────────────────────────
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Toast helper ───────────────────────────────────
+    let _toastTimer = null;
+    function showToast(msg, duration = 3000) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+    }
+
+    // ── Panel toggling ─────────────────────────────────
+    function showCreatorPanel(me) {
+      document.getElementById('login-panel').style.display = 'none';
+      document.getElementById('creator-panel').style.display = 'block';
+      if (me && me.display_name) {
+        document.getElementById('topbar-creator-name').textContent = me.display_name;
+      }
+      loadDashboardStats();
+    }
+    function showLoginPanel() {
+      clearJwt();
+      document.getElementById('login-panel').style.display = 'flex';
+      document.getElementById('creator-panel').style.display = 'none';
+      document.getElementById('login-error').textContent = '';
+    }
+
+    // ── API helpers ────────────────────────────────────
+    async function apiGet(path) {
+      const r = await fetch(path, { headers: authHeader() });
+      if (r.status === 401) { clearJwt(); showLoginPanel(); throw new Error('401'); }
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    }
+    async function apiPost(path, body) {
+      return fetch(path, {
+        method: 'POST',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    async function apiPatch(path, body) {
+      return fetch(path, {
+        method: 'PATCH',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    async function apiDelete(path) {
+      return fetch(path, { method: 'DELETE', headers: authHeader() });
+    }
+
+    // ── Boot: check existing token ─────────────────────
+    (async () => {
+      if (!getJwt()) return;
+      try {
+        const me = await apiGet('/api/creator/me');
+        showCreatorPanel(me);
+      } catch {
+        /* 401 already handled in apiGet */
+      }
+    })();
+
+    // ── Login ──────────────────────────────────────────
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const handle = document.getElementById('login-handle').value.trim();
+      const pass   = document.getElementById('login-password').value;
+      const errEl  = document.getElementById('login-error');
+      const btn    = document.getElementById('login-btn');
+      errEl.textContent = '';
+      if (!handle || !pass) { errEl.textContent = 'Please enter your handle and password.'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Entering den…';
+      try {
+        const resp = await fetch('/api/creator/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle, password: pass }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || '🐾 Invalid handle or password.';
+          return;
+        }
+        const data = await resp.json();
+        setJwt(data.access_token);
+        const me = await apiGet('/api/creator/me');
+        showCreatorPanel(me);
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = '🐾 Login failed. Please try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🐾 Enter the Den';
+      }
+    });
+
+    ['login-handle', 'login-password'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
+      });
+    });
+
+    // ── Logout ─────────────────────────────────────────
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      showLoginPanel();
+    });
+
+    // ── Sidebar navigation ─────────────────────────────
+    function navigate(targetId, triggerLoad) {
+      document.querySelectorAll('.creator-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+      const section = document.getElementById(targetId);
+      if (section) section.classList.add('active');
+      const btn = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+      if (btn) btn.classList.add('active');
+      closeMobileSidebar();
+      if (triggerLoad !== false) {
+        if (targetId === 's-profile') loadProfile();
+        if (targetId === 's-qa') loadQuestions();
+        if (targetId === 's-drool') loadDrool();
+        if (targetId === 's-stats') loadStats();
+      }
+    }
+
+    document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
+      btn.addEventListener('click', () => navigate(btn.dataset.target));
+    });
+
+    document.querySelectorAll('.btn-quick[data-jump]').forEach(btn => {
+      btn.addEventListener('click', () => navigate(btn.dataset.jump));
+    });
+
+    // ── Mobile sidebar ─────────────────────────────────
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mob-overlay');
+    const menuBtn = document.getElementById('mob-menu-btn');
+
+    function closeMobileSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    }
+    menuBtn.addEventListener('click', () => {
+      const isOpen = sidebar.classList.toggle('open');
+      overlay.classList.toggle('open', isOpen);
+    });
+    overlay.addEventListener('click', closeMobileSidebar);
+
+    // ── Dashboard stats ────────────────────────────────
+    async function loadDashboardStats() {
+      try {
+        const data = await apiGet('/api/creator/stats');
+        document.getElementById('dash-stat-subscribers').textContent = data.subscriber_count   ?? '—';
+        document.getElementById('dash-stat-unanswered').textContent  = data.unanswered_questions ?? '—';
+        document.getElementById('dash-stat-answered').textContent    = data.answered_questions   ?? '—';
+        document.getElementById('dash-stat-drool').textContent       = data.drool_entries         ?? '—';
+        updateUnansweredBadge(data.unanswered_questions ?? 0);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load dashboard stats.');
+      }
+    }
+
+    function updateUnansweredBadge(count) {
+      const badge = document.getElementById('nav-unanswered-badge');
+      badge.textContent = count;
+      badge.classList.toggle('visible', count > 0);
+    }
+
+    // ── Profile ────────────────────────────────────────
+    async function loadProfile() {
+      try {
+        const me = await apiGet('/api/creator/me');
+        document.getElementById('prof-display-name').value  = me.display_name  || '';
+        document.getElementById('prof-bio').value           = me.bio            || '';
+        document.getElementById('prof-avatar-url').value    = me.avatar_url     || '';
+        const color = me.accent_color || '#e8aeb7';
+        document.getElementById('prof-accent-color').value  = color;
+        document.getElementById('accent-swatch').style.background = color;
+        document.getElementById('accent-hex').textContent = color;
+        document.getElementById('profile-error').textContent = '';
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load profile.');
+      }
+    }
+
+    document.getElementById('prof-accent-color').addEventListener('input', (e) => {
+      document.getElementById('accent-swatch').style.background = e.target.value;
+      document.getElementById('accent-hex').textContent = e.target.value;
+    });
+
+    document.getElementById('profile-save-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('profile-error');
+      const btn   = document.getElementById('profile-save-btn');
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const resp = await apiPatch('/api/creator/me', {
+          display_name: document.getElementById('prof-display-name').value.trim(),
+          bio:          document.getElementById('prof-bio').value.trim(),
+          avatar_url:   document.getElementById('prof-avatar-url').value.trim() || null,
+          accent_color: document.getElementById('prof-accent-color').value,
+        });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        const updated = await resp.json().catch(() => ({}));
+        if (updated.display_name) {
+          document.getElementById('topbar-creator-name').textContent = updated.display_name;
+        }
+        showToast('🐾 Profile saved!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Save failed. Please try again.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Profile 🐾';
+      }
+    });
+
+    // ── Q&A sub-tabs ───────────────────────────────────
+    document.querySelectorAll('.sub-tab[data-qa-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.sub-tab[data-qa-tab]').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#s-qa .sub-tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`qa-tab-${tab.dataset.qaTab}`).classList.add('active');
+      });
+    });
+
+    // ── Questions ──────────────────────────────────────
+    async function loadQuestions() {
+      await Promise.all([loadUnanswered(), loadAnswered()]);
+    }
+
+    async function loadUnanswered() {
+      try {
+        const questions = await apiGet('/api/creator/questions');
+        renderUnanswered(questions);
+        updateUnansweredBadge(questions.length);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load questions.');
+      }
+    }
+
+    function renderUnanswered(questions) {
+      const tbody = document.getElementById('unanswered-body');
+      if (!questions.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No unanswered questions 🐾</td></tr>';
+        return;
+      }
+      tbody.innerHTML = questions.map(q => {
+        const ts = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+          <td><div class="q-text">${escHtml(q.text)}</div></td>
+          <td class="q-ts">${escHtml(ts)}</td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-edit answer-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Answer 🐾</button>
+            <button class="btn-sm btn-delete del-q-btn" data-id="${escHtml(q.id)}">🗑️</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.answer-btn').forEach(btn => {
+        btn.addEventListener('click', () => openAnswerModal(btn.dataset.id, btn.dataset.text));
+      });
+      tbody.querySelectorAll('.del-q-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id));
+      });
+    }
+
+    async function loadAnswered() {
+      try {
+        const questions = await apiGet('/api/creator/questions/answered');
+        renderAnswered(questions);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load answered questions.');
+      }
+    }
+
+    function renderAnswered(questions) {
+      const tbody = document.getElementById('answered-body');
+      if (!questions.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No answered questions yet 🐾</td></tr>';
+        return;
+      }
+      tbody.innerHTML = questions.map(q => {
+        const ts      = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const preview = q.answer && q.answer.length > 90
+          ? escHtml(q.answer.slice(0, 87)) + '…'
+          : escHtml(q.answer || '');
+        return `<tr class="question-row" data-id="${escHtml(q.id)}">
+          <td><div class="q-text">${escHtml(q.text)}</div></td>
+          <td><div class="q-answer-preview">${preview}</div></td>
+          <td class="q-ts">${escHtml(ts)}</td>
+          <td><div class="action-cell">
+            <button class="btn-sm btn-delete del-answered-btn" data-id="${escHtml(q.id)}">🗑️</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.del-answered-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteQuestion(btn.dataset.id));
+      });
+    }
+
+    async function deleteQuestion(id) {
+      if (!confirm('Delete this question? This cannot be undone.')) return;
+      try {
+        const resp = await apiDelete(`/api/creator/questions/${encodeURIComponent(id)}`);
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadQuestions();
+        showToast('🗑️ Question deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    document.getElementById('refresh-questions-btn').addEventListener('click', loadQuestions);
+
+    // ── Answer modal ───────────────────────────────────
+    let _answeringId = null;
+
+    function openAnswerModal(id, text) {
+      _answeringId = id;
+      document.getElementById('answer-modal-question').textContent = `"${text}"`;
+      document.getElementById('answer-modal-textarea').value = '';
+      document.getElementById('answer-modal-error').textContent = '';
+      document.getElementById('answer-modal-backdrop').classList.add('open');
+      document.getElementById('answer-modal-textarea').focus();
+    }
+
+    function closeAnswerModal() {
+      _answeringId = null;
+      document.getElementById('answer-modal-backdrop').classList.remove('open');
+    }
+
+    document.getElementById('answer-modal-close').addEventListener('click', closeAnswerModal);
+    document.getElementById('answer-modal-cancel').addEventListener('click', closeAnswerModal);
+    document.getElementById('answer-modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('answer-modal-backdrop')) closeAnswerModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('answer-modal-backdrop').classList.contains('open')) {
+        closeAnswerModal();
+      }
+    });
+
+    document.getElementById('answer-modal-save').addEventListener('click', async () => {
+      const answer  = document.getElementById('answer-modal-textarea').value.trim();
+      const errEl   = document.getElementById('answer-modal-error');
+      const saveBtn = document.getElementById('answer-modal-save');
+      if (!answer) { errEl.textContent = 'Please enter an answer.'; return; }
+      errEl.textContent = '';
+      saveBtn.disabled = true;
+      try {
+        const resp = await apiPost(
+          `/api/creator/questions/${encodeURIComponent(_answeringId)}/answer`,
+          { answer }
+        );
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        closeAnswerModal();
+        await loadQuestions();
+        showToast('🐾 Answer saved!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    // ── Drool Log ──────────────────────────────────────
+    async function loadDrool() {
+      try {
+        const entries = await apiGet('/api/creator/drool');
+        renderDrool(entries);
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load drool log.');
+      }
+    }
+
+    function renderDrool(entries) {
+      const tbody = document.getElementById('drool-body');
+      if (!entries.length) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No drool entries yet 💧</td></tr>';
+        return;
+      }
+      tbody.innerHTML = entries.map(e => {
+        const ts    = (e.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
+        const label = e.title || e.url || '';
+        const display = label.length > 60 ? escHtml(label.slice(0, 57)) + '…' : escHtml(label);
+        const linked = e.url
+          ? `<a href="${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" style="color:#c49a9f;text-decoration:none;">${display}</a>`
+          : display;
+        return `<tr>
+          <td>${escHtml(String(e.id))}</td>
+          <td>${escHtml(e.platform || '—')}</td>
+          <td class="truncate-cell">${linked}</td>
+          <td class="ts-cell">${escHtml(ts)}</td>
+          <td><button class="btn-sm btn-delete del-drool-btn" data-id="${escHtml(String(e.id))}">🗑️</button></td>
+        </tr>`;
+      }).join('');
+      tbody.querySelectorAll('.del-drool-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteDrool(btn.dataset.id));
+      });
+    }
+
+    async function deleteDrool(id) {
+      if (!confirm('Delete this drool entry? This cannot be undone.')) return;
+      try {
+        const resp = await apiDelete(`/api/creator/drool/${encodeURIComponent(id)}`);
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadDrool();
+        showToast('🗑️ Entry deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    document.getElementById('refresh-drool-btn').addEventListener('click', loadDrool);
+
+    // ── Stats ──────────────────────────────────────────
+    async function loadStats() {
+      try {
+        const data = await apiGet('/api/creator/stats');
+        document.getElementById('stats-subscribers').textContent = data.subscriber_count     ?? '—';
+        document.getElementById('stats-unanswered').textContent  = data.unanswered_questions ?? '—';
+        document.getElementById('stats-answered').textContent    = data.answered_questions   ?? '—';
+        document.getElementById('stats-drool').textContent       = data.drool_entries         ?? '—';
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load stats.');
+      }
+    }
+
+    document.getElementById('refresh-stats-btn').addEventListener('click', loadStats);
+  </script>
+</body>
+</html>
