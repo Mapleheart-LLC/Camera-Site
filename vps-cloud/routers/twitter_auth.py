@@ -86,6 +86,9 @@ def _store_pending(token: str, secret: str) -> None:
 def _pop_pending(token: str) -> Optional[str]:
     """Return and remove the stored secret, or None if missing/expired."""
     conn = None
+    row = None
+    secret: Optional[str] = None
+    expires_at: Optional[str] = None
     try:
         conn = get_db_connection()
         row = conn.execute(

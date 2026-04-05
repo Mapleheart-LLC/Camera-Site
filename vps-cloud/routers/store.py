@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from db import get_db
-from discord_webhook import send_admin_notification, send_discord_notification
+from discord_webhook import send_admin_notification
 from payments import get_payment_provider
 
 logger = logging.getLogger(__name__)

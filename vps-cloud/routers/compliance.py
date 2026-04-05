@@ -30,11 +30,10 @@ Endpoints
 
 import logging
 import os
-import secrets
 import smtplib
 import sqlite3
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Optional
 
@@ -44,8 +43,6 @@ from pydantic import BaseModel, Field
 
 from db import get_db
 from dependencies import (
-    SECRET_KEY,
-    create_access_token,
     get_admin_user,
     get_current_creator,
     get_current_user,
@@ -541,8 +538,10 @@ def approve_application(
         # Attempt Cloudflare subdomain provisioning.
         try:
             from routers.cloudflare import provision_creator_subdomain
-            import asyncio
-            asyncio.run(provision_creator_subdomain(handle, forwarding_email=applicant_email))
+            from urllib.parse import urlparse
+            root_domain = urlparse(base_url).hostname or ""
+            if root_domain:
+                provision_creator_subdomain(handle, root_domain, forwarding_email=applicant_email)
         except Exception as exc:
             logger.warning("CF provisioning for %s failed: %s", handle, exc)
         # Send welcome email.
