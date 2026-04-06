@@ -103,12 +103,64 @@
       box-shadow: 0 4px 18px rgba(232,174,183,.28);
     }
 
-    /* Login form */
-    #login-form-wrap {
+    /* Auth modal */
+    #auth-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #auth-modal[hidden] { display: none; }
+
+    #auth-modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, .65);
+      backdrop-filter: blur(2px);
+    }
+
+    #auth-modal-card {
+      position: relative;
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 2rem 2rem 1.25rem;
       width: 100%;
       max-width: 380px;
-      margin: 1.5rem auto 0;
-      padding: 0 1.5rem;
+      margin: 1rem;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, .55);
+      animation: authModalIn .2s ease;
+    }
+
+    @keyframes authModalIn {
+      from { opacity: 0; transform: translateY(-10px) scale(.97); }
+      to   { opacity: 1; transform: translateY(0)   scale(1);    }
+    }
+
+    #auth-modal-close {
+      position: absolute;
+      top: .65rem;
+      right: .75rem;
+      background: none;
+      border: none;
+      color: #9e7e82;
+      font-size: 1.4rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: .15rem .45rem;
+      border-radius: 6px;
+      transition: color .2s, background .2s;
+    }
+
+    #auth-modal-close:hover { color: #e8aeb7; background: #2a1a1e; }
+
+    /* Login form (inside modal) */
+    #login-form-wrap {
+      width: 100%;
+      margin-bottom: .5rem;
     }
 
     #login-form-wrap form {
@@ -210,7 +262,8 @@
       text-align: center;
       font-size: .85rem;
       min-height: 1.2em;
-      padding: 0 1.5rem .5rem;
+      padding: 0 0 .25rem;
+      margin: 0;
     }
 
     #login-message.error   { color: #f87171; }
@@ -942,7 +995,7 @@
     <!-- Sticky nav -->
     <nav class="landing-nav">
       <span class="landing-logo">🐾 mochii.live</span>
-      <button id="sign-in-btn" type="button" onclick="document.getElementById('login-form-wrap').scrollIntoView({behavior:'smooth'})">
+      <button id="sign-in-btn" type="button">
         Sign In 🐾
       </button>
     </nav>
@@ -953,23 +1006,6 @@
       <h1 aria-label="mochii.live">mochii.live</h1>
       <p class="hero-tagline">come find your place in the pack. 🐾</p>
     </div>
-
-    <!-- Login/register form -->
-    <div id="login-form-wrap">
-      <form id="auth-form" autocomplete="on" novalidate>
-        <label for="auth-username" class="visually-hidden">Username</label>
-        <input id="auth-username" type="text" name="username" placeholder="Username" autocomplete="username" required maxlength="32" />
-        <label for="auth-password" class="visually-hidden">Password</label>
-        <input id="auth-password" type="password" name="password" placeholder="Password" autocomplete="current-password" required maxlength="128" />
-        <div class="form-row">
-          <button id="login-submit-btn" type="submit">Sign In 🐾</button>
-          <button id="register-submit-btn" type="button">Register</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Status/error message -->
-    <p id="login-message" role="alert" aria-live="polite"></p>
 
     <!-- Static nav cards -->
     <div class="links-section">
@@ -1053,6 +1089,27 @@
     </div>
   </section>
 
+  <!-- Auth Modal -->
+  <div id="auth-modal" role="dialog" aria-modal="true" aria-label="Sign In or Register" hidden>
+    <div id="auth-modal-backdrop"></div>
+    <div id="auth-modal-card">
+      <button id="auth-modal-close" type="button" aria-label="Close">&times;</button>
+      <div id="login-form-wrap">
+        <form id="auth-form" autocomplete="on" novalidate>
+          <label for="auth-username" class="visually-hidden">Username</label>
+          <input id="auth-username" type="text" name="username" placeholder="Username" autocomplete="username" required maxlength="32" />
+          <label for="auth-password" class="visually-hidden">Password</label>
+          <input id="auth-password" type="password" name="password" placeholder="Password" autocomplete="current-password" required maxlength="128" />
+          <div class="form-row">
+            <button id="login-submit-btn" type="submit">Sign In 🐾</button>
+            <button id="register-submit-btn" type="button">Register</button>
+          </div>
+        </form>
+      </div>
+      <p id="login-message" role="alert" aria-live="polite"></p>
+    </div>
+  </div>
+
   <script>
     // ── Storage helpers ───────────────────────────────
     const TOKEN_KEY = 'mochii_token';
@@ -1083,8 +1140,24 @@
       } else {
         msgEl.textContent = '';
         msgEl.className   = '';
+        // No-args call = navigating back to landing; close modal if open
+        if (msg === undefined) closeAuthModal();
       }
 
+    }
+
+    function openAuthModal() {
+      document.getElementById('auth-modal').hidden = false;
+      document.getElementById('auth-username').focus();
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').hidden = true;
+      document.body.style.overflow = '';
+      const msgEl = document.getElementById('login-message');
+      msgEl.textContent = '';
+      msgEl.className   = '';
     }
 
     function escHtmlAttr(str) {
@@ -1647,6 +1720,7 @@
           // Login flow
           if (resp.ok && data.access_token) {
             saveToken(data.access_token);
+            closeAuthModal();
             showDashboard();
             loadCameras();
             initControls();
@@ -1673,6 +1747,16 @@
         submitAuth('/api/auth/register');
       });
     })();
+
+    // ── Auth modal wiring ─────────────────────────────
+    document.getElementById('sign-in-btn').addEventListener('click', openAuthModal);
+    document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
+    document.getElementById('auth-modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeAuthModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
+    });
 
     // ── Page initialisation ───────────────────────────
     (function init() {
