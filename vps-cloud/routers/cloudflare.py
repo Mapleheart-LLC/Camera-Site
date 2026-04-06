@@ -18,6 +18,14 @@ CLAPI_TUNNEL_HOSTNAME
     When set, new creator subdomains are automatically provisioned as
     proxied CNAME records pointing at the tunnel on creation and removed
     on deletion.  Leave empty to manage DNS records manually.
+CLAPI_ACCOUNT_ID
+    Cloudflare account ID.  When not set, auto-discovered once via
+    ``GET /accounts`` and cached for the process lifetime.  Required for
+    tunnel ingress route management (Cloudflare Tunnel:Edit).
+CLAPI_TUNNEL_SERVICE
+    Internal service URL that the tunnel should forward all public hostnames
+    to (e.g. ``http://backend:8000``).  Required for tunnel ingress route
+    management.  Leave empty to skip tunnel ingress auto-configuration.
 CLAPI_EMAIL_ROUTING_DEST
     Global fallback e-mail address for per-creator routing rules (e.g.
     ``admin@mochii.live``).  Used only when a creator has no
@@ -81,8 +89,19 @@ def _email_routing_dest() -> str:
     return os.environ.get("CLAPI_EMAIL_ROUTING_DEST", "")
 
 
+def _cf_account_id_env() -> str:
+    return os.environ.get("CLAPI_ACCOUNT_ID", "")
+
+
+def _tunnel_service() -> str:
+    return os.environ.get("CLAPI_TUNNEL_SERVICE", "")
+
+
 # Zone ID cached after first auto-discovery so we only call the API once.
 _cached_zone_id: Optional[str] = None
+
+# Account ID cached after first auto-discovery.
+_cached_account_id: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # Low-level HTTP helpers
@@ -158,7 +177,157 @@ def _get_zone_id() -> str:
     return zone_id
 
 
-def _cf_request(method: str, path: str, **kwargs) -> dict:
+def _get_account_id() -> str:
+    """Return the effective Cloudflare account ID, auto-discovering if necessary.
+
+    Raises HTTP 503 if the account cannot be determined.
+    """
+    global _cached_account_id
+    account_id = _cf_account_id_env() or _cached_account_id
+    if not account_id:
+        try:
+            r = httpx.get(
+                f"{_CF_BASE}/accounts",
+                headers=_auth_headers(),
+                timeout=10.0,
+            )
+            data = r.json()
+            results = data.get("result", [])
+            if results:
+                account_id = results[0]["id"]
+                _cached_account_id = account_id
+                logger.info("Auto-discovered Cloudflare account ID: %s", account_id)
+        except (httpx.RequestError, ValueError, KeyError) as exc:
+            logger.warning("CF account ID lookup failed: %s", exc)
+    if not account_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Cloudflare account ID could not be determined. "
+                "Set CLAPI_ACCOUNT_ID or ensure the token can list accounts."
+            ),
+        )
+    return account_id
+
+
+def _tunnel_id_from_hostname() -> str:
+    """Extract the tunnel UUID from CLAPI_TUNNEL_HOSTNAME.
+
+    E.g. ``23153a57-a144-40cb-9ed6-4e4e44d3ebcf.cfargotunnel.com``
+    → ``23153a57-a144-40cb-9ed6-4e4e44d3ebcf``.
+    Returns an empty string when CLAPI_TUNNEL_HOSTNAME is not set or has no UUID prefix.
+    """
+    host = _tunnel_hostname()
+    if not host:
+        return ""
+    return host.split(".")[0]
+
+
+def _get_tunnel_ingress(account_id: str, tunnel_id: str) -> list[dict]:
+    """Fetch the current ingress rules for the given tunnel.
+
+    Returns a list of ingress rule dicts.  The trailing catch-all rule
+    (which has no ``hostname`` key) is included.
+    """
+    data = _cf_request("GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations")
+    return data.get("result", {}).get("config", {}).get("ingress", [])
+
+
+def _put_tunnel_ingress(account_id: str, tunnel_id: str, ingress: list[dict]) -> None:
+    """Replace the tunnel ingress configuration with *ingress*.
+
+    Always ensures there is a catch-all rule at the end (``{"service": "http_status:404"}``).
+    """
+    # Remove any existing catch-all entries then append one clean one at the end.
+    rules = [r for r in ingress if r.get("hostname")]
+    rules.append({"service": "http_status:404"})
+    _cf_request(
+        "PUT",
+        f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+        json={"config": {"ingress": rules}},
+    )
+
+
+def ensure_tunnel_ingress_routes(hostnames: list[str], service: str) -> None:
+    """Idempotently add *hostnames* as ingress routes on the Cloudflare Tunnel.
+
+    Reads the current tunnel config, merges any missing hostnames (pointing at
+    *service*), then writes the config back.  Existing routes are preserved and
+    never duplicated.  Best-effort — errors are logged but never raised.
+
+    Requires ``CLAPI_TUNNEL_HOSTNAME`` (to derive the tunnel ID) and either
+    ``CLAPI_ACCOUNT_ID`` or a token that can list accounts.
+    ``CLAPI_TUNNEL_SERVICE`` (or the *service* argument) must be non-empty.
+    """
+    tunnel_id = _tunnel_id_from_hostname()
+    if not tunnel_id:
+        logger.debug("CLAPI_TUNNEL_HOSTNAME not set – skipping tunnel ingress provisioning.")
+        return
+    if not service:
+        logger.debug("CLAPI_TUNNEL_SERVICE not set – skipping tunnel ingress provisioning.")
+        return
+    try:
+        account_id = _get_account_id()
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress: account ID lookup failed: %s", exc.detail)
+        return
+    try:
+        current = _get_tunnel_ingress(account_id, tunnel_id)
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress: failed to read current config: %s", exc.detail)
+        return
+
+    existing_hosts = {r["hostname"] for r in current if r.get("hostname")}
+    new_routes = [r for r in current if r.get("hostname")]
+    added: list[str] = []
+    for hostname in hostnames:
+        if hostname not in existing_hosts:
+            new_routes.append({"hostname": hostname, "service": service})
+            added.append(hostname)
+
+    if not added:
+        logger.debug("CF tunnel ingress: all hostnames already present – nothing to add.")
+        return
+
+    try:
+        _put_tunnel_ingress(account_id, tunnel_id, new_routes)
+        logger.info("CF tunnel ingress: added routes for %s → %s", added, service)
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress: failed to update config: %s", exc.detail)
+
+
+def remove_tunnel_ingress_route(hostname: str) -> None:
+    """Remove *hostname* from the Cloudflare Tunnel ingress config if present.
+
+    Best-effort — errors are logged but never raised.
+    """
+    tunnel_id = _tunnel_id_from_hostname()
+    if not tunnel_id:
+        return
+    try:
+        account_id = _get_account_id()
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress remove: account ID lookup failed: %s", exc.detail)
+        return
+    try:
+        current = _get_tunnel_ingress(account_id, tunnel_id)
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress remove: failed to read current config: %s", exc.detail)
+        return
+
+    updated = [r for r in current if r.get("hostname") and r["hostname"] != hostname]
+    if len(updated) == len([r for r in current if r.get("hostname")]):
+        logger.debug("CF tunnel ingress: hostname %s not found – nothing to remove.", hostname)
+        return
+
+    try:
+        _put_tunnel_ingress(account_id, tunnel_id, updated)
+        logger.info("CF tunnel ingress: removed route for %s", hostname)
+    except HTTPException as exc:
+        logger.warning("CF tunnel ingress remove: failed to update config: %s", exc.detail)
+
+
+
     """Make a *synchronous* Cloudflare API request and return the JSON body.
 
     Raises ``HTTPException`` on network errors or API-level failures.
@@ -219,6 +388,8 @@ def provision_creator_subdomain(
     Creates:
     - A proxied CNAME record ``{handle}.{root_domain}`` → ``CLAPI_TUNNEL_HOSTNAME``
       (only when ``CLAPI_TUNNEL_HOSTNAME`` is configured).
+    - A tunnel ingress route for ``{handle}.{root_domain}`` → ``CLAPI_TUNNEL_SERVICE``
+      (only when both ``CLAPI_TUNNEL_HOSTNAME`` and ``CLAPI_TUNNEL_SERVICE`` are configured).
     - An email routing rule forwarding ``{handle}@{root_domain}`` to the
       appropriate destinations, resolved in this order:
 
@@ -270,6 +441,11 @@ def provision_creator_subdomain(
             "CLAPI_TUNNEL_HOSTNAME not set – skipping CNAME auto-creation for @%s.", handle
         )
 
+    # ── Tunnel ingress route ───────────────────────────────────────────────
+    service = _tunnel_service()
+    if tunnel_host and service:
+        ensure_tunnel_ingress_routes([f"{handle}.{root_domain}"], service)
+
     # ── Email routing rule ─────────────────────────────────────────────────
     # Build destination list: per-creator addresses take precedence; fall back
     # to the global CLAPI_EMAIL_ROUTING_DEST only when neither is supplied.
@@ -315,12 +491,16 @@ def provision_creator_subdomain(
 
 
 def ensure_platform_subdomains(root_domain: str) -> None:
-    """Ensure all required platform subdomains exist as proxied CNAME DNS records.
+    """Ensure all required platform subdomains exist as DNS records and tunnel ingress routes.
 
     Checks each well-known subdomain prefix (anon, links, shop, drool, creator,
     member, www) and creates a proxied CNAME record pointing at
     ``CLAPI_TUNNEL_HOSTNAME`` for any that are missing.  Existing records are
     left untouched.
+
+    Also adds each subdomain (plus the bare root domain) as a tunnel ingress
+    route when ``CLAPI_TUNNEL_SERVICE`` is configured, so that Cloudflare
+    forwards traffic through the tunnel to the backend service.
 
     Called automatically at application startup.  Requires both ``CLAPI`` and
     ``CLAPI_TUNNEL_HOSTNAME`` to be configured; silently skips otherwise.
@@ -370,12 +550,19 @@ def ensure_platform_subdomains(root_domain: str) -> None:
         except HTTPException as exc:
             logger.warning("CF: failed to provision platform subdomain %s: %s", fqdn, exc.detail)
 
+    # ── Tunnel ingress routes ──────────────────────────────────────────────
+    service = _tunnel_service()
+    if service:
+        all_hostnames = [f"{p}.{root_domain}" for p in _PLATFORM_SUBDOMAINS] + [root_domain]
+        ensure_tunnel_ingress_routes(all_hostnames, service)
+
 
 def deprovision_creator_subdomain(handle: str, root_domain: str) -> bool:
     """Remove Cloudflare resources tied to a deleted creator.
 
     Deletes:
     - Any CNAME records whose name is ``{handle}.{root_domain}``.
+    - The tunnel ingress route for ``{handle}.{root_domain}`` (when configured).
     - Any email routing rules whose first ``to``-literal matcher targets
       ``{handle}@{root_domain}``.
 
@@ -407,6 +594,9 @@ def deprovision_creator_subdomain(handle: str, root_domain: str) -> bool:
             dns_ok = True
     except HTTPException as exc:
         logger.warning("CF: CNAME deletion failed for @%s: %s", handle, exc.detail)
+
+    # ── Tunnel ingress route ───────────────────────────────────────────────
+    remove_tunnel_ingress_route(fqdn)
 
     # ── Email routing rule ─────────────────────────────────────────────────
     target_email = f"{handle}@{root_domain}"
@@ -507,6 +697,7 @@ async def cloudflare_status(_: str = Depends(get_admin_user)):
             "zone_id": None,
             "zone_auto_discovered": False,
             "tunnel_hostname_set": False,
+            "tunnel_service_set": False,
             "email_routing_dest_set": False,
         }
 
@@ -534,6 +725,9 @@ async def cloudflare_status(_: str = Depends(get_admin_user)):
         "zone_id": zone_id or "(not found — set CLAPI_ZONE_ID)",
         "zone_auto_discovered": zone_auto,
         "tunnel_hostname_set": bool(_tunnel_hostname()),
+        "tunnel_id": _tunnel_id_from_hostname() or None,
+        "tunnel_service_set": bool(_tunnel_service()),
+        "tunnel_ingress_auto_provisioning": bool(_tunnel_hostname() and _tunnel_service()),
         "email_routing_dest_set": bool(_email_routing_dest()),
     }
 

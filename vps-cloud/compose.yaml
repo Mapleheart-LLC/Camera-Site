@@ -164,6 +164,14 @@ services:
       # When set, new creator subdomains are automatically provisioned as
       # proxied CNAME records pointing at the tunnel.  Leave empty to skip.
       - CLAPI_TUNNEL_HOSTNAME=${CLAPI_TUNNEL_HOSTNAME:-}
+      # Cloudflare account ID – required for tunnel ingress route management.
+      # Leave empty to auto-discover from the token's accessible accounts.
+      - CLAPI_ACCOUNT_ID=${CLAPI_ACCOUNT_ID:-}
+      # Internal service URL the tunnel should forward all public hostnames to
+      # (e.g. http://backend:8000 when running in this compose stack).
+      # Required for automatic tunnel ingress route provisioning; leave empty
+      # to manage tunnel ingress routes manually in the Cloudflare dashboard.
+      - CLAPI_TUNNEL_SERVICE=${CLAPI_TUNNEL_SERVICE:-}
       # Email address for per-creator routing rules (e.g. admin@mochii.live).
       # When set, a forwarding rule is auto-created for {handle}@{domain}.
       # Leave empty to manage email routing manually.
