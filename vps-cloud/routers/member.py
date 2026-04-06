@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from db import get_db
 from dependencies import get_current_user, get_optional_user
 from routers.auth import _verify_password, _hash_password
+from routers.alerts import dispatch_alert as _dispatch_alert
 
 router = APIRouter(prefix="/api/member", tags=["member"])
 
@@ -283,6 +284,22 @@ def follow_creator(
         db.commit()
     except Exception:
         db.rollback()  # UNIQUE constraint hit → already following, that's fine
+        return {"status": "following", "creator_handle": handle}
+
+    # Fire stream-overlay alert (best-effort; failure must not affect the response).
+    try:
+        follower = db.execute(
+            "SELECT COALESCE(display_name, username) AS display FROM site_users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        _dispatch_alert(
+            handle,
+            "follow",
+            {"username": follower["display"] if follower else "Someone"},
+            db,
+        )
+    except Exception as _exc:
+        logger.debug("Alert dispatch failed for follow: %s", _exc)
 
     return {"status": "following", "creator_handle": handle}
 

@@ -14,6 +14,11 @@ Endpoints
   GET    /api/creator/me                        – own profile (includes forwarding_email)
   PATCH  /api/creator/me                        – update bio / avatar / accent colour / forwarding_email
   POST   /api/creator/email/send                – send email FROM handle@domain via SMTP
+  GET    /api/creator/stream-info               – stream keys, RTMP server URL, live status per camera
+  GET    /api/creator/subscribers/search        – search users to gift (by email/username)
+  GET    /api/creator/subscribers/gifted        – list all gifts given by this creator
+  POST   /api/creator/subscribers/gift          – gift a subscription to a user
+  DELETE /api/creator/subscribers/gifted/{id}   – revoke a gifted subscription
   GET    /api/creator/questions                 – unanswered questions (own only)
   GET    /api/creator/questions/answered        – answered questions (own only)
   POST   /api/creator/questions/{id}/answer     – answer a question
@@ -31,11 +36,12 @@ import logging
 import os
 import smtplib
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -47,12 +53,22 @@ from dependencies import (
     get_current_creator,
 )
 from routers.auth import _hash_password, _verify_password  # reuse stdlib hashing
+from stream_utils import is_producer_live as _is_producer_live
 
 router = APIRouter(prefix="/api/creator", tags=["creator"])
 
 logger = logging.getLogger(__name__)
 
 _creator_limiter = Limiter(key_func=get_remote_address)
+
+
+def _alerts_dispatch(creator_handle: str, event_type: str, data: dict, db) -> None:
+    """Fire a stream-overlay alert (lazy import to avoid circular deps)."""
+    try:
+        from routers.alerts import dispatch_alert
+        dispatch_alert(creator_handle, event_type, data, db)
+    except Exception as _exc:
+        logger.debug("Alert dispatch failed (%s/%s): %s", event_type, creator_handle, _exc)
 
 # ---------------------------------------------------------------------------
 # Creator JWT lifetime (longer than subscriber tokens — 24 h default)
@@ -509,6 +525,286 @@ def creator_delete_drool(
     db.execute("DELETE FROM drool_archive WHERE id = ?", (entry_id,))
     db.commit()
     return {"deleted": entry_id}
+
+
+# ---------------------------------------------------------------------------
+# Streaming – stream keys and live status
+# ---------------------------------------------------------------------------
+
+_GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
+
+
+@router.get("/stream-info")
+async def creator_stream_info(
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return streaming credentials and live status for all cameras.
+
+    Includes the RTMP ingest URL and stream key (rtmp_key) that the creator
+    enters into OBS or other streaming software.  Also returns whether each
+    stream is currently live, derived from go2rtc's /api/streams API.
+    """
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    hostname = urlparse(base_url).hostname if base_url else "localhost"
+    rtmp_server = f"rtmp://{hostname}:1935"
+
+    rows = db.execute(
+        "SELECT id, display_name, stream_slug, rtmp_key, stream_title FROM cameras ORDER BY id"
+    ).fetchall()
+
+    # Attempt to fetch live status from go2rtc
+    go2rtc_data: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams")
+        if resp.is_success:
+            go2rtc_data = resp.json()
+    except Exception as exc:
+        logger.warning("Could not fetch go2rtc stream status: %s", exc)
+
+    cameras = []
+    for row in rows:
+        go2rtc_name = row["rtmp_key"] if row["rtmp_key"] else row["stream_slug"]
+        stream_info = go2rtc_data.get(go2rtc_name) or {}
+        producers = stream_info.get("producers") or []
+        consumers = stream_info.get("consumers") or []
+        cameras.append({
+            "id": row["id"],
+            "display_name": row["display_name"],
+            "stream_slug": row["stream_slug"],
+            "stream_title": row["stream_title"],
+            "rtmp_key": row["rtmp_key"],
+            "rtmp_server": rtmp_server if row["rtmp_key"] else None,
+            "is_live": _is_producer_live(producers),
+            "viewer_count": len(consumers),
+        })
+
+    return {"cameras": cameras, "rtmp_server": rtmp_server}
+
+
+# ---------------------------------------------------------------------------
+# Gift subscriptions (creator)
+# ---------------------------------------------------------------------------
+
+
+class CreatorGiftRequest(BaseModel):
+    identifier: str = Field(..., min_length=1, max_length=254,
+                            description="User email address or username")
+    access_level: int = Field(2, ge=1, le=3)
+    tier_id: Optional[int] = None
+    expires_at: Optional[str] = None   # ISO-8601 datetime or None for permanent
+    note: Optional[str] = Field(None, max_length=500)
+
+
+@router.get("/subscribers/search")
+def creator_search_subscribers(
+    q: str = "",
+    limit: int = 20,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Search for site users by username or email to gift a subscription.
+
+    Returns id, username, email, display_name and their current subscription
+    status for this creator.  Searches across all users (not just existing
+    subscribers) so new users can be gifted too.
+    """
+    limit = max(1, min(limit, 100))
+    pattern = f"%{q}%"
+    rows = db.execute(
+        """
+        SELECT u.id, u.username, u.email, u.display_name,
+               us.status AS sub_status
+          FROM site_users u
+          LEFT JOIN user_subscriptions us
+            ON us.user_id = u.id AND us.creator_handle = ?
+         WHERE u.username LIKE ? OR u.email LIKE ?
+         ORDER BY u.created_at DESC
+         LIMIT ?
+        """,
+        (handle, pattern, pattern, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/subscribers/gifted")
+def creator_list_gifted(
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all subscriptions gifted by this creator, newest first."""
+    rows = db.execute(
+        """
+        SELECT g.id, g.user_id, u.username, u.email, u.display_name,
+               g.access_level_granted, g.tier_id, g.expires_at,
+               g.note, g.is_active, g.created_at
+          FROM gifted_subscriptions g
+          JOIN site_users u ON u.id = g.user_id
+         WHERE g.creator_handle = ?
+         ORDER BY g.created_at DESC
+        """,
+        (handle,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/subscribers/gift", status_code=201)
+def creator_gift_subscription(
+    payload: CreatorGiftRequest,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Gift a subscription to a user identified by email or username.
+
+    Grants ``access_level`` (never downgrades an existing higher level) and
+    records the gift in ``gifted_subscriptions`` scoped to this creator.
+    """
+    # Resolve identifier → user.
+    user = db.execute(
+        "SELECT id, username, email, access_level FROM site_users WHERE email = ? OR username = ?",
+        (payload.identifier, payload.identifier),
+    ).fetchone()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No user found with that email or username.",
+        )
+
+    if payload.tier_id is not None:
+        tier = db.execute(
+            "SELECT id FROM subscription_tiers WHERE id = ? AND creator_handle = ?",
+            (payload.tier_id, handle),
+        ).fetchone()
+        if not tier:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tier not found for this creator.",
+            )
+
+    now = datetime.now(timezone.utc).isoformat()
+    user_id = user["id"]
+
+    # Grant access (never downgrade).
+    db.execute(
+        "UPDATE site_users SET access_level = MAX(access_level, ?) WHERE id = ?",
+        (payload.access_level, user_id),
+    )
+
+    cursor = db.execute(
+        """
+        INSERT INTO gifted_subscriptions
+            (user_id, creator_handle, granted_by, access_level_granted, tier_id,
+             expires_at, note, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        """,
+        (
+            user_id,
+            handle,
+            f"creator:{handle}",
+            payload.access_level,
+            payload.tier_id,
+            payload.expires_at or None,
+            payload.note or None,
+            now,
+        ),
+    )
+
+    # Upsert user_subscriptions.
+    db.execute(
+        """
+        INSERT INTO user_subscriptions (user_id, creator_handle, tier_id, status, started_at, expires_at)
+        VALUES (?, ?, ?, 'active', ?, ?)
+        ON CONFLICT(user_id, creator_handle)
+        DO UPDATE SET status = 'active', tier_id = excluded.tier_id,
+                      expires_at = excluded.expires_at
+        """,
+        (user_id, handle, payload.tier_id, now, payload.expires_at or None),
+    )
+
+    # Log subscribe event.
+    db.execute(
+        """
+        INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at)
+        VALUES (?, ?, ?, 'subscribe', ?)
+        """,
+        (user_id, handle, payload.tier_id, now),
+    )
+
+    db.commit()
+
+    # Fire stream-overlay alert for gifted subscription.
+    _alerts_dispatch(
+        handle,
+        "subscribe",
+        {"username": user["username"], "tier_name": "", "gifted": True},
+        db,
+    )
+
+    return {
+        "gift_id": cursor.lastrowid,
+        "user_id": user_id,
+        "username": user["username"],
+        "email": user["email"],
+        "access_level_granted": payload.access_level,
+        "expires_at": payload.expires_at,
+    }
+
+
+@router.delete("/subscribers/gifted/{gift_id}", status_code=status.HTTP_200_OK)
+def creator_revoke_gift(
+    gift_id: int,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Revoke a gift previously granted by this creator."""
+    gift = db.execute(
+        """
+        SELECT id, user_id, access_level_granted, is_active
+          FROM gifted_subscriptions
+         WHERE id = ? AND creator_handle = ?
+        """,
+        (gift_id, handle),
+    ).fetchone()
+    if not gift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found.")
+    if not gift["is_active"]:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Gift already revoked.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    user_id = gift["user_id"]
+
+    db.execute("UPDATE gifted_subscriptions SET is_active = 0 WHERE id = ?", (gift_id,))
+
+    # Revoke user_subscriptions if no other active gift for this creator.
+    other = db.execute(
+        "SELECT id FROM gifted_subscriptions WHERE user_id = ? AND creator_handle = ? AND is_active = 1 AND id != ?",
+        (user_id, handle, gift_id),
+    ).fetchone()
+    if not other:
+        db.execute(
+            "UPDATE user_subscriptions SET status = 'cancelled' WHERE user_id = ? AND creator_handle = ?",
+            (user_id, handle),
+        )
+
+    # Drop access_level to 0 if no remaining active gifts or Segpay subs.
+    active_gifts = db.execute(
+        "SELECT id FROM gifted_subscriptions WHERE user_id = ? AND is_active = 1", (user_id,)
+    ).fetchone()
+    active_subs = db.execute(
+        "SELECT id FROM user_subscriptions WHERE user_id = ? AND status = 'active'", (user_id,)
+    ).fetchone()
+    if not active_gifts and not active_subs:
+        db.execute("UPDATE site_users SET access_level = 0 WHERE id = ?", (user_id,))
+
+    db.execute(
+        "INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at) VALUES (?, ?, NULL, 'cancel', ?)",
+        (user_id, handle, now),
+    )
+
+    db.commit()
+    return {"revoked": gift_id}
 
 
 # ---------------------------------------------------------------------------

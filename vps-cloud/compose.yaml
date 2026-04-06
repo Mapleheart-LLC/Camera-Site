@@ -182,6 +182,7 @@ services:
     image: alexxit/go2rtc
     ports:
       - "1984:1984"   # HTTP API / web UI
+      - "1935:1935"   # RTMP ingest (OBS / streaming software)
       - "8554:8554"   # RTSP server (re-stream)
       - "8555:8555"   # WebRTC/ICE TCP
     volumes:
