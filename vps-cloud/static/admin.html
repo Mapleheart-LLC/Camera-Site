@@ -115,6 +115,15 @@
     }
     #logout-admin-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
+    #switch-to-creator-btn {
+      display: none; margin-left: .5rem; background: transparent;
+      border: 1px solid #3a4b35; border-radius: 8px; color: #8ea87e;
+      padding: .35rem .85rem; font-family: inherit; font-size: .82rem;
+      font-weight: 700; cursor: pointer; transition: border-color .2s, color .2s;
+      white-space: nowrap;
+    }
+    #switch-to-creator-btn:hover { border-color: #aee8b4; color: #aee8b4; }
+
     /* ── Layout ──────────────────────────────────────── */
     .admin-layout { display: flex; min-height: calc(100vh - 56px); }
 
@@ -435,6 +444,7 @@
       <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
       <span class="topbar-title">🐾 The Alpha Kennel</span>
       <span class="topbar-badge">Authorized Paws Only</span>
+      <button id="switch-to-creator-btn">🎨 Creator Mode</button>
       <button id="logout-admin-btn">Leave Kennel 🐾</button>
     </header>
 
@@ -1209,6 +1219,7 @@
       document.getElementById('admin-panel').style.display = 'block';
       checkLegalStatus();
       loadAll();
+      initCreatorModeSwitch();
     }
     function showLoginPanel() {
       clearCreds();
@@ -1306,6 +1317,30 @@
     // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-admin-btn').addEventListener('click', () => {
       showLoginPanel();
+    });
+
+    // ── Creator mode switch ─────────────────────────────
+    async function initCreatorModeSwitch() {
+      try {
+        const data = await apiGet('/api/admin/linked-creator');
+        if (data && data.handle) {
+          const btn = document.getElementById('switch-to-creator-btn');
+          btn.title = `Switch to creator mode as @${data.handle}`;
+          btn.style.display = 'inline-block';
+        }
+      } catch {
+        // No linked creator configured – button stays hidden.
+      }
+    }
+
+    document.getElementById('switch-to-creator-btn').addEventListener('click', async () => {
+      try {
+        const data = await apiGet('/api/admin/creator-token');
+        localStorage.setItem('creator_jwt', data.access_token);
+        window.location.href = '/creator';
+      } catch {
+        showToast('❌ Could not switch to creator mode. Check server configuration.');
+      }
     });
 
     // ── Sidebar navigation ─────────────────────────────

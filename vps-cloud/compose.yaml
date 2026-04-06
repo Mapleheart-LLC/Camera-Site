@@ -31,6 +31,9 @@ services:
       # Admin panel credentials – must be set or /api/admin/* returns 503
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Creator account linked to the admin user – enables one-click admin↔creator
+      # mode switching in the dashboards (e.g. ADMIN_CREATOR_HANDLE=mochii).
+      - ADMIN_CREATOR_HANDLE=${ADMIN_CREATOR_HANDLE:-}
       # Discord webhook – set to a Discord Incoming Webhook URL to receive
       # notifications when new questions are submitted to the Puppy Pouch.
       # Leave empty to disable notifications.

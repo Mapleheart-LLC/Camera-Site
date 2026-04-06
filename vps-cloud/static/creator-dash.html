@@ -97,6 +97,15 @@
     }
     #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
+    #switch-to-admin-btn {
+      display: none; margin-left: .5rem; background: transparent;
+      border: 1px solid #3a3a4b; border-radius: 8px; color: #7e82a8;
+      padding: .35rem .85rem; font-family: inherit; font-size: .82rem;
+      font-weight: 700; cursor: pointer; transition: border-color .2s, color .2s;
+      white-space: nowrap;
+    }
+    #switch-to-admin-btn:hover { border-color: #aeb4e8; color: #aeb4e8; }
+
     /* ── Layout ──────────────────────────────────────── */
     .admin-layout { display: flex; min-height: calc(100vh - 56px); }
 
@@ -321,6 +330,7 @@
       <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
       <span class="topbar-title">🐾 Creator Den</span>
       <span id="topbar-creator-name" class="topbar-creator-name"></span>
+      <button id="switch-to-admin-btn">🛡️ Admin Mode</button>
       <button id="logout-btn">Leave Den 🐾</button>
     </header>
 
@@ -883,6 +893,19 @@
     document.getElementById('logout-btn').addEventListener('click', () => {
       showLoginPanel();
     });
+
+    // ── Admin mode switch ────────────────────────────────
+    (function initAdminModeSwitch() {
+      const adminCreds = sessionStorage.getItem('mochii_admin_creds');
+      const adminJwt   = sessionStorage.getItem('mochii_admin_jwt');
+      if (adminCreds || adminJwt) {
+        const btn = document.getElementById('switch-to-admin-btn');
+        btn.style.display = 'inline-block';
+        btn.addEventListener('click', () => {
+          window.location.href = '/admin';
+        });
+      }
+    })();
 
     // ── Sidebar navigation ─────────────────────────────
     function navigate(targetId, triggerLoad) {
