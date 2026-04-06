@@ -345,6 +345,67 @@
       #mob-overlay.open { display: block; }
       .admin-main { padding: 1.25rem 1rem; }
     }
+
+    /* ── Legal placeholder warning banner ────────────────── */
+    #legal-banner {
+      background: #221a09;
+      border-bottom: 1px solid #6a4510;
+    }
+    #legal-banner-inner {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .6rem 1.25rem;
+    }
+    #legal-banner-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
+    #legal-banner-text {
+      flex: 1;
+      font-size: .88rem;
+      color: #f5c57e;
+      line-height: 1.55;
+    }
+    #legal-banner-text strong { color: #ffd07a; }
+    #legal-banner-text code {
+      background: rgba(255,208,120,.12);
+      border-radius: 4px;
+      padding: .1em .35em;
+      font-size: .82em;
+      color: #ffc060;
+    }
+    .legal-file-link {
+      color: #ffd07a;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color .15s;
+    }
+    .legal-file-link:hover { color: #ffe8a0; }
+    #legal-banner-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+    #legal-recheck-btn {
+      background: rgba(245,197,126,.12);
+      border: 1px solid #6a4510;
+      border-radius: 8px;
+      color: #f5c57e;
+      font-family: inherit;
+      font-size: .8rem;
+      font-weight: 700;
+      padding: .3rem .8rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    #legal-recheck-btn:hover { background: rgba(245,197,126,.28); }
+    #legal-dismiss-btn {
+      background: transparent;
+      border: 1px solid #6a4510;
+      border-radius: 8px;
+      color: #9e7e82;
+      font-size: .85rem;
+      line-height: 1;
+      padding: .3rem .6rem;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    #legal-dismiss-btn:hover { color: #e8aeb7; border-color: #e8aeb7; }
   </style>
 </head>
 <body>
@@ -378,6 +439,22 @@
     </header>
 
     <div id="mob-overlay"></div>
+
+    <!-- ── Legal placeholder warning banner ──────────────── -->
+    <div id="legal-banner" style="display:none" role="alert" aria-live="polite">
+      <div id="legal-banner-inner">
+        <span id="legal-banner-icon" aria-hidden="true">⚠️</span>
+        <div id="legal-banner-text">
+          <strong>Legal pages have unfilled placeholders.</strong>
+          Replace all <code>[PLACEHOLDER]</code> tokens before going live:
+          <span id="legal-banner-files"></span>
+        </div>
+        <div id="legal-banner-actions">
+          <button id="legal-recheck-btn" type="button">↻ Re-check</button>
+          <button id="legal-dismiss-btn" type="button" aria-label="Dismiss for this session">✕</button>
+        </div>
+      </div>
+    </div>
 
     <div class="admin-layout">
 
@@ -1051,12 +1128,43 @@
     function showAdminPanel() {
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
+      checkLegalStatus();
       loadAll();
     }
     function showLoginPanel() {
       clearCreds();
       window.location.href = '/?admin_msg=Session+expired.+Please+sign+in+again.';
     }
+
+    // ── Legal placeholder banner ────────────────────────
+    async function checkLegalStatus() {
+      if (sessionStorage.getItem('legal_banner_dismissed') === '1') return;
+      try {
+        const data = await apiGet('/api/admin/legal-status');
+        const banner = document.getElementById('legal-banner');
+        if (data.all_clear) {
+          banner.style.display = 'none';
+          return;
+        }
+        const pending = data.files.filter(f => f.placeholder_count > 0);
+        const filesHtml = pending.map(f =>
+          `<a class="legal-file-link" href="${escHtml(f.url)}" target="_blank" rel="noopener noreferrer">${escHtml(f.name)} (${f.placeholder_count})</a>`
+        ).join(', ');
+        document.getElementById('legal-banner-files').innerHTML = ' ' + filesHtml;
+        banner.style.display = '';
+      } catch {
+        // silently ignore — banner stays hidden if the check fails
+      }
+    }
+    function dismissLegalBanner() {
+      sessionStorage.setItem('legal_banner_dismissed', '1');
+      document.getElementById('legal-banner').style.display = 'none';
+    }
+    document.getElementById('legal-recheck-btn').addEventListener('click', () => {
+      sessionStorage.removeItem('legal_banner_dismissed');
+      checkLegalStatus();
+    });
+    document.getElementById('legal-dismiss-btn').addEventListener('click', dismissLegalBanner);
 
     // ── API helpers ────────────────────────────────────
     async function apiGet(path) {

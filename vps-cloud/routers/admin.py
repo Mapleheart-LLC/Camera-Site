@@ -34,8 +34,10 @@ Endpoints
 
 import logging
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from urllib.parse import quote as _url_quote
 
@@ -303,6 +305,45 @@ def admin_stats(
         "total_cameras": total_cameras,
         "total_camera_accesses": total_camera_accesses,
         "recent_activations": [dict(r) for r in recent],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Legal pages placeholder status
+# ---------------------------------------------------------------------------
+
+_STATIC_DIR = Path(__file__).parent.parent / "static"
+
+_LEGAL_FILES = [
+    {"name": "Terms of Service",  "url": "/terms",   "file": "terms.html"},
+    {"name": "Privacy Policy",    "url": "/privacy",  "file": "privacy.html"},
+    {"name": "DMCA Policy",       "url": "/dmca",     "file": "dmca.html"},
+    {"name": "§ 2257 Statement",  "url": "/2257",     "file": "2257.html"},
+]
+
+# Matches tokens like [OPERATOR LEGAL NAME], [CONTACT EMAIL], etc.
+# Requires the token to start with an uppercase letter so HTML attribute
+# selectors like [type="checkbox"] are never counted.
+_PLACEHOLDER_RE = re.compile(r'\[[A-Z][^\]\n]*\]')
+
+
+@router.get("/legal-status")
+def admin_legal_status(_: str = Depends(get_admin_user)):
+    """Check whether the legal pages still contain unfilled [PLACEHOLDER] tokens."""
+    results = []
+    for entry in _LEGAL_FILES:
+        path = _STATIC_DIR / entry["file"]
+        count = 0
+        if path.exists():
+            count = len(_PLACEHOLDER_RE.findall(path.read_text(encoding="utf-8")))
+        results.append({
+            "name": entry["name"],
+            "url": entry["url"],
+            "placeholder_count": count,
+        })
+    return {
+        "all_clear": all(f["placeholder_count"] == 0 for f in results),
+        "files": results,
     }
 
 
