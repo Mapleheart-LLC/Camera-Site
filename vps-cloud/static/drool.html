@@ -426,6 +426,86 @@
       border-radius: 999px;
       padding: .15rem .55rem;
     }
+
+    /* ── Gallery carousel ────────────────────────────── */
+    .card-media.gallery { position: relative; overflow: hidden; }
+
+    .gallery-track {
+      display: flex;
+      width: 100%;
+      transition: transform .28s cubic-bezier(.4,0,.2,1);
+    }
+
+    .gallery-slide {
+      flex: 0 0 100%;
+      min-width: 0;
+      position: relative;
+    }
+
+    .gallery-slide img,
+    .gallery-slide video {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+    }
+
+    .gallery-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(26,26,26,.75);
+      border: 1px solid rgba(196,154,159,.45);
+      color: #e8aeb7;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      font-size: 1.15rem;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font-family: inherit;
+      transition: background .15s;
+    }
+
+    .gallery-nav:hover { background: rgba(61,32,40,.9); }
+    .gallery-prev { left: .35rem; }
+    .gallery-next { right: .35rem; }
+
+    .gallery-counter {
+      position: absolute;
+      bottom: .35rem;
+      right: .45rem;
+      background: rgba(26,26,26,.75);
+      color: #c49a9f;
+      font-size: .65rem;
+      font-weight: 700;
+      font-family: inherit;
+      padding: .1rem .38rem;
+      border-radius: 999px;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* ── GIF badge ───────────────────────────────────── */
+    .gif-badge {
+      position: absolute;
+      top: .4rem;
+      left: .4rem;
+      background: rgba(26,26,26,.82);
+      color: #e8aeb7;
+      font-size: .6rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      padding: .1rem .32rem;
+      border-radius: 3px;
+      z-index: 5;
+      pointer-events: none;
+    }
     /* ── iPhone safe-area: push bar content above home indicator ── */
     #spotify-bar {
       padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px)) !important;
@@ -501,21 +581,19 @@
     document.addEventListener('error', (e) => {
       const img = e.target;
       if (img.tagName !== 'IMG') return;
-      if (img.dataset.fallback === 'whimper') {
-        // For the whimper hero image, just hide it gracefully
+      // Hide the broken image and, if it's inside a card-media slide or wrapper,
+      // replace the nearest slide/wrapper content with a placeholder paw.
+      const slide = img.closest('.gallery-slide') || img.closest('.card-media');
+      if (slide) {
+        img.remove();
+        const placeholder = document.createElement('div');
+        placeholder.className = 'card-media-placeholder';
+        placeholder.setAttribute('aria-label', 'Media unavailable');
+        placeholder.textContent = '🐾';
+        slide.appendChild(placeholder);
+      } else {
         img.hidden = true;
         img.setAttribute('aria-hidden', 'true');
-      } else if (img.dataset.fallback === '1') {
-        // Replace the card-media wrapper content with a placeholder div
-        const wrapper = img.closest('.card-media');
-        if (wrapper) {
-          img.remove();
-          const placeholder = document.createElement('div');
-          placeholder.className = 'card-media-placeholder';
-          placeholder.setAttribute('aria-label', 'Media unavailable');
-          placeholder.textContent = '🐾';
-          wrapper.appendChild(placeholder);
-        }
       }
     }, true);
 
@@ -569,24 +647,116 @@
       return div;
     }
 
-    // ── Build post card ───────────────────────────────────
+    // ── Media helpers ─────────────────────────────────────
+    function isVideoUrl(url) {
+      return /\.(mp4|webm|mov|gifv)(\?|$)/i.test(url);
+    }
+
+    function isGifUrl(url) {
+      return /\.(gif|gifv)(\?|$)/i.test(url);
+    }
+
+    function createMediaNode(url, altText) {
+      if (isVideoUrl(url)) {
+        const v = document.createElement('video');
+        v.src = url;
+        v.controls = true;
+        v.muted = true;
+        v.setAttribute('playsinline', '');
+        v.setAttribute('preload', 'metadata');
+        return v;
+      }
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = altText || 'She liked this';
+      img.loading = 'lazy';
+      img.dataset.fallback = '1';
+      return img;
+    }
+
+    function buildMediaElement(item, altText) {
+      const urls = (item.media_urls && item.media_urls.length > 0)
+        ? item.media_urls
+        : (item.media_url ? [item.media_url] : []);
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'card-media';
+
+      if (urls.length === 0) {
+        const ph = document.createElement('div');
+        ph.className = 'card-media-placeholder';
+        ph.setAttribute('aria-hidden', 'true');
+        ph.textContent = '🐾';
+        wrapper.appendChild(ph);
+        return wrapper;
+      }
+
+      if (urls.length === 1) {
+        const node = createMediaNode(urls[0], altText);
+        wrapper.appendChild(node);
+        if (isGifUrl(urls[0])) {
+          const badge = document.createElement('span');
+          badge.className = 'gif-badge';
+          badge.textContent = 'GIF';
+          wrapper.appendChild(badge);
+        }
+        return wrapper;
+      }
+
+      // Multi-image gallery carousel
+      wrapper.classList.add('gallery');
+      const track = document.createElement('div');
+      track.className = 'gallery-track';
+      urls.forEach((url, i) => {
+        const slide = document.createElement('div');
+        slide.className = 'gallery-slide';
+        const node = createMediaNode(url, `${altText || 'She liked this'} (${i + 1}/${urls.length})`);
+        slide.appendChild(node);
+        if (isGifUrl(url)) {
+          const badge = document.createElement('span');
+          badge.className = 'gif-badge';
+          badge.textContent = 'GIF';
+          slide.appendChild(badge);
+        }
+        track.appendChild(slide);
+      });
+      wrapper.appendChild(track);
+
+      const counter = document.createElement('span');
+      counter.className = 'gallery-counter';
+      counter.textContent = `1 / ${urls.length}`;
+      wrapper.appendChild(counter);
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = 'gallery-nav gallery-prev';
+      prevBtn.setAttribute('aria-label', 'Previous image');
+      prevBtn.textContent = '‹';
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'gallery-nav gallery-next';
+      nextBtn.setAttribute('aria-label', 'Next image');
+      nextBtn.textContent = '›';
+
+      let current = 0;
+      const goto = (n) => {
+        current = ((n % urls.length) + urls.length) % urls.length;
+        track.style.transform = `translateX(-${current * 100}%)`;
+        counter.textContent = `${current + 1} / ${urls.length}`;
+      };
+      prevBtn.addEventListener('click', () => goto(current - 1));
+      nextBtn.addEventListener('click', () => goto(current + 1));
+      wrapper.appendChild(prevBtn);
+      wrapper.appendChild(nextBtn);
+
+      return wrapper;
+    }
+
     function buildCard(item, isWhimper = false) {
       const card = document.createElement('article');
       card.className = 'post-card';
       card.setAttribute('aria-label', `${item.platform} post`);
 
-      // Media
-      let mediaHtml;
-      if (item.media_url) {
-        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
-        if (isVideo) {
-          mediaHtml = `<div class="card-media"><video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="max-height:320px;"></video></div>`;
-        } else {
-          mediaHtml = `<div class="card-media"><img src="${escHtml(item.media_url)}" alt="She liked this" loading="lazy" data-fallback="1" /></div>`;
-        }
-      } else {
-        mediaHtml = `<div class="card-media"><div class="card-media-placeholder" aria-hidden="true">🐾</div></div>`;
-      }
+      // Media element (handles single image, video, GIF, and multi-image gallery)
+      card.appendChild(buildMediaElement(item, 'She liked this'));
 
       // Platform icon
       const platformIcon = ICONS[item.platform] || '';
@@ -603,9 +773,8 @@
         ? (item.text_content.length > 180 ? item.text_content.slice(0, 177) + '…' : item.text_content)
         : '';
 
-      // Build inner HTML
-      card.innerHTML = `
-        ${mediaHtml}
+      // Build inner HTML (body only; media already prepended above)
+      card.insertAdjacentHTML('beforeend', `
         <div class="card-body">
           <div class="card-platform-row">
             <span class="platform-chip">${platformIcon}${escHtml(platformLabel)}</span>
@@ -745,18 +914,15 @@
       `;
       inner.appendChild(header);
 
-      // Media (larger)
-      if (item.media_url) {
-        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
-        const mediaWrap = document.createElement('div');
-        mediaWrap.style.cssText = 'padding: 0 1.25rem .5rem; border-radius: 12px; overflow:hidden;';
-        if (isVideo) {
-          mediaWrap.innerHTML = `<video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;"></video>`;
-        } else {
-          mediaWrap.innerHTML = `<img src="${escHtml(item.media_url)}" alt="Weekly Whimper – she liked this" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" data-fallback="whimper" />`;
-        }
-        inner.appendChild(mediaWrap);
-      }
+      // Media (larger, with rounded corners matching the hero layout)
+      const whimperMediaEl = buildMediaElement(item, 'Weekly Whimper – she liked this');
+      whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden;';
+      whimperMediaEl.querySelectorAll('img, video').forEach(el => {
+        el.style.maxHeight = '400px';
+        el.style.objectFit = 'cover';
+        el.style.borderRadius = '12px';
+      });
+      inner.appendChild(whimperMediaEl);
 
       // Body
       const body = document.createElement('div');

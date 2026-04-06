@@ -80,6 +80,7 @@ class DroolItem(BaseModel):
     platform: str
     original_url: str
     media_url: Optional[str]
+    media_urls: list[str] = []
     text_content: Optional[str]
     view_count: int
     timestamp: str
@@ -157,11 +158,26 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         "UPDATE drool_archive SET view_count = view_count + 1 WHERE id = ?",
         (item_id,),
     )
+    media_url = row["media_url"]
+    # Parse media_urls JSON; fall back to wrapping media_url for older rows
+    # that pre-date the column migration.
+    try:
+        raw_media_urls = row["media_urls"]
+    except (IndexError, KeyError):
+        raw_media_urls = None
+    if raw_media_urls:
+        try:
+            media_urls: list[str] = [u for u in json.loads(raw_media_urls) if u]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            media_urls = [media_url] if media_url else []
+    else:
+        media_urls = [media_url] if media_url else []
     return DroolItem(
         id=item_id,
         platform=row["platform"],
         original_url=row["original_url"],
-        media_url=row["media_url"],
+        media_url=media_url,
+        media_urls=media_urls,
         text_content=row["text_content"],
         view_count=row["view_count"],
         timestamp=row["timestamp"],
@@ -371,12 +387,14 @@ async def ifttt_reddit_webhook(
     if existing:
         return {"message": "Already archived.", "id": existing["id"]}
 
+    media_urls_json: Optional[str] = json.dumps([media_url]) if media_url else None
+
     cursor = db.execute(
         """
-        INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-        VALUES ('reddit', ?, ?, ?, ?)
+        INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
+        VALUES ('reddit', ?, ?, ?, ?, ?)
         """,
-        (original_url, media_url, text_content, ts),
+        (original_url, media_url, media_urls_json, text_content, ts),
     )
     db.commit()
 

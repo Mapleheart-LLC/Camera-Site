@@ -58,6 +58,7 @@ DISCORD_WEBHOOK_URL    – (shared) Discord webhook for new-item pings
 import asyncio
 import csv
 import io
+import json
 import logging
 import os
 import re
@@ -142,7 +143,8 @@ async def _ping_discord_new_item(platform: str, url: str, text: str) -> None:
 
 def _notify_new_items(new_items: list[tuple]) -> None:
     """Fire Discord pings for each newly inserted item (best-effort, sync wrapper)."""
-    for platform, orig_url, _media, text_content, _ts in new_items:
+    for item in new_items:
+        platform, orig_url, _media, text_content, _ts = item[:5]
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -686,7 +688,7 @@ def _scrape_twitter() -> None:
                 max_results=50,
                 tweet_fields=["created_at", "text", "attachments"],
                 expansions=["attachments.media_keys"],
-                media_fields=["url", "preview_image_url"],
+                media_fields=["url", "preview_image_url", "type"],
             )
             if resp and resp.data:
                 media_map: dict = {}
@@ -697,17 +699,21 @@ def _scrape_twitter() -> None:
                         )
                 for tweet in resp.data:
                     url = f"https://x.com/i/web/status/{tweet.id}"
-                    media_url: Optional[str] = None
                     att = getattr(tweet, "attachments", None) or {}
-                    mk = (att.get("media_keys") or [None])[0]
-                    if mk:
-                        media_url = media_map.get(mk)
+                    mks = att.get("media_keys") or []
+                    tweet_media_urls = []
+                    for mk in mks:
+                        resolved = media_map.get(mk)
+                        if resolved:
+                            tweet_media_urls.append(resolved)
+                    media_url: Optional[str] = tweet_media_urls[0] if tweet_media_urls else None
+                    media_urls_json: Optional[str] = json.dumps(tweet_media_urls) if tweet_media_urls else None
                     ts = (
                         tweet.created_at.isoformat()
                         if tweet.created_at
                         else datetime.now(timezone.utc).isoformat()
                     )
-                    items.append(("twitter", url, media_url, tweet.text, ts))
+                    items.append(("twitter", url, media_url, tweet.text, ts, media_urls_json))
         except Exception as exc:
             logger.warning("Twitter scraper: liked tweets fetch failed: %s", exc)
 
@@ -719,7 +725,7 @@ def _scrape_twitter() -> None:
                     max_results=50,
                     tweet_fields=["created_at", "text", "attachments"],
                     expansions=["attachments.media_keys"],
-                    media_fields=["url", "preview_image_url"],
+                    media_fields=["url", "preview_image_url", "type"],
                 )
                 if bk_resp and bk_resp.data:
                     bk_media_map: dict = {}
@@ -730,17 +736,21 @@ def _scrape_twitter() -> None:
                             )
                     for tweet in bk_resp.data:
                         url = f"https://x.com/i/web/status/{tweet.id}"
-                        bk_media_url: Optional[str] = None
                         att = getattr(tweet, "attachments", None) or {}
-                        mk = (att.get("media_keys") or [None])[0]
-                        if mk:
-                            bk_media_url = bk_media_map.get(mk)
+                        mks = att.get("media_keys") or []
+                        bk_tweet_media_urls = []
+                        for mk in mks:
+                            resolved = bk_media_map.get(mk)
+                            if resolved:
+                                bk_tweet_media_urls.append(resolved)
+                        bk_media_url: Optional[str] = bk_tweet_media_urls[0] if bk_tweet_media_urls else None
+                        bk_media_urls_json: Optional[str] = json.dumps(bk_tweet_media_urls) if bk_tweet_media_urls else None
                         ts = (
                             tweet.created_at.isoformat()
                             if tweet.created_at
                             else datetime.now(timezone.utc).isoformat()
                         )
-                        items.append(("twitter", url, bk_media_url, tweet.text, ts))
+                        items.append(("twitter", url, bk_media_url, tweet.text, ts, bk_media_urls_json))
             except Exception as exc:
                 logger.warning("Twitter scraper: bookmarks fetch failed: %s", exc)
         else:
@@ -748,7 +758,7 @@ def _scrape_twitter() -> None:
 
         new_count = 0
         newly_inserted: list[tuple] = []
-        for platform, orig_url, media_url, text_content, ts in items:
+        for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
             ).fetchone()
@@ -756,10 +766,10 @@ def _scrape_twitter() -> None:
                 continue
             conn.execute(
                 """
-                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, text_content or None, ts),
+                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
             newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
@@ -817,35 +827,47 @@ def _scrape_bluesky() -> None:
                 if record:
                     text = getattr(record, "text", "") or ""
 
-                media_url: Optional[str] = None
+                bsky_media_urls: list[str] = []
                 embed = getattr(post, "embed", None)
                 if embed:
-                    # Direct image embed (app.bsky.embed.images#view)
+                    # Direct image embed (app.bsky.embed.images#view) – collect all
                     images = getattr(embed, "images", None)
                     if images:
-                        media_url = (
-                            getattr(images[0], "fullsize", None)
-                            or getattr(images[0], "thumb", None)
-                        )
+                        for img in images:
+                            img_url = getattr(img, "fullsize", None) or getattr(img, "thumb", None)
+                            if img_url:
+                                bsky_media_urls.append(img_url)
                     # Record-with-media (app.bsky.embed.recordWithMedia#view)
-                    if not media_url:
+                    if not bsky_media_urls:
                         media = getattr(embed, "media", None)
                         if media:
                             media_images = getattr(media, "images", None)
                             if media_images:
-                                media_url = (
-                                    getattr(media_images[0], "fullsize", None)
-                                    or getattr(media_images[0], "thumb", None)
-                                )
-                            if not media_url:
+                                for img in media_images:
+                                    img_url = getattr(img, "fullsize", None) or getattr(img, "thumb", None)
+                                    if img_url:
+                                        bsky_media_urls.append(img_url)
+                            if not bsky_media_urls:
                                 ext = getattr(media, "external", None)
                                 if ext:
-                                    media_url = getattr(ext, "thumb", None)
+                                    ext_url = getattr(ext, "thumb", None)
+                                    if ext_url:
+                                        bsky_media_urls.append(ext_url)
                     # External link card (app.bsky.embed.external#view)
-                    if not media_url:
+                    if not bsky_media_urls:
                         external = getattr(embed, "external", None)
                         if external:
-                            media_url = getattr(external, "thumb", None)
+                            ext_url = getattr(external, "thumb", None)
+                            if ext_url:
+                                bsky_media_urls.append(ext_url)
+                    # Video embed (app.bsky.embed.video#view) – use thumbnail
+                    if not bsky_media_urls:
+                        thumb = getattr(embed, "thumbnail", None)
+                        if thumb:
+                            bsky_media_urls.append(thumb)
+
+                media_url: Optional[str] = bsky_media_urls[0] if bsky_media_urls else None
+                media_urls_json: Optional[str] = json.dumps(bsky_media_urls) if bsky_media_urls else None
 
                 indexed_at = getattr(post, "indexed_at", None)
                 if indexed_at:
@@ -853,13 +875,13 @@ def _scrape_bluesky() -> None:
                 else:
                     ts = datetime.now(timezone.utc).isoformat()
 
-                items.append(("bluesky", url, media_url, text, ts))
+                items.append(("bluesky", url, media_url, text, ts, media_urls_json))
         except Exception as exc:
             logger.warning("Bluesky scraper: liked posts fetch failed: %s", exc)
 
         new_count = 0
         newly_inserted: list[tuple] = []
-        for platform, orig_url, media_url, text_content, ts in items:
+        for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
             ).fetchone()
@@ -867,10 +889,10 @@ def _scrape_bluesky() -> None:
                 continue
             conn.execute(
                 """
-                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, text_content or None, ts),
+                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
             newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
