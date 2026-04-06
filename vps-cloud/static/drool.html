@@ -170,6 +170,36 @@
       object-fit: cover;
     }
 
+    /* Pixelation overlay — shown when the image src is already the server-side
+       pixelated proxy (so any download is also pixelated). The ::after pseudo-
+       element displays the reveal prompt on top of the pixelated image. */
+    .card-media.is-pixelated {
+      cursor: pointer;
+    }
+    .card-media.is-pixelated::after {
+      content: '🙈 Tap to reveal';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.35);
+      color: #fff;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      text-shadow: 0 1px 4px rgba(0,0,0,.9);
+      pointer-events: none;
+    }
+    /* Creator-forced: no tap-to-reveal cursor or prompt */
+    .card-media.is-creator-pixelated {
+      cursor: default;
+    }
+    .card-media.is-creator-pixelated::after {
+      content: '🔒 Content censored by creator';
+      font-size: .78rem;
+    }
+
     .card-media-placeholder {
       width: 100%;
       height: 160px;
@@ -462,7 +492,12 @@
 
     <!-- ── Feed section ─────────────────────────────── -->
     <div id="feed-section">
-      <p class="section-label" style="margin-top: 1.5rem;" id="feed-label">✦ Her Shame Gallery ✦</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-top:1.5rem">
+        <p class="section-label" style="margin:0" id="feed-label">✦ Her Shame Gallery ✦</p>
+        <button id="pixelate-toggle-btn" onclick="togglePixelate()"
+          style="background:rgba(255,255,255,.06);border:1px solid #3d2a2e;color:#c49a9f;border-radius:20px;padding:.3rem .85rem;font-size:.8rem;cursor:pointer;white-space:nowrap"
+          aria-pressed="false">🙈 Pixelate NSFW</button>
+      </div>
       <!-- Loading skeletons -->
       <div id="loading-state" class="masonry">
         <div class="post-card" style="padding: 1rem;">
@@ -574,15 +609,33 @@
       const card = document.createElement('article');
       card.className = 'post-card';
       card.setAttribute('aria-label', `${item.platform} post`);
+      card.dataset.itemId        = item.id;
+      card.dataset.nsfwScore     = item.nsfw_score ?? 0;
+      card.dataset.creatorPixelate = item.creator_pixelate ? '1' : '0';
+
+      // Decide pixelation: creator-forced always on; user-opted on when item has NSFW score.
+      const creatorPixelate = !!item.creator_pixelate;
+      const userOptedPixelate = userPixelate && (item.nsfw_score ?? 0) > 0;
+      const shouldPixelate = creatorPixelate || userOptedPixelate;
 
       // Media
       let mediaHtml;
       if (item.media_url) {
         const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
+        // For user-opted pixelation on images: use the server-side proxy URL as src
+        // so any right-click → Save also produces a pixelated file.
+        // For creator_pixelate images: media_url is already the proxy URL (set server-side).
+        const proxySrc = `/api/media/pixelated/${item.id}`;
+        const effectiveSrc = (!isVideo && userOptedPixelate && !creatorPixelate)
+          ? proxySrc
+          : item.media_url;
+        const pixelClass = shouldPixelate
+          ? ` is-pixelated${creatorPixelate ? ' is-creator-pixelated' : ''}`
+          : '';
         if (isVideo) {
-          mediaHtml = `<div class="card-media"><video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="max-height:320px;"></video></div>`;
+          mediaHtml = `<div class="card-media${pixelClass}" data-original="${escHtml(item.media_url)}" data-creator-lock="${creatorPixelate ? '1' : '0'}"><video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="max-height:320px;"></video></div>`;
         } else {
-          mediaHtml = `<div class="card-media"><img src="${escHtml(item.media_url)}" alt="She liked this" loading="lazy" data-fallback="1" /></div>`;
+          mediaHtml = `<div class="card-media${pixelClass}" data-original="${escHtml(item.media_url)}" data-proxy="${escHtml(proxySrc)}" data-creator-lock="${creatorPixelate ? '1' : '0'}"><img src="${escHtml(effectiveSrc)}" alt="She liked this" loading="lazy" data-fallback="1" /></div>`;
         }
       } else {
         mediaHtml = `<div class="card-media"><div class="card-media-placeholder" aria-hidden="true">🐾</div></div>`;
@@ -709,6 +762,19 @@
         }
       });
 
+      // Tap-to-reveal for user-opted pixelation (not creator-forced).
+      if (shouldPixelate && !creatorPixelate) {
+        const mediaEl = card.querySelector('.card-media.is-pixelated');
+        if (mediaEl) {
+          mediaEl.addEventListener('click', () => {
+            const img = mediaEl.querySelector('img');
+            if (img) img.src = mediaEl.dataset.original;
+            mediaEl.classList.remove('is-pixelated');
+            mediaEl.dataset.revealed = '1';
+          }, { once: true });
+        }
+      }
+
       return card;
     }
 
@@ -752,12 +818,35 @@
       // Media (larger)
       if (item.media_url) {
         const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(item.media_url);
+        const creatorPixelate = !!item.creator_pixelate;
+        const userOptedPixelate = userPixelate && (item.nsfw_score ?? 0) > 0;
+        const shouldPixelate = creatorPixelate || userOptedPixelate;
+        const proxySrc = `/api/media/pixelated/${item.id}`;
+        const effectiveSrc = (!isVideo && userOptedPixelate && !creatorPixelate)
+          ? proxySrc
+          : item.media_url;
+        const pixelClass = shouldPixelate
+          ? `is-pixelated${creatorPixelate ? ' is-creator-pixelated' : ''}`
+          : '';
         const mediaWrap = document.createElement('div');
-        mediaWrap.style.cssText = 'padding: 0 1.25rem .5rem; border-radius: 12px; overflow:hidden;';
+        mediaWrap.style.cssText = 'padding: 0 1.25rem .5rem; border-radius: 12px; overflow:hidden; position:relative;';
+        if (pixelClass) mediaWrap.className = `card-media ${pixelClass}`;
+        mediaWrap.dataset.original = item.media_url;
+        mediaWrap.dataset.proxy    = proxySrc;
+        mediaWrap.dataset.creatorLock = creatorPixelate ? '1' : '0';
         if (isVideo) {
           mediaWrap.innerHTML = `<video src="${escHtml(item.media_url)}" controls muted playsinline preload="metadata" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;"></video>`;
         } else {
-          mediaWrap.innerHTML = `<img src="${escHtml(item.media_url)}" alt="Weekly Whimper – she liked this" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" data-fallback="whimper" />`;
+          mediaWrap.innerHTML = `<img src="${escHtml(effectiveSrc)}" alt="Weekly Whimper – she liked this" loading="lazy" style="width:100%;border-radius:12px;max-height:400px;object-fit:cover;" data-fallback="whimper" />`;
+        }
+        if (shouldPixelate && !creatorPixelate) {
+          mediaWrap.style.cursor = 'pointer';
+          mediaWrap.addEventListener('click', () => {
+            const img = mediaWrap.querySelector('img');
+            if (img) img.src = item.media_url;
+            mediaWrap.classList.remove('is-pixelated');
+            mediaWrap.dataset.revealed = '1';
+          }, { once: true });
         }
         inner.appendChild(mediaWrap);
       }
@@ -870,6 +959,77 @@
       wrapper.appendChild(inner);
     }
 
+    // ── Init ─────────────────────────────────────────────
+    let userPixelate = false;  // member preference; updated by loadPixelatePreference()
+
+    async function loadPixelatePreference() {
+      // Try server first (using member_token if present), then localStorage fallback.
+      const token = localStorage.getItem('member_token');
+      if (token) {
+        try {
+          const r = await fetch('/api/member/me/content-filter', {
+            headers: { Authorization: 'Bearer ' + token },
+          });
+          if (r.ok) {
+            const data = await r.json();
+            userPixelate = !!data.pixelate_media;
+            localStorage.setItem('drool_pixelate', userPixelate ? '1' : '0');
+            updatePixelateToggle();
+            return;
+          }
+        } catch (_) {}
+      }
+      // Fall back to localStorage (works for anonymous visitors).
+      userPixelate = localStorage.getItem('drool_pixelate') === '1';
+      updatePixelateToggle();
+    }
+
+    function updatePixelateToggle() {
+      const btn = document.getElementById('pixelate-toggle-btn');
+      if (btn) {
+        btn.textContent = userPixelate ? '👁️ Show All' : '🙈 Pixelate NSFW';
+        btn.setAttribute('aria-pressed', String(userPixelate));
+      }
+      // Re-apply to any already-rendered cards.
+      document.querySelectorAll('.post-card[data-item-id]').forEach(card => {
+        const mediaEl = card.querySelector('.card-media');
+        if (mediaEl && !mediaEl.dataset.revealed) {
+          _applyPixelToCard(card, mediaEl);
+        }
+      });
+    }
+
+    async function togglePixelate() {
+      userPixelate = !userPixelate;
+      localStorage.setItem('drool_pixelate', userPixelate ? '1' : '0');
+      const token = localStorage.getItem('member_token');
+      if (token) {
+        fetch('/api/member/me/content-filter', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ pixelate_media: userPixelate }),
+        }).catch(() => {});
+      }
+      updatePixelateToggle();
+    }
+
+    // Decide whether a card's media should be pixelated and apply classes + handler.
+    function _applyPixelToCard(card, mediaEl) {
+      const creatorPixelate = card.dataset.creatorPixelate === '1';
+      const nsfw = parseFloat(card.dataset.nsfwScore || '0') > 0;
+      const shouldPixelate = creatorPixelate || (userPixelate && nsfw);
+
+      if (!shouldPixelate) {
+        mediaEl.classList.remove('is-pixelated', 'is-creator-pixelated');
+        return;
+      }
+
+      mediaEl.classList.add('is-pixelated');
+      if (creatorPixelate) {
+        mediaEl.classList.add('is-creator-pixelated');
+      }
+    }
+
     // ── Load feed from API ────────────────────────────────
     async function loadFeed() {
       let items;
@@ -913,8 +1073,9 @@
       }
     }
 
-    // ── Init ─────────────────────────────────────────────
-    loadFeed();
+    // Load preference first so cards render with correct pixelation state.
+    // Use .catch() so a network failure never prevents the feed from loading.
+    loadPixelatePreference().catch(() => {}).then(loadFeed);
   </script>
 
   <!-- ── Spotify Now Playing (fixed bottom bar) ──────── -->

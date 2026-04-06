@@ -24,6 +24,7 @@ from slowapi.util import get_remote_address
 
 from db import get_db
 from discord_webhook import send_discord_notification
+from routers.moderation import check_image_nsfw, is_nsfw
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,8 @@ class DroolItem(BaseModel):
     reaction_counts: dict[str, int]
     is_weekly_whimper: bool = False
     creator_handle: str = _PRIMARY_CREATOR
+    nsfw_score: Optional[float] = None
+    creator_pixelate: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -162,18 +165,38 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         "UPDATE drool_archive SET view_count = view_count + 1 WHERE id = ?",
         (item_id,),
     )
+    cols = row.keys()
+    raw_media_url: Optional[str] = row["media_url"]
+    creator_pixelate = bool(row["creator_pixelate"]) if "creator_pixelate" in cols else False
+
+    # When a creator has forced pixelation, replace the media URL with the
+    # server-side pixelation proxy so the original bytes never reach the browser.
+    # Videos are excluded because server-side video pixelation requires ffmpeg;
+    # the client will apply a CSS overlay for those instead.
+    is_video = bool(
+        raw_media_url
+        and raw_media_url.lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
+    )
+    effective_media_url: Optional[str] = (
+        f"/api/media/pixelated/{item_id}"
+        if creator_pixelate and raw_media_url and not is_video
+        else raw_media_url
+    )
+
     return DroolItem(
         id=item_id,
         platform=row["platform"],
         original_url=row["original_url"],
-        media_url=row["media_url"],
+        media_url=effective_media_url,
         text_content=row["text_content"],
         view_count=row["view_count"],
         timestamp=row["timestamp"],
         comment_count=_comment_count(item_id, db),
         reaction_counts=_reaction_counts(item_id, db),
         is_weekly_whimper=(item_id == whimper_id),
-        creator_handle=row["creator_handle"] if "creator_handle" in row else _PRIMARY_CREATOR,
+        creator_handle=row["creator_handle"] if "creator_handle" in cols else _PRIMARY_CREATOR,
+        nsfw_score=row["nsfw_score"] if "nsfw_score" in cols else None,
+        creator_pixelate=creator_pixelate,
     )
 
 
@@ -210,11 +233,15 @@ def get_drool_feed(
         # Per-creator feed: recent-first (original behaviour).
         rows = db.execute(
             """
-            SELECT * FROM drool_archive
-            WHERE id != COALESCE(?, -1)
-              AND creator_handle = ?
-              AND COALESCE(is_hidden, 0) = 0
-            ORDER BY timestamp DESC
+            SELECT da.*,
+                   da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate
+            FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
+            WHERE da.id != COALESCE(?, -1)
+              AND da.creator_handle = ?
+              AND COALESCE(da.is_hidden, 0) = 0
+            ORDER BY da.timestamp DESC
             LIMIT ? OFFSET ?
             """,
             (whimper_id, creator_handle, page_size, offset),
@@ -225,11 +252,14 @@ def get_drool_feed(
         rows = db.execute(
             """
             SELECT da.*,
+                   da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate,
                    (da.view_count
                     + COALESCE(c.cnt, 0) * 3
                     + COALESCE(r.cnt, 0) * 2
                    ) AS _score
             FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
             LEFT JOIN (
                 SELECT drool_id, COUNT(*) AS cnt
                 FROM drool_comments
@@ -253,7 +283,14 @@ def get_drool_feed(
     # Pin Weekly Whimper at the top on the first page.
     if page == 1 and whimper_id is not None:
         wrow = db.execute(
-            "SELECT * FROM drool_archive WHERE id = ?", (whimper_id,)
+            """
+            SELECT da.*, da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate
+            FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
+            WHERE da.id = ?
+            """,
+            (whimper_id,),
         ).fetchone()
         if wrow:
             feed.append(_build_item(wrow, whimper_id, db))
@@ -427,6 +464,23 @@ async def ifttt_reddit_webhook(
     db.commit()
 
     new_id = cursor.lastrowid
+
+    # Run NSFW check on the media image (best-effort; never blocks archiving).
+    if media_url:
+        score = await check_image_nsfw(media_url)
+        if score is not None:
+            flagged = is_nsfw(score)
+            db.execute(
+                "UPDATE drool_archive SET nsfw_score = ?, is_hidden = ? WHERE id = ?",
+                (score, 1 if flagged else 0, new_id),
+            )
+            db.commit()
+            if flagged:
+                logger.info(
+                    "IFTTT drool #%d auto-hidden: NSFW score %.2f for %.120s",
+                    new_id, score, media_url,
+                )
+
     logger.info("IFTTT Reddit webhook: archived item #%d – %s", new_id, original_url)
 
     await send_discord_notification(

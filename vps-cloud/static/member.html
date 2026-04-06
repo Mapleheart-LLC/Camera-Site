@@ -204,6 +204,31 @@
       border-radius: 20px;
       padding: .15rem .55rem;
     }
+    .rating-badge {
+      display: inline-block;
+      font-size: .7rem;
+      font-weight: 700;
+      border-radius: 20px;
+      padding: .15rem .55rem;
+      margin-left: .3rem;
+    }
+    .rating-sfw   { background: rgba(76,175,125,.15); color: #4caf7d; border: 1px solid #2a5030; }
+    .rating-nsfw  { background: rgba(224,90,90,.15);  color: #e05a5a; border: 1px solid #5a2020; }
+    .rating-mixed { background: rgba(224,160,80,.15); color: #e0a050; border: 1px solid #5a3a10; }
+    .rating-unrated { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+    .live-badge {
+      display: inline-block;
+      background: rgba(224,90,90,.15);
+      color: #e05a5a;
+      border: 1px solid #7a2020;
+      border-radius: 20px;
+      padding: .12rem .5rem;
+      font-size: .68rem;
+      font-weight: 800;
+      margin-left: .3rem;
+      animation: pulse-live 1.4s infinite;
+    }
+    @keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:.6} }
     .creator-card-footer { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: auto; }
 
     /* ── Feed items ───────────────────────────────────────────────────────── */
@@ -521,6 +546,38 @@
           <button class="btn btn-primary" onclick="changePassword()">Change Password</button>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title">🎛️ Content Preferences</div>
+        <div class="field-group">
+          <span class="field-label">Current filter</span>
+          <span class="field-value" id="acct-content-filter">—</span>
+        </div>
+        <p class="field-hint" style="margin-bottom:.75rem">Choose whether you want to see all creators or only SFW (safe-for-work) content in discovery and browse views.</p>
+        <div class="form-row">
+          <div class="field-group">
+            <label class="field-label" for="input-content-filter">Show content</label>
+            <select id="input-content-filter" class="field-input" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:.45rem .7rem;font-size:.9rem;cursor:pointer">
+              <option value="all">🌐 All creators (SFW + 18+)</option>
+              <option value="sfw">🌸 SFW only</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="saveContentFilter()">Save</button>
+        </div>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div>
+              <div class="field-label" style="margin-bottom:.2rem">🙈 Pixelate non-live media</div>
+              <p class="field-hint" style="margin:0">When on, archived images flagged as NSFW are pixelated by default. You can still tap each image to reveal it.</p>
+            </div>
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="input-pixelate-media" style="width:1.1rem;height:1.1rem;accent-color:var(--accent);cursor:pointer" onchange="savePixelateMedia()" />
+              <span id="pixelate-media-label" style="font-size:.9rem;color:var(--muted)">Off</span>
+            </label>
+          </div>
+        </div>
+        <div id="content-filter-msg" style="margin-top:.5rem"></div>
+      </div>
     </div>
   </div>
 
@@ -818,6 +875,10 @@ function buildCreatorCard(creator) {
     ? `<img class="creator-avatar" src="${esc(creator.avatar_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="creator-avatar-placeholder">🐾</div>`;
   const freeBadge = creator.allow_free_content ? `<span class="free-badge">✨ Free content</span>` : '';
+  const ratingMap = { sfw: ['🌸 SFW', 'rating-sfw'], mixed: ['🟡 Mixed', 'rating-mixed'], nsfw: ['🔞 18+', 'rating-nsfw'], unrated: ['', ''] };
+  const [ratingLabel, ratingCls] = ratingMap[creator.content_rating] || ['', ''];
+  const ratingBadge = ratingLabel ? `<span class="rating-badge ${ratingCls}">${ratingLabel}</span>` : '';
+  const liveBadge = creator.is_live ? `<span class="live-badge">🔴 LIVE</span>` : '';
   const followBtnId = 'follow-btn-' + esc(creator.handle);
   const followingClass = creator.is_following ? 'btn-danger' : 'btn';
   const followText     = creator.is_following ? 'Following ✓' : '+ Follow';
@@ -826,7 +887,7 @@ function buildCreatorCard(creator) {
     <div style="display:flex;align-items:center;gap:.75rem">
       ${avatar}
       <div style="min-width:0">
-        <div class="creator-name">${esc(creator.display_name || creator.handle)}</div>
+        <div class="creator-name">${esc(creator.display_name || creator.handle)}${ratingBadge}${liveBadge}</div>
         ${freeBadge}
       </div>
     </div>
@@ -977,6 +1038,18 @@ async function loadAccount() {
   } catch (e) {
     if (e.status === 401) { clearAuth(); updateNavUI(); loadAccount(); }
   }
+
+  // Load content filter preference (separate try so profile still renders on error)
+  try {
+    const pref = await apiFetch('/api/member/me/content-filter');
+    const filter = pref.content_filter || 'all';
+    const labels = { all: '🌐 All creators', sfw: '🌸 SFW only' };
+    document.getElementById('acct-content-filter').textContent = labels[filter] || filter;
+    document.getElementById('input-content-filter').value = filter;
+    const pixelateOn = !!pref.pixelate_media;
+    document.getElementById('input-pixelate-media').checked = pixelateOn;
+    document.getElementById('pixelate-media-label').textContent = pixelateOn ? 'On' : 'Off';
+  } catch (_) { /* silently skip if endpoint not available */ }
 }
 
 async function saveDisplayName() {
@@ -1019,6 +1092,39 @@ async function changePassword() {
     setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
   } catch (e) {
     msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not change password.')}</span>`;
+  }
+}
+
+async function saveContentFilter() {
+  const val   = document.getElementById('input-content-filter').value;
+  const msgEl = document.getElementById('content-filter-msg');
+  try {
+    const result = await apiFetch('/api/member/me/content-filter', {
+      method: 'PATCH',
+      body: JSON.stringify({ content_filter: val }),
+    });
+    const labels = { all: '🌐 All creators', sfw: '🌸 SFW only' };
+    document.getElementById('acct-content-filter').textContent = labels[result.content_filter] || result.content_filter;
+    msgEl.innerHTML = `<span class="success-msg">✓ Preference saved!</span>`;
+    setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
+  } catch (e) {
+    msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not save preference.')}</span>`;
+  }
+}
+
+async function savePixelateMedia() {
+  const checked = document.getElementById('input-pixelate-media').checked;
+  const msgEl   = document.getElementById('content-filter-msg');
+  document.getElementById('pixelate-media-label').textContent = checked ? 'On' : 'Off';
+  try {
+    await apiFetch('/api/member/me/content-filter', {
+      method: 'PATCH',
+      body: JSON.stringify({ pixelate_media: checked }),
+    });
+    msgEl.innerHTML = `<span class="success-msg">✓ Pixelate preference saved!</span>`;
+    setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
+  } catch (e) {
+    msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not save preference.')}</span>`;
   }
 }
 

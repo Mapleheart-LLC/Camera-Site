@@ -2,6 +2,7 @@
 routers/discovery.py – Discovery, SEO & Search.
 
 Phase 6: tags/categories, global FTS search, /explore page data.
+Phase 8: SFW/NSFW content-rating support on explore + search.
 
 Endpoints
 ---------
@@ -16,9 +17,11 @@ Endpoints
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -27,6 +30,9 @@ from db import get_db
 from dependencies import get_admin_user, get_current_creator
 
 router = APIRouter(tags=["discovery"])
+
+_GO2RTC_HOST = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT = os.environ.get("GO2RTC_PORT", "1984")
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +43,7 @@ logger = logging.getLogger(__name__)
 class TagCreate(BaseModel):
     slug: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
     label: str = Field(..., min_length=1, max_length=100)
+    is_mature: bool = False
 
 
 class ContentTagRequest(BaseModel):
@@ -52,7 +59,7 @@ class ContentTagRequest(BaseModel):
 @router.get("/api/tags")
 def list_tags(db: sqlite3.Connection = Depends(get_db)):
     """Return all available tags."""
-    rows = db.execute("SELECT id, slug, label FROM tags ORDER BY label").fetchall()
+    rows = db.execute("SELECT id, slug, label, is_mature FROM tags ORDER BY label").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -67,10 +74,11 @@ def create_tag(
     if existing:
         raise HTTPException(status_code=409, detail="Tag with this slug already exists.")
     cursor = db.execute(
-        "INSERT INTO tags (slug, label) VALUES (?, ?)", (payload.slug, payload.label)
+        "INSERT INTO tags (slug, label, is_mature) VALUES (?, ?, ?)",
+        (payload.slug, payload.label, 1 if payload.is_mature else 0),
     )
     db.commit()
-    return {"id": cursor.lastrowid, "slug": payload.slug, "label": payload.label}
+    return {"id": cursor.lastrowid, "slug": payload.slug, "label": payload.label, "is_mature": payload.is_mature}
 
 
 @router.post("/api/admin/content-tags", status_code=status.HTTP_201_CREATED)
@@ -147,21 +155,29 @@ def creator_tag_content(
 # ---------------------------------------------------------------------------
 
 _VALID_TYPES = frozenset({"all", "drool", "questions", "creators", "products", "posts"})
+_VALID_FILTERS = frozenset({"all", "sfw"})
 
 
 @router.get("/api/search")
 def global_search(
     q: str = Query(..., min_length=1, max_length=200),
     type: str = Query("all"),
+    filter: str = Query("all", description="Content-rating filter: 'all' or 'sfw'"),
     limit: int = Query(20, ge=1, le=100),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Full-text search across drool, Q&A, creators, products, and posts."""
+    """Full-text search across drool, Q&A, creators, products, and posts.
+
+    Pass ``filter=sfw`` to restrict creator results to SFW-rated profiles only.
+    """
     if type not in _VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"type must be one of {_VALID_TYPES}")
+    if filter not in _VALID_FILTERS:
+        raise HTTPException(status_code=400, detail=f"filter must be one of {_VALID_FILTERS}")
 
     results: dict = {}
     safe_q = q.replace('"', '""')  # escape double-quotes for FTS5 query
+    sfw_only = filter == "sfw"
 
     if type in ("all", "drool"):
         try:
@@ -201,17 +217,31 @@ def global_search(
 
     if type in ("all", "creators"):
         try:
-            rows = db.execute(
-                """
-                SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
-                       'creator' AS result_type
-                  FROM fts_creators fc
-                  JOIN creator_accounts ca ON ca.id = fc.rowid
-                 WHERE fts_creators MATCH ? AND ca.is_active = 1
-                 LIMIT ?
-                """,
-                (safe_q, limit),
-            ).fetchall()
+            if sfw_only:
+                rows = db.execute(
+                    """
+                    SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
+                           ca.content_rating, 'creator' AS result_type
+                      FROM fts_creators fc
+                      JOIN creator_accounts ca ON ca.id = fc.rowid
+                     WHERE fts_creators MATCH ? AND ca.is_active = 1
+                           AND ca.content_rating = 'sfw'
+                     LIMIT ?
+                    """,
+                    (safe_q, limit),
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    """
+                    SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
+                           ca.content_rating, 'creator' AS result_type
+                      FROM fts_creators fc
+                      JOIN creator_accounts ca ON ca.id = fc.rowid
+                     WHERE fts_creators MATCH ? AND ca.is_active = 1
+                     LIMIT ?
+                    """,
+                    (safe_q, limit),
+                ).fetchall()
             results["creators"] = [dict(r) for r in rows]
         except Exception as exc:
             logger.debug("FTS creators error: %s", exc)
@@ -260,20 +290,51 @@ def global_search(
 # ---------------------------------------------------------------------------
 
 @router.get("/api/explore")
-def explore_feed(db: sqlite3.Connection = Depends(get_db)):
-    """Public explore feed: featured creators, trending drool, newest posts, top products."""
+async def explore_feed(
+    filter: str = Query("all", description="Content-rating filter: 'all', 'sfw', or 'nsfw'"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Public explore feed: featured creators, trending drool, newest posts, top products.
+
+    Use ``filter=sfw`` to show only SFW-rated creators, or ``filter=nsfw`` for adult creators only.
+    """
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
+    valid_explore_filters = {"all", "sfw", "nsfw"}
+    if filter not in valid_explore_filters:
+        raise HTTPException(status_code=400, detail=f"filter must be one of {valid_explore_filters}")
+
     # Featured creators (most recent active ones, up to 8).
-    featured_creators = db.execute(
-        """
-        SELECT handle, display_name, bio, avatar_url, accent_color
-          FROM creator_accounts
-         WHERE is_active = 1
-         ORDER BY created_at DESC
-         LIMIT 8
-        """
-    ).fetchall()
+    if filter == "sfw":
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1 AND content_rating = 'sfw'
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
+    elif filter == "nsfw":
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1 AND content_rating IN ('nsfw', 'mixed')
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
+    else:
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
 
     # Trending drool (top engagement last 7 days).
     trending_drool = db.execute(
@@ -313,8 +374,48 @@ def explore_feed(db: sqlite3.Connection = Depends(get_db)):
         """
     ).fetchall()
 
+    creator_list = [dict(r) for r in featured_creators]
+
+    # Annotate each creator with a live flag from go2rtc (best-effort, never blocks).
+    try:
+        live_handles: set = set()
+        # Fetch all cameras with their creator_handle mapping.
+        cam_rows = db.execute(
+            "SELECT stream_slug, rtmp_key FROM cameras"
+        ).fetchall()
+        if cam_rows:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(
+                    f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams"
+                )
+            if resp.is_success:
+                streams_data = resp.json()
+                for cam in cam_rows:
+                    go2rtc_name = cam["rtmp_key"] if cam["rtmp_key"] else cam["stream_slug"]
+                    stream_info = streams_data.get(go2rtc_name) or {}
+                    producers = stream_info.get("producers") or []
+                    if any(p.get("url") for p in producers):
+                        slug = cam["stream_slug"] or ""
+                        owner_row = db.execute(
+                            """
+                            SELECT ca.handle FROM cameras c
+                              JOIN creator_accounts ca ON c.stream_slug LIKE ca.handle || '%'
+                             WHERE c.stream_slug = ?
+                             LIMIT 1
+                            """,
+                            (slug,),
+                        ).fetchone()
+                        if owner_row:
+                            live_handles.add(owner_row["handle"])
+        for c in creator_list:
+            c["is_live"] = c["handle"] in live_handles
+    except Exception as exc:
+        logger.debug("Could not fetch live status for explore: %s", exc)
+        for c in creator_list:
+            c.setdefault("is_live", False)
+
     return {
-        "featured_creators": [dict(r) for r in featured_creators],
+        "featured_creators": creator_list,
         "trending_drool": [dict(r) for r in trending_drool],
         "newest_posts": [dict(r) for r in newest_posts],
         "top_products": [dict(r) for r in top_products],

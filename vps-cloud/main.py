@@ -54,6 +54,7 @@ from routers.monetization import router as monetization_router
 from routers.analytics import router as analytics_router
 from routers.discovery import router as discovery_router
 from routers.alerts import router as alerts_router
+from routers.moderation import router as moderation_router, public_router as moderation_public_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -901,6 +902,14 @@ def init_db() -> None:
     except sqlite3.OperationalError as _e:
         if "duplicate column" not in str(_e).lower():
             raise
+    # Migration: nsfw_score column on drool_archive for AI content moderation.
+    try:
+        conn.execute(
+            "ALTER TABLE drool_archive ADD COLUMN nsfw_score REAL"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
     # ── Phase 6: Discovery & SEO ──────────────────────────────────────────
     conn.execute(
         """
@@ -978,6 +987,48 @@ def init_db() -> None:
         )
         """
     )
+    # ── Phase 8: Mixed-audience SFW + NSFW support ───────────────────────
+    # content_rating on creator_accounts: 'sfw' | 'mixed' | 'nsfw' | 'unrated'
+    for _col, _defn in [
+        ("content_rating", "TEXT NOT NULL DEFAULT 'unrated'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # content_filter on site_users: 'all' | 'sfw'
+    for _col, _defn in [
+        ("content_filter", "TEXT NOT NULL DEFAULT 'all'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE site_users ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # pixelate_media on creator_accounts: creator forces pixelation for their archived items
+    try:
+        conn.execute(
+            "ALTER TABLE creator_accounts ADD COLUMN pixelate_media INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # pixelate_media on site_users: member opts into pixelating NSFW-scored archive media
+    try:
+        conn.execute(
+            "ALTER TABLE site_users ADD COLUMN pixelate_media INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # is_mature on tags: 0 = safe, 1 = adult/explicit
+    try:
+        conn.execute("ALTER TABLE tags ADD COLUMN is_mature INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+
     conn.commit()
     conn.close()
 
@@ -2165,6 +2216,8 @@ app.include_router(monetization_router)
 app.include_router(analytics_router)
 app.include_router(discovery_router)
 app.include_router(alerts_router)
+app.include_router(moderation_router)
+app.include_router(moderation_public_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in all rate-limited routers function correctly.

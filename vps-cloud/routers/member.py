@@ -14,13 +14,17 @@ Endpoints
   POST   /api/member/me/follows/{handle}   – follow a creator
   DELETE /api/member/me/follows/{handle}   – unfollow a creator
   GET    /api/member/creators              – browse active creators (public)
+  GET    /api/member/me/content-filter     – get content-rating filter preference
+  PATCH  /api/member/me/content-filter     – update content-rating filter preference
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -28,6 +32,9 @@ from db import get_db
 from dependencies import get_current_user, get_optional_user
 from routers.auth import _verify_password, _hash_password
 from routers.alerts import dispatch_alert as _dispatch_alert
+
+_GO2RTC_HOST = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT = os.environ.get("GO2RTC_PORT", "1984")
 
 router = APIRouter(prefix="/api/member", tags=["member"])
 
@@ -328,17 +335,19 @@ def unfollow_creator(
 
 
 @router.get("/creators")
-def browse_creators(
+async def browse_creators(
     current_user: Optional[dict] = Depends(get_optional_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Return all active creator profiles with public information.
 
     When authenticated the response includes a ``is_following`` flag per creator.
+    Each creator also carries an ``is_live`` flag derived from go2rtc (best-effort).
     """
     rows = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content, created_at
+        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content,
+               content_rating, created_at
           FROM creator_accounts
          WHERE is_active = 1
          ORDER BY display_name ASC
@@ -359,6 +368,93 @@ def browse_creators(
         creator = dict(r)
         creator["is_following"] = creator["handle"] in follows
         creator["allow_free_content"] = bool(creator.get("allow_free_content"))
+        creator["content_rating"] = creator.get("content_rating") or "unrated"
+        creator["is_live"] = False
         result.append(creator)
 
+    # Enrich with live status from go2rtc (best-effort, never blocks the response).
+    try:
+        cam_rows = db.execute(
+            "SELECT stream_slug, rtmp_key FROM cameras"
+        ).fetchall()
+        if cam_rows:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get(f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams")
+            if r.is_success:
+                streams_data = r.json()
+                live_handles: set = set()
+                for cam in cam_rows:
+                    go2rtc_name = cam["rtmp_key"] if cam["rtmp_key"] else cam["stream_slug"]
+                    stream_info = streams_data.get(go2rtc_name) or {}
+                    producers = stream_info.get("producers") or []
+                    if any(p.get("url") for p in producers):
+                        owner = db.execute(
+                            """
+                            SELECT ca.handle FROM cameras c
+                              JOIN creator_accounts ca ON c.stream_slug LIKE ca.handle || '%'
+                             WHERE c.stream_slug = ?
+                             LIMIT 1
+                            """,
+                            (cam["stream_slug"],),
+                        ).fetchone()
+                        if owner:
+                            live_handles.add(owner["handle"])
+                for c in result:
+                    c["is_live"] = c["handle"] in live_handles
+    except Exception as exc:
+        logger.debug("Could not fetch live status in browse_creators: %s", exc)
+
     return result
+
+
+# ---------------------------------------------------------------------------
+# Content-filter preferences
+# ---------------------------------------------------------------------------
+
+class ContentFilterUpdate(BaseModel):
+    content_filter: Optional[str] = Field(None, pattern=r"^(all|sfw)$")
+    pixelate_media: Optional[bool] = None
+
+
+@router.get("/me/content-filter")
+def get_content_filter(
+    user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the authenticated member's content preferences."""
+    user_id = user["fanvue_id"]
+    row = db.execute(
+        "SELECT content_filter, pixelate_media FROM site_users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return {
+        "content_filter": (row["content_filter"] if row else None) or "all",
+        "pixelate_media": bool(row["pixelate_media"]) if row else False,
+    }
+
+
+@router.patch("/me/content-filter")
+def update_content_filter(
+    payload: ContentFilterUpdate,
+    user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update content-filter and/or pixelate_media preference."""
+    user_id = user["fanvue_id"]
+    if payload.content_filter is not None:
+        db.execute(
+            "UPDATE site_users SET content_filter = ? WHERE id = ?",
+            (payload.content_filter, user_id),
+        )
+    if payload.pixelate_media is not None:
+        db.execute(
+            "UPDATE site_users SET pixelate_media = ? WHERE id = ?",
+            (1 if payload.pixelate_media else 0, user_id),
+        )
+    db.commit()
+    row = db.execute(
+        "SELECT content_filter, pixelate_media FROM site_users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return {
+        "content_filter": (row["content_filter"] if row else None) or "all",
+        "pixelate_media": bool(row["pixelate_media"]) if row else False,
+    }

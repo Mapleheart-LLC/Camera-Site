@@ -56,6 +56,7 @@ from dependencies import (
     get_current_creator,
 )
 from routers.auth import _hash_password, _verify_password  # reuse stdlib hashing
+from routers.moderation import check_image_nsfw, is_nsfw
 from stream_utils import is_producer_live as _is_producer_live
 
 # Handle of the creator account linked to the admin user.  When set, the
@@ -100,6 +101,8 @@ class ProfilePatch(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=512)
     accent_color: Optional[str] = Field(None, max_length=16, pattern=r"^#[0-9a-fA-F]{3,8}$")
     forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    content_rating: Optional[str] = Field(None, pattern=r"^(sfw|mixed|nsfw|unrated)$")
+    pixelate_media: Optional[bool] = None
 
 
 class AnswerPayload(BaseModel):
@@ -306,7 +309,8 @@ def get_my_profile(
     """Return the creator's public + editable profile fields."""
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email
+        SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email,
+               content_rating, require_age_gate, pixelate_media
           FROM creator_accounts
          WHERE handle = ?
         """,
@@ -314,18 +318,22 @@ def get_my_profile(
     ).fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
-    return dict(row)
+    result = dict(row)
+    result["content_rating"] = result.get("content_rating") or "unrated"
+    result["require_age_gate"] = bool(result.get("require_age_gate", 1))
+    result["pixelate_media"] = bool(result.get("pixelate_media", 0))
+    return result
 
 
 @router.patch("/me")
-def patch_my_profile(
+async def patch_my_profile(
     payload: ProfilePatch,
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Update the creator's editable profile fields (bio, avatar URL, accent colour, forwarding email)."""
     row = db.execute(
-        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email, content_rating, require_age_gate, pixelate_media FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
     if not row:
@@ -336,18 +344,32 @@ def patch_my_profile(
     new_avatar_url      = payload.avatar_url      if payload.avatar_url      is not None else row["avatar_url"]
     new_accent_color    = payload.accent_color    if payload.accent_color    is not None else row["accent_color"]
     new_forwarding_email = payload.forwarding_email if payload.forwarding_email is not None else row["forwarding_email"]
+    new_content_rating  = payload.content_rating  if payload.content_rating  is not None else (row["content_rating"] or "unrated")
+    new_pixelate_media  = payload.pixelate_media  if payload.pixelate_media  is not None else bool(row["pixelate_media"])
     forwarding_email_changed = (
         payload.forwarding_email is not None
         and payload.forwarding_email != row["forwarding_email"]
     )
 
+    # Auto-manage age gate: SFW creators don't need one; NSFW/mixed always do.
+    if new_content_rating == "sfw":
+        new_require_age_gate = 0
+    elif new_content_rating in ("nsfw", "mixed"):
+        new_require_age_gate = 1
+    else:
+        new_require_age_gate = row["require_age_gate"]
+
     db.execute(
         """
         UPDATE creator_accounts
-           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?, forwarding_email = ?
+           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?,
+               forwarding_email = ?, content_rating = ?, require_age_gate = ?,
+               pixelate_media = ?
          WHERE handle = ?
         """,
-        (new_display_name, new_bio, new_avatar_url, new_accent_color, new_forwarding_email, handle),
+        (new_display_name, new_bio, new_avatar_url, new_accent_color,
+         new_forwarding_email, new_content_rating, new_require_age_gate,
+         1 if new_pixelate_media else 0, handle),
     )
     db.commit()
 
@@ -370,20 +392,34 @@ def patch_my_profile(
                     agent_email=agent_email,
                 )
 
-    return {
+    # Run NSFW check on the avatar URL when it was changed (best-effort).
+    avatar_nsfw_warning: Optional[str] = None
+    if payload.avatar_url and payload.avatar_url != row["avatar_url"]:
+        score = await check_image_nsfw(new_avatar_url)
+        if is_nsfw(score):
+            avatar_nsfw_warning = (
+                f"⚠️ Your avatar image was flagged by the NSFW detector "
+                f"(score {score:.0%}). Please review platform guidelines."
+            )
+            logger.warning(
+                "Creator %s uploaded avatar with NSFW score %.2f: %.120s",
+                handle, score, new_avatar_url,
+            )
+
+    result = {
         "handle": handle,
         "display_name": new_display_name,
         "bio": new_bio,
         "avatar_url": new_avatar_url,
         "accent_color": new_accent_color,
         "forwarding_email": new_forwarding_email,
+        "content_rating": new_content_rating,
+        "require_age_gate": bool(new_require_age_gate),
+        "pixelate_media": new_pixelate_media,
     }
-
-
-# ---------------------------------------------------------------------------
-# SMTP send-as
-# ---------------------------------------------------------------------------
-
+    if avatar_nsfw_warning:
+        result["avatar_nsfw_warning"] = avatar_nsfw_warning
+    return result
 def _smtp_send(from_addr: str, to_addr: str, subject: str, body: str) -> None:
     """Send a plain-text email via SMTP using environment credentials.
 
@@ -925,7 +961,7 @@ def public_creator_profile(
     """
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content
+        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content, content_rating
           FROM creator_accounts
          WHERE handle = ? AND is_active = 1
         """,
@@ -941,5 +977,6 @@ def public_creator_profile(
     return {
         **dict(row),
         "allow_free_content": bool(row["allow_free_content"]),
+        "content_rating": row["content_rating"] or "unrated",
         "public_email": public_email,
     }

@@ -492,6 +492,7 @@
         <button class="nav-item" data-target="s-featured-creator">⭐ Featured Creator</button>
         <button class="nav-item" data-target="s-users">👥 Users & Gifts</button>
         <div class="sidebar-section-label">System</div>
+        <button class="nav-item" data-target="s-moderation">🔍 Moderation</button>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
       </nav>
 
@@ -1264,6 +1265,42 @@
           </div>
         </section>
 
+        <!-- ── Moderation ──────────────────────────── -->
+        <section id="s-moderation" class="admin-section">
+          <h1 class="section-heading">🔍 NSFW Moderation</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>Manual Image Check</h2></div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.88rem;margin-bottom:.75rem">Enter any image URL to run the local NSFW detector (nudenet). No external API key required — inference runs on the server.</p>
+              <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:1;min-width:260px">
+                  <label class="field-label" for="mod-check-url">Image URL</label>
+                  <input id="mod-check-url" type="url" class="field-input" placeholder="https://…" style="width:100%" />
+                </div>
+                <button class="btn btn-sm btn-edit" onclick="modCheckUrl()">Check 🔍</button>
+              </div>
+              <div id="mod-check-result" style="margin-top:.75rem;font-size:.9rem"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Auto-Flagged Drool Items</h2>
+              <button class="btn btn-sm" onclick="loadFlagged()">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <p style="color:var(--muted);font-size:.85rem;margin-bottom:.75rem">Items auto-hidden because their media scored above the NSFW threshold. Unflagging restores them to the public feed.</p>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>ID</th><th>Score</th><th>Hidden</th><th>Caption</th><th>Media URL</th><th>Date</th><th>Action</th></tr></thead>
+                  <tbody id="flagged-body"><tr class="empty-row"><td colspan="7">Loading…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Settings ──────────────────────────────── -->
         <section id="s-settings" class="admin-section">
           <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
@@ -1481,7 +1518,10 @@
     }
 
     document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
-      btn.addEventListener('click', () => navigate(btn.dataset.target));
+      btn.addEventListener('click', () => {
+        navigate(btn.dataset.target);
+        if (btn.dataset.target === 's-moderation') loadFlagged();
+      });
     });
 
     // ── Mobile sidebar ─────────────────────────────────
@@ -1944,6 +1984,69 @@
         showToast('🗑️ Question deleted.');
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    }
+
+    // ── Moderation ────────────────────────────────────
+    async function modCheckUrl() {
+      const url   = document.getElementById('mod-check-url').value.trim();
+      const resEl = document.getElementById('mod-check-result');
+      if (!url) { resEl.textContent = 'Please enter a URL.'; return; }
+      resEl.textContent = '⏳ Checking…';
+      try {
+        const data = await apiPost('/api/admin/moderation/check-url', { url });
+        const pct  = Math.round(data.nsfw_score * 100);
+        const bar  = `<div style="background:#2a1520;border-radius:4px;height:10px;overflow:hidden;margin:.4rem 0 .2rem">
+          <div style="height:100%;width:${pct}%;background:${data.flagged ? '#e05a5a' : '#4caf7d'};transition:width .3s"></div>
+        </div>`;
+        resEl.innerHTML = `
+          <strong>Score: ${pct}%</strong> — ${data.flagged ? '🔞 <span style="color:#e05a5a">NSFW (flagged)</span>' : '🌸 <span style="color:#4caf7d">Safe</span>'}
+          ${bar}
+          <span style="font-size:.75rem;color:var(--muted)">Threshold: ${Math.round(data.threshold * 100)}%</span>`;
+      } catch (e) {
+        resEl.textContent = `Error: ${e.detail || e.message || 'Check failed.'}`;
+      }
+    }
+
+    async function loadFlagged() {
+      const tbody = document.getElementById('flagged-body');
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Loading…</td></tr>';
+      try {
+        const rows = await apiGet('/api/admin/moderation/flagged');
+        if (!rows.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No flagged items.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(r => `
+          <tr>
+            <td>${r.id}</td>
+            <td style="color:${r.nsfw_score >= 0.75 ? '#e05a5a' : '#e0a050'}">${Math.round((r.nsfw_score||0)*100)}%</td>
+            <td>${r.is_hidden ? '🙈 Hidden' : '👁️ Visible'}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.text_content||'—')}</td>
+            <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              ${r.media_url ? `<a href="${escHtml(r.media_url)}" target="_blank" rel="noopener" style="color:var(--accent)">View</a>` : '—'}
+            </td>
+            <td>${(r.timestamp||'').slice(0,10)}</td>
+            <td><button class="btn btn-sm btn-edit" onclick="unflagItem(${r.id}, this)">Unflag</button></td>
+          </tr>`).join('');
+      } catch (e) {
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Error loading: ${escHtml(e.detail||e.message||'')}</td></tr>`;
+      }
+    }
+
+    async function unflagItem(id, btn) {
+      btn.disabled = true;
+      btn.textContent = '…';
+      try {
+        await apiPost(`/api/admin/moderation/unflag/${id}`, {});
+        btn.textContent = '✓ Restored';
+        btn.style.color = '#4caf7d';
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Unflag';
+        alert(`Error: ${e.detail || e.message || 'Unflag failed'}`);
       }
     }
 

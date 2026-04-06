@@ -219,6 +219,14 @@
       outline: none; transition: border-color .2s;
     }
     .form-field input:focus, .form-field textarea:focus { border-color: #e8aeb7; }
+    .form-field select {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 7px;
+      color: #f0e6e8; font-family: inherit; font-size: .95rem; padding: .5rem .75rem;
+      outline: none; transition: border-color .2s; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239e7e82' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right .75rem center;
+    }
+    .form-field select:focus { border-color: #e8aeb7; }
     .form-field textarea { resize: vertical; min-height: 80px; }
     .profile-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
     .accent-preview-row { display: flex; align-items: center; gap: .75rem; }
@@ -463,6 +471,27 @@
                   <label for="prof-forwarding-email">Forwarding Email</label>
                   <input id="prof-forwarding-email" type="email" placeholder="your@inbox.com — where fan mail is forwarded" />
                   <p class="field-hint">Incoming mail sent to your public <code>handle@domain</code> address will be forwarded here. Leave blank to use the platform default.</p>
+                </div>
+                <div class="form-field">
+                  <label for="prof-content-rating">Content Rating</label>
+                  <select id="prof-content-rating">
+                    <option value="unrated">⬜ Unrated</option>
+                    <option value="sfw">🌸 SFW — Safe For Work</option>
+                    <option value="mixed">🟡 Mixed — Some adult content</option>
+                    <option value="nsfw">🔞 NSFW — Adult content</option>
+                  </select>
+                  <p class="field-hint">Controls age-gating and how your profile appears in discovery. Choosing SFW removes the age gate; NSFW / Mixed enforces it.</p>
+                </div>
+                <div class="form-field">
+                  <label>Age Gate</label>
+                  <p id="prof-age-gate-status" class="field-hint" style="font-size:.9rem;margin:0"></p>
+                </div>
+                <div class="form-field">
+                  <label for="prof-pixelate-media">Pixelate archived media</label>
+                  <div style="display:flex;align-items:center;gap:.6rem">
+                    <input type="checkbox" id="prof-pixelate-media" style="width:1.1rem;height:1.1rem;accent-color:var(--accent);cursor:pointer" />
+                    <span class="field-hint" style="margin:0">Force pixelation on your archived drool items for all viewers regardless of their personal preference. Images are pixelated server-side so downloads are also censored.</span>
+                  </div>
                 </div>
               </div>
               <p id="profile-error" role="alert" aria-live="polite"></p>
@@ -1081,6 +1110,14 @@
         document.getElementById('prof-accent-color').value  = color;
         document.getElementById('accent-swatch').style.background = color;
         document.getElementById('accent-hex').textContent = color;
+        document.getElementById('prof-content-rating').value = me.content_rating || 'unrated';
+        document.getElementById('prof-pixelate-media').checked = !!me.pixelate_media;
+        const ageGateEl = document.getElementById('prof-age-gate-status');
+        if (me.require_age_gate) {
+          ageGateEl.innerHTML = '🔞 <strong>Age gate is ON</strong> — visitors must confirm 18+ before viewing your page.';
+        } else {
+          ageGateEl.innerHTML = '🌸 <strong>Age gate is OFF</strong> — your page is visible without an age confirmation.';
+        }
         document.getElementById('profile-error').textContent = '';
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load profile.');
@@ -1105,6 +1142,8 @@
           avatar_url:        document.getElementById('prof-avatar-url').value.trim() || null,
           accent_color:      document.getElementById('prof-accent-color').value,
           forwarding_email:  document.getElementById('prof-forwarding-email').value.trim() || null,
+          content_rating:    document.getElementById('prof-content-rating').value,
+          pixelate_media:    document.getElementById('prof-pixelate-media').checked,
         });
         if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
         if (!resp.ok) {
@@ -1116,7 +1155,19 @@
         if (updated.display_name) {
           document.getElementById('topbar-creator-name').textContent = updated.display_name;
         }
+        // Refresh age-gate status indicator after rating change
+        const ageGateEl = document.getElementById('prof-age-gate-status');
+        if (typeof updated.require_age_gate === 'boolean') {
+          if (updated.require_age_gate) {
+            ageGateEl.innerHTML = '🔞 <strong>Age gate is ON</strong> — visitors must confirm 18+ before viewing your page.';
+          } else {
+            ageGateEl.innerHTML = '🌸 <strong>Age gate is OFF</strong> — your page is visible without an age confirmation.';
+          }
+        }
         showToast('🐾 Profile saved!');
+        if (updated.avatar_nsfw_warning) {
+          errEl.textContent = updated.avatar_nsfw_warning;
+        }
       } catch (err) {
         if (err.message !== '401') errEl.textContent = 'Save failed. Please try again.';
       } finally {
