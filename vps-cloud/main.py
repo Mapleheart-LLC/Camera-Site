@@ -381,6 +381,11 @@ def init_db() -> None:
         conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
+    # Idempotent migration: add media_urls column for multi-image/video support.
+    try:
+        conn.execute("ALTER TABLE drool_archive ADD COLUMN media_urls TEXT")
+    except Exception:
+        pass  # column already exists
     # Idempotent migration: add username/password_hash columns.
     # Column names and type definitions are hardcoded string literals (not
     # derived from user input), so the f-string interpolation is safe here.
