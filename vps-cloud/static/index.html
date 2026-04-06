@@ -1751,9 +1751,11 @@
     // ── Auth modal wiring ─────────────────────────────
     document.getElementById('sign-in-btn').addEventListener('click', openAuthModal);
     document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
-    document.getElementById('auth-modal-backdrop').addEventListener('click', closeAuthModal);
+    document.getElementById('auth-modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeAuthModal();
+    });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAuthModal();
+      if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
     });
 
     // ── Page initialisation ───────────────────────────
