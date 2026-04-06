@@ -501,22 +501,20 @@
       const search = window.location.search;
       const proto  = window.location.protocol;
 
-      const memberOrigin = `${proto}//member.${host}`;
-
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
-        window.location.replace(memberOrigin + '/' + hash);
+        window.location.replace('/member/' + hash);
         return;
       }
 
       if (search.includes('subscribed=')) {
-        window.location.replace(memberOrigin + '/' + search + hash);
+        window.location.replace('/member/' + search + hash);
         return;
       }
 
       // Wire up dynamic links (no domain hardcoding)
       // Sign-in / sign-up goes to the platform member portal (not creator-specific)
-      document.getElementById('nav-enter').href  = memberOrigin + '/';
-      document.getElementById('hero-enter').href = memberOrigin + '/';
+      document.getElementById('nav-enter').href  = '/member';
+      document.getElementById('hero-enter').href = '/member';
 
       // ── Site-mode: tailor to single creator when applicable ──
       // When only one creator is active the platform presents itself as that
