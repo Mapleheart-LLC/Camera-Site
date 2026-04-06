@@ -680,6 +680,35 @@
             <button id="refresh-drool-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
           </h1>
 
+          <!-- Auto-Sync Settings card -->
+          <div class="card" style="margin-bottom:1.25rem">
+            <div class="card-header"><h2>⚙️ Auto-Sync Settings</h2></div>
+            <div class="card-body">
+              <p style="font-size:.85rem;color:#c49a9f;margin-bottom:1rem;">
+                Set your social media handles below and the platform will automatically pull your liked / saved posts every 5 minutes.
+              </p>
+              <div class="profile-form-grid">
+                <div class="form-field">
+                  <label for="sync-twitter-uid">Twitter / X — Numeric User ID</label>
+                  <input id="sync-twitter-uid" type="text" placeholder="e.g. 123456789" maxlength="32" inputmode="numeric" />
+                  <span style="font-size:.73rem;color:#7a5a5e;">Find yours at <a href="https://tweeterid.com" target="_blank" rel="noopener noreferrer" style="color:#c49a9f;">tweeterid.com</a>. Liked tweets are synced (bookmarks require OAuth setup by the platform admin).</span>
+                </div>
+                <div class="form-field">
+                  <label for="sync-bsky-handle">Bluesky — Handle</label>
+                  <input id="sync-bsky-handle" type="text" placeholder="yourname.bsky.social" maxlength="128" />
+                  <span style="font-size:.73rem;color:#7a5a5e;">Your full Bluesky handle. Required together with an App Password.</span>
+                </div>
+                <div class="form-field">
+                  <label for="sync-bsky-password">Bluesky — App Password</label>
+                  <input id="sync-bsky-password" type="password" placeholder="xxxx-xxxx-xxxx-xxxx" maxlength="256" autocomplete="new-password" />
+                  <span id="sync-bsky-password-hint" style="font-size:.73rem;color:#7a5a5e;">Generate one in Bluesky → Settings → App Passwords. Leave blank to keep the current password.</span>
+                </div>
+              </div>
+              <p id="sync-settings-error" role="alert" aria-live="polite" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem;"></p>
+              <button id="sync-settings-save-btn" class="btn-sm btn-edit" style="margin-top:.5rem">Save Auto-Sync Settings</button>
+            </div>
+          </div>
+
           <div class="card" style="margin-bottom:1.25rem">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
               <h2>Add Entry</h2>
@@ -1033,7 +1062,7 @@
         if (targetId === 's-streaming')   loadStreamInfo();
         if (targetId === 's-subscribers') loadGiftedList();
         if (targetId === 's-qa')          loadQuestions();
-        if (targetId === 's-drool')       loadDrool();
+        if (targetId === 's-drool')       { loadDrool(); loadSyncSettings(); }
         if (targetId === 's-email')       loadEmailSection();
         if (targetId === 's-stats')       loadStats();
         if (targetId === 's-alerts')      loadAlertSettings();
@@ -1702,7 +1731,67 @@
 
     document.getElementById('refresh-drool-btn').addEventListener('click', loadDrool);
 
-    // ── Add Drool Entry ────────────────────────────────
+    // ── Auto-Sync Settings ─────────────────────────────
+    async function loadSyncSettings() {
+      try {
+        const data = await apiGet('/api/creator/drool/settings');
+        document.getElementById('sync-twitter-uid').value  = data.twitter_user_id || '';
+        document.getElementById('sync-bsky-handle').value  = data.bsky_handle     || '';
+        document.getElementById('sync-bsky-password').value = '';
+        const hint = document.getElementById('sync-bsky-password-hint');
+        hint.textContent = data.bsky_app_password_set
+          ? 'App password is set. Leave blank to keep it, or enter a new one to replace it.'
+          : 'Generate one in Bluesky → Settings → App Passwords.';
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load sync settings.');
+      }
+    }
+
+    document.getElementById('sync-settings-save-btn').addEventListener('click', async () => {
+      const twitterUid  = document.getElementById('sync-twitter-uid').value.trim();
+      const bskyHandle  = document.getElementById('sync-bsky-handle').value.trim();
+      const bskyPass    = document.getElementById('sync-bsky-password').value;
+      const errEl       = document.getElementById('sync-settings-error');
+      const saveBtn     = document.getElementById('sync-settings-save-btn');
+      errEl.textContent = '';
+
+      if (twitterUid && !/^\d+$/.test(twitterUid)) {
+        errEl.textContent = 'Twitter User ID must be numeric (digits only).';
+        return;
+      }
+
+      const body = {
+        twitter_user_id: twitterUid,
+        bsky_handle:     bskyHandle,
+      };
+      if (bskyPass) body.bsky_app_password = bskyPass;
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      try {
+        const resp = await fetch('/api/creator/drool/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getJwt()}` },
+          body: JSON.stringify(body),
+        });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        document.getElementById('sync-bsky-password').value = '';
+        await loadSyncSettings();
+        showToast('⚙️ Auto-sync settings saved!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Auto-Sync Settings';
+      }
+    });
+
+
     document.getElementById('add-drool-toggle-btn').addEventListener('click', () => {
       const form = document.getElementById('add-drool-form');
       const shown = form.style.display !== 'none';

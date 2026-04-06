@@ -29,6 +29,8 @@ Endpoints
   POST   /api/creator/questions/{id}/answer     – answer a question
   DELETE /api/creator/questions/{id}            – delete a question
   GET    /api/creator/drool                     – Drool Log entries (own only)
+  GET    /api/creator/drool/settings            – drool auto-sync settings (Twitter user ID, Bluesky handle)
+  PATCH  /api/creator/drool/settings            – update drool auto-sync settings
   POST   /api/creator/drool                     – manually add a Drool Log entry
   DELETE /api/creator/drool/{id}                – remove a Drool Log entry
   GET    /api/creator/stats                     – subscriber count, recent tips, Q count
@@ -136,6 +138,12 @@ class DroolCreate(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048)
     platform: str = Field(..., min_length=1, max_length=50)
     text_content: Optional[str] = Field(None, max_length=2000)
+
+
+class DroolSyncPatch(BaseModel):
+    twitter_user_id: Optional[str] = Field(None, max_length=32)
+    bsky_handle: Optional[str] = Field(None, max_length=128)
+    bsky_app_password: Optional[str] = Field(None, max_length=256)
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +608,61 @@ def creator_delete_question(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/drool")
+@router.get("/drool/settings")
+def creator_get_drool_settings(
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the creator's drool auto-sync settings (Twitter user ID and Bluesky handle)."""
+    row = db.execute(
+        "SELECT twitter_user_id, bsky_handle, bsky_app_password FROM creator_accounts WHERE handle = ?",
+        (handle,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
+    return {
+        "twitter_user_id": row["twitter_user_id"] or "",
+        "bsky_handle": row["bsky_handle"] or "",
+        "bsky_app_password_set": bool(row["bsky_app_password"]),
+    }
+
+
+@router.patch("/drool/settings")
+def creator_patch_drool_settings(
+    payload: DroolSyncPatch,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update the creator's drool auto-sync settings.
+
+    - ``twitter_user_id``: numeric Twitter/X user ID (empty string clears it).
+    - ``bsky_handle``: Bluesky handle such as ``yourname.bsky.social`` (leading ``@`` stripped).
+    - ``bsky_app_password``: Bluesky app password; empty string clears it.
+
+    Only supplied fields are updated; omitted fields are left unchanged.
+    """
+    updates: dict = {}
+    if payload.twitter_user_id is not None:
+        updates["twitter_user_id"] = payload.twitter_user_id.strip() or None
+    if payload.bsky_handle is not None:
+        updates["bsky_handle"] = payload.bsky_handle.strip().lstrip("@") or None
+    if payload.bsky_app_password is not None:
+        updates["bsky_app_password"] = payload.bsky_app_password or None
+
+    if not updates:
+        return {"updated": []}
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [handle]
+    db.execute(
+        f"UPDATE creator_accounts SET {set_clause} WHERE handle = ?",  # noqa: S608
+        values,
+    )
+    db.commit()
+    return {"updated": list(updates.keys())}
+
+
+
 def creator_list_drool(
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),

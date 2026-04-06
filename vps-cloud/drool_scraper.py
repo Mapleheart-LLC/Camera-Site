@@ -885,8 +885,241 @@ def _scrape_bluesky() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Combined job (runs every 5 minutes)
+# Per-creator scraping helpers (uses credentials stored in creator_accounts)
 # ---------------------------------------------------------------------------
+
+_PRIMARY_CREATOR = "mochii"
+
+
+def _scrape_twitter_user_likes(creator_handle: str, user_id: str) -> None:
+    """Fetch liked tweets for *user_id* and store them under *creator_handle*.
+
+    Uses the globally configured Twitter client (OAuth 2.0 preferred, then
+    bearer / OAuth 1.0a).  Only public liked tweets are retrievable without
+    the account-owner's own OAuth tokens; bookmarks are skipped here.
+    """
+    if not _TWEEPY_AVAILABLE:
+        return
+
+    client = _get_oauth2_client() or _get_tweepy_client()
+    if client is None:
+        logger.debug("Twitter per-creator scraper: no client available, skipping %s.", creator_handle)
+        return
+
+    conn = get_db_connection()
+    try:
+        items: list[tuple] = []
+        try:
+            resp = client.get_liked_tweets(
+                id=user_id,
+                user_auth=False,
+                max_results=50,
+                tweet_fields=["created_at", "text", "attachments"],
+                expansions=["attachments.media_keys"],
+                media_fields=["url", "preview_image_url"],
+            )
+            if resp and resp.data:
+                media_map: dict = {}
+                if resp.includes and "media" in resp.includes:
+                    for m in resp.includes["media"]:
+                        media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                            m, "preview_image_url", None
+                        )
+                for tweet in resp.data:
+                    url = f"https://x.com/i/web/status/{tweet.id}"
+                    media_url: Optional[str] = None
+                    att = getattr(tweet, "attachments", None) or {}
+                    mk = (att.get("media_keys") or [None])[0]
+                    if mk:
+                        media_url = media_map.get(mk)
+                    ts = (
+                        tweet.created_at.isoformat()
+                        if tweet.created_at
+                        else datetime.now(timezone.utc).isoformat()
+                    )
+                    items.append(("twitter", url, media_url, tweet.text, ts))
+        except Exception as exc:
+            logger.warning(
+                "Twitter per-creator scraper (%s): liked tweets fetch failed: %s",
+                creator_handle, exc,
+            )
+
+        new_count = 0
+        newly_inserted: list[tuple] = []
+        for platform, orig_url, media_url, text_content, ts in items:
+            if conn.execute(
+                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
+            ).fetchone():
+                continue
+            conn.execute(
+                """
+                INSERT INTO drool_archive
+                    (platform, original_url, media_url, text_content, timestamp, creator_handle)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (platform, orig_url, media_url or None, text_content or None, ts, creator_handle),
+            )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            new_count += 1
+        conn.commit()
+        if new_count:
+            logger.info(
+                "Twitter per-creator scraper (%s): archived %d new item(s).",
+                creator_handle, new_count,
+            )
+            _notify_new_items(newly_inserted)
+    except Exception as exc:
+        logger.error("Twitter per-creator scraper (%s) error: %s", creator_handle, exc)
+    finally:
+        conn.close()
+
+
+def _scrape_bluesky_creator(
+    creator_handle: str,
+    bsky_handle: str,
+    app_password: str,
+) -> None:
+    """Fetch liked Bluesky posts for *bsky_handle* and store under *creator_handle*."""
+    if not _ATPROTO_AVAILABLE:
+        return
+
+    bsky_handle = bsky_handle.lstrip("@")
+    try:
+        client = _AtprotoClient()
+        client.login(bsky_handle, app_password)
+    except Exception as exc:
+        logger.warning(
+            "Bluesky per-creator scraper (%s): could not authenticate: %s",
+            creator_handle, exc,
+        )
+        return
+
+    conn = get_db_connection()
+    try:
+        items: list[tuple] = []
+        try:
+            resp = client.app.bsky.feed.get_actor_likes({"actor": bsky_handle, "limit": 50})
+            for feed_view in (resp.feed or []):
+                post = feed_view.post
+                at_uri = post.uri
+                parts = at_uri.split("/")
+                did  = parts[2] if len(parts) > 2 else bsky_handle
+                rkey = parts[-1] if parts else ""
+                url  = f"https://bsky.app/profile/{did}/post/{rkey}"
+
+                text = ""
+                record = getattr(post, "record", None)
+                if record:
+                    text = getattr(record, "text", "") or ""
+
+                media_url: Optional[str] = None
+                embed = getattr(post, "embed", None)
+                if embed:
+                    images = getattr(embed, "images", None)
+                    if images:
+                        media_url = (
+                            getattr(images[0], "fullsize", None)
+                            or getattr(images[0], "thumb", None)
+                        )
+                    if not media_url:
+                        media = getattr(embed, "media", None)
+                        if media:
+                            media_images = getattr(media, "images", None)
+                            if media_images:
+                                media_url = (
+                                    getattr(media_images[0], "fullsize", None)
+                                    or getattr(media_images[0], "thumb", None)
+                                )
+                            if not media_url:
+                                ext = getattr(media, "external", None)
+                                if ext:
+                                    media_url = getattr(ext, "thumb", None)
+                    if not media_url:
+                        external = getattr(embed, "external", None)
+                        if external:
+                            media_url = getattr(external, "thumb", None)
+
+                indexed_at = getattr(post, "indexed_at", None)
+                if indexed_at:
+                    ts = indexed_at if isinstance(indexed_at, str) else indexed_at.isoformat()
+                else:
+                    ts = datetime.now(timezone.utc).isoformat()
+
+                items.append(("bluesky", url, media_url, text, ts))
+        except Exception as exc:
+            logger.warning(
+                "Bluesky per-creator scraper (%s): liked posts fetch failed: %s",
+                creator_handle, exc,
+            )
+
+        new_count = 0
+        newly_inserted: list[tuple] = []
+        for platform, orig_url, media_url, text_content, ts in items:
+            if conn.execute(
+                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
+            ).fetchone():
+                continue
+            conn.execute(
+                """
+                INSERT INTO drool_archive
+                    (platform, original_url, media_url, text_content, timestamp, creator_handle)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (platform, orig_url, media_url or None, text_content or None, ts, creator_handle),
+            )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            new_count += 1
+        conn.commit()
+        if new_count:
+            logger.info(
+                "Bluesky per-creator scraper (%s): archived %d new item(s).",
+                creator_handle, new_count,
+            )
+            _notify_new_items(newly_inserted)
+    except Exception as exc:
+        logger.error("Bluesky per-creator scraper (%s) error: %s", creator_handle, exc)
+    finally:
+        conn.close()
+
+
+def _scrape_per_creator_accounts() -> None:
+    """Iterate creator_accounts rows with drool sync settings and scrape each."""
+    import sqlite3 as _sqlite3  # noqa: PLC0415
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            """
+            SELECT handle, twitter_user_id, bsky_handle, bsky_app_password
+              FROM creator_accounts
+             WHERE is_active = 1
+               AND (twitter_user_id IS NOT NULL OR bsky_handle IS NOT NULL)
+            """
+        ).fetchall()
+        conn.close()
+    except _sqlite3.Error as exc:
+        logger.warning("Drool per-creator: could not query creator_accounts: %s", exc)
+        return
+
+    for row in rows:
+        handle         = row[0]
+        twitter_uid    = row[1] or ""
+        bsky_handle    = row[2] or ""
+        bsky_app_pass  = row[3] or ""
+
+        if twitter_uid:
+            try:
+                _scrape_twitter_user_likes(handle, twitter_uid)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Drool per-creator Twitter (%s) error: %s", handle, exc)
+
+        if bsky_handle and bsky_app_pass:
+            try:
+                _scrape_bluesky_creator(handle, bsky_handle, bsky_app_pass)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Drool per-creator Bluesky (%s) error: %s", handle, exc)
+
+
+
 
 
 async def run_drool_scrape() -> None:
@@ -904,6 +1137,10 @@ async def run_drool_scrape() -> None:
         _scrape_bluesky()
     except Exception as exc:  # noqa: BLE001
         logger.error("Drool scraper: Bluesky job error: %s", exc)
+    try:
+        _scrape_per_creator_accounts()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Drool scraper: per-creator accounts job error: %s", exc)
     logger.info("Drool scraper: run complete.")
 
 

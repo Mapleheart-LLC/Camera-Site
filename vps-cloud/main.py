@@ -532,6 +532,16 @@ def init_db() -> None:
     except sqlite3.OperationalError as _e:
         if "duplicate column" not in str(_e).lower():
             raise
+    # Migration: per-creator drool auto-sync settings.
+    #   twitter_user_id  – numeric Twitter/X user ID whose liked tweets are scraped
+    #   bsky_handle      – Bluesky handle (e.g. yourname.bsky.social) for likes scraping
+    #   bsky_app_password – Bluesky app password (stored at rest; creator self-managed)
+    for _col in ("twitter_user_id", "bsky_handle", "bsky_app_password"):
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} TEXT")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
     # Member portal tables.
     conn.execute(
         """
