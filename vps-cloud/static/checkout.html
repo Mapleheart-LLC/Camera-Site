@@ -281,7 +281,7 @@
 
   <!-- ── Nav ──────────────────────────────────── -->
   <nav class="store-nav">
-    <a class="nav-logo" href="https://mochii.live">🐾 mochii.live</a>
+    <a class="nav-logo" id="checkout-nav-logo" href="/">🐾 mochii.live</a>
     <a class="nav-back-btn" href="/store.html">← Back to Shop</a>
   </nav>
 
@@ -294,7 +294,7 @@
   </main>
 
   <footer class="store-footer">
-    <p>🐾 <a href="https://mochii.live">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
+    <p>🐾 <a href="/" id="checkout-footer-home">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
   </footer>
 
   <script>
@@ -502,6 +502,18 @@
       }
       poll();
       setInterval(poll, 5000);
+    })();
+  </script>
+  <script>
+    // Checkout is served from shop.{domain}, so derive the root-domain home URL.
+    (function () {
+      var h = window.location.hostname;
+      var parts = h.split('.');
+      var homeUrl = window.location.protocol + '//' + (parts.length >= 3 ? parts.slice(1).join('.') : h);
+      ['checkout-nav-logo', 'checkout-footer-home'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.href = homeUrl;
+      });
     })();
   </script>
 </body>

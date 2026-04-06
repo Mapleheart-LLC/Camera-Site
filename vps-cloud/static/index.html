@@ -2033,8 +2033,8 @@
 
       // Wire up link card hrefs from the detected root domain
       const links = {
-        'link-ask':   `${proto}//anon.${rootDomain}`,
-        'link-drool': `${proto}//drool.${rootDomain}`,
+        'link-ask':   `${proto}//${rootDomain}/${handle}/anon`,
+        'link-drool': `${proto}//${rootDomain}/${handle}/drool`,
         'link-store': `${proto}//shop.${rootDomain}`,
         'link-links': `${proto}//links.${rootDomain}`,
       };

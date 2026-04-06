@@ -905,7 +905,7 @@ function buildCreatorUrl(handle) {
   if (parts.length >= 2) {
     const root = parts.slice(-2).join('.');
     const proto = window.location.protocol;
-    return `${proto}//${handle}.${root}/member`;
+    return `${proto}//${handle}.${root}/`;
   }
   return `/${handle}`;
 }
