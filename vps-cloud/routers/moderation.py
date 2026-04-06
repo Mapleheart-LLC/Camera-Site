@@ -64,7 +64,11 @@ router = APIRouter(prefix="/api/admin/moderation", tags=["moderation"])
 public_router = APIRouter(tags=["media"])
 
 _NSFW_THRESHOLD: float = float(os.environ.get("NSFW_SCORE_THRESHOLD", "0.75"))
-_PIXEL_SIZE: int = max(4, int(os.environ.get("NSFW_PIXEL_SIZE", "16")))
+try:
+    _PIXEL_SIZE: int = max(4, int(os.environ.get("NSFW_PIXEL_SIZE", "16")))
+except (ValueError, TypeError):
+    logger.warning("Invalid NSFW_PIXEL_SIZE env var — using default 16.")
+    _PIXEL_SIZE = 16
 
 # Labels from nudenet that indicate explicit content.
 _NSFW_LABELS: frozenset[str] = frozenset({
@@ -167,8 +171,9 @@ async def check_image_nsfw(url: str) -> Optional[float]:
 
     Downloads the image into memory then runs the local nudenet ONNX detector.
     Never raises — returns ``None`` on any network or inference failure.
+    Only fetches URLs that pass the _is_safe_url() guard.
     """
-    if not url:
+    if not url or not _is_safe_url(url):
         return None
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:

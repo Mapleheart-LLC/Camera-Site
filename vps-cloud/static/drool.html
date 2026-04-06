@@ -1074,7 +1074,8 @@
     }
 
     // Load preference first so cards render with correct pixelation state.
-    loadPixelatePreference().then(loadFeed);
+    // Use .catch() so a network failure never prevents the feed from loading.
+    loadPixelatePreference().catch(() => {}).then(loadFeed);
   </script>
 
   <!-- ── Spotify Now Playing (fixed bottom bar) ──────── -->
