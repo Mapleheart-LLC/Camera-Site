@@ -827,7 +827,6 @@ def _scrape_bluesky() -> None:
     # Persist the (possibly refreshed) session so the next run can reuse it.
     try:
         new_session = client.export_session_string()
-        import sqlite3 as _sqlite3  # noqa: PLC0415
         _conn = get_db_connection()
         _conn.execute(
             """

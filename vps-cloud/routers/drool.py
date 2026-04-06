@@ -180,7 +180,9 @@ def _build_feed_items(
     if not rows:
         return []
 
-    ids = [row["id"] for row in rows]
+    # Explicitly cast to int to ensure the placeholder list is safe integers
+    # before interpolating the length into the SQL string.
+    ids: list[int] = [int(row["id"]) for row in rows]
     placeholders = ",".join("?" * len(ids))
 
     # Batch: comment counts for all ids
