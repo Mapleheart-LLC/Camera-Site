@@ -13,6 +13,9 @@ services:
       # go2rtc service name so the backend can build WebRTC URLs for the client
       - GO2RTC_HOST=go2rtc
       - GO2RTC_PORT=1984
+      # Path inside the container where go2rtc HLS recordings are mounted.
+      # Must match the volume mount below and go2rtc's hls.dir setting.
+      - RECORDINGS_PATH=/recordings
       # ── Fanvue OAuth 2.0 ──────────────────────────────
       # Register your app at https://app.fanvue.com/developer and paste the
       # credentials below (or export them as environment variables).
@@ -194,6 +197,9 @@ services:
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
+      # Shared recording volume: go2rtc writes HLS segments here; backend reads
+      # them to serve DVR playlists and archive VODs.
+      - stream_recordings:/recordings
     depends_on:
       - go2rtc
       - redis
@@ -209,6 +215,8 @@ services:
       - "8555:8555"   # WebRTC/ICE TCP
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+      # HLS segments are written here by go2rtc and read by the backend.
+      - stream_recordings:/recordings
     restart: unless-stopped
 
   # ── Redis – rate-limiting store ─────────────────────
@@ -252,4 +260,5 @@ services:
 
 volumes:
   camera_data:
+  stream_recordings:
   tailscale_state:
