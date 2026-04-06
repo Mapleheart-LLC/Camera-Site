@@ -484,6 +484,10 @@
         <button class="nav-item" data-target="s-spotify">🎵 Spotify</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">Creators</div>
+        <button class="nav-item" data-target="s-applications">
+          📝 Applications
+          <span id="nav-applications-badge" class="nav-badge" aria-label="pending applications"></span>
+        </button>
         <button class="nav-item" data-target="s-pack-members">🐾 Pack Members</button>
         <button class="nav-item" data-target="s-featured-creator">⭐ Featured Creator</button>
         <button class="nav-item" data-target="s-users">👥 Users & Gifts</button>
@@ -995,6 +999,82 @@
         </section>
 
         <!-- ── Pack Members ───────────────────────────── -->
+        <!-- ── Creator Applications ───────────────────── -->
+        <section id="s-applications" class="admin-section">
+          <h1 class="section-heading">
+            📝 Creator Applications
+            <button id="refresh-applications-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <!-- Sub-tabs -->
+          <div class="sub-tabs" style="margin-bottom:1rem">
+            <button class="sub-tab active" data-apptab="pending">Pending</button>
+            <button class="sub-tab" data-apptab="approved">Approved</button>
+            <button class="sub-tab" data-apptab="rejected">Rejected</button>
+          </div>
+
+          <!-- Applications table -->
+          <div class="card">
+            <div class="card-body">
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Creator applications">
+                  <thead>
+                    <tr>
+                      <th>Handle</th>
+                      <th>Display Name</th>
+                      <th>Email</th>
+                      <th>Bio</th>
+                      <th>Submitted</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="applications-body">
+                    <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Approve inline form -->
+          <div id="approve-form" style="display:none;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:10px;padding:1.1rem;margin-top:.75rem">
+            <h3 style="font-size:.83rem;font-weight:800;color:#e8aeb7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.85rem">
+              Approve Application — <span id="approve-form-handle"></span>
+            </h3>
+            <div class="form-row">
+              <div class="form-field">
+                <label for="approve-password">Initial Password (8+ chars)</label>
+                <input id="approve-password" type="password" placeholder="Set their initial password" autocomplete="new-password" />
+              </div>
+              <div class="form-actions" style="align-self:flex-end;padding-bottom:1px">
+                <button id="approve-save-btn" class="btn-sm btn-edit">✅ Approve</button>
+                <button id="approve-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+              </div>
+            </div>
+            <p id="approve-form-error" style="font-size:.8rem;color:#f87171;margin-top:.5rem;min-height:1em"></p>
+          </div>
+
+          <!-- Reject inline form -->
+          <div id="reject-form" style="display:none;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:10px;padding:1.1rem;margin-top:.75rem">
+            <h3 style="font-size:.83rem;font-weight:800;color:#e8aeb7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.85rem">
+              Reject Application — <span id="reject-form-handle"></span>
+            </h3>
+            <div class="form-row">
+              <div class="form-field" style="flex:2">
+                <label for="reject-reason">Reason (10–500 chars)</label>
+                <input id="reject-reason" type="text" placeholder="Reason for rejection…" maxlength="500" />
+              </div>
+              <div class="form-actions" style="align-self:flex-end;padding-bottom:1px">
+                <button id="reject-save-btn" class="btn-sm btn-delete">❌ Reject</button>
+                <button id="reject-cancel-btn" class="btn-sm btn-edit">Cancel</button>
+              </div>
+            </div>
+            <p id="reject-form-error" style="font-size:.8rem;color:#f87171;margin-top:.5rem;min-height:1em"></p>
+          </div>
+        </section>
+
+        <!-- ── Pack Members ────────────────────────────── -->
         <section id="s-pack-members" class="admin-section">
           <h1 class="section-heading">
             🐾 Pack Members
@@ -1425,6 +1505,7 @@
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
         loadDroolCredentials(), loadDroolArchive(), loadCreators(), loadFeaturedQueue(),
+        loadApplications(),
       ]);
     }
 
@@ -2566,6 +2647,165 @@
     // ── Pack Members ──────────────────────────────────
 
     let _editingCreatorHandle = null;
+
+    // ── Creator Applications ───────────────────────────
+    let _applicationsTab = 'pending';
+    let _approvingId     = null;
+    let _rejectingId     = null;
+
+    async function loadApplications() {
+      const tbody = document.getElementById('applications-body');
+      try {
+        // Always refresh the pending count badge.
+        const pending = await apiGet('/api/admin/creator-applications?status_filter=pending');
+        const badge = document.getElementById('nav-applications-badge');
+        if (pending.length) {
+          badge.textContent = pending.length;
+          badge.classList.add('visible');
+        } else {
+          badge.textContent = '';
+          badge.classList.remove('visible');
+        }
+
+        // Load the currently-selected tab's data.
+        const apps = _applicationsTab === 'pending' ? pending
+          : await apiGet(`/api/admin/creator-applications?status_filter=${encodeURIComponent(_applicationsTab)}`);
+
+        if (!apps.length) {
+          tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No ${escHtml(_applicationsTab)} applications.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = apps.map(a => {
+          const ts = (a.created_at || '').replace('T', ' ').slice(0, 16);
+          const reviewedTs = a.reviewed_at ? a.reviewed_at.replace('T', ' ').slice(0, 16) : '—';
+          const bioSnippet = a.bio ? escHtml(a.bio.slice(0, 60)) + (a.bio.length > 60 ? '…' : '') : '—';
+          let statusCell = '';
+          if (a.status === 'pending') {
+            statusCell = '<span class="link-active-badge" style="background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid #fbbf24">Pending</span>';
+          } else if (a.status === 'approved') {
+            statusCell = `<span class="link-active-badge on">Approved</span><br><small class="ts-cell">${escHtml(reviewedTs)}</small>`;
+          } else {
+            statusCell = `<span class="link-active-badge off">Rejected</span>${a.reject_reason ? `<br><small style="color:#9e7e82;font-size:.75rem">${escHtml(a.reject_reason.slice(0, 60))}${a.reject_reason.length > 60 ? '…' : ''}</small>` : ''}`;
+          }
+          const actions = a.status === 'pending'
+            ? `<div class="action-cell">
+                 <button class="btn-sm btn-edit app-approve-btn" data-id="${a.id}" data-handle="${escHtml(a.handle_requested)}">✅ Approve</button>
+                 <button class="btn-sm btn-delete app-reject-btn" data-id="${a.id}" data-handle="${escHtml(a.handle_requested)}">❌ Reject</button>
+               </div>`
+            : '—';
+          return `<tr>
+            <td style="font-weight:700;color:#e8aeb7"><code>${escHtml(a.handle_requested)}</code></td>
+            <td>${escHtml(a.display_name || '')}</td>
+            <td>${escHtml(a.email || '')}</td>
+            <td style="max-width:180px;word-break:break-word">${bioSnippet}</td>
+            <td class="ts-cell">${escHtml(ts)}</td>
+            <td>${statusCell}</td>
+            <td>${actions}</td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Failed to load applications.</td></tr>';
+      }
+    }
+
+    // Sub-tab switching.
+    document.querySelectorAll('.sub-tab[data-apptab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sub-tab[data-apptab]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _applicationsTab = btn.dataset.apptab;
+        // Hide any open inline forms when switching tabs.
+        document.getElementById('approve-form').style.display = 'none';
+        document.getElementById('reject-form').style.display  = 'none';
+        _approvingId = null;
+        _rejectingId = null;
+        loadApplications();
+      });
+    });
+
+    // Delegate clicks on the applications table body.
+    document.getElementById('applications-body').addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+
+      if (btn.classList.contains('app-approve-btn')) {
+        _approvingId = parseInt(btn.dataset.id, 10);
+        _rejectingId = null;
+        document.getElementById('approve-form-handle').textContent = `@${btn.dataset.handle}`;
+        document.getElementById('approve-password').value          = '';
+        document.getElementById('approve-form-error').textContent  = '';
+        document.getElementById('reject-form').style.display       = 'none';
+        document.getElementById('approve-form').style.display      = 'block';
+        document.getElementById('approve-password').focus();
+        return;
+      }
+
+      if (btn.classList.contains('app-reject-btn')) {
+        _rejectingId = parseInt(btn.dataset.id, 10);
+        _approvingId = null;
+        document.getElementById('reject-form-handle').textContent = `@${btn.dataset.handle}`;
+        document.getElementById('reject-reason').value            = '';
+        document.getElementById('reject-form-error').textContent  = '';
+        document.getElementById('approve-form').style.display     = 'none';
+        document.getElementById('reject-form').style.display      = 'block';
+        document.getElementById('reject-reason').focus();
+      }
+    });
+
+    document.getElementById('approve-cancel-btn').addEventListener('click', () => {
+      document.getElementById('approve-form').style.display = 'none';
+      _approvingId = null;
+    });
+
+    document.getElementById('approve-save-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('approve-form-error');
+      const pw    = document.getElementById('approve-password').value;
+      if (pw.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+      if (!_approvingId)  { errEl.textContent = 'No application selected.'; return; }
+      try {
+        const resp = await apiPost(`/api/admin/creator-applications/${_approvingId}/approve`, { initial_password: pw });
+        if (resp.ok) {
+          document.getElementById('approve-form').style.display = 'none';
+          _approvingId = null;
+          await loadApplications();
+          showToast('✅ Application approved — creator account created!');
+        } else {
+          const d = await resp.json().catch(() => ({}));
+          errEl.textContent = d.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      }
+    });
+
+    document.getElementById('reject-cancel-btn').addEventListener('click', () => {
+      document.getElementById('reject-form').style.display = 'none';
+      _rejectingId = null;
+    });
+
+    document.getElementById('reject-save-btn').addEventListener('click', async () => {
+      const errEl  = document.getElementById('reject-form-error');
+      const reason = document.getElementById('reject-reason').value.trim();
+      if (reason.length < 10) { errEl.textContent = 'Reason must be at least 10 characters.'; return; }
+      if (!_rejectingId)      { errEl.textContent = 'No application selected.'; return; }
+      try {
+        const resp = await apiPost(`/api/admin/creator-applications/${_rejectingId}/reject`, { reason });
+        if (resp.ok) {
+          document.getElementById('reject-form').style.display = 'none';
+          _rejectingId = null;
+          await loadApplications();
+          showToast('❌ Application rejected.');
+        } else {
+          const d = await resp.json().catch(() => ({}));
+          errEl.textContent = d.detail || `Error ${resp.status}`;
+        }
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      }
+    });
+
+    document.getElementById('refresh-applications-btn').addEventListener('click', loadApplications);
 
     async function loadCreators() {
       const tbody = document.getElementById('creators-body');

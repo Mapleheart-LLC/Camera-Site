@@ -202,14 +202,22 @@
       font-weight: 800;
       font-family: inherit;
       text-decoration: none;
+      border: none;
+      cursor: pointer;
       transition: opacity .2s, box-shadow .2s, transform .15s;
       box-shadow: 0 4px 18px rgba(232,174,183,.3);
     }
 
-    .btn-pink:hover {
+    .btn-pink:hover:not(:disabled) {
       opacity: .9;
       box-shadow: 0 6px 26px rgba(232,174,183,.45);
       transform: translateY(-2px);
+    }
+
+    .btn-pink:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
     }
 
     .cta-apply {
@@ -227,6 +235,128 @@
 
     .cta-apply a:hover {
       text-decoration: underline;
+    }
+
+    /* ── Apply form ───────────────────────────────────── */
+    .apply-card {
+      width: 100%;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 18px;
+      padding: 1.75rem 1.5rem;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .apply-card h3 {
+      font-size: 1rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      letter-spacing: .01em;
+      margin-bottom: .1rem;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+    }
+
+    .form-field label {
+      font-size: .78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9e7e82;
+    }
+
+    .form-field input,
+    .form-field textarea {
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .93rem;
+      font-weight: 600;
+      padding: .6rem .85rem;
+      transition: border-color .2s;
+      width: 100%;
+    }
+
+    .form-field input:focus,
+    .form-field textarea:focus {
+      outline: none;
+      border-color: #e8aeb7;
+    }
+
+    .form-field textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-field input::placeholder,
+    .form-field textarea::placeholder {
+      color: #5a3a3e;
+    }
+
+    .form-row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+
+    @media (max-width: 480px) {
+      .form-row-2 { grid-template-columns: 1fr; }
+    }
+
+    .age-check {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-size: .88rem;
+      font-weight: 600;
+      color: #9e7e82;
+      cursor: pointer;
+    }
+
+    .age-check input[type="checkbox"] {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: #e8aeb7;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .apply-error {
+      font-size: .83rem;
+      color: #f87171;
+      font-weight: 600;
+      min-height: 1.2em;
+    }
+
+    .apply-success {
+      text-align: center;
+      padding: 1.25rem 0 .5rem;
+    }
+
+    .apply-success .success-icon {
+      font-size: 2.5rem;
+      display: block;
+      margin-bottom: .6rem;
+    }
+
+    .apply-success p {
+      font-size: .95rem;
+      color: #9e7e82;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+
+    .apply-success strong {
+      color: #e8aeb7;
     }
 
     /* ── Footer ───────────────────────────────────────── */
@@ -323,11 +453,135 @@
     <div class="cta-divider" aria-hidden="true"></div>
     <h2>Ready to build your den?</h2>
     <a href="/creator-dash.html" class="btn-pink">Access Your Dashboard →</a>
-    <p class="cta-apply">
-      New here? To apply for a creator account, reach out at
-      <a href="mailto:[CONTACT]">[CONTACT]</a>.
-    </p>
+
+    <!-- Application form -->
+    <div class="apply-card" id="apply-card">
+      <h3>Apply to Join</h3>
+
+      <div id="apply-form">
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="af-handle">Handle <span style="color:#e8aeb7">*</span></label>
+            <input id="af-handle" type="text" placeholder="yourhandle" autocomplete="off"
+                   minlength="5" maxlength="32" pattern="[a-z0-9_-]+" />
+          </div>
+          <div class="form-field">
+            <label for="af-display-name">Display Name <span style="color:#e8aeb7">*</span></label>
+            <input id="af-display-name" type="text" placeholder="Your Name" maxlength="64" />
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top:.1rem">
+          <label for="af-email">Email <span style="color:#e8aeb7">*</span></label>
+          <input id="af-email" type="email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+
+        <div class="form-field">
+          <label for="af-bio">Bio <small style="text-transform:none;font-weight:600;color:#6a4a4e">(optional)</small></label>
+          <textarea id="af-bio" placeholder="Tell us a little about yourself…" maxlength="500"></textarea>
+        </div>
+
+        <div class="form-field">
+          <label for="af-socials">Social Links <small style="text-transform:none;font-weight:600;color:#6a4a4e">(optional — comma-separated URLs)</small></label>
+          <input id="af-socials" type="text" placeholder="https://twitter.com/you, https://instagram.com/you" />
+        </div>
+
+        <label class="age-check">
+          <input type="checkbox" id="af-age" />
+          I confirm I am 18 years of age or older.
+        </label>
+        <p style="font-size:.8rem;color:#9e7e82;font-weight:600;line-height:1.55;margin-top:-.25rem">
+          ⚠️ If your application is approved, you will be required to verify your age through a third-party age verification service before your account is activated.
+        </p>
+
+        <p class="apply-error" id="apply-error" aria-live="polite"></p>
+
+        <button class="btn-pink" id="apply-submit-btn" style="margin-top:.25rem;width:100%;justify-content:center">
+          Submit Application 🐾
+        </button>
+      </div>
+
+      <div id="apply-success" class="apply-success" style="display:none">
+        <span class="success-icon" aria-hidden="true">🐾</span>
+        <p>
+          <strong>Application received!</strong><br>
+          We'll review your submission and get back to you at your provided email. Thanks for your interest in joining the pack!
+        </p>
+      </div>
+    </div>
   </section>
+
+  <script>
+    (function () {
+      const submitBtn = document.getElementById('apply-submit-btn');
+      const errorEl   = document.getElementById('apply-error');
+
+      submitBtn.addEventListener('click', async () => {
+        errorEl.textContent = '';
+
+        const handle      = document.getElementById('af-handle').value.trim().toLowerCase();
+        const displayName = document.getElementById('af-display-name').value.trim();
+        const email       = document.getElementById('af-email').value.trim();
+        const bio         = document.getElementById('af-bio').value.trim();
+        const socialsRaw  = document.getElementById('af-socials').value.trim();
+        const ageChecked  = document.getElementById('af-age').checked;
+
+        if (!handle)      { errorEl.textContent = 'Handle is required.'; return; }
+        if (!/^[a-z0-9_-]{5,32}$/.test(handle)) {
+          errorEl.textContent = 'Handle must be 5–32 lowercase letters, numbers, underscores, or hyphens.';
+          return;
+        }
+        if (!displayName) { errorEl.textContent = 'Display name is required.'; return; }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          errorEl.textContent = 'A valid email address is required.';
+          return;
+        }
+        if (!ageChecked)  { errorEl.textContent = 'You must confirm you are 18 or older.'; return; }
+
+        // Parse optional social links into an object.
+        const socialLinks = {};
+        if (socialsRaw) {
+          socialsRaw.split(',').map(s => s.trim()).filter(Boolean).forEach((url, i) => {
+            socialLinks[`link_${i + 1}`] = url;
+          });
+        }
+
+        const body = {
+          handle_requested: handle,
+          display_name: displayName,
+          email,
+          bio: bio || null,
+          social_links: Object.keys(socialLinks).length ? socialLinks : null,
+          age_attested: true,
+        };
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting…';
+
+        try {
+          const resp = await fetch('/api/creator/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          if (resp.ok) {
+            document.getElementById('apply-form').style.display = 'none';
+            document.getElementById('apply-success').style.display = '';
+          } else {
+            const data = await resp.json().catch(() => ({}));
+            errorEl.textContent = data.detail || `Error ${resp.status}. Please try again.`;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Application 🐾';
+          }
+        } catch (_) {
+          errorEl.textContent = 'Network error. Please check your connection and try again.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Application 🐾';
+        }
+      });
+    })();
+  </script>
 
   <!-- Footer -->
   <footer>

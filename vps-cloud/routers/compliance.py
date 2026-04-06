@@ -125,7 +125,7 @@ class DmcaActionRequest(BaseModel):
 
 
 class CreatorApplicationRequest(BaseModel):
-    handle_requested: str = Field(..., min_length=2, max_length=32, pattern=r"^[a-z0-9_-]+$")
+    handle_requested: str = Field(..., min_length=5, max_length=32, pattern=r"^[a-z0-9_-]+$")
     display_name: str = Field(..., min_length=2, max_length=64)
     email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     bio: Optional[str] = Field(None, max_length=500)
