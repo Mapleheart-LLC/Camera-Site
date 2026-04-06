@@ -94,6 +94,13 @@ MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool
 # Falls back to the request base_url when not set.
 BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 
+# Default creator account seeding.
+# When both CREATOR_HANDLE and CREATOR_PASSWORD are set, init_db() creates
+# the creator account on first startup (INSERT OR IGNORE – safe on restarts).
+# Use ADMIN_CREATOR_HANDLE in routers/admin.py to link admin ↔ creator.
+_SEED_CREATOR_HANDLE: str = os.environ.get("CREATOR_HANDLE", "").lower().strip()
+_SEED_CREATOR_PASSWORD: str = os.environ.get("CREATOR_PASSWORD", "")
+
 # ---------------------------------------------------------------------------
 # CORS / cookie-domain configuration
 #
@@ -377,6 +384,31 @@ def init_db() -> None:
         )
         """
     )
+    # Seed the default creator account from env vars (idempotent).
+    if _SEED_CREATOR_HANDLE and _SEED_CREATOR_PASSWORD:
+        from routers.auth import _hash_password as _auth_hash
+        import uuid as _uuid
+        from datetime import datetime as _dt, timezone as _tz
+        _existing = conn.execute(
+            "SELECT id FROM creator_accounts WHERE handle = ?",
+            (_SEED_CREATOR_HANDLE,),
+        ).fetchone()
+        if not _existing:
+            conn.execute(
+                """
+                INSERT INTO creator_accounts
+                    (id, handle, display_name, hashed_password, is_active, created_at)
+                VALUES (?, ?, ?, ?, 1, ?)
+                """,
+                (
+                    str(_uuid.uuid4()),
+                    _SEED_CREATOR_HANDLE,
+                    _SEED_CREATOR_HANDLE.capitalize(),
+                    _auth_hash(_SEED_CREATOR_PASSWORD),
+                    _dt.now(_tz.utc).isoformat(),
+                ),
+            )
+
     # ── Segpay subscription audit log ─────────────────────────────────────
     # Each Segpay postback is recorded here.  The current access_level lives
     # on site_users; this table is for history and manual reconciliation.
