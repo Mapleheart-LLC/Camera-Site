@@ -419,22 +419,25 @@
       const search = window.location.search;
       const proto  = window.location.protocol;
 
-      const portalOrigin = `${proto}//mochii.${host}`;
+      const memberOrigin = `${proto}//member.${host}`;
+      const mochiiOrigin = `${proto}//mochii.${host}`;
 
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
-        window.location.replace(portalOrigin + '/' + hash);
+        window.location.replace(memberOrigin + '/' + hash);
         return;
       }
 
       if (search.includes('subscribed=')) {
-        window.location.replace(portalOrigin + '/' + search + hash);
+        window.location.replace(memberOrigin + '/' + search + hash);
         return;
       }
 
       // Wire up dynamic links (no domain hardcoding)
-      document.getElementById('nav-enter').href   = portalOrigin + '/';
-      document.getElementById('hero-enter').href  = portalOrigin + '/';
-      document.getElementById('mochii-card').href = portalOrigin + '/';
+      // Sign-in / sign-up goes to the platform member portal (not creator-specific)
+      document.getElementById('nav-enter').href   = memberOrigin + '/';
+      document.getElementById('hero-enter').href  = memberOrigin + '/';
+      // Creator card links to mochii's den specifically
+      document.getElementById('mochii-card').href = mochiiOrigin + '/';
     })();
   </script>
   <script>
