@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live — live cams, the drool log, anonymous Q&amp;A, and more. come find your place in the pack." />
+  <meta name="description" content="mochii.live — a creator platform with live cams, anonymous Q&A, curated feeds, and a den that's yours." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="come find your place in the pack." />
+  <meta property="og:description" content="the den is open." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"        content="summary" />
   <meta name="twitter:title"       content="mochii.live 🐾" />
-  <meta name="twitter:description" content="come find your place in the pack." />
+  <meta name="twitter:description" content="the den is open." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,11 +29,11 @@
       display: flex;
       flex-direction: column;
       background:
-        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(120, 20, 35, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(120, 20, 35, 0.18) 0%, transparent 70%),
         #1a1a1a;
     }
 
-    /* ── Nav ────────────────────────────────────────────── */
+    /* ── Nav ──────────────────────────────────────────── */
     .nav {
       display: flex;
       align-items: center;
@@ -41,7 +41,7 @@
       padding: .85rem 1.75rem;
       background: #1e1e1e;
       border-bottom: 1px solid #3d2a2e;
-      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160, 30, 50, 0.1);
+      box-shadow: 0 1px 0 #3d2a2e, 0 0 24px rgba(140, 20, 40, 0.1);
       position: sticky;
       top: 0;
       z-index: 10;
@@ -55,38 +55,48 @@
       letter-spacing: .01em;
     }
 
-    .nav-actions { display: flex; gap: .65rem; align-items: center; }
+    .nav-actions { display: flex; gap: .6rem; align-items: center; }
 
     .btn-nav {
-      display: inline-flex; align-items: center; gap: .4rem;
+      display: inline-flex; align-items: center; gap: .35rem;
       padding: .45rem 1rem;
       border-radius: 10px;
       font-size: .85rem; font-weight: 700; font-family: inherit;
       text-decoration: none; cursor: pointer;
-      transition: background .2s, color .2s, box-shadow .2s;
+      transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
+      border: 1px solid transparent;
     }
 
+    .btn-nav-ghost {
+      background: transparent;
+      border-color: #4b3538;
+      color: #9e7e82;
+    }
+    .btn-nav-ghost:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
     .btn-nav-primary {
-      background: #3d2028; border: 1px solid #e8aeb7; color: #e8aeb7;
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
     }
     .btn-nav-primary:hover {
       background: #e8aeb7; color: #1a1a1a;
-      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+      box-shadow: 0 4px 16px rgba(232,174,183,.3);
     }
 
-    /* ── Hero ───────────────────────────────────────────── */
+    /* ── Hero ─────────────────────────────────────────── */
     .hero {
       text-align: center;
-      padding: 5rem 1.5rem 3rem;
+      padding: 5rem 1.5rem 3.5rem;
       flex-shrink: 0;
     }
 
     .hero-paw {
-      font-size: 3.8rem;
+      font-size: 3.6rem;
       display: block;
       margin-bottom: 1rem;
       animation: pawFloat 3s ease-in-out infinite;
-      filter: drop-shadow(0 0 20px rgba(220,80,100,.45));
+      filter: drop-shadow(0 0 22px rgba(220,80,100,.5));
     }
 
     @keyframes pawFloat {
@@ -95,11 +105,11 @@
     }
 
     .hero h1 {
-      font-size: clamp(2.4rem, 6vw, 3.6rem);
+      font-size: clamp(2.2rem, 5.5vw, 3.4rem);
       font-weight: 800;
       color: #e8aeb7;
-      margin-bottom: .5rem;
-      letter-spacing: -.01em;
+      margin-bottom: .6rem;
+      letter-spacing: -.02em;
       line-height: 1.1;
       text-shadow: 0 0 40px rgba(232, 100, 120, 0.3);
     }
@@ -108,8 +118,9 @@
       font-size: 1rem;
       color: #9e7e82;
       font-weight: 600;
-      margin: 0 auto 2.5rem;
-      line-height: 1.6;
+      max-width: 420px;
+      margin: 0 auto 2.25rem;
+      line-height: 1.65;
     }
 
     .hero-ctas {
@@ -120,63 +131,68 @@
     }
 
     .btn-hero-primary {
-      padding: .75rem 1.75rem;
+      padding: .72rem 1.65rem;
       background: linear-gradient(135deg, #c4525e 0%, #e8aeb7 100%);
       border: none; border-radius: 12px;
       color: #fff; font-family: inherit; font-size: 1rem; font-weight: 800;
       text-decoration: none; cursor: pointer;
-      box-shadow: 0 6px 28px rgba(232,174,183,.3);
+      box-shadow: 0 6px 24px rgba(232,174,183,.32);
       transition: transform .15s, box-shadow .2s;
       display: inline-flex; align-items: center; gap: .45rem;
     }
     .btn-hero-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 36px rgba(232,174,183,.42);
+      box-shadow: 0 10px 32px rgba(232,174,183,.44);
     }
     .btn-hero-primary:active { transform: translateY(0); }
 
-    /* ── Link cards (matching subscriber portal style) ───── */
-    .links-section {
+    .btn-hero-ghost {
+      padding: .72rem 1.65rem;
+      background: transparent; border: 1px solid #4b3538;
+      border-radius: 12px; color: #9e7e82;
+      font-family: inherit; font-size: 1rem; font-weight: 700;
+      text-decoration: none; cursor: pointer;
+      transition: border-color .2s, color .2s, transform .15s;
+      display: inline-flex; align-items: center; gap: .45rem;
+    }
+    .btn-hero-ghost:hover { border-color: #e8aeb7; color: #e8aeb7; transform: translateY(-2px); }
+    .btn-hero-ghost:active { transform: translateY(0); }
+
+    /* ── Section wrapper ─────────────────────────────── */
+    .section {
       width: 100%;
-      max-width: 560px;
+      max-width: 680px;
       margin: 0 auto;
-      padding: 0 1.5rem 1rem;
+      padding: 2rem 1.5rem;
     }
 
-    .links-section-label {
-      font-size: .7rem;
+    .section-label {
+      font-size: .68rem;
       font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: .13em;
+      letter-spacing: .14em;
       color: #6a4a4e;
-      margin-bottom: 1rem;
       text-align: center;
+      margin-bottom: 1.25rem;
     }
 
-    .links-list {
-      display: flex;
-      flex-direction: column;
-      gap: .65rem;
-    }
-
-    .link-card {
+    /* ── Featured creator card ───────────────────────── */
+    .creator-card {
       display: flex;
       align-items: center;
-      gap: 1rem;
-      padding: 1rem 1.25rem;
+      gap: 1.1rem;
+      padding: 1.25rem 1.4rem;
       background: #242424;
       border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      color: #f0e6e8;
+      border-radius: 16px;
       text-decoration: none;
-      font-size: .95rem;
-      font-weight: 700;
+      color: #f0e6e8;
       position: relative;
       overflow: hidden;
-      transition: background .18s, border-color .18s, transform .15s, box-shadow .18s, color .18s;
+      transition: background .18s, border-color .18s, transform .15s, box-shadow .2s;
     }
 
-    .link-card::after {
+    .creator-card::after {
       content: '';
       position: absolute;
       inset: 0;
@@ -185,76 +201,80 @@
       transition: transform .55s ease;
     }
 
-    .link-card:hover::after { transform: translateX(100%); }
+    .creator-card:hover::after { transform: translateX(100%); }
 
-    .link-card:hover {
+    .creator-card:hover {
       background: #2a1520;
       border-color: #d4667a;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 36px rgba(200, 60, 85, 0.22), 0 2px 8px rgba(232, 174, 183, 0.1);
-      color: #f5d5da;
+      transform: translateY(-3px);
+      box-shadow: 0 10px 36px rgba(200, 60, 85, 0.22);
     }
 
-    .link-card:active { transform: translateY(0); }
-
-    .link-card-emoji {
-      font-size: 1.45rem;
-      width: 2rem;
-      text-align: center;
+    .creator-avatar {
+      width: 62px; height: 62px;
+      border-radius: 50%;
+      background: #3d2028;
+      border: 2px solid #5a2a32;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.8rem;
       flex-shrink: 0;
+      transition: border-color .18s;
     }
 
-    .link-card-body  { flex: 1; display: flex; flex-direction: column; gap: .15rem; }
-    .link-card-desc  { font-size: .78rem; font-weight: 400; color: #9a7a80; }
-    .link-card:hover .link-card-desc { color: #c49aa0; }
+    .creator-card:hover .creator-avatar { border-color: #e8aeb7; }
 
-    .link-card-arrow {
+    .creator-info { flex: 1; min-width: 0; }
+
+    .creator-name {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .2rem;
+    }
+
+    .creator-handle {
+      font-size: .75rem;
       color: #6a4a4e;
+      font-weight: 600;
+      margin-bottom: .45rem;
+    }
+
+    .creator-bio {
+      font-size: .82rem;
+      color: #9e7e82;
+      line-height: 1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .creator-arrow {
       font-size: .9rem;
+      color: #6a4a4e;
       flex-shrink: 0;
       transition: color .18s, transform .18s;
     }
 
-    .link-card:hover .link-card-arrow {
-      color: #e8aeb7;
-      transform: translateX(3px);
-    }
+    .creator-card:hover .creator-arrow { color: #e8aeb7; transform: translateX(4px); }
 
-    /* ── Divider ─────────────────────────────────────────── */
-    .section-divider {
+    /* ── Divider ─────────────────────────────────────── */
+    .divider {
       width: 100%;
-      max-width: 560px;
-      margin: 1.5rem auto;
+      max-width: 680px;
+      margin: .5rem auto;
       border: none;
       border-top: 1px solid #2d1f22;
     }
 
-    /* ── What's inside strip ─────────────────────────────── */
-    .inside-section {
-      width: 100%;
-      max-width: 560px;
-      margin: 0 auto;
-      padding: 0 1.5rem 2.5rem;
-      text-align: center;
-    }
-
-    .inside-label {
-      font-size: .7rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .13em;
-      color: #6a4a4e;
-      margin-bottom: 1rem;
-    }
-
-    .inside-pills {
+    /* ── Feature pills ───────────────────────────────── */
+    .pills {
       display: flex;
       flex-wrap: wrap;
-      gap: .6rem;
+      gap: .55rem;
       justify-content: center;
     }
 
-    .inside-pill {
+    .pill {
       display: inline-flex;
       align-items: center;
       gap: .4rem;
@@ -267,7 +287,35 @@
       color: #9e7e82;
     }
 
-    /* ── Footer ─────────────────────────────────────────── */
+    /* ── Creator CTA strip ───────────────────────────── */
+    .creator-pitch {
+      text-align: center;
+    }
+
+    .creator-pitch p {
+      font-size: .9rem;
+      color: #6a4a4e;
+      font-weight: 600;
+      margin-bottom: .65rem;
+    }
+
+    .creator-pitch a {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .88rem;
+      font-weight: 800;
+      color: #9e7e82;
+      text-decoration: none;
+      border: 1px solid #4b3538;
+      border-radius: 10px;
+      padding: .5rem 1.1rem;
+      transition: border-color .2s, color .2s;
+    }
+
+    .creator-pitch a:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    /* ── Footer ──────────────────────────────────────── */
     footer {
       margin-top: auto;
       text-align: center;
@@ -280,11 +328,12 @@
     footer a { color: #6a4a4e; text-decoration: none; }
     footer a:hover { color: #e8aeb7; }
 
-    /* ── Mobile ──────────────────────────────────────────── */
+    /* ── Mobile ──────────────────────────────────────── */
     @media (max-width: 520px) {
       .hero { padding: 3.5rem 1rem 2.5rem; }
-      .links-section, .inside-section { padding-left: 1rem; padding-right: 1rem; }
-      .nav { padding: .75rem 1.1rem; }
+      .section { padding: 1.5rem 1rem; }
+      .nav { padding: .75rem 1rem; }
+      .creator-bio { display: none; }
     }
   </style>
   <link rel="manifest" href="/manifest.json">
@@ -294,95 +343,83 @@
 </head>
 <body>
 
-  <!-- ── Nav ────────────────────────────────────────────── -->
+  <!-- ── Nav ──────────────────────────────────────────── -->
   <nav class="nav">
     <a href="/" class="nav-logo">🐾 mochii.live</a>
     <div class="nav-actions">
-      <a id="nav-signin" href="#" class="btn-nav btn-nav-primary">Sign In 🐾</a>
+      <a href="/creator-dash.html" class="btn-nav btn-nav-ghost">Creator Login</a>
+      <a id="nav-enter" href="#" class="btn-nav btn-nav-primary">Sign In 🐾</a>
     </div>
   </nav>
 
-  <!-- ── Hero ───────────────────────────────────────────── -->
+  <!-- ── Hero ─────────────────────────────────────────── -->
   <section class="hero">
     <span class="hero-paw" aria-hidden="true">🐾</span>
-    <h1>mochii.live</h1>
-    <p class="hero-tagline">come find your place in the pack. 🐾</p>
+    <h1>the den is open.</h1>
+    <p class="hero-tagline">
+      a creator platform with live cams, anonymous Q&amp;A, curated feeds, and a den that's yours.
+    </p>
     <div class="hero-ctas">
-      <a id="hero-enter-btn" href="#" class="btn-hero-primary">🐾 Enter the Den</a>
+      <a id="hero-enter" href="#" class="btn-hero-primary">🐾 Enter the Den</a>
+      <a href="/creator.html" class="btn-hero-ghost">Become a Creator →</a>
     </div>
   </section>
 
-  <!-- ── Quick links ────────────────────────────────────── -->
-  <div class="links-section">
-    <p class="links-section-label">explore ✦</p>
-    <div class="links-list">
-      <a class="link-card" id="link-ask" href="#">
-        <span class="link-card-emoji" aria-hidden="true">🐾</span>
-        <span class="link-card-body">
-          <span>Ask a Question</span>
-          <span class="link-card-desc">drop me an anonymous question or message</span>
-        </span>
-        <span class="link-card-arrow" aria-hidden="true">→</span>
-      </a>
-      <a class="link-card" id="link-drool" href="#">
-        <span class="link-card-emoji" aria-hidden="true">💧</span>
-        <span class="link-card-body">
-          <span>Drool Log</span>
-          <span class="link-card-desc">the shame gallery — everything i saved and liked</span>
-        </span>
-        <span class="link-card-arrow" aria-hidden="true">→</span>
-      </a>
-      <a class="link-card" id="link-store" href="#">
-        <span class="link-card-emoji" aria-hidden="true">🛍️</span>
-        <span class="link-card-body">
-          <span>Pack Store</span>
-          <span class="link-card-desc">merch from across the pack</span>
-        </span>
-        <span class="link-card-arrow" aria-hidden="true">→</span>
-      </a>
-      <a class="link-card" id="link-links" href="#">
-        <span class="link-card-emoji" aria-hidden="true">🔗</span>
-        <span class="link-card-body">
-          <span>All Links</span>
-          <span class="link-card-desc">socials, shop, and everything else</span>
-        </span>
-        <span class="link-card-arrow" aria-hidden="true">→</span>
-      </a>
+  <!-- ── Featured Creator ─────────────────────────────── -->
+  <div class="section">
+    <p class="section-label">now on mochii.live</p>
+    <a class="creator-card" id="mochii-card" href="#" aria-label="Visit mochii's den">
+      <div class="creator-avatar" aria-hidden="true">🐾</div>
+      <div class="creator-info">
+        <div class="creator-name">mochii</div>
+        <div class="creator-handle">mochii.mochii.live</div>
+        <div class="creator-bio">live streams, the drool log, anonymous Q&amp;A, and a growing pack.</div>
+      </div>
+      <span class="creator-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ── What's in a den ───────────────────────────────── -->
+  <div class="section">
+    <p class="section-label">what's in every den</p>
+    <div class="pills">
+      <span class="pill">📷 Live Cams</span>
+      <span class="pill">💧 Drool Log</span>
+      <span class="pill">🐾 Puppy Pouch Q&amp;A</span>
+      <span class="pill">🎵 Now Playing</span>
+      <span class="pill">🛍️ Pack Store</span>
+      <span class="pill">🎮 Interactive</span>
     </div>
   </div>
 
-  <hr class="section-divider" />
+  <hr class="divider" />
 
-  <!-- ── What's inside ─────────────────────────────────── -->
-  <div class="inside-section">
-    <p class="inside-label">what's in the den ✦</p>
-    <div class="inside-pills">
-      <span class="inside-pill">📷 Live Cams</span>
-      <span class="inside-pill">💧 Drool Log</span>
-      <span class="inside-pill">🐾 Puppy Pouch</span>
-      <span class="inside-pill">🎵 Now Playing</span>
-      <span class="inside-pill">🎮 Interactive</span>
-      <span class="inside-pill">🛍️ Pack Store</span>
+  <!-- ── Creator pitch ─────────────────────────────────── -->
+  <div class="section">
+    <div class="creator-pitch">
+      <p>want your own den on the platform?</p>
+      <a href="/creator.html">Apply to join →</a>
     </div>
   </div>
 
-  <!-- ── Footer ─────────────────────────────────────────── -->
+  <!-- ── Footer ────────────────────────────────────────── -->
   <footer>
-    <p>© mochii.live 🐾 &nbsp;·&nbsp; <a href="/creator-dash.html">Creator Login</a> &nbsp;·&nbsp; <a href="/creator.html">Join as Creator</a> &nbsp;·&nbsp; <a href="/terms">Terms</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a> &nbsp;·&nbsp; <a href="/dmca">DMCA</a> &nbsp;·&nbsp; <a href="/2257">§ 2257</a></p>
+    <p>© mochii.live 🐾 &nbsp;·&nbsp; <a href="/creator-dash.html">Creator Login</a> &nbsp;·&nbsp; <a href="/creator.html">Become a Creator</a> &nbsp;·&nbsp; <a href="/terms">Terms</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a> &nbsp;·&nbsp; <a href="/dmca">DMCA</a> &nbsp;·&nbsp; <a href="/2257">§ 2257</a></p>
   </footer>
 
   <script>
     // ── Token / subscribed forwarding ────────────────────
-    // When a user signs in on the root domain (OAuth or native auth redirects
-    // back here with /#token=… or /?subscribed=1), forward them to the
-    // appropriate creator subdomain so the subscriber portal handles it.
+    // When auth callbacks land on the root domain, bounce to the
+    // mochii subscriber portal to handle the token or subscription state.
     (function () {
-      const host   = window.location.hostname; // e.g. "mochii.live"
-      const hash   = window.location.hash;     // e.g. "#token=eyJ…"
-      const search = window.location.search;   // e.g. "?subscribed=1"
+      const host   = window.location.hostname;
+      const hash   = window.location.hash;
+      const search = window.location.search;
+      const proto  = window.location.protocol;
 
-      const defaultCreator = 'mochii';
-      const portalOrigin   = `${window.location.protocol}//${defaultCreator}.${host}`;
+      const portalOrigin = `${proto}//mochii.${host}`;
 
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
         window.location.replace(portalOrigin + '/' + hash);
@@ -395,12 +432,9 @@
       }
 
       // Wire up dynamic links (no domain hardcoding)
-      document.getElementById('nav-signin').href     = portalOrigin + '/';
-      document.getElementById('hero-enter-btn').href = portalOrigin + '/';
-      document.getElementById('link-ask').href       = `${window.location.protocol}//anon.${host}`;
-      document.getElementById('link-drool').href     = `${window.location.protocol}//drool.${host}`;
-      document.getElementById('link-store').href     = `${window.location.protocol}//shop.${host}`;
-      document.getElementById('link-links').href     = `${window.location.protocol}//links.${host}`;
+      document.getElementById('nav-enter').href   = portalOrigin + '/';
+      document.getElementById('hero-enter').href  = portalOrigin + '/';
+      document.getElementById('mochii-card').href = portalOrigin + '/';
     })();
   </script>
   <script>

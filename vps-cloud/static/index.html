@@ -240,7 +240,7 @@
       width: 100%;
       max-width: 560px;
       margin: 0 auto;
-      padding: 0 1.5rem 3rem;
+      padding: 0 1.5rem 1.5rem;
     }
 
     .links-section + .links-section {
@@ -974,10 +974,50 @@
       <p class="hero-tagline">come find your place in the pack. 🐾</p>
     </div>
 
+    <!-- Static nav cards -->
+    <div class="links-section">
+      <p class="links-section-label">explore ✦</p>
+      <div class="links-list">
+        <a class="link-card" href="https://anon.mochii.live">
+          <span class="link-card-emoji" aria-hidden="true">🐾</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Ask a Question</span>
+            <span class="link-card-desc">drop me an anonymous question or message</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" href="https://drool.mochii.live">
+          <span class="link-card-emoji" aria-hidden="true">💧</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Drool Log</span>
+            <span class="link-card-desc">the shame gallery — everything i saved and liked</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" href="https://shop.mochii.live">
+          <span class="link-card-emoji" aria-hidden="true">🛍️</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Pack Store</span>
+            <span class="link-card-desc">merch from across the pack</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" href="https://links.mochii.live">
+          <span class="link-card-emoji" aria-hidden="true">🔗</span>
+          <span class="link-card-body">
+            <span class="link-card-title">All Links</span>
+            <span class="link-card-desc">browse my socials, shop, and more</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </div>
+
     <!-- OAuth error/info message -->
     <p id="login-message" role="alert" aria-live="polite"></p>
 
-    <!-- Login / Register card -->
+    <!-- Login / Register / Creator card -->
+    <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:#6a4a4e;text-align:center;margin:.5rem 0 .75rem;">sign in to unlock streams ✦</p>
     <div id="auth-card">
       <div class="auth-tabs" role="tablist">
         <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true"
@@ -1033,37 +1073,6 @@
         <button class="subscribe-link" type="button" onclick="startSubscribe()">
           Subscribe to unlock streams →
         </button>
-      </div>
-    </div>
-
-    <!-- Static nav cards -->
-    <div class="links-section">
-      <p class="links-section-label">pages ✦</p>
-      <div class="links-list">
-        <a class="link-card" href="https://links.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">🔗</span>
-          <span class="link-card-body">
-            <span class="link-card-title">All Links</span>
-            <span class="link-card-desc">browse my socials, shop, and more</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
-        <a class="link-card" href="https://anon.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">🐾</span>
-          <span class="link-card-body">
-            <span class="link-card-title">Ask a Question</span>
-            <span class="link-card-desc">drop me an anonymous question or message</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
-        <a class="link-card" href="https://drool.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">💧</span>
-          <span class="link-card-body">
-            <span class="link-card-title">Drool Log</span>
-            <span class="link-card-desc">the shame gallery – she liked this</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
       </div>
     </div>
 
@@ -1767,6 +1776,71 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Create Account 🐾';
+      }
+    }
+
+    // ── Creator login ─────────────────────────────────
+    let _creatorPendingToken = null;
+
+    async function handleCreatorLogin(e) {
+      e.preventDefault();
+      const btn    = document.getElementById('creator-login-btn');
+      const handle = document.getElementById('creator-handle').value.trim();
+      const pass   = document.getElementById('creator-password').value;
+      btn.disabled = true;
+      btn.textContent = 'Entering den…';
+      try {
+        const res = await fetch('/api/creator/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle, password: pass }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Invalid handle or password.', 'error');
+          return;
+        }
+        if (data.requires_2fa) {
+          _creatorPendingToken = data.pending_token;
+          document.getElementById('creator-login-form').style.display = 'none';
+          document.getElementById('creator-otp-form').style.display   = 'flex';
+          return;
+        }
+        localStorage.setItem('creator_jwt', data.access_token);
+        window.location.href = '/creator-dash.html';
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enter the Den 🐾';
+      }
+    }
+
+    // ── Creator 2FA confirm ───────────────────────────
+    async function handleCreatorOtp(e) {
+      e.preventDefault();
+      const btn = document.getElementById('creator-otp-btn');
+      const otp = document.getElementById('creator-otp').value.trim();
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      try {
+        const res = await fetch('/api/creator/2fa/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pending_token: _creatorPendingToken, otp }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Invalid code. Please try again.', 'error');
+          return;
+        }
+        localStorage.setItem('creator_jwt', data.access_token);
+        window.location.href = '/creator-dash.html';
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm 🐾';
       }
     }
 
