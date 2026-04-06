@@ -1327,21 +1327,20 @@
           const btn = document.getElementById('switch-to-creator-btn');
           btn.title = `Switch to creator mode as @${data.handle}`;
           btn.style.display = 'inline-block';
+          btn.addEventListener('click', async () => {
+            try {
+              const tokenData = await apiGet('/api/admin/creator-token');
+              localStorage.setItem('creator_jwt', tokenData.access_token);
+              window.location.href = '/creator';
+            } catch {
+              showToast('❌ Could not switch to creator mode. Check server configuration.');
+            }
+          });
         }
       } catch {
         // No linked creator configured – button stays hidden.
       }
     }
-
-    document.getElementById('switch-to-creator-btn').addEventListener('click', async () => {
-      try {
-        const data = await apiGet('/api/admin/creator-token');
-        localStorage.setItem('creator_jwt', data.access_token);
-        window.location.href = '/creator';
-      } catch {
-        showToast('❌ Could not switch to creator mode. Check server configuration.');
-      }
-    });
 
     // ── Sidebar navigation ─────────────────────────────
     function navigate(targetId) {
