@@ -19,10 +19,12 @@ Endpoints
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -30,6 +32,9 @@ from db import get_db
 from dependencies import get_current_user, get_optional_user
 from routers.auth import _verify_password, _hash_password
 from routers.alerts import dispatch_alert as _dispatch_alert
+
+_GO2RTC_HOST = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT = os.environ.get("GO2RTC_PORT", "1984")
 
 router = APIRouter(prefix="/api/member", tags=["member"])
 
@@ -330,13 +335,14 @@ def unfollow_creator(
 
 
 @router.get("/creators")
-def browse_creators(
+async def browse_creators(
     current_user: Optional[dict] = Depends(get_optional_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Return all active creator profiles with public information.
 
     When authenticated the response includes a ``is_following`` flag per creator.
+    Each creator also carries an ``is_live`` flag derived from go2rtc (best-effort).
     """
     rows = db.execute(
         """
@@ -363,7 +369,40 @@ def browse_creators(
         creator["is_following"] = creator["handle"] in follows
         creator["allow_free_content"] = bool(creator.get("allow_free_content"))
         creator["content_rating"] = creator.get("content_rating") or "unrated"
+        creator["is_live"] = False
         result.append(creator)
+
+    # Enrich with live status from go2rtc (best-effort, never blocks the response).
+    try:
+        cam_rows = db.execute(
+            "SELECT stream_slug, rtmp_key FROM cameras"
+        ).fetchall()
+        if cam_rows:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get(f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams")
+            if r.is_success:
+                streams_data = r.json()
+                live_handles: set = set()
+                for cam in cam_rows:
+                    go2rtc_name = cam["rtmp_key"] if cam["rtmp_key"] else cam["stream_slug"]
+                    stream_info = streams_data.get(go2rtc_name) or {}
+                    producers = stream_info.get("producers") or []
+                    if any(p.get("url") for p in producers):
+                        owner = db.execute(
+                            """
+                            SELECT ca.handle FROM cameras c
+                              JOIN creator_accounts ca ON c.stream_slug LIKE ca.handle || '%'
+                             WHERE c.stream_slug = ?
+                             LIMIT 1
+                            """,
+                            (cam["stream_slug"],),
+                        ).fetchone()
+                        if owner:
+                            live_handles.add(owner["handle"])
+                for c in result:
+                    c["is_live"] = c["handle"] in live_handles
+    except Exception as exc:
+        logger.debug("Could not fetch live status in browse_creators: %s", exc)
 
     return result
 

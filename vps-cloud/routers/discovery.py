@@ -17,9 +17,11 @@ Endpoints
 """
 
 import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -28,6 +30,9 @@ from db import get_db
 from dependencies import get_admin_user, get_current_creator
 
 router = APIRouter(tags=["discovery"])
+
+_GO2RTC_HOST = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT = os.environ.get("GO2RTC_PORT", "1984")
 logger = logging.getLogger(__name__)
 
 
@@ -285,7 +290,7 @@ def global_search(
 # ---------------------------------------------------------------------------
 
 @router.get("/api/explore")
-def explore_feed(
+async def explore_feed(
     filter: str = Query("all", description="Content-rating filter: 'all', 'sfw', or 'nsfw'"),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -369,8 +374,54 @@ def explore_feed(
         """
     ).fetchall()
 
+    creator_list = [dict(r) for r in featured_creators]
+
+    # Annotate each creator with a live flag from go2rtc (best-effort, never blocks).
+    try:
+        live_handles: set = set()
+        # Fetch all cameras with their creator_handle mapping.
+        cam_rows = db.execute(
+            "SELECT stream_slug, rtmp_key FROM cameras WHERE is_active IS NULL OR is_active != 0"
+        ).fetchall()
+        if cam_rows:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(
+                    f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams"
+                )
+            if resp.is_success:
+                streams_data = resp.json()
+                for cam in cam_rows:
+                    go2rtc_name = cam["rtmp_key"] if cam["rtmp_key"] else cam["stream_slug"]
+                    stream_info = streams_data.get(go2rtc_name) or {}
+                    producers = stream_info.get("producers") or []
+                    if any(p.get("url") for p in producers):
+                        # Map camera back to creator via stream_slug prefix (handle.slug convention).
+                        slug = cam["stream_slug"] or ""
+                        # Cameras are owned per creator; look up by stream_slug in cameras table.
+                        owner_row = db.execute(
+                            """
+                            SELECT ca.handle FROM cameras c
+                              JOIN creator_accounts ca ON ca.handle = c.stream_slug
+                             WHERE c.stream_slug = ?
+                            UNION
+                            SELECT ca.handle FROM cameras c
+                              JOIN creator_accounts ca ON c.stream_slug LIKE ca.handle || '%'
+                             WHERE c.stream_slug = ?
+                             LIMIT 1
+                            """,
+                            (slug, slug),
+                        ).fetchone()
+                        if owner_row:
+                            live_handles.add(owner_row["handle"])
+        for c in creator_list:
+            c["is_live"] = c["handle"] in live_handles
+    except Exception as exc:
+        logger.debug("Could not fetch live status for explore: %s", exc)
+        for c in creator_list:
+            c.setdefault("is_live", False)
+
     return {
-        "featured_creators": [dict(r) for r in featured_creators],
+        "featured_creators": creator_list,
         "trending_drool": [dict(r) for r in trending_drool],
         "newest_posts": [dict(r) for r in newest_posts],
         "top_products": [dict(r) for r in top_products],
