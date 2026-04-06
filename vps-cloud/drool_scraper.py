@@ -888,8 +888,6 @@ def _scrape_bluesky() -> None:
 # Per-creator scraping helpers (uses credentials stored in creator_accounts)
 # ---------------------------------------------------------------------------
 
-_PRIMARY_CREATOR = "mochii"
-
 
 def _scrape_twitter_user_likes(creator_handle: str, user_id: str) -> None:
     """Fetch liked tweets for *user_id* and store them under *creator_handle*.

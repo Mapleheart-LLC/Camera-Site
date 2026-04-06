@@ -536,6 +536,8 @@ def init_db() -> None:
     #   twitter_user_id  – numeric Twitter/X user ID whose liked tweets are scraped
     #   bsky_handle      – Bluesky handle (e.g. yourname.bsky.social) for likes scraping
     #   bsky_app_password – Bluesky app password (stored at rest; creator self-managed)
+    # Column names are hard-coded string literals (not user input); the f-string
+    # interpolation here is safe and necessary for DDL ALTER TABLE statements.
     for _col in ("twitter_user_id", "bsky_handle", "bsky_app_password"):
         try:
             conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} TEXT")

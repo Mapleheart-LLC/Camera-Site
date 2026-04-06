@@ -652,6 +652,14 @@ def creator_patch_drool_settings(
     if not updates:
         return {"updated": []}
 
+    # Validate keys are strictly from the known-safe set before building SQL.
+    _ALLOWED_DROOL_SYNC_COLS = {"twitter_user_id", "bsky_handle", "bsky_app_password"}
+    if not set(updates).issubset(_ALLOWED_DROOL_SYNC_COLS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid settings field.",
+        )
+
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [handle]
     db.execute(
