@@ -993,6 +993,32 @@ def init_db() -> None:
         )
         """
     )
+    # ── Phase 8: Mixed-audience SFW + NSFW support ───────────────────────
+    # content_rating on creator_accounts: 'sfw' | 'mixed' | 'nsfw' | 'unrated'
+    for _col, _defn in [
+        ("content_rating", "TEXT NOT NULL DEFAULT 'unrated'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE creator_accounts ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # content_filter on site_users: 'all' | 'sfw'
+    for _col, _defn in [
+        ("content_filter", "TEXT NOT NULL DEFAULT 'all'"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE site_users ADD COLUMN {_col} {_defn}")
+        except sqlite3.OperationalError as _e:
+            if "duplicate column" not in str(_e).lower():
+                raise
+    # is_mature on tags: 0 = safe, 1 = adult/explicit
+    try:
+        conn.execute("ALTER TABLE tags ADD COLUMN is_mature INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+
     conn.commit()
     conn.close()
 

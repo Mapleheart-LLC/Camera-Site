@@ -100,6 +100,7 @@ class ProfilePatch(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=512)
     accent_color: Optional[str] = Field(None, max_length=16, pattern=r"^#[0-9a-fA-F]{3,8}$")
     forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    content_rating: Optional[str] = Field(None, pattern=r"^(sfw|mixed|nsfw|unrated)$")
 
 
 class AnswerPayload(BaseModel):
@@ -306,7 +307,8 @@ def get_my_profile(
     """Return the creator's public + editable profile fields."""
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email
+        SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email,
+               content_rating, require_age_gate
           FROM creator_accounts
          WHERE handle = ?
         """,
@@ -314,7 +316,10 @@ def get_my_profile(
     ).fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Creator not found.")
-    return dict(row)
+    result = dict(row)
+    result["content_rating"] = result.get("content_rating") or "unrated"
+    result["require_age_gate"] = bool(result.get("require_age_gate", 1))
+    return result
 
 
 @router.patch("/me")
@@ -325,7 +330,7 @@ def patch_my_profile(
 ):
     """Update the creator's editable profile fields (bio, avatar URL, accent colour, forwarding email)."""
     row = db.execute(
-        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email, content_rating, require_age_gate FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
     if not row:
@@ -336,18 +341,29 @@ def patch_my_profile(
     new_avatar_url      = payload.avatar_url      if payload.avatar_url      is not None else row["avatar_url"]
     new_accent_color    = payload.accent_color    if payload.accent_color    is not None else row["accent_color"]
     new_forwarding_email = payload.forwarding_email if payload.forwarding_email is not None else row["forwarding_email"]
+    new_content_rating  = payload.content_rating  if payload.content_rating  is not None else (row["content_rating"] or "unrated")
     forwarding_email_changed = (
         payload.forwarding_email is not None
         and payload.forwarding_email != row["forwarding_email"]
     )
 
+    # Auto-manage age gate: SFW creators don't need one; NSFW/mixed always do.
+    if new_content_rating == "sfw":
+        new_require_age_gate = 0
+    elif new_content_rating in ("nsfw", "mixed"):
+        new_require_age_gate = 1
+    else:
+        new_require_age_gate = row["require_age_gate"]
+
     db.execute(
         """
         UPDATE creator_accounts
-           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?, forwarding_email = ?
+           SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?,
+               forwarding_email = ?, content_rating = ?, require_age_gate = ?
          WHERE handle = ?
         """,
-        (new_display_name, new_bio, new_avatar_url, new_accent_color, new_forwarding_email, handle),
+        (new_display_name, new_bio, new_avatar_url, new_accent_color,
+         new_forwarding_email, new_content_rating, new_require_age_gate, handle),
     )
     db.commit()
 
@@ -377,6 +393,8 @@ def patch_my_profile(
         "avatar_url": new_avatar_url,
         "accent_color": new_accent_color,
         "forwarding_email": new_forwarding_email,
+        "content_rating": new_content_rating,
+        "require_age_gate": bool(new_require_age_gate),
     }
 
 
@@ -925,7 +943,7 @@ def public_creator_profile(
     """
     row = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content
+        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content, content_rating
           FROM creator_accounts
          WHERE handle = ? AND is_active = 1
         """,
@@ -941,5 +959,6 @@ def public_creator_profile(
     return {
         **dict(row),
         "allow_free_content": bool(row["allow_free_content"]),
+        "content_rating": row["content_rating"] or "unrated",
         "public_email": public_email,
     }

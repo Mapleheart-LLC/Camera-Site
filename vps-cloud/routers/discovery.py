@@ -2,6 +2,7 @@
 routers/discovery.py – Discovery, SEO & Search.
 
 Phase 6: tags/categories, global FTS search, /explore page data.
+Phase 8: SFW/NSFW content-rating support on explore + search.
 
 Endpoints
 ---------
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 class TagCreate(BaseModel):
     slug: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z0-9_-]+$")
     label: str = Field(..., min_length=1, max_length=100)
+    is_mature: bool = False
 
 
 class ContentTagRequest(BaseModel):
@@ -52,7 +54,7 @@ class ContentTagRequest(BaseModel):
 @router.get("/api/tags")
 def list_tags(db: sqlite3.Connection = Depends(get_db)):
     """Return all available tags."""
-    rows = db.execute("SELECT id, slug, label FROM tags ORDER BY label").fetchall()
+    rows = db.execute("SELECT id, slug, label, is_mature FROM tags ORDER BY label").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -67,10 +69,11 @@ def create_tag(
     if existing:
         raise HTTPException(status_code=409, detail="Tag with this slug already exists.")
     cursor = db.execute(
-        "INSERT INTO tags (slug, label) VALUES (?, ?)", (payload.slug, payload.label)
+        "INSERT INTO tags (slug, label, is_mature) VALUES (?, ?, ?)",
+        (payload.slug, payload.label, 1 if payload.is_mature else 0),
     )
     db.commit()
-    return {"id": cursor.lastrowid, "slug": payload.slug, "label": payload.label}
+    return {"id": cursor.lastrowid, "slug": payload.slug, "label": payload.label, "is_mature": payload.is_mature}
 
 
 @router.post("/api/admin/content-tags", status_code=status.HTTP_201_CREATED)
@@ -147,21 +150,29 @@ def creator_tag_content(
 # ---------------------------------------------------------------------------
 
 _VALID_TYPES = frozenset({"all", "drool", "questions", "creators", "products", "posts"})
+_VALID_FILTERS = frozenset({"all", "sfw"})
 
 
 @router.get("/api/search")
 def global_search(
     q: str = Query(..., min_length=1, max_length=200),
     type: str = Query("all"),
+    filter: str = Query("all", description="Content-rating filter: 'all' or 'sfw'"),
     limit: int = Query(20, ge=1, le=100),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Full-text search across drool, Q&A, creators, products, and posts."""
+    """Full-text search across drool, Q&A, creators, products, and posts.
+
+    Pass ``filter=sfw`` to restrict creator results to SFW-rated profiles only.
+    """
     if type not in _VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"type must be one of {_VALID_TYPES}")
+    if filter not in _VALID_FILTERS:
+        raise HTTPException(status_code=400, detail=f"filter must be one of {_VALID_FILTERS}")
 
     results: dict = {}
     safe_q = q.replace('"', '""')  # escape double-quotes for FTS5 query
+    sfw_only = filter == "sfw"
 
     if type in ("all", "drool"):
         try:
@@ -201,13 +212,15 @@ def global_search(
 
     if type in ("all", "creators"):
         try:
+            rating_clause = "AND ca.content_rating = 'sfw'" if sfw_only else ""
             rows = db.execute(
-                """
+                f"""
                 SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
-                       'creator' AS result_type
+                       ca.content_rating, 'creator' AS result_type
                   FROM fts_creators fc
                   JOIN creator_accounts ca ON ca.id = fc.rowid
                  WHERE fts_creators MATCH ? AND ca.is_active = 1
+                       {rating_clause}
                  LIMIT ?
                 """,
                 (safe_q, limit),
@@ -260,16 +273,35 @@ def global_search(
 # ---------------------------------------------------------------------------
 
 @router.get("/api/explore")
-def explore_feed(db: sqlite3.Connection = Depends(get_db)):
-    """Public explore feed: featured creators, trending drool, newest posts, top products."""
+def explore_feed(
+    filter: str = Query("all", description="Content-rating filter: 'all', 'sfw', or 'nsfw'"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Public explore feed: featured creators, trending drool, newest posts, top products.
+
+    Use ``filter=sfw`` to show only SFW-rated creators, or ``filter=nsfw`` for adult creators only.
+    """
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+
+    valid_explore_filters = {"all", "sfw", "nsfw"}
+    if filter not in valid_explore_filters:
+        raise HTTPException(status_code=400, detail=f"filter must be one of {valid_explore_filters}")
+
+    # Build content_rating WHERE clause for creators.
+    if filter == "sfw":
+        creator_rating_clause = "AND content_rating = 'sfw'"
+    elif filter == "nsfw":
+        creator_rating_clause = "AND content_rating IN ('nsfw', 'mixed')"
+    else:
+        creator_rating_clause = ""
 
     # Featured creators (most recent active ones, up to 8).
     featured_creators = db.execute(
-        """
-        SELECT handle, display_name, bio, avatar_url, accent_color
+        f"""
+        SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
           FROM creator_accounts
          WHERE is_active = 1
+               {creator_rating_clause}
          ORDER BY created_at DESC
          LIMIT 8
         """

@@ -14,6 +14,8 @@ Endpoints
   POST   /api/member/me/follows/{handle}   – follow a creator
   DELETE /api/member/me/follows/{handle}   – unfollow a creator
   GET    /api/member/creators              – browse active creators (public)
+  GET    /api/member/me/content-filter     – get content-rating filter preference
+  PATCH  /api/member/me/content-filter     – update content-rating filter preference
 """
 
 import logging
@@ -338,7 +340,8 @@ def browse_creators(
     """
     rows = db.execute(
         """
-        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content, created_at
+        SELECT handle, display_name, bio, avatar_url, accent_color, allow_free_content,
+               content_rating, created_at
           FROM creator_accounts
          WHERE is_active = 1
          ORDER BY display_name ASC
@@ -359,6 +362,47 @@ def browse_creators(
         creator = dict(r)
         creator["is_following"] = creator["handle"] in follows
         creator["allow_free_content"] = bool(creator.get("allow_free_content"))
+        creator["content_rating"] = creator.get("content_rating") or "unrated"
         result.append(creator)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Content-filter preferences
+# ---------------------------------------------------------------------------
+
+_VALID_CONTENT_FILTERS = frozenset({"all", "sfw"})
+
+
+class ContentFilterUpdate(BaseModel):
+    content_filter: str = Field(..., pattern=r"^(all|sfw)$")
+
+
+@router.get("/me/content-filter")
+def get_content_filter(
+    user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the authenticated member's content-filter preference."""
+    user_id = user["fanvue_id"]
+    row = db.execute(
+        "SELECT content_filter FROM site_users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return {"content_filter": (row["content_filter"] if row else None) or "all"}
+
+
+@router.patch("/me/content-filter")
+def update_content_filter(
+    payload: ContentFilterUpdate,
+    user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update the authenticated member's content-filter preference ('all' or 'sfw')."""
+    user_id = user["fanvue_id"]
+    db.execute(
+        "UPDATE site_users SET content_filter = ? WHERE id = ?",
+        (payload.content_filter, user_id),
+    )
+    db.commit()
+    return {"content_filter": payload.content_filter}

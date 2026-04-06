@@ -321,6 +321,63 @@
 
     .creator-pitch a:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
+    /* ── Audience split grid ─────────────────────────── */
+    .audience-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 520px) {
+      .audience-grid { grid-template-columns: 1fr; }
+    }
+
+    .audience-card {
+      border-radius: 14px;
+      padding: 1.25rem 1.1rem;
+      border: 1px solid #3d2a2e;
+      background: #1e1e1e;
+    }
+
+    .audience-sfw  { border-color: #2d5a3d; }
+    .audience-nsfw { border-color: #5a2d30; }
+
+    .audience-icon {
+      font-size: 1.8rem;
+      margin-bottom: .5rem;
+    }
+
+    .audience-card h3 {
+      font-size: .95rem;
+      font-weight: 800;
+      margin-bottom: .4rem;
+      color: #f0e6e8;
+    }
+
+    .audience-sfw  h3 { color: #6dbf8a; }
+    .audience-nsfw h3 { color: #e08888; }
+
+    .audience-card p {
+      font-size: .8rem;
+      color: #7a5a5e;
+      margin-bottom: .65rem;
+      line-height: 1.45;
+    }
+
+    .audience-card ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .audience-card ul li {
+      font-size: .78rem;
+      color: #9e7e82;
+      padding: .15rem 0;
+    }
+
     /* ── Footer ──────────────────────────────────────── */
     footer {
       margin-top: auto;
@@ -397,6 +454,39 @@
       <span class="pill">🎵 Now Playing</span>
       <span class="pill">🛍️ Pack Store</span>
       <span class="pill">🎮 Interactive</span>
+      <span class="pill">🔔 Stream Alerts</span>
+      <span class="pill">📹 VOD Archive</span>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ── Audience split ────────────────────────────────── -->
+  <div class="section">
+    <p class="section-label">a platform for every creator</p>
+    <div class="audience-grid">
+      <div class="audience-card audience-sfw">
+        <div class="audience-icon">🌸</div>
+        <h3>SFW Creators</h3>
+        <p>Streamers, artists, musicians, cosplayers — build your community, sell merch, and go live without an age gate.</p>
+        <ul>
+          <li>✅ No age-gate for your audience</li>
+          <li>✅ Subscriptions &amp; tipping</li>
+          <li>✅ Merch store &amp; digital downloads</li>
+          <li>✅ Community posts &amp; Q&amp;A</li>
+        </ul>
+      </div>
+      <div class="audience-card audience-nsfw">
+        <div class="audience-icon">🔞</div>
+        <h3>Adult Creators</h3>
+        <p>Full adult content support with Segpay billing, 18+ age-gating, § 2257 compliance, and PPV streams built in.</p>
+        <ul>
+          <li>✅ 18+ age-gate &amp; verification</li>
+          <li>✅ PPV cameras &amp; tiered access</li>
+          <li>✅ Segpay adult billing</li>
+          <li>✅ § 2257 &amp; DMCA compliance</li>
+        </ul>
+      </div>
     </div>
   </div>
 
@@ -407,6 +497,8 @@
     <div class="creator-pitch">
       <p>want your own den on the platform?</p>
       <a href="/creator.html">Apply to join →</a>
+      &nbsp;
+      <a href="/explore" style="margin-left:.5rem">Browse creators →</a>
     </div>
   </div>
 
