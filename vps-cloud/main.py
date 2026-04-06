@@ -1072,9 +1072,21 @@ def _build_hls_playlist(hls_dir: Path, segment_base_url: str, max_secs: float | 
 
     Returns ``None`` when the directory contains no TS segments.
 
-    The function is path-traversal-safe: only files whose names match the
-    pattern ``*.ts`` are included and they are referenced by basename only.
+    The function is path-traversal-safe: *hls_dir* is resolved and checked
+    against RECORDINGS_PATH before any filesystem access.  Only ``.ts`` files
+    are included and they are referenced by basename only.
     """
+    # Resolve and re-check the directory even if the caller already validated,
+    # so that this function is safe when used independently.
+    if not RECORDINGS_PATH:
+        return None
+    try:
+        recordings_root = Path(RECORDINGS_PATH).resolve()
+        hls_dir = hls_dir.resolve()
+        hls_dir.relative_to(recordings_root)
+    except (ValueError, OSError):
+        return None
+
     if not hls_dir.is_dir():
         return None
 
@@ -1260,9 +1272,8 @@ async def _finalize_vod(
         shutil.copytree(str(src_dir), str(vod_dir))
     except Exception as exc:
         logger.error(
-            "Failed to copy VOD files for vod %d (DB record id=%d is_ready=0 – "
+            "Failed to copy VOD files for vod %d (DB record is_ready=0 – "
             "manual cleanup may be needed): %s",
-            vod_id,
             vod_id,
             exc,
         )
