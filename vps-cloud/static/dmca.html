@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="index, follow" />
+  <title>DMCA Policy 🐾 mochii.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      padding: 2.5rem 1rem 4rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      color: #9e7e82;
+      text-decoration: none;
+      font-size: .88rem;
+      font-weight: 600;
+      margin-bottom: 2rem;
+      transition: color .15s;
+    }
+    .back-link:hover { color: #e8aeb7; }
+
+    .doc-header {
+      margin-bottom: 2.5rem;
+    }
+
+    .doc-label {
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: #9e7e82;
+      margin-bottom: .5rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: .5rem;
+    }
+
+    .doc-meta {
+      font-size: .85rem;
+      color: #6a4a4e;
+    }
+
+    .card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.08);
+    }
+
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-top: 2rem;
+      margin-bottom: .6rem;
+    }
+    h2:first-child { margin-top: 0; }
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #c4909a;
+      margin-top: 1.25rem;
+      margin-bottom: .4rem;
+    }
+
+    p {
+      font-size: .93rem;
+      color: #c9b0b4;
+      line-height: 1.7;
+      margin-bottom: .9rem;
+    }
+
+    ul, ol {
+      margin: .5rem 0 .9rem 1.4rem;
+    }
+
+    li {
+      font-size: .93rem;
+      color: #c9b0b4;
+      line-height: 1.7;
+      margin-bottom: .3rem;
+    }
+
+    a {
+      color: #e8aeb7;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: color .15s;
+    }
+    a:hover { color: #f5d0d6; }
+
+    .highlight-box {
+      background: #1e1e1e;
+      border: 1px solid #4b3538;
+      border-left: 3px solid #e8aeb7;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0 1.2rem;
+      font-size: .9rem;
+      color: #d4b4b8;
+      line-height: 1.65;
+    }
+
+    .warning-box {
+      background: #1e1a16;
+      border: 1px solid #5c3f1e;
+      border-left: 3px solid #d4946a;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0 1.2rem;
+      font-size: .9rem;
+      color: #d4a882;
+      line-height: 1.65;
+    }
+
+    .dmca-form-card {
+      background: #1e1e1e;
+      border: 1px solid #4b3538;
+      border-radius: 14px;
+      padding: 1.5rem 1.5rem;
+      margin: 1.25rem 0;
+    }
+
+    .dmca-form-card h3 {
+      margin-top: 0;
+      margin-bottom: .75rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: .85rem;
+      font-weight: 700;
+      color: #c4909a;
+      margin-bottom: .35rem;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="url"],
+    textarea {
+      width: 100%;
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      padding: .6rem .8rem;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .9rem;
+      outline: none;
+      transition: border-color .15s;
+      resize: vertical;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    input[type="url"]:focus,
+    textarea:focus {
+      border-color: #e8aeb7;
+    }
+
+    .form-help {
+      font-size: .8rem;
+      color: #6a4a4e;
+      margin-top: .25rem;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: .65rem;
+      margin-bottom: .75rem;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      margin-top: .2rem;
+      accent-color: #e8aeb7;
+      flex-shrink: 0;
+    }
+
+    .checkbox-row label {
+      margin-bottom: 0;
+      font-size: .88rem;
+      color: #c9b0b4;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    .btn-submit {
+      display: inline-block;
+      background: linear-gradient(135deg, #c4525e 0%, #e8aeb7 100%);
+      color: #1a1a1a;
+      border: none;
+      border-radius: 10px;
+      padding: .75rem 1.75rem;
+      font-size: .95rem;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity .15s, transform .15s;
+    }
+    .btn-submit:hover { opacity: .9; transform: translateY(-1px); }
+
+    .footer-nav {
+      margin-top: 2.5rem;
+      text-align: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+      justify-content: center;
+    }
+
+    .footer-nav a {
+      display: inline-block;
+      padding: .55rem 1.2rem;
+      background: #1e1e1e;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      color: #9e7e82;
+      font-size: .88rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: border-color .15s, color .15s;
+    }
+    .footer-nav a:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    .success-msg {
+      display: none;
+      background: #1e261e;
+      border: 1px solid #4b7a4b;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      color: #a4d4a4;
+      font-size: .9rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a class="back-link" href="/">← mochii.live</a>
+
+    <div class="doc-header">
+      <p class="doc-label">Legal</p>
+      <h1>DMCA Policy 🐾</h1>
+      <p class="doc-meta">Effective Date: [EFFECTIVE DATE] &nbsp;·&nbsp; Last Updated: [LAST UPDATED DATE]</p>
+    </div>
+
+    <div class="card">
+      <h2>Overview</h2>
+      <p>mochii.live ("Platform") respects intellectual property rights and expects its users and creators to do the same. In accordance with the Digital Millennium Copyright Act of 1998 ("DMCA"), 17 U.S.C. § 512, we will respond expeditiously to claims of copyright infringement communicated to our Designated Copyright Agent using the process described below.</p>
+
+      <h2>1. Reporting Copyright Infringement</h2>
+      <p>If you believe that content on the Platform infringes your copyright, you may submit a DMCA takedown notice. To be effective under the DMCA, your notice must include <strong>all</strong> of the following:</p>
+      <ol>
+        <li>A physical or electronic signature of the person authorized to act on behalf of the copyright owner.</li>
+        <li>Identification of the copyrighted work claimed to have been infringed (or, if multiple works, a representative list).</li>
+        <li>Identification of the allegedly infringing material and information reasonably sufficient to permit us to locate it on the Platform (e.g., the URL of the specific page).</li>
+        <li>Your contact information — name, address, telephone number, and email address.</li>
+        <li>A statement that you have a good-faith belief that the use of the material is not authorized by the copyright owner, its agent, or the law.</li>
+        <li>A statement, made under penalty of perjury, that the information in your notice is accurate and that you are the copyright owner or are authorized to act on the copyright owner's behalf.</li>
+      </ol>
+
+      <div class="warning-box">
+        ⚠️ <strong>False Claims:</strong> Submitting a DMCA notice for content you know is not infringing may expose you to civil liability and damages under 17 U.S.C. § 512(f).
+      </div>
+
+      <h2>2. Submit a Takedown Notice</h2>
+      <p>You may submit your DMCA takedown notice via <strong>email</strong> to our Designated Copyright Agent (see Section 5), or using the form below.</p>
+
+      <div class="dmca-form-card">
+        <h3>DMCA Takedown Request Form</h3>
+        <form id="dmca-form">
+          <div class="form-group">
+            <label for="dmca-name">Your Full Name *</label>
+            <input type="text" id="dmca-name" name="name" required placeholder="Jane Doe" />
+          </div>
+          <div class="form-group">
+            <label for="dmca-email">Your Email Address *</label>
+            <input type="email" id="dmca-email" name="email" required placeholder="you@example.com" />
+          </div>
+          <div class="form-group">
+            <label for="dmca-work">Description of the Copyrighted Work *</label>
+            <textarea id="dmca-work" name="original_work" rows="3" required placeholder="Describe the copyrighted work (e.g., name of video, photo, or other work)."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="dmca-url">URL(s) of Infringing Content on mochii.live *</label>
+            <textarea id="dmca-url" name="infringing_urls" rows="3" required placeholder="https://mochii.live/...&#10;https://mochii.live/..."></textarea>
+            <p class="form-help">Provide the full URL(s) where the infringing content appears.</p>
+          </div>
+          <div class="form-group">
+            <label for="dmca-details">Additional Details</label>
+            <textarea id="dmca-details" name="details" rows="3" placeholder="Any additional context that may help us process your request."></textarea>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="dmca-good-faith" name="good_faith" required />
+            <label for="dmca-good-faith">I have a good-faith belief that the use of the material described above is not authorized by the copyright owner, its agent, or the law.</label>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="dmca-accuracy" name="accuracy" required />
+            <label for="dmca-accuracy">Under penalty of perjury, I affirm that the information in this notice is accurate and that I am the copyright owner or am authorized to act on the copyright owner's behalf.</label>
+          </div>
+          <button type="submit" class="btn-submit">Submit Takedown Notice</button>
+          <div class="success-msg" id="dmca-success">
+            ✓ Your DMCA notice has been received. We will review and respond within 3–5 business days.
+          </div>
+        </form>
+      </div>
+
+      <h2>3. Counter-Notification</h2>
+      <p>If you believe that content you posted was removed or disabled as a result of a mistake or misidentification, you may submit a counter-notification to our Designated Copyright Agent. A valid counter-notification must include:</p>
+      <ol>
+        <li>Your physical or electronic signature.</li>
+        <li>Identification of the material that was removed or disabled and the location where it appeared before removal.</li>
+        <li>A statement under penalty of perjury that you have a good-faith belief that the material was removed or disabled as a result of mistake or misidentification.</li>
+        <li>Your name, address, and telephone number, and a statement that you consent to jurisdiction in the federal district court for the judicial district in which your address is located (or, if outside the US, in any judicial district in which we may be found), and that you will accept service of process from the person who submitted the original notice.</li>
+      </ol>
+      <p>Upon receipt of a valid counter-notification, we will forward it to the original complainant and may restore the removed content within 10–14 business days, unless the complainant notifies us that they have filed a court action to restrain you from the infringing activity.</p>
+
+      <h2>4. Repeat Infringers</h2>
+      <p>In accordance with the DMCA and applicable law, we maintain a policy to terminate, in appropriate circumstances, the accounts of users who are determined to be repeat infringers of third-party copyrights.</p>
+
+      <h2>5. Designated Copyright Agent</h2>
+      <p>Send DMCA notices and counter-notifications to our Designated Copyright Agent:</p>
+      <div class="highlight-box">
+        <strong>[OPERATOR LEGAL NAME]</strong><br/>
+        Attn: DMCA Agent<br/>
+        [ADDRESS LINE 1]<br/>
+        [CITY, STATE, ZIP], [COUNTRY]<br/>
+        Email: <a href="mailto:[DMCA EMAIL]">[DMCA EMAIL]</a>
+      </div>
+      <p>We recommend sending notices via email for faster processing.</p>
+
+      <h2>6. Non-Copyright Complaints</h2>
+      <p>The DMCA process is only for copyright infringement claims. For other content concerns (e.g., privacy violations, harassment), please use our general <a href="mailto:[CONTACT EMAIL]">contact form</a> or report the content using the in-platform reporting tools.</p>
+    </div>
+
+    <nav class="footer-nav">
+      <a href="/terms">Terms of Service</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/2257">§ 2257 Statement</a>
+      <a href="/">← Home</a>
+    </nav>
+  </div>
+
+  <script>
+    document.getElementById('dmca-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const form = e.target;
+      const btn = form.querySelector('.btn-submit');
+      const successMsg = document.getElementById('dmca-success');
+
+      btn.disabled = true;
+      btn.textContent = 'Submitting…';
+
+      const body = {
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        original_work: form.original_work.value.trim(),
+        infringing_urls: form.infringing_urls.value.trim(),
+        details: form.details.value.trim(),
+      };
+
+      try {
+        const res = await fetch('/api/dmca', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (res.ok) {
+          form.reset();
+          successMsg.style.display = 'block';
+          btn.style.display = 'none';
+        } else {
+          const data = await res.json().catch(() => ({ detail: 'Submission failed (unreadable server response). Please try again or email us directly.' }));
+          alert(data.detail || 'Submission failed. Please try again or email us directly.');
+          btn.disabled = false;
+          btn.textContent = 'Submit Takedown Notice';
+        }
+      } catch {
+        alert('Network error. Please try again or email us directly.');
+        btn.disabled = false;
+        btn.textContent = 'Submit Takedown Notice';
+      }
+    });
+  </script>
+</body>
+</html>

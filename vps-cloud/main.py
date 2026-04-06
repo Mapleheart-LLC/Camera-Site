@@ -1467,6 +1467,10 @@ _AGE_GATE_EXEMPT_PREFIXES = (
     "/explore",
     "/landing",
     "/age-gate",
+    "/terms",
+    "/privacy",
+    "/dmca",
+    "/2257",
 )
 _AGE_GATE_EXEMPT_EXTENSIONS = (".css", ".js", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2")
 
@@ -1504,7 +1508,7 @@ _AGE_GATE_HTML = """<!DOCTYPE html>
     <button type="submit" class="btn">I am 18 or older &mdash; Enter</button>
   </form>
   <a href="https://www.google.com" class="btn btn-exit">Exit</a>
-  <small>By entering you agree to our Terms of Service and Privacy Policy.</small>
+  <small>By entering you agree to our <a href="/terms" style="color:#c49a9f">Terms of Service</a> and <a href="/privacy" style="color:#c49a9f">Privacy Policy</a>.</small>
 </div>
 </body>
 </html>"""
