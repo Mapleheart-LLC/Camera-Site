@@ -88,6 +88,8 @@ class DroolItem(BaseModel):
     reaction_counts: dict[str, int]
     is_weekly_whimper: bool = False
     creator_handle: str = "mochii"
+    nsfw_score: Optional[float] = None
+    creator_pixelate: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +161,7 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         "UPDATE drool_archive SET view_count = view_count + 1 WHERE id = ?",
         (item_id,),
     )
+    cols = row.keys()
     return DroolItem(
         id=item_id,
         platform=row["platform"],
@@ -170,7 +173,9 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         comment_count=_comment_count(item_id, db),
         reaction_counts=_reaction_counts(item_id, db),
         is_weekly_whimper=(item_id == whimper_id),
-        creator_handle=row["creator_handle"] if "creator_handle" in row else "mochii",
+        creator_handle=row["creator_handle"] if "creator_handle" in cols else "mochii",
+        nsfw_score=row["nsfw_score"] if "nsfw_score" in cols else None,
+        creator_pixelate=bool(row["creator_pixelate"]) if "creator_pixelate" in cols else False,
     )
 
 
@@ -207,11 +212,15 @@ def get_drool_feed(
         # Per-creator feed: recent-first (original behaviour).
         rows = db.execute(
             """
-            SELECT * FROM drool_archive
-            WHERE id != COALESCE(?, -1)
-              AND creator_handle = ?
-              AND COALESCE(is_hidden, 0) = 0
-            ORDER BY timestamp DESC
+            SELECT da.*,
+                   da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate
+            FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
+            WHERE da.id != COALESCE(?, -1)
+              AND da.creator_handle = ?
+              AND COALESCE(da.is_hidden, 0) = 0
+            ORDER BY da.timestamp DESC
             LIMIT ? OFFSET ?
             """,
             (whimper_id, creator_handle, page_size, offset),
@@ -222,11 +231,14 @@ def get_drool_feed(
         rows = db.execute(
             """
             SELECT da.*,
+                   da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate,
                    (da.view_count
                     + COALESCE(c.cnt, 0) * 3
                     + COALESCE(r.cnt, 0) * 2
                    ) AS _score
             FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
             LEFT JOIN (
                 SELECT drool_id, COUNT(*) AS cnt
                 FROM drool_comments
@@ -250,7 +262,14 @@ def get_drool_feed(
     # Pin Weekly Whimper at the top on the first page.
     if page == 1 and whimper_id is not None:
         wrow = db.execute(
-            "SELECT * FROM drool_archive WHERE id = ?", (whimper_id,)
+            """
+            SELECT da.*, da.nsfw_score,
+                   COALESCE(ca.pixelate_media, 0) AS creator_pixelate
+            FROM drool_archive da
+            LEFT JOIN creator_accounts ca ON ca.handle = da.creator_handle
+            WHERE da.id = ?
+            """,
+            (whimper_id,),
         ).fetchone()
         if wrow:
             feed.append(_build_item(wrow, whimper_id, db))

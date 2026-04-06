@@ -1021,6 +1021,22 @@ def init_db() -> None:
         except sqlite3.OperationalError as _e:
             if "duplicate column" not in str(_e).lower():
                 raise
+    # pixelate_media on creator_accounts: creator forces pixelation for their archived items
+    try:
+        conn.execute(
+            "ALTER TABLE creator_accounts ADD COLUMN pixelate_media INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # pixelate_media on site_users: member opts into pixelating NSFW-scored archive media
+    try:
+        conn.execute(
+            "ALTER TABLE site_users ADD COLUMN pixelate_media INTEGER NOT NULL DEFAULT 0"
+        )
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
     # is_mature on tags: 0 = safe, 1 = adult/explicit
     try:
         conn.execute("ALTER TABLE tags ADD COLUMN is_mature INTEGER NOT NULL DEFAULT 0")

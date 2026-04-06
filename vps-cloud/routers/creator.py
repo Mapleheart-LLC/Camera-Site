@@ -102,6 +102,7 @@ class ProfilePatch(BaseModel):
     accent_color: Optional[str] = Field(None, max_length=16, pattern=r"^#[0-9a-fA-F]{3,8}$")
     forwarding_email: Optional[str] = Field(None, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     content_rating: Optional[str] = Field(None, pattern=r"^(sfw|mixed|nsfw|unrated)$")
+    pixelate_media: Optional[bool] = None
 
 
 class AnswerPayload(BaseModel):
@@ -331,7 +332,7 @@ async def patch_my_profile(
 ):
     """Update the creator's editable profile fields (bio, avatar URL, accent colour, forwarding email)."""
     row = db.execute(
-        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email, content_rating, require_age_gate FROM creator_accounts WHERE handle = ?",
+        "SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email, content_rating, require_age_gate, pixelate_media FROM creator_accounts WHERE handle = ?",
         (handle,),
     ).fetchone()
     if not row:
@@ -343,6 +344,7 @@ async def patch_my_profile(
     new_accent_color    = payload.accent_color    if payload.accent_color    is not None else row["accent_color"]
     new_forwarding_email = payload.forwarding_email if payload.forwarding_email is not None else row["forwarding_email"]
     new_content_rating  = payload.content_rating  if payload.content_rating  is not None else (row["content_rating"] or "unrated")
+    new_pixelate_media  = payload.pixelate_media  if payload.pixelate_media  is not None else bool(row["pixelate_media"])
     forwarding_email_changed = (
         payload.forwarding_email is not None
         and payload.forwarding_email != row["forwarding_email"]
@@ -360,11 +362,13 @@ async def patch_my_profile(
         """
         UPDATE creator_accounts
            SET display_name = ?, bio = ?, avatar_url = ?, accent_color = ?,
-               forwarding_email = ?, content_rating = ?, require_age_gate = ?
+               forwarding_email = ?, content_rating = ?, require_age_gate = ?,
+               pixelate_media = ?
          WHERE handle = ?
         """,
         (new_display_name, new_bio, new_avatar_url, new_accent_color,
-         new_forwarding_email, new_content_rating, new_require_age_gate, handle),
+         new_forwarding_email, new_content_rating, new_require_age_gate,
+         1 if new_pixelate_media else 0, handle),
     )
     db.commit()
 
@@ -410,6 +414,7 @@ async def patch_my_profile(
         "forwarding_email": new_forwarding_email,
         "content_rating": new_content_rating,
         "require_age_gate": bool(new_require_age_gate),
+        "pixelate_media": new_pixelate_media,
     }
     if avatar_nsfw_warning:
         result["avatar_nsfw_warning"] = avatar_nsfw_warning
