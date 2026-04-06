@@ -10,3 +10,4 @@ praw>=7.8.1
 tweepy>=4.14.0
 apscheduler>=3.10.4
 atproto>=0.0.59
+passlib[bcrypt]>=1.7.4

@@ -4,7 +4,7 @@ routers/discord_oauth.py – Discord OAuth2 account linking and Linked Roles.
 Provides two complementary Discord integration features:
 
 1. **Account linking** – Authenticated site users can link their Discord
-   account to their Fanvue profile so that subscriber metadata is visible
+   account to their site account so that subscriber metadata is visible
    inside Discord servers.
 
 2. **Linked Roles Verification URL** – The ``GET /discord/verify-user``
@@ -62,13 +62,13 @@ _STATE_TTL_SECONDS = 600
 _discord_oauth_states: dict[str, dict] = {}
 
 
-def _generate_state(flow_type: str, fanvue_id: Optional[str] = None) -> str:
+def _generate_state(flow_type: str, user_id: Optional[str] = None) -> str:
     """Create a CSRF state token with embedded flow metadata."""
     _prune_states()
     nonce = secrets.token_urlsafe(32)
     _discord_oauth_states[nonce] = {
         "type": flow_type,
-        "fanvue_id": fanvue_id,
+        "user_id": user_id,
         "created_at": datetime.now(timezone.utc),
     }
     return nonce
@@ -122,13 +122,13 @@ _METADATA_SCHEMA = [
     {
         "key": "access_level",
         "name": "Subscriber Tier",
-        "description": "Fanvue subscription access level (0–3)",
+        "description": "Subscription access level (0–3)",
         "type": 2,  # integer_greater_than_or_equal
     },
     {
         "key": "is_subscriber",
         "name": "Active Subscriber",
-        "description": "Has an active Fanvue subscription",
+        "description": "Has an active subscription",
         "type": 7,  # boolean_equal
     },
 ]
@@ -268,20 +268,20 @@ def discord_link(token: Optional[str] = None):
 
     try:
         payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        fanvue_id: Optional[str] = payload.get("sub")
+        user_id: Optional[str] = payload.get("sub")
     except (_jwt.ExpiredSignatureError, _jwt.InvalidTokenError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired site token.",
         ) from exc
 
-    if not fanvue_id:
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid site token payload.",
         )
 
-    state = _generate_state("link_account", fanvue_id=fanvue_id)
+    state = _generate_state("link_account", user_id=user_id)
     # Request role_connections.write so we can push metadata immediately on link.
     return RedirectResponse(
         url=_build_discord_auth_url(state, ["identify", "role_connections.write"]),
@@ -308,7 +308,7 @@ async def discord_callback(
         return RedirectResponse(url="/?error=discord_invalid_state", status_code=302)
 
     flow_type: str = state_data["type"]
-    fanvue_id: Optional[str] = state_data.get("fanvue_id")
+    user_id: Optional[str] = state_data.get("user_id")
 
     client_id     = os.environ.get("DISCORD_CLIENT_ID", "")
     client_secret = os.environ.get("DISCORD_CLIENT_SECRET", "")
@@ -380,7 +380,7 @@ async def discord_callback(
         return await _handle_link_account(
             discord_id, discord_username, discord_avatar,
             discord_access_token, discord_refresh_token, expires_at,
-            fanvue_id,
+            user_id,
         )
 
     # flow_type == "linked_roles"
@@ -397,22 +397,20 @@ async def _handle_link_account(
     access_token: str,
     refresh_token: Optional[str],
     expires_at: str,
-    fanvue_id: Optional[str],
+    user_id: Optional[str],
 ):
-    """Persist the Discord↔Fanvue link and push subscriber metadata."""
+    """Persist the Discord↔site-user link and push subscriber metadata."""
     now = datetime.now(timezone.utc).isoformat()
 
-    # Resolve the site user_id from the fanvue_id carried through state.
-    user_id: Optional[str] = None
+    # Look up the user's current access_level so we can push metadata.
     access_level: Optional[int] = None
-    if fanvue_id:
+    if user_id:
         with get_db_connection() as db:
             row = db.execute(
-                "SELECT id, access_level FROM users WHERE fanvue_id = ?",
-                (fanvue_id,),
+                "SELECT access_level FROM users WHERE id = ?",
+                (user_id,),
             ).fetchone()
         if row:
-            user_id      = row["id"]
             access_level = row["access_level"]
 
     with get_db_connection() as db:
@@ -460,7 +458,7 @@ async def _handle_linked_roles(
     """Handle the Linked Roles verification flow.
 
     Always upserts the Discord token so it stays fresh.  If the Discord
-    account is already linked to a Fanvue user, push their subscriber
+    account is already linked to a site user, push their subscriber
     metadata and show a success page.  Otherwise show a prompt to link.
     """
     now = datetime.now(timezone.utc).isoformat()
@@ -527,16 +525,15 @@ async def _handle_linked_roles(
 @router.get("/api/discord/status")
 def discord_status(current_user: dict = Depends(get_current_user)):
     """Return the Discord link status for the authenticated site user."""
-    fanvue_id: str = current_user["fanvue_id"]
+    user_id: str = current_user["user_id"]
     with get_db_connection() as db:
         row = db.execute(
             """
-            SELECT da.discord_id, da.discord_username, da.discord_avatar, da.linked_at
-            FROM discord_accounts da
-            JOIN users u ON u.id = da.user_id
-            WHERE u.fanvue_id = ?
+            SELECT discord_id, discord_username, discord_avatar, linked_at
+            FROM discord_accounts
+            WHERE user_id = ?
             """,
-            (fanvue_id,),
+            (user_id,),
         ).fetchone()
 
     if row:
@@ -557,18 +554,11 @@ def discord_unlink(current_user: dict = Depends(get_current_user)):
     Sets ``user_id = NULL`` on the discord_accounts row rather than deleting
     it, so the Discord token row is preserved for future re-linking.
     """
-    fanvue_id: str = current_user["fanvue_id"]
+    user_id: str = current_user["user_id"]
     with get_db_connection() as db:
-        user_row = db.execute(
-            "SELECT id FROM users WHERE fanvue_id = ?", (fanvue_id,)
-        ).fetchone()
-        if not user_row:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
-            )
         db.execute(
             "UPDATE discord_accounts SET user_id = NULL WHERE user_id = ?",
-            (user_row["id"],),
+            (user_id,),
         )
         db.commit()
     return {"unlinked": True}
@@ -602,7 +592,7 @@ _LINKED_ROLES_SUCCESS_HTML = """\
     <div class="icon">✅</div>
     <h1>Account Verified!</h1>
     <p>Welcome, <strong>{username}</strong>!</p>
-    <p>Your Fanvue subscription has been confirmed.</p>
+    <p>Your subscription has been confirmed.</p>
     <div class="badge">Subscriber Tier {access_level}</div>
     <p class="close">You can now close this window and return to Discord.</p>
   </div>
@@ -636,8 +626,8 @@ _LINKED_ROLES_NOT_LINKED_HTML = """\
     <div class="icon">🔗</div>
     <h1>One More Step</h1>
     <p>Hi <strong>{username}</strong> — your Discord account isn't linked to a
-       Fanvue subscription yet.</p>
-    <p>Log in to mochii.live with your Fanvue account, then click
+       site account yet.</p>
+    <p>Log in to mochii.live with your username and password, then click
        <em>"Link Discord"</em> in your profile to earn your role.</p>
     <a class="btn" href="{site_url}">Go to mochii.live</a>
     <p class="hint">Already linked? Try the verification again after logging in.</p>

@@ -58,7 +58,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
-    """Decode the Fanvue JWT and return ``{"fanvue_id": ..., "access_level": ...}``."""
+    """Decode the site JWT and return ``{"user_id": ..., "access_level": ...}``."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -68,13 +68,13 @@ def get_current_user(
         raise credentials_exception
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-        fanvue_id: Optional[str] = payload.get("sub")
+        user_id: Optional[str] = payload.get("sub")
         access_level: int = int(payload.get("access_level", 0))
-        if fanvue_id is None:
+        if user_id is None:
             raise credentials_exception
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         raise credentials_exception
-    return {"fanvue_id": fanvue_id, "access_level": access_level}
+    return {"user_id": user_id, "access_level": access_level}
 
 
 # ---------------------------------------------------------------------------
