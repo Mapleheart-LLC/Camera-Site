@@ -3565,7 +3565,7 @@ def _build_anon_html(canonical: str, creator_handle: Optional[str] = None) -> st
     // Detect per-creator context from URL path (e.g. /mochii/anon).
     const CREATOR_HANDLE = (function() {{
       const parts = window.location.pathname.split('/');
-      return (parts.length >= 3 && parts[2] === 'anon') ? parts[1] : null;
+      return (parts.length >= 3 && parts[1] && parts[2] === 'anon') ? parts[1] : null;
     }})();
     const textarea  = document.getElementById('note-textarea');
     const charCount = document.getElementById('char-count');
@@ -3636,7 +3636,7 @@ def _build_anon_html(canonical: str, creator_handle: Optional[str] = None) -> st
           const div = document.createElement('div');
           div.className = 'qa-item';
           // Show creator badge only on the global feed where multiple creators mix.
-          const creatorTag = (!CREATOR_HANDLE && q.creator_handle && q.creator_handle !== 'mochii')
+          const creatorTag = (!CREATOR_HANDLE && q.creator_handle && q.creator_handle !== '{_PRIMARY_CREATOR}')
             ? `<span style="font-size:.7rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:.35rem;">🐾 ${{esc(q.creator_handle)}}</span>`
             : '';
           div.innerHTML =

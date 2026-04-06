@@ -534,8 +534,8 @@
 
     // Detect per-creator context from URL path (e.g. /mochii/drool).
     const CREATOR_HANDLE = (function() {
-      const m = window.location.pathname.match(/^\/([^\/]+)\/drool\b/);
-      return m ? m[1] : null;
+      const parts = window.location.pathname.split('/');
+      return (parts.length >= 3 && parts[1] && parts[2] === 'drool') ? parts[1] : null;
     })();
 
     // ── Image error handler (safe DOM, no innerHTML) ─────
