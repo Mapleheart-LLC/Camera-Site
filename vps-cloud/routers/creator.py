@@ -533,8 +533,7 @@ async def creator_stream_info(
     stream is currently live, derived from go2rtc's /api/streams API.
     """
     base_url = os.environ.get("BASE_URL", "").rstrip("/")
-    from urllib.parse import urlparse as _up
-    hostname = _up(base_url).hostname if base_url else "localhost"
+    hostname = urlparse(base_url).hostname if base_url else "localhost"
     rtmp_server = f"rtmp://{hostname}:1935"
 
     rows = db.execute(

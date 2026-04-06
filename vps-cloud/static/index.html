@@ -1225,6 +1225,7 @@
     let _activeStreamUrl  = null;
     let _reconnectTimer   = null;
     let _reconnectAttempt = 0;
+    let _statusPollInterval = null;
     const _MAX_RECONNECT_ATTEMPTS = 10;
 
     // STUN servers so WebRTC can traverse NATs / firewalls.
@@ -1326,7 +1327,7 @@
         videoEl.classList.remove('live-glow');
         return;
       }
-      const delay = Math.min(2000 * Math.pow(1.5, _reconnectAttempt), 30000);
+      const delay = Math.min(2000 * (1.5 ** _reconnectAttempt), 30000);
       _reconnectAttempt++;
       statusEl.textContent = `Stream offline – reconnecting in ${Math.round(delay / 1000)}s…`;
       statusEl.className   = 'stream-status error';
@@ -1453,7 +1454,7 @@
 
         // Start polling stream status every 30 s
         pollStreamStatus();
-        setInterval(pollStreamStatus, 30_000);
+        _statusPollInterval = setInterval(pollStreamStatus, 30_000);
       } catch (err) {
         const sidebar = document.getElementById('camera-sidebar');
         sidebar.querySelectorAll('.cam-btn, #sidebar-message').forEach(el => el.remove());
@@ -1810,6 +1811,7 @@
       if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
       _activeStreamSlug = null;
       _activeStreamUrl  = null;
+      if (_statusPollInterval) { clearInterval(_statusPollInterval); _statusPollInterval = null; }
       // Clear any active countdown timers and hide controls bar
       Object.values(controlTimers).forEach(clearInterval);
       Object.keys(controlTimers).forEach(k => delete controlTimers[k]);

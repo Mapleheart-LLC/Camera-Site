@@ -832,12 +832,6 @@
       badge.classList.toggle('visible', count > 0);
     }
 
-    function updateUnansweredBadge(count) {
-      const badge = document.getElementById('nav-unanswered-badge');
-      badge.textContent = count;
-      badge.classList.toggle('visible', count > 0);
-    }
-
     // ── Streaming ──────────────────────────────────────
     async function loadStreamInfo() {
       const errEl  = document.getElementById('stream-info-error');
