@@ -1,39 +1,59 @@
 """
 routers/moderation.py – NSFW image moderation using a local nudenet ONNX model.
 
-Endpoints
----------
+Routers
+-------
+  router        – admin-only endpoints (prefix /api/admin/moderation)
+  public_router – publicly accessible media proxy (no auth)
+
+Admin endpoints
+---------------
   POST /api/admin/moderation/check-url         – manually check a URL
   GET  /api/admin/moderation/flagged           – list auto-flagged drool items
   POST /api/admin/moderation/unflag/{drool_id} – clear flag and unhide an item
 
-Helper
-------
-  check_image_nsfw(url)  – async, returns float 0-1 or None (model error / no URL)
+Public endpoint
+---------------
+  GET /api/media/pixelated/{drool_id}
+      Fetches the original media_url for the drool item, applies a blocky
+      pixelation effect with Pillow, and returns the result as JPEG.
+
+      This is intentionally the only way the browser ever receives the image
+      when creator-forced pixelation is active.  The original URL is kept
+      server-side so any download always produces the pixelated version.
+
+Helpers (importable by other routers)
+--------------------------------------
+  check_image_nsfw(url)  – async, returns float 0-1 or None on error
   is_nsfw(score)         – True when score meets threshold
 
-How the score is computed
--------------------------
-nudenet detects body-part regions and assigns each a label + confidence score.
-Labels that are inherently explicit (exposed genitalia, exposed breasts, exposed
-buttocks, exposed anus) are treated as NSFW.  The returned score is the highest
-confidence value among those detections, or 0.0 if none are found.
+How the NSFW score is computed
+-------------------------------
+nudenet detects body-part regions and assigns each a label + confidence.
+Labels that indicate explicit content (exposed genitalia, breasts, buttocks,
+anus) are treated as NSFW.  The returned score is the highest confidence
+among those detections, or 0.0 if none are found.
 
 Environment variables
 ---------------------
-  NSFW_SCORE_THRESHOLD – float 0-1, default 0.75. Items at or above this score
-                         are auto-hidden in the drool feed.
+  NSFW_SCORE_THRESHOLD – float 0-1, default 0.75
+  NSFW_PIXEL_SIZE      – integer pixel-block size for pixelation, default 16
 """
 
 import io
 import logging
 import os
 import sqlite3
+from urllib.parse import urlparse
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from PIL import Image
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import get_admin_user
@@ -41,8 +61,10 @@ from dependencies import get_admin_user
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/moderation", tags=["moderation"])
+public_router = APIRouter(tags=["media"])
 
 _NSFW_THRESHOLD: float = float(os.environ.get("NSFW_SCORE_THRESHOLD", "0.75"))
+_PIXEL_SIZE: int = max(4, int(os.environ.get("NSFW_PIXEL_SIZE", "16")))
 
 # Labels from nudenet that indicate explicit content.
 _NSFW_LABELS: frozenset[str] = frozenset({
@@ -52,6 +74,9 @@ _NSFW_LABELS: frozenset[str] = frozenset({
     "BUTTOCKS_EXPOSED",
     "ANUS_EXPOSED",
 })
+
+# Rate limiter for the public pixelation proxy.
+_limiter = Limiter(key_func=get_remote_address)
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded detector singleton – ONNX model loads once, reused on every call
@@ -71,7 +96,53 @@ def _get_detector():
 
 
 # ---------------------------------------------------------------------------
-# Core helper – importable by other routers
+# SSRF guard
+# ---------------------------------------------------------------------------
+
+_PRIVATE_PREFIXES = ("10.", "172.", "192.168.", "127.", "0.", "169.254.")
+
+
+def _is_safe_url(url: str) -> bool:
+    """Return True only for http/https URLs pointing to non-private hosts."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    if host in ("localhost", "::1"):
+        return False
+    if any(host.startswith(p) for p in _PRIVATE_PREFIXES):
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Pillow pixelation
+# ---------------------------------------------------------------------------
+
+
+def _pixelate_image(img_bytes: bytes) -> bytes:
+    """Downscale then upscale to produce a blocky pixelation effect.
+
+    Returns JPEG bytes.  Any input format supported by Pillow is accepted.
+    """
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    small_w = max(1, img.width // _PIXEL_SIZE)
+    small_h = max(1, img.height // _PIXEL_SIZE)
+    pixelated = img.resize((small_w, small_h), Image.BOX).resize(
+        img.size, Image.NEAREST
+    )
+    out = io.BytesIO()
+    pixelated.save(out, format="JPEG", quality=85)
+    return out.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Core NSFW helper – importable by other routers
 # ---------------------------------------------------------------------------
 
 
@@ -97,7 +168,6 @@ async def check_image_nsfw(url: str) -> Optional[float]:
     try:
         detector = _get_detector()
         detections = detector.detect(image_bytes)
-        # Compute score: highest confidence among NSFW-labelled detections.
         nsfw_scores = [
             d["score"] for d in detections if d.get("class") in _NSFW_LABELS
         ]
@@ -110,6 +180,87 @@ async def check_image_nsfw(url: str) -> Optional[float]:
 def is_nsfw(score: Optional[float]) -> bool:
     """Return True when *score* meets or exceeds the configured threshold."""
     return score is not None and score >= _NSFW_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
+# Public pixelation proxy
+# ---------------------------------------------------------------------------
+
+
+@public_router.get("/api/media/pixelated/{drool_id}")
+@_limiter.limit("120/minute")
+async def serve_pixelated_media(
+    request: Request,
+    drool_id: int,
+    db: sqlite3.Connection = Depends(get_db),
+) -> Response:
+    """Fetch the original media for a drool item and return a pixelated JPEG.
+
+    The original URL is read from the database — it is never taken from the
+    request — which prevents SSRF.  The response is cached by the browser for
+    24 hours so repeated views don't re-process the same image.
+    """
+    row = db.execute(
+        "SELECT media_url FROM drool_archive WHERE id = ? AND media_url IS NOT NULL",
+        (drool_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+
+    original_url: str = row["media_url"]
+
+    # Guard: never proxy our own proxy endpoint (avoid recursive loops).
+    if "/api/media/pixelated/" in original_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source URL."
+        )
+
+    if not _is_safe_url(original_url):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Source URL is not eligible for proxying.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                original_url,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; CameraSiteBot/1.0)"},
+                follow_redirects=True,
+            )
+        if not resp.is_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Upstream returned HTTP {resp.status_code}.",
+            )
+        img_bytes = resp.content
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("pixelation proxy: download failed for drool #%d: %s", drool_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not fetch source image.",
+        )
+
+    try:
+        pixelated = _pixelate_image(img_bytes)
+    except Exception as exc:
+        logger.warning("pixelation proxy: processing failed for drool #%d: %s", drool_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Could not process image.",
+        )
+
+    return Response(
+        content=pixelated,
+        media_type="image/jpeg",
+        headers={
+            # 24-hour browser cache; immutable since the drool item won't change.
+            "Cache-Control": "public, max-age=86400, immutable",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

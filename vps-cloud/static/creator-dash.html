@@ -486,6 +486,13 @@
                   <label>Age Gate</label>
                   <p id="prof-age-gate-status" class="field-hint" style="font-size:.9rem;margin:0"></p>
                 </div>
+                <div class="form-field">
+                  <label for="prof-pixelate-media">Pixelate archived media</label>
+                  <div style="display:flex;align-items:center;gap:.6rem">
+                    <input type="checkbox" id="prof-pixelate-media" style="width:1.1rem;height:1.1rem;accent-color:var(--accent);cursor:pointer" />
+                    <span class="field-hint" style="margin:0">Force pixelation on your archived drool items for all viewers regardless of their personal preference. Images are pixelated server-side so downloads are also censored.</span>
+                  </div>
+                </div>
               </div>
               <p id="profile-error" role="alert" aria-live="polite"></p>
               <button id="profile-save-btn" class="btn-sm btn-edit" style="margin-top:.5rem">Save Profile 🐾</button>
@@ -1104,6 +1111,7 @@
         document.getElementById('accent-swatch').style.background = color;
         document.getElementById('accent-hex').textContent = color;
         document.getElementById('prof-content-rating').value = me.content_rating || 'unrated';
+        document.getElementById('prof-pixelate-media').checked = !!me.pixelate_media;
         const ageGateEl = document.getElementById('prof-age-gate-status');
         if (me.require_age_gate) {
           ageGateEl.innerHTML = '🔞 <strong>Age gate is ON</strong> — visitors must confirm 18+ before viewing your page.';
@@ -1135,6 +1143,7 @@
           accent_color:      document.getElementById('prof-accent-color').value,
           forwarding_email:  document.getElementById('prof-forwarding-email').value.trim() || null,
           content_rating:    document.getElementById('prof-content-rating').value,
+          pixelate_media:    document.getElementById('prof-pixelate-media').checked,
         });
         if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
         if (!resp.ok) {

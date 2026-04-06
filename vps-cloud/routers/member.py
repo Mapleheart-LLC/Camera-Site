@@ -412,7 +412,8 @@ async def browse_creators(
 # ---------------------------------------------------------------------------
 
 class ContentFilterUpdate(BaseModel):
-    content_filter: str = Field(..., pattern=r"^(all|sfw)$")
+    content_filter: Optional[str] = Field(None, pattern=r"^(all|sfw)$")
+    pixelate_media: Optional[bool] = None
 
 
 @router.get("/me/content-filter")
@@ -420,12 +421,15 @@ def get_content_filter(
     user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Return the authenticated member's content-filter preference."""
+    """Return the authenticated member's content preferences."""
     user_id = user["fanvue_id"]
     row = db.execute(
-        "SELECT content_filter FROM site_users WHERE id = ?", (user_id,)
+        "SELECT content_filter, pixelate_media FROM site_users WHERE id = ?", (user_id,)
     ).fetchone()
-    return {"content_filter": (row["content_filter"] if row else None) or "all"}
+    return {
+        "content_filter": (row["content_filter"] if row else None) or "all",
+        "pixelate_media": bool(row["pixelate_media"]) if row else False,
+    }
 
 
 @router.patch("/me/content-filter")
@@ -434,11 +438,23 @@ def update_content_filter(
     user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Update the authenticated member's content-filter preference ('all' or 'sfw')."""
+    """Update content-filter and/or pixelate_media preference."""
     user_id = user["fanvue_id"]
-    db.execute(
-        "UPDATE site_users SET content_filter = ? WHERE id = ?",
-        (payload.content_filter, user_id),
-    )
+    if payload.content_filter is not None:
+        db.execute(
+            "UPDATE site_users SET content_filter = ? WHERE id = ?",
+            (payload.content_filter, user_id),
+        )
+    if payload.pixelate_media is not None:
+        db.execute(
+            "UPDATE site_users SET pixelate_media = ? WHERE id = ?",
+            (1 if payload.pixelate_media else 0, user_id),
+        )
     db.commit()
-    return {"content_filter": payload.content_filter}
+    row = db.execute(
+        "SELECT content_filter, pixelate_media FROM site_users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return {
+        "content_filter": (row["content_filter"] if row else None) or "all",
+        "pixelate_media": bool(row["pixelate_media"]) if row else False,
+    }

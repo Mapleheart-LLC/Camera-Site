@@ -564,6 +564,18 @@
           </div>
           <button class="btn btn-primary" onclick="saveContentFilter()">Save</button>
         </div>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+            <div>
+              <div class="field-label" style="margin-bottom:.2rem">🙈 Pixelate non-live media</div>
+              <p class="field-hint" style="margin:0">When on, archived images flagged as NSFW are pixelated by default. You can still tap each image to reveal it.</p>
+            </div>
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" id="input-pixelate-media" style="width:1.1rem;height:1.1rem;accent-color:var(--accent);cursor:pointer" onchange="savePixelateMedia()" />
+              <span id="pixelate-media-label" style="font-size:.9rem;color:var(--muted)">Off</span>
+            </label>
+          </div>
+        </div>
         <div id="content-filter-msg" style="margin-top:.5rem"></div>
       </div>
     </div>
@@ -1034,6 +1046,9 @@ async function loadAccount() {
     const labels = { all: '🌐 All creators', sfw: '🌸 SFW only' };
     document.getElementById('acct-content-filter').textContent = labels[filter] || filter;
     document.getElementById('input-content-filter').value = filter;
+    const pixelateOn = !!pref.pixelate_media;
+    document.getElementById('input-pixelate-media').checked = pixelateOn;
+    document.getElementById('pixelate-media-label').textContent = pixelateOn ? 'On' : 'Off';
   } catch (_) { /* silently skip if endpoint not available */ }
 }
 
@@ -1091,6 +1106,22 @@ async function saveContentFilter() {
     const labels = { all: '🌐 All creators', sfw: '🌸 SFW only' };
     document.getElementById('acct-content-filter').textContent = labels[result.content_filter] || result.content_filter;
     msgEl.innerHTML = `<span class="success-msg">✓ Preference saved!</span>`;
+    setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
+  } catch (e) {
+    msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not save preference.')}</span>`;
+  }
+}
+
+async function savePixelateMedia() {
+  const checked = document.getElementById('input-pixelate-media').checked;
+  const msgEl   = document.getElementById('content-filter-msg');
+  document.getElementById('pixelate-media-label').textContent = checked ? 'On' : 'Off';
+  try {
+    await apiFetch('/api/member/me/content-filter', {
+      method: 'PATCH',
+      body: JSON.stringify({ pixelate_media: checked }),
+    });
+    msgEl.innerHTML = `<span class="success-msg">✓ Pixelate preference saved!</span>`;
     setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
   } catch (e) {
     msgEl.innerHTML = `<span class="error-msg">${esc(e.detail || 'Could not save preference.')}</span>`;

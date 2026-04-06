@@ -54,7 +54,7 @@ from routers.monetization import router as monetization_router
 from routers.analytics import router as analytics_router
 from routers.discovery import router as discovery_router
 from routers.alerts import router as alerts_router
-from routers.moderation import router as moderation_router
+from routers.moderation import router as moderation_router, public_router as moderation_public_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -2232,6 +2232,7 @@ app.include_router(analytics_router)
 app.include_router(discovery_router)
 app.include_router(alerts_router)
 app.include_router(moderation_router)
+app.include_router(moderation_public_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in all rate-limited routers function correctly.

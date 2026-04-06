@@ -1272,7 +1272,7 @@
           <div class="card">
             <div class="card-header"><h2>Manual Image Check</h2></div>
             <div class="card-body">
-              <p style="color:var(--muted);font-size:.88rem;margin-bottom:.75rem">Enter any image URL to run the NSFW detector. Requires <code>DEEPAI_API_KEY</code> to be configured.</p>
+              <p style="color:var(--muted);font-size:.88rem;margin-bottom:.75rem">Enter any image URL to run the local NSFW detector (nudenet). No external API key required — inference runs on the server.</p>
               <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
                 <div style="flex:1;min-width:260px">
                   <label class="field-label" for="mod-check-url">Image URL</label>
@@ -2006,7 +2006,7 @@
           ${bar}
           <span style="font-size:.75rem;color:var(--muted)">Threshold: ${Math.round(data.threshold * 100)}%</span>`;
       } catch (e) {
-        resEl.textContent = `Error: ${e.detail || e.message || 'Check failed — is DEEPAI_API_KEY configured?'}`;
+        resEl.textContent = `Error: ${e.detail || e.message || 'Check failed.'}`;
       }
     }
 

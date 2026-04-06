@@ -310,7 +310,7 @@ def get_my_profile(
     row = db.execute(
         """
         SELECT handle, display_name, bio, avatar_url, accent_color, forwarding_email,
-               content_rating, require_age_gate
+               content_rating, require_age_gate, pixelate_media
           FROM creator_accounts
          WHERE handle = ?
         """,
@@ -321,6 +321,7 @@ def get_my_profile(
     result = dict(row)
     result["content_rating"] = result.get("content_rating") or "unrated"
     result["require_age_gate"] = bool(result.get("require_age_gate", 1))
+    result["pixelate_media"] = bool(result.get("pixelate_media", 0))
     return result
 
 

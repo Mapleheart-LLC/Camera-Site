@@ -162,11 +162,28 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         (item_id,),
     )
     cols = row.keys()
+    raw_media_url: Optional[str] = row["media_url"]
+    creator_pixelate = bool(row["creator_pixelate"]) if "creator_pixelate" in cols else False
+
+    # When a creator has forced pixelation, replace the media URL with the
+    # server-side pixelation proxy so the original bytes never reach the browser.
+    # Videos are excluded because server-side video pixelation requires ffmpeg;
+    # the client will apply a CSS overlay for those instead.
+    is_video = bool(
+        raw_media_url
+        and raw_media_url.lower().split("?")[0].endswith((".mp4", ".webm", ".mov"))
+    )
+    effective_media_url: Optional[str] = (
+        f"/api/media/pixelated/{item_id}"
+        if creator_pixelate and raw_media_url and not is_video
+        else raw_media_url
+    )
+
     return DroolItem(
         id=item_id,
         platform=row["platform"],
         original_url=row["original_url"],
-        media_url=row["media_url"],
+        media_url=effective_media_url,
         text_content=row["text_content"],
         view_count=row["view_count"],
         timestamp=row["timestamp"],
@@ -175,7 +192,7 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         is_weekly_whimper=(item_id == whimper_id),
         creator_handle=row["creator_handle"] if "creator_handle" in cols else "mochii",
         nsfw_score=row["nsfw_score"] if "nsfw_score" in cols else None,
-        creator_pixelate=bool(row["creator_pixelate"]) if "creator_pixelate" in cols else False,
+        creator_pixelate=creator_pixelate,
     )
 
 
