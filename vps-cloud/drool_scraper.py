@@ -701,7 +701,11 @@ def _scrape_twitter() -> None:
                     url = f"https://x.com/i/web/status/{tweet.id}"
                     att = getattr(tweet, "attachments", None) or {}
                     mks = att.get("media_keys") or []
-                    tweet_media_urls = [u for mk in mks if (u := media_map.get(mk))]
+                    tweet_media_urls = []
+                    for mk in mks:
+                        resolved = media_map.get(mk)
+                        if resolved:
+                            tweet_media_urls.append(resolved)
                     media_url: Optional[str] = tweet_media_urls[0] if tweet_media_urls else None
                     media_urls_json: Optional[str] = json.dumps(tweet_media_urls) if tweet_media_urls else None
                     ts = (
@@ -734,7 +738,11 @@ def _scrape_twitter() -> None:
                         url = f"https://x.com/i/web/status/{tweet.id}"
                         att = getattr(tweet, "attachments", None) or {}
                         mks = att.get("media_keys") or []
-                        bk_tweet_media_urls = [u for mk in mks if (u := bk_media_map.get(mk))]
+                        bk_tweet_media_urls = []
+                        for mk in mks:
+                            resolved = bk_media_map.get(mk)
+                            if resolved:
+                                bk_tweet_media_urls.append(resolved)
                         bk_media_url: Optional[str] = bk_tweet_media_urls[0] if bk_tweet_media_urls else None
                         bk_media_urls_json: Optional[str] = json.dumps(bk_tweet_media_urls) if bk_tweet_media_urls else None
                         ts = (

@@ -653,7 +653,7 @@
     }
 
     function isGifUrl(url) {
-      return /\.gif(\?|$)/i.test(url);
+      return /\.(gif|gifv)(\?|$)/i.test(url);
     }
 
     function createMediaNode(url, altText) {
@@ -694,7 +694,7 @@
       if (urls.length === 1) {
         const node = createMediaNode(urls[0], altText);
         wrapper.appendChild(node);
-        if (isGifUrl(urls[0]) && !isVideoUrl(urls[0])) {
+        if (isGifUrl(urls[0])) {
           const badge = document.createElement('span');
           badge.className = 'gif-badge';
           badge.textContent = 'GIF';
@@ -712,7 +712,7 @@
         slide.className = 'gallery-slide';
         const node = createMediaNode(url, `${altText || 'She liked this'} (${i + 1}/${urls.length})`);
         slide.appendChild(node);
-        if (isGifUrl(url) && !isVideoUrl(url)) {
+        if (isGifUrl(url)) {
           const badge = document.createElement('span');
           badge.className = 'gif-badge';
           badge.textContent = 'GIF';

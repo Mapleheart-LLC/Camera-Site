@@ -159,8 +159,12 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         (item_id,),
     )
     media_url = row["media_url"]
-    # Parse media_urls JSON; fall back to wrapping media_url for older rows.
-    raw_media_urls = row["media_urls"] if "media_urls" in row.keys() else None
+    # Parse media_urls JSON; fall back to wrapping media_url for older rows
+    # that pre-date the column migration.
+    try:
+        raw_media_urls = row["media_urls"]
+    except (IndexError, KeyError):
+        raw_media_urls = None
     if raw_media_urls:
         try:
             media_urls: list[str] = [u for u in json.loads(raw_media_urls) if u]
