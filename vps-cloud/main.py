@@ -1175,6 +1175,9 @@ async def lifespan(app: FastAPI):
             "OAuth login will not work until these are configured."
         )
     init_db()
+    if _ROOT_HOSTNAME:
+        from routers.cloudflare import ensure_platform_subdomains
+        ensure_platform_subdomains(_ROOT_HOSTNAME)
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
