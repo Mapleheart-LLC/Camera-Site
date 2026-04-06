@@ -165,6 +165,8 @@ logging.basicConfig(
 def init_db() -> None:
     """Create the users, cameras, activations, and questions tables if they do not already exist."""
     conn = get_db_connection()
+    # Enable WAL journal mode for better concurrent read/write performance.
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS users (

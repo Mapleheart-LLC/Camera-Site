@@ -801,12 +801,45 @@ def _scrape_bluesky() -> None:
         logger.debug("Bluesky scraper: credentials not configured, skipping.")
         return
 
+    client = _AtprotoClient()
+    authenticated = False
+
+    # Try to resume a previously saved session (avoids hitting the
+    # createSession rate limit of 10 logins per day).
+    stored_session = _load_credential("drool_bsky_session_string", "")
+    if stored_session:
+        try:
+            client.login(session_string=stored_session)
+            authenticated = True
+            logger.debug("Bluesky scraper: resumed existing session.")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Bluesky scraper: could not resume session, will re-login: %s", exc)
+            client = _AtprotoClient()
+
+    if not authenticated:
+        try:
+            client.login(handle, app_password)
+            authenticated = True
+        except Exception as exc:
+            logger.warning("Bluesky scraper: could not authenticate: %s", exc)
+            return
+
+    # Persist the (possibly refreshed) session so the next run can reuse it.
     try:
-        client = _AtprotoClient()
-        client.login(handle, app_password)
-    except Exception as exc:
-        logger.warning("Bluesky scraper: could not authenticate: %s", exc)
-        return
+        new_session = client.export_session_string()
+        _conn = get_db_connection()
+        _conn.execute(
+            """
+            INSERT INTO settings (key, value, updated_at)
+            VALUES ('drool_bsky_session_string', ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """,
+            (new_session,),
+        )
+        _conn.commit()
+        _conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Bluesky scraper: could not persist session: %s", exc)
 
     conn = get_db_connection()
     try:
