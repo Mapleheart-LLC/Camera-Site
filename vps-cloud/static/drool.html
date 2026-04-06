@@ -883,7 +883,9 @@
       // fetch the full feed and grab the matching item (cheapest since backend
       // is local SQLite).  A simple approach: re-fetch page 1 and find the item.
       try {
-        const r = await fetch(`/api/drool?page=1&page_size=100`);
+        const r = await fetch(`/api/drool?page=1&page_size=100`, {
+          signal: AbortSignal.timeout(10000),
+        });
         if (!r.ok) return;
         const items = await r.json();
         const updated = items.find(i => i.id === itemId);
@@ -1035,7 +1037,9 @@
     async function loadFeed() {
       let items;
       try {
-        const r = await fetch('/api/drool?page=1&page_size=50');
+        const r = await fetch('/api/drool?page=1&page_size=50', {
+          signal: AbortSignal.timeout(20000),
+        });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         items = await r.json();
       } catch (err) {

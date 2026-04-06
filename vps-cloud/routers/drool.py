@@ -152,39 +152,75 @@ def _weekly_whimper_id(db: sqlite3.Connection) -> Optional[int]:
     return row["id"] if row else None
 
 
-def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connection) -> DroolItem:
-    item_id = row["id"]
-    db.execute(
-        "UPDATE drool_archive SET view_count = view_count + 1 WHERE id = ?",
-        (item_id,),
-    )
+def _parse_media_urls(row: sqlite3.Row) -> list[str]:
+    """Parse media_urls JSON from a drool_archive row, falling back to media_url."""
     media_url = row["media_url"]
-    # Parse media_urls JSON; fall back to wrapping media_url for older rows
-    # that pre-date the column migration.
     try:
         raw_media_urls = row["media_urls"]
     except (IndexError, KeyError):
         raw_media_urls = None
     if raw_media_urls:
         try:
-            media_urls: list[str] = [u for u in json.loads(raw_media_urls) if u]
+            return [u for u in json.loads(raw_media_urls) if u]
         except (json.JSONDecodeError, ValueError, TypeError):
-            media_urls = [media_url] if media_url else []
-    else:
-        media_urls = [media_url] if media_url else []
-    return DroolItem(
-        id=item_id,
-        platform=row["platform"],
-        original_url=row["original_url"],
-        media_url=media_url,
-        media_urls=media_urls,
-        text_content=row["text_content"],
-        view_count=row["view_count"],
-        timestamp=row["timestamp"],
-        comment_count=_comment_count(item_id, db),
-        reaction_counts=_reaction_counts(item_id, db),
-        is_weekly_whimper=(item_id == whimper_id),
+            pass
+    return [media_url] if media_url else []
+
+
+def _build_feed_items(
+    rows: list[sqlite3.Row],
+    whimper_id: Optional[int],
+    db: sqlite3.Connection,
+) -> list[DroolItem]:
+    """Build DroolItem objects for a list of rows using batch DB queries.
+
+    Uses two aggregate queries (one for comment counts, one for reaction counts)
+    instead of N per-item queries, reducing DB round-trips from O(N) to O(1).
+    """
+    if not rows:
+        return []
+
+    ids = [row["id"] for row in rows]
+    placeholders = ",".join("?" * len(ids))
+
+    # Batch: comment counts for all ids
+    comment_rows = db.execute(
+        f"SELECT drool_id, COUNT(*) AS cnt FROM drool_comments WHERE drool_id IN ({placeholders}) GROUP BY drool_id",  # noqa: S608
+        ids,
+    ).fetchall()
+    comment_map: dict[int, int] = {r["drool_id"]: r["cnt"] for r in comment_rows}
+
+    # Batch: reaction counts for all ids
+    reaction_rows = db.execute(
+        f"SELECT drool_id, reaction_type, COUNT(*) AS cnt FROM drool_reactions WHERE drool_id IN ({placeholders}) GROUP BY drool_id, reaction_type",  # noqa: S608
+        ids,
+    ).fetchall()
+    reaction_map: dict[int, dict[str, int]] = {}
+    for r in reaction_rows:
+        reaction_map.setdefault(r["drool_id"], {})[r["reaction_type"]] = r["cnt"]
+
+    # Batch: increment view counts for all ids in a single statement
+    db.execute(
+        f"UPDATE drool_archive SET view_count = view_count + 1 WHERE id IN ({placeholders})",  # noqa: S608
+        ids,
     )
+
+    return [
+        DroolItem(
+            id=row["id"],
+            platform=row["platform"],
+            original_url=row["original_url"],
+            media_url=row["media_url"],
+            media_urls=_parse_media_urls(row),
+            text_content=row["text_content"],
+            view_count=row["view_count"],
+            timestamp=row["timestamp"],
+            comment_count=comment_map.get(row["id"], 0),
+            reaction_counts=reaction_map.get(row["id"], {}),
+            is_weekly_whimper=(row["id"] == whimper_id),
+        )
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -218,19 +254,20 @@ def get_drool_feed(
         (whimper_id, page_size, offset),
     ).fetchall()
 
-    feed: list[DroolItem] = []
+    all_rows: list[sqlite3.Row] = []
 
     # Pin Weekly Whimper at the top on the first page.
+    whimper_row = None
     if page == 1 and whimper_id is not None:
-        wrow = db.execute(
+        whimper_row = db.execute(
             "SELECT * FROM drool_archive WHERE id = ?", (whimper_id,)
         ).fetchone()
-        if wrow:
-            feed.append(_build_item(wrow, whimper_id, db))
+        if whimper_row:
+            all_rows.append(whimper_row)
 
-    for row in rows:
-        feed.append(_build_item(row, whimper_id, db))
+    all_rows.extend(rows)
 
+    feed = _build_feed_items(all_rows, whimper_id, db)
     db.commit()
     return feed
 
