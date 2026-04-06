@@ -558,9 +558,9 @@
 
   <!-- ── Nav ──────────────────────────────────── -->
   <nav class="store-nav">
-    <a class="nav-logo" href="https://mochii.live">🐾 mochii.live</a>
+    <a class="nav-logo" id="store-nav-logo" href="/">🐾 mochii.live</a>
     <div class="nav-right">
-      <a class="nav-back-btn" href="https://mochii.live">← Home</a>
+      <a class="nav-back-btn" id="store-nav-home" href="/">← Home</a>
       <button class="cart-toggle-btn" id="cart-toggle-btn" onclick="openCart()" aria-label="Open cart">
         🛒 Cart <span class="cart-badge" id="cart-count">0</span>
       </button>
@@ -633,7 +633,7 @@
   </main>
 
   <footer class="store-footer">
-    <p>🐾 <a href="https://mochii.live">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
+    <p>🐾 <a href="/" id="store-footer-home">mochii.live</a> · Payments powered by Segpay · Merch fulfilled by Printful</p>
   </footer>
 
   <script>
@@ -873,6 +873,19 @@
       }
       poll();
       setInterval(poll, 5000);
+    })();
+  </script>
+  <script>
+    // The store is served from shop.{domain}, so derive the root-domain home URL by
+    // stripping the leading subdomain segment.
+    (function () {
+      var h = window.location.hostname;
+      var parts = h.split('.');
+      var homeUrl = window.location.protocol + '//' + (parts.length >= 2 ? parts.slice(1).join('.') : h);
+      ['store-nav-logo', 'store-nav-home', 'store-footer-home'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.href = homeUrl;
+      });
     })();
   </script>
 </body>

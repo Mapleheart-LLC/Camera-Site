@@ -466,8 +466,8 @@
 
   <!-- ── Nav ──────────────────────────────────────────── -->
   <nav class="drool-nav" aria-label="Site navigation">
-    <a href="https://mochii.live" class="nav-logo">🐾 mochii.live</a>
-    <a href="https://mochii.live" class="nav-home-btn">← Back to the Pack</a>
+    <a href="/" class="nav-logo" id="drool-nav-logo">🐾 mochii.live</a>
+    <a href="/" class="nav-home-btn" id="drool-nav-back">← Back to the Pack</a>
   </nav>
 
   <!-- ── Page header ──────────────────────────────────── -->
@@ -537,6 +537,15 @@
       const parts = window.location.pathname.split('/');
       return (parts.length >= 3 && parts[1] && parts[2] === 'drool') ? parts[1] : null;
     })();
+
+    // Update "Back to the Pack" to link to the creator's den when the handle is known.
+    if (CREATOR_HANDLE) {
+      const proto = window.location.protocol;
+      const host  = window.location.hostname; // e.g. "mochii.live"
+      const denUrl = `${proto}//${CREATOR_HANDLE}.${host}/`;
+      const backBtn = document.getElementById('drool-nav-back');
+      if (backBtn) backBtn.href = denUrl;
+    }
 
     // ── Image error handler (safe DOM, no innerHTML) ─────
     document.addEventListener('error', (e) => {

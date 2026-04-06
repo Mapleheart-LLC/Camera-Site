@@ -287,7 +287,18 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
 
-loadExplore();
+// ── Site-mode: redirect to creator's den when only one creator is active ───
+fetch('/api/site-mode')
+  .then(r=>r.json())
+  .then(function(mode){
+    if(mode && mode.mode === 'single' && mode.handle){
+      const creatorOrigin = window.location.protocol + '//' + mode.handle + '.' + window.location.hostname;
+      window.location.replace(creatorOrigin + '/');
+    } else {
+      loadExplore();
+    }
+  })
+  .catch(function(){ loadExplore(); });
 </script>
 </body>
 </html>
