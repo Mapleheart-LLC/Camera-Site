@@ -2670,6 +2670,8 @@
         // Load the currently-selected tab's data.
         const apps = _applicationsTab === 'pending' ? pending
           : await apiGet(`/api/admin/creator-applications?status_filter=${encodeURIComponent(_applicationsTab)}`);
+
+        if (!apps.length) {
           tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No ${escHtml(_applicationsTab)} applications.</td></tr>`;
           return;
         }
