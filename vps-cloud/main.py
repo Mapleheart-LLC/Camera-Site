@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from db import DATABASE_PATH, get_db, get_db_connection, get_setting
+from stream_utils import is_producer_live as _is_producer_live
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -1475,12 +1476,8 @@ async def get_stream_status(
                 stream_info = go2rtc_data.get(go2rtc_name) or {}
                 producers = stream_info.get("producers") or []
                 consumers = stream_info.get("consumers") or []
-                is_live = any(
-                    p.get("state") not in (None, "offline", "error") or "url" in p
-                    for p in producers
-                )
                 status[slug] = {
-                    "is_live": is_live,
+                    "is_live": _is_producer_live(producers),
                     "viewer_count": len(consumers),
                 }
     except Exception as exc:

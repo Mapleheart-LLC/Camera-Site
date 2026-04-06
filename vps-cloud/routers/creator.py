@@ -53,6 +53,7 @@ from dependencies import (
     get_current_creator,
 )
 from routers.auth import _hash_password, _verify_password  # reuse stdlib hashing
+from stream_utils import is_producer_live as _is_producer_live
 
 router = APIRouter(prefix="/api/creator", tags=["creator"])
 
@@ -560,10 +561,6 @@ async def creator_stream_info(
         stream_info = go2rtc_data.get(go2rtc_name) or {}
         producers = stream_info.get("producers") or []
         consumers = stream_info.get("consumers") or []
-        is_live = any(
-            p.get("state") not in (None, "offline", "error") or "url" in p
-            for p in producers
-        )
         cameras.append({
             "id": row["id"],
             "display_name": row["display_name"],
@@ -571,7 +568,7 @@ async def creator_stream_info(
             "stream_title": row["stream_title"],
             "rtmp_key": row["rtmp_key"],
             "rtmp_server": rtmp_server if row["rtmp_key"] else None,
-            "is_live": is_live,
+            "is_live": _is_producer_live(producers),
             "viewer_count": len(consumers),
         })
 
