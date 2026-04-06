@@ -1156,6 +1156,9 @@
           }
         }
         showToast('🐾 Profile saved!');
+        if (updated.avatar_nsfw_warning) {
+          errEl.textContent = updated.avatar_nsfw_warning;
+        }
       } catch (err) {
         if (err.message !== '401') errEl.textContent = 'Save failed. Please try again.';
       } finally {

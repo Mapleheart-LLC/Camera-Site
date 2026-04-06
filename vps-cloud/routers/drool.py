@@ -24,6 +24,7 @@ from slowapi.util import get_remote_address
 
 from db import get_db
 from discord_webhook import send_discord_notification
+from routers.moderation import check_image_nsfw, is_nsfw
 
 logger = logging.getLogger(__name__)
 
@@ -423,6 +424,23 @@ async def ifttt_reddit_webhook(
     db.commit()
 
     new_id = cursor.lastrowid
+
+    # Run NSFW check on the media image (best-effort; never blocks archiving).
+    if media_url:
+        score = await check_image_nsfw(media_url)
+        if score is not None:
+            flagged = is_nsfw(score)
+            db.execute(
+                "UPDATE drool_archive SET nsfw_score = ?, is_hidden = ? WHERE id = ?",
+                (score, 1 if flagged else 0, new_id),
+            )
+            db.commit()
+            if flagged:
+                logger.info(
+                    "IFTTT drool #%d auto-hidden: NSFW score %.2f for %.120s",
+                    new_id, score, media_url,
+                )
+
     logger.info("IFTTT Reddit webhook: archived item #%d – %s", new_id, original_url)
 
     await send_discord_notification(

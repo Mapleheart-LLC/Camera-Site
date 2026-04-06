@@ -56,6 +56,7 @@ from dependencies import (
     get_current_creator,
 )
 from routers.auth import _hash_password, _verify_password  # reuse stdlib hashing
+from routers.moderation import check_image_nsfw, is_nsfw
 from stream_utils import is_producer_live as _is_producer_live
 
 # Handle of the creator account linked to the admin user.  When set, the
@@ -323,7 +324,7 @@ def get_my_profile(
 
 
 @router.patch("/me")
-def patch_my_profile(
+async def patch_my_profile(
     payload: ProfilePatch,
     handle: str = Depends(get_current_creator),
     db: sqlite3.Connection = Depends(get_db),
@@ -386,7 +387,21 @@ def patch_my_profile(
                     agent_email=agent_email,
                 )
 
-    return {
+    # Run NSFW check on the avatar URL when it was changed (best-effort).
+    avatar_nsfw_warning: Optional[str] = None
+    if payload.avatar_url and payload.avatar_url != row["avatar_url"]:
+        score = await check_image_nsfw(new_avatar_url)
+        if is_nsfw(score):
+            avatar_nsfw_warning = (
+                f"⚠️ Your avatar image was flagged by the NSFW detector "
+                f"(score {score:.0%}). Please review platform guidelines."
+            )
+            logger.warning(
+                "Creator %s uploaded avatar with NSFW score %.2f: %.120s",
+                handle, score, new_avatar_url,
+            )
+
+    result = {
         "handle": handle,
         "display_name": new_display_name,
         "bio": new_bio,
@@ -396,12 +411,9 @@ def patch_my_profile(
         "content_rating": new_content_rating,
         "require_age_gate": bool(new_require_age_gate),
     }
-
-
-# ---------------------------------------------------------------------------
-# SMTP send-as
-# ---------------------------------------------------------------------------
-
+    if avatar_nsfw_warning:
+        result["avatar_nsfw_warning"] = avatar_nsfw_warning
+    return result
 def _smtp_send(from_addr: str, to_addr: str, subject: str, body: str) -> None:
     """Send a plain-text email via SMTP using environment credentials.
 
