@@ -291,7 +291,7 @@ if('serviceWorker' in navigator){
 fetch('/api/site-mode')
   .then(r=>r.json())
   .then(function(mode){
-    if(mode && mode.mode === 'single'){
+    if(mode && mode.mode === 'single' && mode.handle){
       const creatorOrigin = window.location.protocol + '//' + mode.handle + '.' + window.location.hostname;
       window.location.replace(creatorOrigin + '/');
     } else {

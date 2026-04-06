@@ -537,6 +537,7 @@
     // Tailors the landing page to one creator so the multi-creator
     // architecture is invisible to visitors.
     function applySingleCreatorMode(creator, proto, host) {
+      if (!creator.handle) return;
       const creatorOrigin = proto + '//' + creator.handle + '.' + host;
 
       // Swap generic tagline for the creator's bio (or a personal default)
