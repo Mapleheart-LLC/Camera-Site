@@ -662,7 +662,7 @@ async function apiFetch(path, opts = {}) {
 /* ── Creator subdomain detection ────────────────────────────────────────── */
 function detectCreatorHandle() {
   const hostname = window.location.hostname.toLowerCase();
-  const reserved = new Set(['shop','drool','anon','links','creator','www']);
+  const reserved = new Set(['shop','drool','anon','links','creator','member','www']);
   const parts = hostname.split('.');
   if (parts.length >= 3) {
     const sub = parts[0];

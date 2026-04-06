@@ -1289,7 +1289,7 @@
       try {
         const me = await apiGet('/api/creator/me');
         // Derive public address from current page hostname (same domain as the API).
-        const domain = location.hostname;
+        const domain = location.hostname.split('.').slice(-2).join('.');
         const addr = `${me.handle || ''}@${domain}`;
         document.getElementById('email-public-addr').textContent = addr;
       } catch (err) {
@@ -1543,7 +1543,8 @@
       const el = document.getElementById('alert-ws-url');
       // Filled in after login with actual handle; show placeholder for now.
       el.dataset.proto = proto;
-      el.textContent = `${proto}://${location.host}/ws/alerts/{your-handle}`;
+      el.dataset.rootDomain = location.hostname.split('.').slice(-2).join('.');
+      el.textContent = `${proto}://{your-handle}.${el.dataset.rootDomain}/ws/alerts/{your-handle}`;
     })();
 
     async function loadAlertSettings() {
@@ -1552,11 +1553,13 @@
       try {
         const settings = await apiGet('/api/creator/alert-settings');
         // Update ws URL with real handle.
-        const proto = document.getElementById('alert-ws-url').dataset.proto || 'wss';
+        const wsEl = document.getElementById('alert-ws-url');
+        const proto = wsEl.dataset.proto || 'wss';
+        const rootDomain = wsEl.dataset.rootDomain || location.hostname.split('.').slice(-2).join('.');
         const me = _creatorHandle || '';
         if (me) {
           document.getElementById('alert-ws-url').textContent =
-            `${proto}://${location.host}/ws/alerts/${me}`;
+            `${proto}://${me}.${rootDomain}/ws/alerts/${me}`;
         }
 
         container.innerHTML = settings.map(cfg => renderAlertCard(cfg)).join('');
@@ -1647,7 +1650,8 @@
       const wsEl = document.getElementById('alert-ws-url');
       if (wsEl && _creatorHandle) {
         const proto = wsEl.dataset.proto || 'wss';
-        wsEl.textContent = `${proto}://${location.host}/ws/alerts/${_creatorHandle}`;
+        const rootDomain = wsEl.dataset.rootDomain || location.hostname.split('.').slice(-2).join('.');
+        wsEl.textContent = `${proto}://${_creatorHandle}.${rootDomain}/ws/alerts/${_creatorHandle}`;
       }
     });
 

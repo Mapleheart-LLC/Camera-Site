@@ -1192,7 +1192,7 @@ def purge_bad_drool_entries(
 
 # Reserved subdomains that can never be used as creator handles.
 _RESERVED_HANDLES = frozenset({
-    "anon", "links", "shop", "drool", "creator", "www",
+    "anon", "links", "shop", "drool", "creator", "member", "www",
     "api", "admin", "static", "media",
 })
 
