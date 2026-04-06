@@ -142,6 +142,7 @@
       margin-bottom: 1rem;
       transition: border-color .22s, box-shadow .22s, transform .18s;
       position: relative;
+      cursor: pointer;
     }
 
     .post-card:hover {
@@ -491,8 +492,8 @@
       pointer-events: none;
     }
 
-    /* ── GIF badge ───────────────────────────────────── */
-    .gif-badge {
+    /* ── Media type badge (VIDEO / GIF / 📷 N) ──────────── */
+    .media-badge {
       position: absolute;
       top: .4rem;
       left: .4rem;
@@ -656,24 +657,6 @@
       return /\.(gif|gifv)(\?|$)/i.test(url);
     }
 
-    function createMediaNode(url, altText) {
-      if (isVideoUrl(url)) {
-        const v = document.createElement('video');
-        v.src = url;
-        v.controls = true;
-        v.muted = true;
-        v.setAttribute('playsinline', '');
-        v.setAttribute('preload', 'metadata');
-        return v;
-      }
-      const img = document.createElement('img');
-      img.src = url;
-      img.alt = altText || 'She liked this';
-      img.loading = 'lazy';
-      img.dataset.fallback = '1';
-      return img;
-    }
-
     function buildMediaElement(item, altText) {
       const urls = (item.media_urls && item.media_urls.length > 0)
         ? item.media_urls
@@ -691,61 +674,29 @@
         return wrapper;
       }
 
-      if (urls.length === 1) {
-        const node = createMediaNode(urls[0], altText);
-        wrapper.appendChild(node);
-        if (isGifUrl(urls[0])) {
-          const badge = document.createElement('span');
-          badge.className = 'gif-badge';
-          badge.textContent = 'GIF';
-          wrapper.appendChild(badge);
-        }
-        return wrapper;
+      // Always show first URL as an image thumbnail
+      const img = document.createElement('img');
+      img.src = urls[0];
+      img.alt = altText || 'She liked this';
+      img.loading = 'lazy';
+      img.dataset.fallback = '1';
+      wrapper.appendChild(img);
+
+      // Media type badge
+      let badgeText = null;
+      if (urls.length > 1) {
+        badgeText = `📷 ${urls.length}`;
+      } else if (isVideoUrl(urls[0])) {
+        badgeText = '▶ VIDEO';
+      } else if (isGifUrl(urls[0])) {
+        badgeText = 'GIF';
       }
-
-      // Multi-image gallery carousel
-      wrapper.classList.add('gallery');
-      const track = document.createElement('div');
-      track.className = 'gallery-track';
-      urls.forEach((url, i) => {
-        const slide = document.createElement('div');
-        slide.className = 'gallery-slide';
-        const node = createMediaNode(url, `${altText || 'She liked this'} (${i + 1}/${urls.length})`);
-        slide.appendChild(node);
-        if (isGifUrl(url)) {
-          const badge = document.createElement('span');
-          badge.className = 'gif-badge';
-          badge.textContent = 'GIF';
-          slide.appendChild(badge);
-        }
-        track.appendChild(slide);
-      });
-      wrapper.appendChild(track);
-
-      const counter = document.createElement('span');
-      counter.className = 'gallery-counter';
-      counter.textContent = `1 / ${urls.length}`;
-      wrapper.appendChild(counter);
-
-      const prevBtn = document.createElement('button');
-      prevBtn.className = 'gallery-nav gallery-prev';
-      prevBtn.setAttribute('aria-label', 'Previous image');
-      prevBtn.textContent = '‹';
-      const nextBtn = document.createElement('button');
-      nextBtn.className = 'gallery-nav gallery-next';
-      nextBtn.setAttribute('aria-label', 'Next image');
-      nextBtn.textContent = '›';
-
-      let current = 0;
-      const goto = (n) => {
-        current = ((n % urls.length) + urls.length) % urls.length;
-        track.style.transform = `translateX(-${current * 100}%)`;
-        counter.textContent = `${current + 1} / ${urls.length}`;
-      };
-      prevBtn.addEventListener('click', () => goto(current - 1));
-      nextBtn.addEventListener('click', () => goto(current + 1));
-      wrapper.appendChild(prevBtn);
-      wrapper.appendChild(nextBtn);
+      if (badgeText) {
+        const badge = document.createElement('span');
+        badge.className = 'media-badge';
+        badge.textContent = badgeText;
+        wrapper.appendChild(badge);
+      }
 
       return wrapper;
     }
@@ -874,6 +825,15 @@
         }
       });
 
+      // ── Card click → open original post ──────────────
+      card.addEventListener('click', () => {
+        window.open(item.original_url, '_blank', 'noopener,noreferrer');
+      });
+      // Prevent card navigation when using interactive elements
+      card.querySelectorAll('a, button, input, textarea, .comment-form').forEach(el => {
+        el.addEventListener('click', e => e.stopPropagation());
+      });
+
       return card;
     }
 
@@ -918,11 +878,14 @@
 
       // Media (larger, with rounded corners matching the hero layout)
       const whimperMediaEl = buildMediaElement(item, 'Weekly Whimper – she liked this');
-      whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden;';
-      whimperMediaEl.querySelectorAll('img, video').forEach(el => {
+      whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden; cursor: pointer;';
+      whimperMediaEl.querySelectorAll('img').forEach(el => {
         el.style.maxHeight = '400px';
         el.style.objectFit = 'cover';
         el.style.borderRadius = '12px';
+      });
+      whimperMediaEl.addEventListener('click', () => {
+        window.open(item.original_url, '_blank', 'noopener,noreferrer');
       });
       inner.appendChild(whimperMediaEl);
 
