@@ -406,6 +406,38 @@
         <section id="s-streaming" class="creator-section">
           <h1 class="section-heading">📡 Live Streaming</h1>
 
+          <!-- Add Camera card -->
+          <div class="card" style="margin-bottom:1.25rem">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h2>Add Camera</h2>
+              <button id="add-camera-toggle-btn" class="btn-sm btn-edit">＋ Add Camera</button>
+            </div>
+            <div id="add-camera-form" style="display:none">
+              <div class="card-body" style="border-top:1px solid #3d2a2e;">
+                <div class="profile-form-grid">
+                  <div class="form-field">
+                    <label for="new-cam-name">Display Name</label>
+                    <input id="new-cam-name" type="text" placeholder="e.g. Living Room" maxlength="100" />
+                  </div>
+                  <div class="form-field">
+                    <label for="new-cam-slug">Stream Slug <span style="font-size:.73rem;color:#7a5a5e;font-weight:400;">(lowercase, letters/numbers/hyphens)</span></label>
+                    <input id="new-cam-slug" type="text" placeholder="e.g. living-room" maxlength="80" />
+                  </div>
+                  <div class="form-field" style="grid-column:1/-1">
+                    <label for="new-cam-title">Stream Title <span style="font-size:.73rem;color:#7a5a5e;font-weight:400;">(optional)</span></label>
+                    <input id="new-cam-title" type="text" placeholder="What's the vibe?" maxlength="200" />
+                  </div>
+                </div>
+                <p id="add-camera-error" role="alert" aria-live="polite" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem;"></p>
+                <div style="display:flex;gap:.5rem;margin-top:.5rem;">
+                  <button id="add-camera-save-btn" class="btn-sm btn-edit">Save Camera 📷</button>
+                  <button id="add-camera-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera stream keys / live status card -->
           <div class="card">
             <div class="card-header"><h2>OBS / Streaming Software Setup</h2></div>
             <div class="card-body">
@@ -416,6 +448,28 @@
               <p id="stream-info-error" role="alert" style="color:#f87171;font-size:.85rem;min-height:1.2em;margin-bottom:.5rem;"></p>
               <div id="stream-cameras-list">
                 <p style="color:#9e7e82;font-size:.85rem;">Loading…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Edit Camera modal -->
+          <div id="edit-camera-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
+            <div style="background:#1a1a1a;border:1px solid #3d2a2e;border-radius:12px;padding:1.5rem;width:min(94vw,460px);max-height:90vh;overflow-y:auto;">
+              <h2 style="margin:0 0 1rem;font-size:1rem;color:#e8aeb7;">✏️ Edit Camera</h2>
+              <div class="profile-form-grid">
+                <div class="form-field" style="grid-column:1/-1">
+                  <label for="edit-cam-name">Display Name</label>
+                  <input id="edit-cam-name" type="text" maxlength="100" />
+                </div>
+                <div class="form-field" style="grid-column:1/-1">
+                  <label for="edit-cam-title">Stream Title <span style="font-size:.73rem;color:#7a5a5e;font-weight:400;">(optional)</span></label>
+                  <input id="edit-cam-title" type="text" maxlength="200" />
+                </div>
+              </div>
+              <p id="edit-camera-error" role="alert" aria-live="polite" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem;"></p>
+              <div style="display:flex;gap:.5rem;margin-top:.75rem;">
+                <button id="edit-camera-save-btn" class="btn-sm btn-edit">Save Changes</button>
+                <button id="edit-camera-cancel-btn" class="btn-sm btn-delete">Cancel</button>
               </div>
             </div>
           </div>
@@ -432,8 +486,7 @@
                 <li>Click <strong>Start Streaming</strong> — your viewers see you live immediately.</li>
               </ol>
               <p style="margin-top:.75rem;font-size:.8rem;color:#7a5a5e;">
-                💡 To add or manage cameras, ask your administrator to use the admin panel.
-                You can view the live status of all cameras here once you are streaming.
+                💡 Use the <strong>Add Camera</strong> form above to create cameras. Each camera gets its own unique RTMP stream key.
               </p>
             </div>
           </div>
@@ -626,6 +679,36 @@
             💧 Drool Log
             <button id="refresh-drool-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
           </h1>
+
+          <div class="card" style="margin-bottom:1.25rem">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+              <h2>Add Entry</h2>
+              <button id="add-drool-toggle-btn" class="btn-sm btn-edit">＋ Add Entry</button>
+            </div>
+            <div id="add-drool-form" style="display:none">
+              <div class="card-body" style="border-top:1px solid #3d2a2e;">
+                <div class="profile-form-grid">
+                  <div class="form-field">
+                    <label for="new-drool-url">URL</label>
+                    <input id="new-drool-url" type="url" placeholder="https://…" maxlength="2048" />
+                  </div>
+                  <div class="form-field">
+                    <label for="new-drool-platform">Platform</label>
+                    <input id="new-drool-platform" type="text" placeholder="e.g. twitter, reddit, manual" maxlength="50" />
+                  </div>
+                  <div class="form-field" style="grid-column:1/-1">
+                    <label for="new-drool-text">Caption / Text <span style="font-size:.73rem;color:#7a5a5e;font-weight:400;">(optional)</span></label>
+                    <textarea id="new-drool-text" placeholder="Optional description or post text…" maxlength="2000" style="min-height:80px"></textarea>
+                  </div>
+                </div>
+                <p id="add-drool-error" role="alert" aria-live="polite" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem;"></p>
+                <div style="display:flex;gap:.5rem;margin-top:.5rem;">
+                  <button id="add-drool-save-btn" class="btn-sm btn-edit">Save Entry 💧</button>
+                  <button id="add-drool-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div class="card">
             <div class="card-header"><h2>Your Drool Entries</h2></div>
@@ -1019,7 +1102,7 @@
       const { cameras, rtmp_server } = data;
 
       if (!cameras || cameras.length === 0) {
-        listEl.innerHTML = '<p style="color:#9e7e82;font-size:.85rem;">No cameras configured yet. Ask your administrator to add a camera.</p>';
+        listEl.innerHTML = '<p style="color:#9e7e82;font-size:.85rem;">No cameras yet — use the Add Camera form above to get started.</p>';
         return;
       }
 
@@ -1065,13 +1148,186 @@
         }
 
         card.innerHTML = `
-          <div style="font-weight:700;font-size:.95rem;color:#e8aeb7;">
-            ${escHtml(cam.display_name)} ${live} ${viewers}
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;flex-wrap:wrap;">
+            <div style="font-weight:700;font-size:.95rem;color:#e8aeb7;">
+              ${escHtml(cam.display_name)} ${live} ${viewers}
+            </div>
+            <div style="display:flex;gap:.4rem;flex-shrink:0;">
+              <button class="btn-sm btn-edit cam-edit-btn" data-id="${cam.id}" data-name="${escHtmlAttr(cam.display_name)}" data-title="${escHtmlAttr(cam.stream_title || '')}">✏️ Edit</button>
+              ${cam.rtmp_key ? `<button class="btn-sm btn-edit cam-rotate-btn" data-id="${cam.id}" data-slug="${escHtmlAttr(cam.stream_slug)}">🔑 Rotate Key</button>` : ''}
+              <button class="btn-sm btn-delete cam-delete-btn" data-id="${cam.id}">🗑️</button>
+            </div>
           </div>
           ${cam.stream_title ? `<div style="font-size:.8rem;color:#9e7e82;margin-top:.25rem;font-style:italic;">${escHtml(cam.stream_title)}</div>` : ''}
           ${keyBlock}`;
         listEl.appendChild(card);
       });
+
+      listEl.querySelectorAll('.cam-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => openEditCameraModal(
+          parseInt(btn.dataset.id, 10), btn.dataset.name, btn.dataset.title
+        ));
+      });
+      listEl.querySelectorAll('.cam-rotate-btn').forEach(btn => {
+        btn.addEventListener('click', () => rotateCameraKey(parseInt(btn.dataset.id, 10), btn.dataset.slug));
+      });
+      listEl.querySelectorAll('.cam-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteCamera(parseInt(btn.dataset.id, 10)));
+      });
+    }
+
+    // ── Camera management ──────────────────────────────
+    document.getElementById('add-camera-toggle-btn').addEventListener('click', () => {
+      const form = document.getElementById('add-camera-form');
+      const shown = form.style.display !== 'none';
+      form.style.display = shown ? 'none' : 'block';
+    });
+
+    document.getElementById('new-cam-name').addEventListener('input', () => {
+      const slugEl = document.getElementById('new-cam-slug');
+      if (slugEl._userEdited) return;
+      slugEl.value = document.getElementById('new-cam-name').value
+        .toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
+    });
+    document.getElementById('new-cam-slug').addEventListener('input', function() {
+      this._userEdited = this.value.length > 0;
+    });
+
+    document.getElementById('add-camera-cancel-btn').addEventListener('click', () => {
+      document.getElementById('add-camera-form').style.display = 'none';
+      document.getElementById('add-camera-error').textContent = '';
+    });
+
+    document.getElementById('add-camera-save-btn').addEventListener('click', async () => {
+      const name    = document.getElementById('new-cam-name').value.trim();
+      const slug    = document.getElementById('new-cam-slug').value.trim();
+      const title   = document.getElementById('new-cam-title').value.trim();
+      const errEl   = document.getElementById('add-camera-error');
+      const saveBtn = document.getElementById('add-camera-save-btn');
+      errEl.textContent = '';
+
+      if (!name) { errEl.textContent = 'Display name is required.'; return; }
+      if (!slug) { errEl.textContent = 'Stream slug is required.'; return; }
+      if (!/^[a-z0-9_-]+$/.test(slug)) {
+        errEl.textContent = 'Slug must be lowercase letters, numbers, hyphens, or underscores only.';
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      try {
+        const resp = await apiPost('/api/creator/cameras', {
+          display_name: name,
+          stream_slug:  slug,
+          stream_title: title || null,
+        });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        document.getElementById('new-cam-name').value  = '';
+        document.getElementById('new-cam-slug').value  = '';
+        document.getElementById('new-cam-title').value = '';
+        document.getElementById('add-camera-form').style.display = 'none';
+        await loadStreamInfo();
+        showToast('📷 Camera added!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Camera 📷';
+      }
+    });
+
+    let _editingCamId = null;
+
+    function openEditCameraModal(id, name, title) {
+      _editingCamId = id;
+      document.getElementById('edit-cam-name').value  = name  || '';
+      document.getElementById('edit-cam-title').value = title || '';
+      document.getElementById('edit-camera-error').textContent = '';
+      const bd = document.getElementById('edit-camera-backdrop');
+      bd.style.display = 'flex';
+    }
+
+    function closeEditCameraModal() {
+      document.getElementById('edit-camera-backdrop').style.display = 'none';
+      _editingCamId = null;
+    }
+
+    document.getElementById('edit-camera-cancel-btn').addEventListener('click', closeEditCameraModal);
+    document.getElementById('edit-camera-backdrop').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('edit-camera-backdrop')) closeEditCameraModal();
+    });
+
+    document.getElementById('edit-camera-save-btn').addEventListener('click', async () => {
+      if (!_editingCamId) return;
+      const name    = document.getElementById('edit-cam-name').value.trim();
+      const title   = document.getElementById('edit-cam-title').value.trim();
+      const errEl   = document.getElementById('edit-camera-error');
+      const saveBtn = document.getElementById('edit-camera-save-btn');
+      errEl.textContent = '';
+      if (!name) { errEl.textContent = 'Display name is required.'; return; }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      try {
+        const resp = await fetch(`/api/creator/cameras/${encodeURIComponent(_editingCamId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getJwt()}` },
+          body: JSON.stringify({ display_name: name, stream_title: title || null }),
+        });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        closeEditCameraModal();
+        await loadStreamInfo();
+        showToast('✏️ Camera updated!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+
+    async function deleteCamera(id) {
+      if (!confirm('Delete this camera? This cannot be undone.')) return;
+      try {
+        const resp = await apiDelete(`/api/creator/cameras/${encodeURIComponent(id)}`);
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok && resp.status !== 204) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Delete failed.');
+          return;
+        }
+        await loadStreamInfo();
+        showToast('🗑️ Camera deleted.');
+      } catch (err) {
+        if (err.message !== '401') showToast('Delete failed.');
+      }
+    }
+
+    async function rotateCameraKey(id, slug) {
+      if (!confirm('Rotate the stream key for this camera?\n\nYour current OBS/streaming software setup will stop working until you paste in the new key.')) return;
+      try {
+        const resp = await apiPost(`/api/creator/cameras/${encodeURIComponent(id)}/rotate-key`, {});
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          showToast(data.detail || 'Rotate failed.');
+          return;
+        }
+        await loadStreamInfo();
+        showToast('🔑 Stream key rotated — update your streaming software!');
+      } catch (err) {
+        if (err.message !== '401') showToast('Rotate failed.');
+      }
     }
 
     function toggleKeyVisibility(keyElId, btn) {
@@ -1445,6 +1701,57 @@
     }
 
     document.getElementById('refresh-drool-btn').addEventListener('click', loadDrool);
+
+    // ── Add Drool Entry ────────────────────────────────
+    document.getElementById('add-drool-toggle-btn').addEventListener('click', () => {
+      const form = document.getElementById('add-drool-form');
+      const shown = form.style.display !== 'none';
+      form.style.display = shown ? 'none' : 'block';
+    });
+
+    document.getElementById('add-drool-cancel-btn').addEventListener('click', () => {
+      document.getElementById('add-drool-form').style.display = 'none';
+      document.getElementById('add-drool-error').textContent = '';
+    });
+
+    document.getElementById('add-drool-save-btn').addEventListener('click', async () => {
+      const url      = document.getElementById('new-drool-url').value.trim();
+      const platform = document.getElementById('new-drool-platform').value.trim();
+      const text     = document.getElementById('new-drool-text').value.trim();
+      const errEl    = document.getElementById('add-drool-error');
+      const saveBtn  = document.getElementById('add-drool-save-btn');
+      errEl.textContent = '';
+
+      if (!url)      { errEl.textContent = 'URL is required.'; return; }
+      if (!platform) { errEl.textContent = 'Platform is required.'; return; }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+      try {
+        const resp = await apiPost('/api/creator/drool', {
+          url,
+          platform,
+          text_content: text || null,
+        });
+        if (resp.status === 401) { clearJwt(); showLoginPanel(); return; }
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errEl.textContent = data.detail || `Error ${resp.status}`;
+          return;
+        }
+        document.getElementById('new-drool-url').value      = '';
+        document.getElementById('new-drool-platform').value = '';
+        document.getElementById('new-drool-text').value     = '';
+        document.getElementById('add-drool-form').style.display = 'none';
+        await loadDrool();
+        showToast('💧 Drool entry added!');
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Entry 💧';
+      }
+    });
 
     // ── Stats ──────────────────────────────────────────
     async function loadStats() {

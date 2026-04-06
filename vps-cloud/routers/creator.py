@@ -2,7 +2,7 @@
 routers/creator.py – Creator self-serve API endpoints.
 
 Provides login for creator accounts and a full set of self-serve endpoints
-so that each creator can manage their own profile, Q&A, and Drool Log
+so that each creator can manage their own profile, Q&A, Drool Log, and cameras
 without touching any other creator's data or owner-only infrastructure.
 
 All endpoints under ``/api/creator/`` (except login) are protected by
@@ -15,6 +15,11 @@ Endpoints
   PATCH  /api/creator/me                        – update bio / avatar / accent colour / forwarding_email
   POST   /api/creator/email/send                – send email FROM handle@domain via SMTP
   GET    /api/creator/stream-info               – stream keys, RTMP server URL, live status per camera
+  GET    /api/creator/cameras                   – list all cameras (creator-safe fields)
+  POST   /api/creator/cameras                   – add a new RTMP camera (rtmp_key auto-generated)
+  PUT    /api/creator/cameras/{id}              – update camera display_name / stream_title
+  DELETE /api/creator/cameras/{id}              – remove a camera
+  POST   /api/creator/cameras/{id}/rotate-key   – generate a new RTMP stream key
   GET    /api/creator/subscribers/search        – search users to gift (by email/username)
   GET    /api/creator/subscribers/gifted        – list all gifts given by this creator
   POST   /api/creator/subscribers/gift          – gift a subscription to a user
@@ -24,6 +29,7 @@ Endpoints
   POST   /api/creator/questions/{id}/answer     – answer a question
   DELETE /api/creator/questions/{id}            – delete a question
   GET    /api/creator/drool                     – Drool Log entries (own only)
+  POST   /api/creator/drool                     – manually add a Drool Log entry
   DELETE /api/creator/drool/{id}                – remove a Drool Log entry
   GET    /api/creator/stats                     – subscriber count, recent tips, Q count
 
@@ -113,6 +119,23 @@ class SendEmailPayload(BaseModel):
     to: str = Field(..., max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     subject: str = Field(..., min_length=1, max_length=200)
     body: str = Field(..., min_length=1, max_length=10000)
+
+
+class CreatorCameraCreate(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=100)
+    stream_slug: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z0-9_-]+$")
+    stream_title: Optional[str] = Field(None, max_length=200)
+
+
+class CreatorCameraUpdate(BaseModel):
+    display_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    stream_title: Optional[str] = Field(None, max_length=200)
+
+
+class DroolCreate(BaseModel):
+    url: str = Field(..., min_length=1, max_length=2048)
+    platform: str = Field(..., min_length=1, max_length=50)
+    text_content: Optional[str] = Field(None, max_length=2000)
 
 
 # ---------------------------------------------------------------------------
@@ -621,12 +644,205 @@ def creator_delete_drool(
     return {"deleted": entry_id}
 
 
+@router.post("/drool", status_code=status.HTTP_201_CREATED)
+def creator_add_drool(
+    payload: DroolCreate,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Manually add a new Drool Log entry for this creator."""
+    parsed = urlparse(payload.url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="URL must start with http:// or https://",
+        )
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        cursor = db.execute(
+            """
+            INSERT INTO drool_archive
+                (platform, original_url, text_content, view_count, timestamp, creator_handle)
+            VALUES (?, ?, ?, 0, ?, ?)
+            """,
+            (
+                payload.platform.strip(),
+                payload.url.strip(),
+                payload.text_content or None,
+                now,
+                handle,
+            ),
+        )
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not add entry (URL may already exist): {exc}",
+        ) from exc
+    row = db.execute(
+        """
+        SELECT id, platform, original_url AS url, media_url,
+               text_content AS title, view_count, timestamp AS created_at
+          FROM drool_archive WHERE id = ?
+        """,
+        (cursor.lastrowid,),
+    ).fetchone()
+    return dict(row)
+
+
 # ---------------------------------------------------------------------------
 # Streaming – stream keys and live status
 # ---------------------------------------------------------------------------
 
 _GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 _GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
+
+
+def _deregister_stream(slug: str) -> None:
+    """Remove a stream from go2rtc. Failures are logged and not re-raised."""
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            client.delete(
+                f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams",
+                params={"name": slug},
+            )
+    except Exception as exc:
+        logger.warning("Could not deregister stream '%s' from go2rtc: %s", slug, exc)
+
+
+# ---------------------------------------------------------------------------
+# Camera management (creator self-serve)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/cameras")
+def creator_list_cameras(
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all cameras. Only the fields safe for creator self-service are returned."""
+    rows = db.execute(
+        """
+        SELECT id, display_name, stream_slug, minimum_access_level,
+               rtmp_key, stream_title
+          FROM cameras ORDER BY id
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.post("/cameras", status_code=status.HTTP_201_CREATED)
+def creator_add_camera(
+    payload: CreatorCameraCreate,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Create a new RTMP camera. The rtmp_key is auto-generated."""
+    rtmp_key = secrets.token_urlsafe(24)
+    try:
+        cursor = db.execute(
+            """
+            INSERT INTO cameras (display_name, stream_slug, minimum_access_level, rtmp_key, stream_title)
+            VALUES (?, ?, 1, ?, ?)
+            """,
+            (
+                payload.display_name,
+                payload.stream_slug,
+                rtmp_key,
+                payload.stream_title or None,
+            ),
+        )
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not add camera (slug may already exist): {exc}",
+        ) from exc
+    row = db.execute(
+        "SELECT id, display_name, stream_slug, minimum_access_level, rtmp_key, stream_title FROM cameras WHERE id = ?",
+        (cursor.lastrowid,),
+    ).fetchone()
+    return dict(row)
+
+
+@router.put("/cameras/{cam_id}")
+def creator_update_camera(
+    cam_id: int,
+    payload: CreatorCameraUpdate,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update the display name and/or stream title of a camera."""
+    row = db.execute("SELECT * FROM cameras WHERE id = ?", (cam_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    new_name  = payload.display_name if payload.display_name  is not None else row["display_name"]
+    new_title = payload.stream_title if payload.stream_title  is not None else row["stream_title"]
+    try:
+        db.execute(
+            "UPDATE cameras SET display_name = ?, stream_title = ? WHERE id = ?",
+            (new_name, new_title or None, cam_id),
+        )
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not update camera: {exc}",
+        ) from exc
+    updated = db.execute(
+        "SELECT id, display_name, stream_slug, minimum_access_level, rtmp_key, stream_title FROM cameras WHERE id = ?",
+        (cam_id,),
+    ).fetchone()
+    return dict(updated)
+
+
+@router.delete("/cameras/{cam_id}", status_code=status.HTTP_204_NO_CONTENT)
+def creator_delete_camera(
+    cam_id: int,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Remove a camera from the database and deregister its stream."""
+    row = db.execute("SELECT stream_slug, rtmp_key FROM cameras WHERE id = ?", (cam_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    slug     = row["stream_slug"]
+    rtmp_key = row["rtmp_key"]
+    db.execute("DELETE FROM cameras WHERE id = ?", (cam_id,))
+    db.commit()
+    _deregister_stream(slug)
+    if rtmp_key and rtmp_key != slug:
+        _deregister_stream(rtmp_key)
+
+
+@router.post("/cameras/{cam_id}/rotate-key")
+def creator_rotate_camera_key(
+    cam_id: int,
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Generate a new RTMP stream key for a camera. The old key stops working immediately."""
+    row = db.execute("SELECT id, rtmp_key FROM cameras WHERE id = ?", (cam_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    if not row["rtmp_key"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This camera does not use RTMP ingest.",
+        )
+    new_key = secrets.token_urlsafe(24)
+    try:
+        db.execute("UPDATE cameras SET rtmp_key = ? WHERE id = ?", (new_key, cam_id))
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not rotate key: {exc}",
+        ) from exc
+    return {"rtmp_key": new_key}
+
+
+
 
 
 @router.get("/stream-info")
