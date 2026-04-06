@@ -223,6 +223,12 @@
 
     .creator-card:hover .creator-avatar { border-color: #e8aeb7; }
 
+    .creator-avatar-img {
+      width: 62px; height: 62px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
     .creator-info { flex: 1; min-width: 0; }
 
     .creator-name {
@@ -366,20 +372,20 @@
   </section>
 
   <!-- ── Featured Creator ─────────────────────────────── -->
-  <div class="section">
-    <p class="section-label">now on mochii.live</p>
-    <a class="creator-card" id="mochii-card" href="#" aria-label="Visit mochii's den">
-      <div class="creator-avatar" aria-hidden="true">🐾</div>
+  <div id="featured-section" class="section" style="display:none">
+    <p class="section-label" id="featured-label">now on mochii.live</p>
+    <a class="creator-card" id="featured-card" href="#" aria-label="Visit creator's den">
+      <div class="creator-avatar" id="featured-avatar" aria-hidden="true">🐾</div>
       <div class="creator-info">
-        <div class="creator-name">mochii</div>
-        <div class="creator-handle">mochii.mochii.live</div>
-        <div class="creator-bio">live streams, the drool log, anonymous Q&amp;A, and a growing pack.</div>
+        <div class="creator-name" id="featured-name"></div>
+        <div class="creator-handle" id="featured-handle-display"></div>
+        <div class="creator-bio" id="featured-bio"></div>
       </div>
       <span class="creator-arrow" aria-hidden="true">→</span>
     </a>
   </div>
 
-  <hr class="divider" />
+  <hr class="divider" id="featured-divider" style="display:none" />
 
   <!-- ── What's in a den ───────────────────────────────── -->
   <div class="section">
@@ -412,29 +418,55 @@
   <script>
     // ── Token / subscribed forwarding ────────────────────
     // When auth callbacks land on the root domain, bounce to the
-    // mochii subscriber portal to handle the token or subscription state.
+    // member portal to handle the token or subscription state.
     (function () {
       const host   = window.location.hostname;
       const hash   = window.location.hash;
       const search = window.location.search;
       const proto  = window.location.protocol;
 
-      const portalOrigin = `${proto}//mochii.${host}`;
+      const memberOrigin = `${proto}//member.${host}`;
 
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
-        window.location.replace(portalOrigin + '/' + hash);
+        window.location.replace(memberOrigin + '/' + hash);
         return;
       }
 
       if (search.includes('subscribed=')) {
-        window.location.replace(portalOrigin + '/' + search + hash);
+        window.location.replace(memberOrigin + '/' + search + hash);
         return;
       }
 
       // Wire up dynamic links (no domain hardcoding)
-      document.getElementById('nav-enter').href   = portalOrigin + '/';
-      document.getElementById('hero-enter').href  = portalOrigin + '/';
-      document.getElementById('mochii-card').href = portalOrigin + '/';
+      // Sign-in / sign-up goes to the platform member portal (not creator-specific)
+      document.getElementById('nav-enter').href  = memberOrigin + '/';
+      document.getElementById('hero-enter').href = memberOrigin + '/';
+
+      // ── Featured creator card ─────────────────────────
+      // Dynamically loaded from /api/featured-creator so the admin can control
+      // which creator is spotlighted without touching this file.
+      fetch('/api/featured-creator')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (creator) {
+          if (!creator || !creator.creator_handle) return;
+          const creatorOrigin = proto + '//' + creator.creator_handle + '.' + host;
+          document.getElementById('featured-card').href         = creatorOrigin + '/';
+          document.getElementById('featured-card').setAttribute('aria-label', 'Visit ' + creator.creator_handle + "'s den");
+          document.getElementById('featured-name').textContent          = creator.display_name || creator.creator_handle;
+          document.getElementById('featured-handle-display').textContent = creator.creator_handle + '.' + host;
+          document.getElementById('featured-bio').textContent           = creator.bio || '';
+          if (creator.avatar_url) {
+            const img = document.createElement('img');
+            img.src = creator.avatar_url;
+            img.alt = creator.creator_handle;
+            img.className = 'creator-avatar-img';
+            document.getElementById('featured-avatar').textContent = '';
+            document.getElementById('featured-avatar').appendChild(img);
+          }
+          document.getElementById('featured-section').style.display = '';
+          document.getElementById('featured-divider').style.display  = '';
+        })
+        .catch(function () { /* silently hide the card on error */ });
     })();
   </script>
   <script>
