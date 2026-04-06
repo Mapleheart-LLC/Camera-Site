@@ -502,12 +502,12 @@
       const proto  = window.location.protocol;
 
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
-        window.location.replace('/member' + hash);
+        window.location.replace('/member/' + hash);
         return;
       }
 
       if (search.includes('subscribed=')) {
-        window.location.replace('/member' + search + hash);
+        window.location.replace('/member/' + search + hash);
         return;
       }
 
