@@ -1636,7 +1636,8 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Server"] = _SPOOFED_SERVER
 
     # Drop any header that leaks implementation details, if present.
-    response.headers.pop("x-powered-by", None)
+    if "x-powered-by" in response.headers:
+        del response.headers["x-powered-by"]
 
     return response
 
