@@ -463,7 +463,7 @@
           <div class="form-field">
             <label for="af-handle">Handle <span style="color:#e8aeb7">*</span></label>
             <input id="af-handle" type="text" placeholder="yourhandle" autocomplete="off"
-                   maxlength="32" pattern="[a-z0-9_-]+" />
+                   minlength="5" maxlength="32" pattern="[a-z0-9_-]+" />
           </div>
           <div class="form-field">
             <label for="af-display-name">Display Name <span style="color:#e8aeb7">*</span></label>
@@ -490,6 +490,9 @@
           <input type="checkbox" id="af-age" />
           I confirm I am 18 years of age or older.
         </label>
+        <p style="font-size:.8rem;color:#9e7e82;font-weight:600;line-height:1.55;margin-top:-.25rem">
+          ⚠️ If your application is approved, you will be required to verify your age through a third-party age verification service before your account is activated.
+        </p>
 
         <p class="apply-error" id="apply-error" aria-live="polite"></p>
 
@@ -524,8 +527,8 @@
         const ageChecked  = document.getElementById('af-age').checked;
 
         if (!handle)      { errorEl.textContent = 'Handle is required.'; return; }
-        if (!/^[a-z0-9_-]{2,32}$/.test(handle)) {
-          errorEl.textContent = 'Handle must be 2–32 lowercase letters, numbers, underscores, or hyphens.';
+        if (!/^[a-z0-9_-]{5,32}$/.test(handle)) {
+          errorEl.textContent = 'Handle must be 5–32 lowercase letters, numbers, underscores, or hyphens.';
           return;
         }
         if (!displayName) { errorEl.textContent = 'Display name is required.'; return; }
