@@ -1344,6 +1344,20 @@ async function doRegister() {
   if (tabParam && ['home','browse','feed','account','subscription'].includes(tabParam)) {
     showTab(tabParam);
   }
+
+  // ── Single-creator mode: hide the Creators browser tab ──
+  // When only one creator is active the member portal doesn't expose
+  // a creator-browsing UI — users discover content through that creator's den.
+  fetch('/api/site-mode')
+    .then(r => r.json())
+    .then(function (mode) {
+      if (!mode || mode.mode !== 'single') return;
+      const browseBtn = document.querySelector('.tab-btn[data-tab="browse"]');
+      if (browseBtn) browseBtn.style.display = 'none';
+      const followsEmpty = document.getElementById('follows-empty');
+      if (followsEmpty) followsEmpty.textContent = 'Not following anyone yet \u2014 visit the den to follow! 🐾';
+    })
+    .catch(function () { /* silently ignore */ });
 })();
 </script>
 </body>

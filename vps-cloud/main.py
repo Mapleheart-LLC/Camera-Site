@@ -2586,6 +2586,27 @@ def get_featured_creator(db: sqlite3.Connection = Depends(get_db)):
     return dict(row)
 
 
+@app.get("/api/site-mode", tags=["discovery"])
+def get_site_mode(db: sqlite3.Connection = Depends(get_db)):
+    """Return whether the platform is in single-creator or multi-creator mode.
+
+    When exactly one creator account is active the UI can present the site as
+    dedicated to that creator so visitors cannot tell it is a multi-creator
+    platform.  The response includes the creator's public profile fields so the
+    frontend only needs this one call.
+    """
+    rows = db.execute(
+        """
+        SELECT handle, display_name, bio, avatar_url, accent_color
+          FROM creator_accounts
+         WHERE is_active = 1
+        """
+    ).fetchall()
+    if len(rows) == 1:
+        return {"mode": "single", **dict(rows[0])}
+    return {"mode": "multi"}
+
+
 @app.get("/admin", include_in_schema=False)
 def admin_page_redirect(request: Request):
     """Redirect /admin (and /admin?q=...) to the static admin.html page."""
