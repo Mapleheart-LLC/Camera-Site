@@ -381,8 +381,9 @@ def init_db() -> None:
         conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
-    # Migration: add username/password_hash columns to existing users tables
-    # that were created before the Fanvue → username/password migration.
+    # Idempotent migration: add username/password_hash columns.
+    # Column names and type definitions are hardcoded string literals (not
+    # derived from user input), so the f-string interpolation is safe here.
     for _col, _defn in [
         ("username",      "TEXT NOT NULL DEFAULT ''"),
         ("password_hash", "TEXT NOT NULL DEFAULT ''"),
@@ -561,7 +562,7 @@ class CameraResponse(BaseModel):
 
 
 class _RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_\-]+$")
+    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     password: str = Field(..., min_length=8, max_length=128)
 
 
@@ -630,10 +631,10 @@ async def auth_login(
         (username_lower,),
     ).fetchone()
 
-    # Use a constant-time comparison even on failure to prevent user enumeration
-    # via timing attacks.  We hash a dummy value when no row is found.
-    dummy_hash = "$2b$12$" + "x" * 53
-    stored_hash = row["password_hash"] if row else dummy_hash
+    # Use a valid bcrypt hash for the dummy comparison to ensure constant-time
+    # behaviour regardless of whether the username exists in the database.
+    _DUMMY_HASH = "$2b$12$gJZZEZSwdcoCzIFtb1WvKeXE5vcZdz52cLCR/0nDLQJwukVQwKxx."
+    stored_hash = row["password_hash"] if row else _DUMMY_HASH
     password_ok = _verify_password(body.password, stored_hash)
 
     if not row or not password_ok:
