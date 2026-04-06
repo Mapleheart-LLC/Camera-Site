@@ -34,6 +34,7 @@ Public (no auth required)
 
 import logging
 import os
+import secrets
 import smtplib
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -49,11 +50,18 @@ from slowapi.util import get_remote_address
 
 from db import get_db
 from dependencies import (
+    ADMIN_PASSWORD,
+    ADMIN_USERNAME,
     create_access_token,
     get_current_creator,
 )
 from routers.auth import _hash_password, _verify_password  # reuse stdlib hashing
 from stream_utils import is_producer_live as _is_producer_live
+
+# Handle of the creator account linked to the admin user.  When set, the
+# admin's HTTP Basic Auth credentials are accepted by POST /api/creator/login
+# so the admin can access the creator panel without a separate password.
+_ADMIN_CREATOR_HANDLE: str = os.environ.get("ADMIN_CREATOR_HANDLE", "").lower().strip()
 
 router = APIRouter(prefix="/api/creator", tags=["creator"])
 
@@ -139,6 +147,56 @@ def creator_login(
     )
 
     if not row:
+        # ── Admin-credential fallback ───────────────────────────────────────
+        # If the submitted handle matches the admin username and the password
+        # matches the admin password, issue a creator JWT for the linked
+        # creator account (ADMIN_CREATOR_HANDLE) without requiring a separate
+        # creator password.  This lets the site owner log into the creator
+        # panel using the same credentials they use for the admin panel.
+        if (
+            _ADMIN_CREATOR_HANDLE
+            and ADMIN_USERNAME
+            and ADMIN_PASSWORD
+            and secrets.compare_digest(handle.encode(), ADMIN_USERNAME.lower().encode())
+            and secrets.compare_digest(payload.password.encode(), ADMIN_PASSWORD.encode())
+        ):
+            linked = db.execute(
+                """
+                SELECT id, handle, display_name,
+                       COALESCE(totp_enabled, 0) AS totp_enabled
+                  FROM creator_accounts
+                 WHERE handle = ? AND is_active = 1
+                """,
+                (_ADMIN_CREATOR_HANDLE,),
+            ).fetchone()
+            if linked:
+                totp_enabled = linked["totp_enabled"]
+                if totp_enabled:
+                    pending_token = create_access_token(
+                        {"sub": linked["handle"], "role": "creator_2fa_pending"},
+                        expires_delta=timedelta(minutes=5),
+                    )
+                    return {
+                        "requires_2fa": True,
+                        "pending_token": pending_token,
+                        "handle": linked["handle"],
+                    }
+                token = create_access_token(
+                    {"sub": linked["handle"], "role": "creator"},
+                    expires_delta=timedelta(minutes=_CREATOR_TOKEN_MINUTES),
+                )
+                logger.info(
+                    "Admin '%s' logged into creator panel via admin credentials (linked handle: '%s').",
+                    ADMIN_USERNAME,
+                    linked["handle"],
+                )
+                return {
+                    "access_token": token,
+                    "token_type": "bearer",
+                    "handle": linked["handle"],
+                    "display_name": linked["display_name"],
+                }
+
         _hash_password("__timing_guard__")  # prevent timing-based enumeration
         raise _invalid
 
