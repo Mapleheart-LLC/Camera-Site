@@ -541,7 +541,7 @@
       const creatorOrigin = proto + '//' + creator.handle + '.' + host;
 
       // Swap generic tagline for the creator's bio (or a personal default)
-      const tagline = creator.bio || 'live cams, Q\u0026A, a curated feed, and a den that\u2019s yours.';
+      const tagline = creator.bio || "live cams, Q&A, a curated feed, and a den that's yours.";
       document.querySelector('.hero-tagline').textContent = tagline;
 
       // Hide the "a platform for every creator" grid — it reveals multi-creator architecture
@@ -550,19 +550,19 @@
       document.getElementById('audience-divider-after').style.display  = 'none';
 
       // Point the CTA directly at the creator's den instead of /explore
-      var ctaLink = document.getElementById('cta-browse');
+      const ctaLink = document.getElementById('cta-browse');
       ctaLink.href        = creatorOrigin + '/';
-      ctaLink.textContent = 'Enter the Den \u2192';
+      ctaLink.textContent = 'Enter the Den →';
 
       // Populate the featured creator card from the site-mode response
-      var name = creator.display_name || creator.handle;
+      const name = creator.display_name || creator.handle;
       document.getElementById('featured-card').href = creatorOrigin + '/';
-      document.getElementById('featured-card').setAttribute('aria-label', 'Visit ' + name + '\u2019s den');
+      document.getElementById('featured-card').setAttribute('aria-label', "Visit " + name + "'s den");
       document.getElementById('featured-name').textContent           = name;
       document.getElementById('featured-handle-display').textContent = creator.handle + '.' + host;
       document.getElementById('featured-bio').textContent            = creator.bio || '';
       if (creator.avatar_url) {
-        var img = document.createElement('img');
+        const img = document.createElement('img');
         img.src = creator.avatar_url;
         img.alt = name;
         img.className = 'creator-avatar-img';

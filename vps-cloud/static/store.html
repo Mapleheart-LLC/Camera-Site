@@ -881,7 +881,7 @@
     (function () {
       var h = window.location.hostname;
       var parts = h.split('.');
-      var homeUrl = window.location.protocol + '//' + (parts.length >= 3 ? parts.slice(1).join('.') : h);
+      var homeUrl = window.location.protocol + '//' + (parts.length >= 2 ? parts.slice(1).join('.') : h);
       ['store-nav-logo', 'store-nav-home', 'store-footer-home'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.href = homeUrl;
