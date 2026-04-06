@@ -32,8 +32,19 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       # Creator account linked to the admin user – enables one-click admin↔creator
-      # mode switching in the dashboards (e.g. ADMIN_CREATOR_HANDLE=mochii).
+      # mode switching in the dashboards AND allows the admin to log into the
+      # creator panel using their admin credentials (no separate creator password).
+      # Must match the CREATOR_HANDLE used for seeding (e.g. ADMIN_CREATOR_HANDLE=mochii).
       - ADMIN_CREATOR_HANDLE=${ADMIN_CREATOR_HANDLE:-}
+      # Default creator account seeded at first startup.
+      # Set CREATOR_HANDLE + CREATOR_PASSWORD so the account exists in the DB
+      # without needing a separate POST /api/admin/creators call.
+      # Set ADMIN_CREATOR_HANDLE to the same value so the admin can also log into
+      # the creator panel with their admin credentials.
+      # Example: CREATOR_HANDLE=mochii  CREATOR_PASSWORD=<initial-password>
+      #          ADMIN_CREATOR_HANDLE=mochii
+      - CREATOR_HANDLE=${CREATOR_HANDLE:-}
+      - CREATOR_PASSWORD=${CREATOR_PASSWORD:-}
       # Discord webhook – set to a Discord Incoming Webhook URL to receive
       # notifications when new questions are submitted to the Puppy Pouch.
       # Leave empty to disable notifications.
