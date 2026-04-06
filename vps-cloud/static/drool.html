@@ -532,6 +532,12 @@
   <script>
     'use strict';
 
+    // Detect per-creator context from URL path (e.g. /mochii/drool).
+    const CREATOR_HANDLE = (function() {
+      const parts = window.location.pathname.split('/');
+      return (parts.length >= 3 && parts[1] && parts[2] === 'drool') ? parts[1] : null;
+    })();
+
     // ── Image error handler (safe DOM, no innerHTML) ─────
     document.addEventListener('error', (e) => {
       const img = e.target;
@@ -784,7 +790,7 @@
       // fetch the full feed and grab the matching item (cheapest since backend
       // is local SQLite).  A simple approach: re-fetch page 1 and find the item.
       try {
-        const r = await fetch(`/api/drool?page=1&page_size=100`);
+        const r = await fetch(`/api/drool?page=1&page_size=100${CREATOR_HANDLE ? '&creator_handle=' + encodeURIComponent(CREATOR_HANDLE) : ''}`);
         if (!r.ok) return;
         const items = await r.json();
         const updated = items.find(i => i.id === itemId);
@@ -1034,7 +1040,10 @@
     async function loadFeed() {
       let items;
       try {
-        const r = await fetch('/api/drool?page=1&page_size=50');
+        const feedUrl = CREATOR_HANDLE
+          ? `/api/drool?page=1&page_size=50&creator_handle=${encodeURIComponent(CREATOR_HANDLE)}`
+          : '/api/drool?page=1&page_size=50';
+        const r = await fetch(feedUrl);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         items = await r.json();
       } catch (err) {
