@@ -1,11 +1,15 @@
 import io
+import asyncio
 import logging
 import os
+import re as _re
+import shutil
 import sys
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode, urlparse, quote as _url_quote
 
@@ -15,7 +19,7 @@ import html as _html_lib
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -61,6 +65,11 @@ from slowapi.util import get_remote_address
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 GO2RTC_TIMEOUT: float = 15.0
+
+# Filesystem path where go2rtc writes HLS segments (hls.dir in go2rtc.yaml).
+# When set, the backend uses this directory to serve DVR playlists and archive
+# completed streams as on-demand VODs.  Leave empty to disable DVR/VOD.
+RECORDINGS_PATH: str = os.environ.get("RECORDINGS_PATH", "").rstrip("/")
 
 # Fanvue OAuth 2.0 settings – set these in your environment / docker-compose.yml
 FANVUE_CLIENT_ID: str = os.environ.get("FANVUE_CLIENT_ID", "")
@@ -965,6 +974,25 @@ def init_db() -> None:
         )
         """
     )
+    # ── VOD archive ───────────────────────────────────────────────────────
+    # Created automatically when a stream ends (if RECORDINGS_PATH is set).
+    # hls_path points to the directory on disk containing stream.m3u8 + *.ts.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vods (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_id   INTEGER NOT NULL REFERENCES cameras(id),
+            stream_slug TEXT    NOT NULL,
+            title       TEXT,
+            started_at  TEXT    NOT NULL,
+            ended_at    TEXT,
+            hls_path    TEXT,
+            is_ready    INTEGER NOT NULL DEFAULT 0,
+            is_public   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -1022,6 +1050,251 @@ async def _sync_cameras_to_go2rtc() -> None:
                 logger.warning(
                     "Could not register stream '%s' with go2rtc on startup: %s", slug, exc
                 )
+
+
+# ---------------------------------------------------------------------------
+# DVR / VOD helpers
+# ---------------------------------------------------------------------------
+
+_DVR_WINDOW_SECS: float = 1800.0  # 30-minute DVR look-back window
+
+# Tracks when each stream_slug went live (populated by the VOD watcher task).
+_live_since: dict[str, datetime] = {}
+_vod_watcher_task: asyncio.Task | None = None
+
+
+def _build_hls_playlist(hls_dir: Path, segment_base_url: str, max_secs: float | None = None) -> str | None:
+    """Build an HLS playlist from TS segments in *hls_dir*, rewriting segment
+    URLs to *segment_base_url*/<filename>.
+
+    When *max_secs* is set only the trailing window of that length is kept
+    (used for the 30-minute DVR endpoint).  Pass ``None`` for full VOD output.
+
+    Returns ``None`` when the directory contains no TS segments.
+
+    The function is path-traversal-safe: only files whose names match the
+    pattern ``*.ts`` are included and they are referenced by basename only.
+    """
+    if not hls_dir.is_dir():
+        return None
+
+    # Extract per-segment durations and target-duration from any existing
+    # playlist written by go2rtc.  Fall back to the go2rtc default of 1 s.
+    target_dur: float = 1.0
+    seg_durations: dict[str, float] = {}
+    m3u8_path = hls_dir / "stream.m3u8"
+    has_endlist = False
+    if m3u8_path.is_file():
+        raw = m3u8_path.read_text(encoding="utf-8", errors="replace")
+        has_endlist = "#EXT-X-ENDLIST" in raw
+        lines = raw.splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith("#EXT-X-TARGETDURATION:"):
+                try:
+                    target_dur = float(line.split(":", 1)[1])
+                except (IndexError, ValueError):
+                    pass
+            elif line.startswith("#EXTINF:"):
+                m = _re.match(r"#EXTINF:([\d.]+)", line)
+                if m and i + 1 < len(lines):
+                    try:
+                        dur = float(m.group(1))
+                        seg_name = Path(lines[i + 1]).name
+                        if seg_name.endswith(".ts"):
+                            seg_durations[seg_name] = dur
+                    except (ValueError, IndexError):
+                        pass
+
+    # Gather all TS files sorted by name (go2rtc names them sequentially).
+    ts_files = sorted(
+        (f for f in hls_dir.iterdir() if f.suffix == ".ts" and f.is_file()),
+        key=lambda p: p.name,
+    )
+    if not ts_files:
+        return None
+
+    # Trim to the trailing max_secs window when requested.
+    if max_secs is not None:
+        total = sum(seg_durations.get(f.name, target_dur) for f in ts_files)
+        while ts_files and total > max_secs:
+            total -= seg_durations.get(ts_files[0].name, target_dur)
+            ts_files = ts_files[1:]
+        if not ts_files:
+            return None
+
+    lines_out = [
+        "#EXTM3U",
+        "#EXT-X-VERSION:3",
+        f"#EXT-X-TARGETDURATION:{int(target_dur) + 1}",
+        "#EXT-X-MEDIA-SEQUENCE:0",
+    ]
+    for ts in ts_files:
+        dur = seg_durations.get(ts.name, target_dur)
+        lines_out.append(f"#EXTINF:{dur:.6f},")
+        lines_out.append(f"{segment_base_url}/{ts.name}")
+    if has_endlist:
+        lines_out.append("#EXT-X-ENDLIST")
+    return "\n".join(lines_out) + "\n"
+
+
+def _safe_ts_filename(filename: str) -> str | None:
+    """Return *filename* if it is a safe TS segment name, else ``None``.
+
+    Rejects anything containing path separators or not ending in ``.ts`` to
+    prevent path-traversal attacks when serving files from the recordings dir.
+    """
+    name = Path(filename).name  # strip any directory components
+    if name != filename:
+        return None
+    if not name.endswith(".ts"):
+        return None
+    return name
+
+
+def _resolve_within_recordings(candidate: Path) -> Path:
+    """Resolve *candidate* and verify it stays inside RECORDINGS_PATH.
+
+    Raises HTTPException 403 if the resolved path escapes the recordings root
+    (path-traversal guard).  The recordings root must be configured.
+    """
+    if not RECORDINGS_PATH:
+        raise HTTPException(status_code=404, detail="DVR/VOD is not enabled on this server")
+    root = Path(RECORDINGS_PATH).resolve()
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return resolved
+
+
+async def _poll_vod_transitions() -> None:
+    """Query go2rtc and detect streams that have just gone live or offline.
+
+    When a stream goes offline, snapshot its HLS directory and create a VOD
+    record in the database.
+    """
+    conn = get_db_connection()
+    try:
+        cameras = conn.execute(
+            "SELECT id, stream_slug, rtmp_key, stream_title FROM cameras"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not cameras:
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/streams")
+        if not resp.is_success:
+            return
+        go2rtc_data: dict = resp.json()
+    except Exception:
+        return
+
+    now = datetime.now(timezone.utc)
+    for cam in cameras:
+        slug: str = cam["stream_slug"]
+        go2rtc_name: str = cam["rtmp_key"] or slug
+        stream_info = go2rtc_data.get(go2rtc_name) or {}
+        producers = stream_info.get("producers") or []
+        is_live = _is_producer_live(producers)
+
+        if is_live and slug not in _live_since:
+            _live_since[slug] = now
+            logger.info("Stream '%s' went live – recording start noted", slug)
+        elif not is_live and slug in _live_since:
+            started_at = _live_since.pop(slug)
+            logger.info(
+                "Stream '%s' went offline – finalizing VOD (started %s)",
+                slug,
+                started_at.isoformat(),
+            )
+            await _finalize_vod(dict(cam), started_at, now, go2rtc_name)
+
+
+async def _finalize_vod(
+    camera: dict,
+    started_at: datetime,
+    ended_at: datetime,
+    go2rtc_name: str,
+) -> None:
+    """Copy the HLS recording for *go2rtc_name* to a permanent VOD directory
+    and create a row in the ``vods`` table."""
+    if not RECORDINGS_PATH:
+        return
+
+    src_dir = Path(RECORDINGS_PATH) / go2rtc_name
+    if not src_dir.is_dir():
+        logger.warning(
+            "VOD finalisation skipped: recording dir '%s' not found", src_dir
+        )
+        return
+
+    # Insert a placeholder row to obtain the auto-increment ID first so we can
+    # name the destination directory after it.
+    conn = get_db_connection()
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO vods (camera_id, stream_slug, title, started_at, ended_at, is_ready)
+            VALUES (?, ?, ?, ?, ?, 0)
+            """,
+            (
+                camera["id"],
+                camera["stream_slug"],
+                camera.get("stream_title"),
+                started_at.isoformat(),
+                ended_at.isoformat(),
+            ),
+        )
+        vod_id: int = cur.lastrowid
+        conn.commit()
+    finally:
+        conn.close()
+
+    vod_dir = Path(RECORDINGS_PATH) / "vods" / str(vod_id)
+    try:
+        shutil.copytree(str(src_dir), str(vod_dir))
+    except Exception as exc:
+        logger.error(
+            "Failed to copy VOD files for vod %d (DB record id=%d is_ready=0 – "
+            "manual cleanup may be needed): %s",
+            vod_id,
+            vod_id,
+            exc,
+        )
+        return
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE vods SET hls_path = ?, is_ready = 1 WHERE id = ?",
+            (str(vod_dir), vod_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    logger.info(
+        "VOD %d created for stream '%s' (%s → %s)",
+        vod_id,
+        camera["stream_slug"],
+        started_at.isoformat(),
+        ended_at.isoformat(),
+    )
+
+
+async def _vod_watcher_loop() -> None:
+    """Background task: poll every 30 s for stream live/offline transitions."""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            await _poll_vod_transitions()
+        except Exception as exc:
+            logger.warning("VOD watcher encountered an error: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1193,7 +1466,15 @@ async def lifespan(app: FastAPI):
     start_drool_scheduler()
     await register_metadata_schema()
     _start_backup_scheduler()
+    # Start the background task that detects stream live/offline transitions
+    # and automatically archives completed streams as VODs.
+    global _vod_watcher_task
+    if RECORDINGS_PATH:
+        _vod_watcher_task = asyncio.create_task(_vod_watcher_loop())
+        logger.info("VOD watcher started (recordings path: %s)", RECORDINGS_PATH)
     yield
+    if _vod_watcher_task is not None:
+        _vod_watcher_task.cancel()
     stop_drool_scheduler()
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
@@ -1571,6 +1852,294 @@ async def get_stream_status(
         # Return all-offline rather than propagating the error
 
     return JSONResponse(status)
+
+
+# ---------------------------------------------------------------------------
+# DVR endpoints  (30-minute rolling look-back window)
+# ---------------------------------------------------------------------------
+
+
+def _check_stream_access(
+    stream_slug: str,
+    current_user: dict,
+    db: sqlite3.Connection,
+) -> sqlite3.Row:
+    """Return the camera row for *stream_slug* or raise 403.
+
+    Access is granted when the user's subscription level meets the camera's
+    minimum OR the user has a valid PPV purchase (matching the live-stream
+    access logic in ``/api/webrtc``).
+    """
+    camera = db.execute(
+        "SELECT id, minimum_access_level, ppv_price_cents, rtmp_key FROM cameras WHERE stream_slug = ?",
+        (stream_slug,),
+    ).fetchone()
+    if not camera:
+        raise HTTPException(status_code=403, detail="Access denied to this stream")
+
+    access_level: int = current_user["access_level"]
+    has_sub_access = access_level >= camera["minimum_access_level"]
+
+    has_ppv_access = False
+    if camera["ppv_price_cents"]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        ppv_row = db.execute(
+            """
+            SELECT id FROM ppv_purchases
+             WHERE user_id = ? AND camera_id = ?
+               AND (expires_at IS NULL OR expires_at > ?)
+            """,
+            (current_user["fanvue_id"], camera["id"], now_iso),
+        ).fetchone()
+        has_ppv_access = ppv_row is not None
+
+    if not has_sub_access and not has_ppv_access:
+        raise HTTPException(status_code=403, detail="Access denied to this stream")
+
+    return camera
+
+
+@app.get("/api/dvr/{stream_slug}/stream.m3u8")
+@_api_limiter.limit("60/minute")
+async def dvr_playlist(
+    stream_slug: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return a 30-minute DVR HLS playlist for the given live stream.
+
+    Requires the same subscription / PPV access as the live WebRTC feed.
+    Returns 404 when RECORDINGS_PATH is not configured or no segments have
+    been written yet for this stream.
+    """
+    if not RECORDINGS_PATH:
+        raise HTTPException(status_code=404, detail="DVR is not enabled on this server")
+
+    camera = _check_stream_access(stream_slug, current_user, db)
+    go2rtc_name: str = camera["rtmp_key"] or stream_slug
+    # Resolve and validate path to prevent traversal via rtmp_key/stream_slug
+    hls_dir = _resolve_within_recordings(Path(RECORDINGS_PATH) / go2rtc_name)
+
+    segment_base = f"/api/dvr/{_url_quote(stream_slug, safe='')}/segments"
+    playlist = _build_hls_playlist(hls_dir, segment_base, max_secs=_DVR_WINDOW_SECS)
+    if playlist is None:
+        raise HTTPException(status_code=404, detail="No DVR data available yet for this stream")
+
+    return Response(
+        content=playlist,
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/api/dvr/{stream_slug}/segments/{filename}")
+@_api_limiter.limit("300/minute")
+async def dvr_segment(
+    stream_slug: str,
+    filename: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Serve a single TS segment for the DVR player."""
+    if not RECORDINGS_PATH:
+        raise HTTPException(status_code=404, detail="DVR is not enabled on this server")
+
+    safe_name = _safe_ts_filename(filename)
+    if safe_name is None:
+        raise HTTPException(status_code=400, detail="Invalid segment filename")
+
+    camera = _check_stream_access(stream_slug, current_user, db)
+    go2rtc_name: str = camera["rtmp_key"] or stream_slug
+    # Resolve and validate path to prevent traversal via rtmp_key/stream_slug
+    seg_path = _resolve_within_recordings(Path(RECORDINGS_PATH) / go2rtc_name / safe_name)
+
+    if not seg_path.is_file():
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    return FileResponse(str(seg_path), media_type="video/MP2T")
+
+
+# ---------------------------------------------------------------------------
+# VOD endpoints  (archived recordings)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/vods")
+@_api_limiter.limit("60/minute")
+async def list_vods(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """List all ready, public VODs accessible to the authenticated user.
+
+    A VOD is accessible when the underlying camera's access requirements match
+    the user's subscription/PPV status (same rules as live streams).
+    """
+    access_level: int = current_user["access_level"]
+    user_id: str = current_user["fanvue_id"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    rows = db.execute(
+        """
+        SELECT v.id, v.stream_slug, v.title, v.started_at, v.ended_at, v.created_at,
+               c.display_name AS camera_display_name,
+               c.minimum_access_level, c.ppv_price_cents, c.id AS camera_id
+          FROM vods v
+          JOIN cameras c ON c.id = v.camera_id
+         WHERE v.is_ready = 1 AND v.is_public = 1
+         ORDER BY v.started_at DESC
+        """
+    ).fetchall()
+
+    result = []
+    for row in rows:
+        has_sub = access_level >= row["minimum_access_level"]
+        has_ppv = False
+        if not has_sub and row["ppv_price_cents"]:
+            ppv = db.execute(
+                """
+                SELECT id FROM ppv_purchases
+                 WHERE user_id = ? AND camera_id = ?
+                   AND (expires_at IS NULL OR expires_at > ?)
+                """,
+                (user_id, row["camera_id"], now_iso),
+            ).fetchone()
+            has_ppv = ppv is not None
+        if not has_sub and not has_ppv:
+            continue
+        result.append(
+            {
+                "id": row["id"],
+                "stream_slug": row["stream_slug"],
+                "title": row["title"],
+                "camera_display_name": row["camera_display_name"],
+                "started_at": row["started_at"],
+                "ended_at": row["ended_at"],
+                "created_at": row["created_at"],
+            }
+        )
+
+    return JSONResponse(result)
+
+
+@app.get("/api/vods/{vod_id}")
+@_api_limiter.limit("60/minute")
+async def get_vod(
+    vod_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return metadata for a single VOD."""
+    row = db.execute(
+        """
+        SELECT v.id, v.stream_slug, v.title, v.started_at, v.ended_at,
+               v.is_ready, v.is_public, v.created_at,
+               c.display_name AS camera_display_name,
+               c.minimum_access_level, c.ppv_price_cents, c.id AS camera_id
+          FROM vods v
+          JOIN cameras c ON c.id = v.camera_id
+         WHERE v.id = ? AND v.is_ready = 1 AND v.is_public = 1
+        """,
+        (vod_id,),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="VOD not found")
+
+    _check_stream_access(row["stream_slug"], current_user, db)
+
+    return JSONResponse(
+        {
+            "id": row["id"],
+            "stream_slug": row["stream_slug"],
+            "title": row["title"],
+            "camera_display_name": row["camera_display_name"],
+            "started_at": row["started_at"],
+            "ended_at": row["ended_at"],
+            "created_at": row["created_at"],
+        }
+    )
+
+
+@app.get("/api/vods/{vod_id}/stream.m3u8")
+@_api_limiter.limit("60/minute")
+async def vod_playlist(
+    vod_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the HLS playlist for a VOD archive."""
+    row = db.execute(
+        """
+        SELECT v.hls_path, v.stream_slug, v.is_ready, v.is_public,
+               c.minimum_access_level, c.ppv_price_cents, c.id AS camera_id
+          FROM vods v
+          JOIN cameras c ON c.id = v.camera_id
+         WHERE v.id = ? AND v.is_ready = 1 AND v.is_public = 1
+        """,
+        (vod_id,),
+    ).fetchone()
+
+    if not row or not row["hls_path"]:
+        raise HTTPException(status_code=404, detail="VOD not found")
+
+    _check_stream_access(row["stream_slug"], current_user, db)
+
+    # Validate hls_path is within RECORDINGS_PATH before reading it
+    hls_dir = _resolve_within_recordings(Path(row["hls_path"]))
+    segment_base = f"/api/vods/{vod_id}/segments"
+    playlist = _build_hls_playlist(hls_dir, segment_base)
+    if playlist is None:
+        raise HTTPException(status_code=404, detail="VOD data not available")
+
+    return Response(
+        content=playlist,
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "max-age=86400"},
+    )
+
+
+@app.get("/api/vods/{vod_id}/segments/{filename}")
+@_api_limiter.limit("300/minute")
+async def vod_segment(
+    vod_id: int,
+    filename: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Serve a single TS segment from a VOD archive."""
+    safe_name = _safe_ts_filename(filename)
+    if safe_name is None:
+        raise HTTPException(status_code=400, detail="Invalid segment filename")
+
+    row = db.execute(
+        """
+        SELECT v.hls_path, v.stream_slug, v.is_ready, v.is_public,
+               c.minimum_access_level, c.ppv_price_cents, c.id AS camera_id
+          FROM vods v
+          JOIN cameras c ON c.id = v.camera_id
+         WHERE v.id = ? AND v.is_ready = 1 AND v.is_public = 1
+        """,
+        (vod_id,),
+    ).fetchone()
+
+    if not row or not row["hls_path"]:
+        raise HTTPException(status_code=404, detail="VOD not found")
+
+    _check_stream_access(row["stream_slug"], current_user, db)
+
+    # Validate hls_path is within RECORDINGS_PATH before accessing it
+    seg_path = _resolve_within_recordings(Path(row["hls_path"]) / safe_name)
+    if not seg_path.is_file():
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    return FileResponse(str(seg_path), media_type="video/MP2T")
 
 
 # ---------------------------------------------------------------------------

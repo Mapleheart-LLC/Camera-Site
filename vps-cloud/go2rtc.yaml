@@ -20,3 +20,10 @@ webrtc:
 
 log:
   level: info
+
+# HLS recording – segments are written to /recordings/{stream_name}/.
+# The backend mounts the same volume read-write so it can:
+#   1. Serve DVR playlists filtered to the last 30 minutes.
+#   2. Snapshot completed streams as permanent VOD archives.
+hls:
+  dir: /recordings

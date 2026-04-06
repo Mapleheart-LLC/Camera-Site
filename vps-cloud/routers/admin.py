@@ -40,12 +40,16 @@ Endpoints
   DELETE /api/admin/featured-creator/{handle} – remove a creator from the queue
   PUT    /api/admin/featured-creator/{handle}/move-up   – promote in queue
   PUT    /api/admin/featured-creator/{handle}/move-down – demote in queue
+  GET    /api/admin/vods               – list all VOD recordings
+  PATCH  /api/admin/vods/{vod_id}      – update VOD title / visibility
+  DELETE /api/admin/vods/{vod_id}      – delete a VOD record and its on-disk files
 """
 
 import logging
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1860,3 +1864,97 @@ def admin_move_featured_down(
     return {"position": pos + 1, "creator_handle": handle}
 
 
+
+
+# ---------------------------------------------------------------------------
+# VOD management
+# ---------------------------------------------------------------------------
+
+# Read RECORDINGS_PATH from env (same variable used by main.py).
+_RECORDINGS_PATH: str = os.environ.get("RECORDINGS_PATH", "").rstrip("/")
+
+
+class VodUpdate(BaseModel):
+    title: Optional[str] = None
+    is_public: Optional[bool] = None
+
+
+@router.get("/vods")
+def admin_list_vods(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """List all VOD records (ready and not-ready, public and private)."""
+    rows = db.execute(
+        """
+        SELECT v.id, v.stream_slug, v.title, v.started_at, v.ended_at,
+               v.hls_path, v.is_ready, v.is_public, v.created_at,
+               c.display_name AS camera_display_name
+          FROM vods v
+          JOIN cameras c ON c.id = v.camera_id
+         ORDER BY v.started_at DESC
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.patch("/vods/{vod_id}", status_code=status.HTTP_200_OK)
+def admin_update_vod(
+    vod_id: int,
+    body: VodUpdate,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update a VOD's title and/or public visibility."""
+    row = db.execute("SELECT id FROM vods WHERE id = ?", (vod_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD not found")
+
+    updates = {}
+    if body.title is not None:
+        updates["title"] = body.title
+    if body.is_public is not None:
+        updates["is_public"] = int(body.is_public)
+
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    db.execute(
+        f"UPDATE vods SET {set_clause} WHERE id = ?",
+        (*updates.values(), vod_id),
+    )
+    db.commit()
+    logger.info("Admin '%s' updated VOD %d: %s", admin_user, vod_id, updates)
+    return {"id": vod_id, **updates}
+
+
+@router.delete("/vods/{vod_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_vod(
+    vod_id: int,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Delete a VOD record and its on-disk HLS files."""
+    row = db.execute("SELECT hls_path FROM vods WHERE id = ?", (vod_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="VOD not found")
+
+    hls_path = row["hls_path"]
+    db.execute("DELETE FROM vods WHERE id = ?", (vod_id,))
+    db.commit()
+
+    if hls_path:
+        vod_dir = Path(hls_path)
+        # Safety check: only remove paths inside the configured recordings dir.
+        recordings_root = Path(_RECORDINGS_PATH) if _RECORDINGS_PATH else None
+        if recordings_root and vod_dir.is_relative_to(recordings_root) and vod_dir.is_dir():
+            shutil.rmtree(str(vod_dir), ignore_errors=True)
+            logger.info("Admin '%s' deleted VOD %d and its files at %s", admin_user, vod_id, vod_dir)
+        else:
+            logger.warning(
+                "Admin '%s' deleted VOD %d but skipped file removal (path %s is outside recordings root or does not exist)",
+                admin_user,
+                vod_id,
+                hls_path,
+            )
