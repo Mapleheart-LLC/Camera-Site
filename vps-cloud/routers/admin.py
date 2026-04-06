@@ -42,7 +42,7 @@ import os
 import re
 import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote as _url_quote
@@ -53,9 +53,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from db import get_db, get_db_connection, get_setting, set_setting
-from dependencies import get_admin_user
+from dependencies import create_access_token, get_admin_user
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Handle of the creator account that is linked to the admin user.
+# Set ADMIN_CREATOR_HANDLE in the environment (e.g. "mochii") to enable
+# the one-click admin ↔ creator mode switch.
+_ADMIN_CREATOR_HANDLE: str = os.environ.get("ADMIN_CREATOR_HANDLE", "").lower().strip()
+_CREATOR_TOKEN_MINUTES = 60 * 24  # 24 hours
 
 _VALID_DEVICES = {"pishock", "lovense"}
 
@@ -1624,4 +1630,58 @@ def admin_revoke_gift(
     db.commit()
     logger.info("Admin '%s' revoked gift %d for user %s.", admin_user, gift_id, user_id)
     return {"revoked": gift_id}
+
+
+# ---------------------------------------------------------------------------
+# Admin ↔ Creator mode switching
+# ---------------------------------------------------------------------------
+
+@router.get("/linked-creator")
+def get_linked_creator(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the creator account linked to the admin user, if one is configured.
+
+    Clients use this to decide whether to show the "Switch to Creator Mode" button.
+    """
+    if not _ADMIN_CREATOR_HANDLE:
+        raise HTTPException(status_code=404, detail="No creator handle linked to admin.")
+    row = db.execute(
+        "SELECT handle, display_name FROM creator_accounts WHERE handle = ? AND is_active = 1",
+        (_ADMIN_CREATOR_HANDLE,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Linked creator account not found or inactive.")
+    return {"handle": row["handle"], "display_name": row["display_name"]}
+
+
+@router.get("/creator-token")
+def get_admin_creator_token(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Issue a creator JWT for the admin's linked creator account.
+
+    Allows the admin to switch into creator mode without a separate login.
+    """
+    if not _ADMIN_CREATOR_HANDLE:
+        raise HTTPException(status_code=404, detail="No creator handle linked to admin.")
+    row = db.execute(
+        "SELECT handle, display_name FROM creator_accounts WHERE handle = ? AND is_active = 1",
+        (_ADMIN_CREATOR_HANDLE,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Linked creator account not found or inactive.")
+    token = create_access_token(
+        {"sub": row["handle"], "role": "creator"},
+        timedelta(minutes=_CREATOR_TOKEN_MINUTES),
+    )
+    logger.info("Admin '%s' issued creator token for handle '%s'.", admin_user, row["handle"])
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "handle": row["handle"],
+        "display_name": row["display_name"],
+    }
 
