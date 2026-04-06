@@ -1344,6 +1344,19 @@ async function doRegister() {
   if (tabParam && ['home','browse','feed','account','subscription'].includes(tabParam)) {
     showTab(tabParam);
   }
+
+  // ── Single-creator mode: hide the creator browse tab ─────────────────────
+  // Once a second creator is added the tab will reappear automatically.
+  fetch('/api/platform/info')
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(info){
+      if (!info || info.is_multi_creator) return;
+      var btn = document.querySelector('.tab-btn[data-tab="browse"]');
+      var panel = document.getElementById('tab-browse');
+      if (btn)   btn.style.display   = 'none';
+      if (panel) panel.style.display = 'none';
+    })
+    .catch(function(){ /* non-critical — leave tab visible on error */ });
 })();
 </script>
 </body>

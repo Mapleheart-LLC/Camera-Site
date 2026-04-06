@@ -2564,6 +2564,31 @@ def get_featured_creator(db: sqlite3.Connection = Depends(get_db)):
     return dict(row)
 
 
+@app.get("/api/platform/info", tags=["discovery"])
+def get_platform_info(db: sqlite3.Connection = Depends(get_db)):
+    """Return basic platform metadata.
+
+    ``is_multi_creator`` is ``false`` while only one active creator exists so
+    the frontend can hide multi-creator discovery UI until a second creator is
+    added.  ``primary_creator`` is included (handle + display_name) when there
+    is exactly one active creator.
+    """
+    count = db.execute(
+        "SELECT COUNT(*) FROM creator_accounts WHERE is_active = 1"
+    ).fetchone()[0]
+    payload: dict = {
+        "creator_count": count,
+        "is_multi_creator": count > 1,
+    }
+    if count == 1:
+        row = db.execute(
+            "SELECT handle, display_name FROM creator_accounts WHERE is_active = 1 LIMIT 1"
+        ).fetchone()
+        if row:
+            payload["primary_creator"] = {"handle": row["handle"], "display_name": row["display_name"]}
+    return payload
+
+
 @app.get("/admin", include_in_schema=False)
 def admin_page_redirect(request: Request):
     """Redirect /admin (and /admin?q=...) to the static admin.html page."""

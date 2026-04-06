@@ -446,10 +446,11 @@
     </div>
   </div>
 
-  <hr class="divider" />
+  <hr class="divider" id="audience-divider" />
 
   <!-- ── Audience split ────────────────────────────────── -->
-  <div class="section">
+  <!-- Hidden in single-creator mode; revealed once a second creator is added -->
+  <div class="section" id="audience-section">
     <p class="section-label">a platform for every creator</p>
     <div class="audience-grid">
       <div class="audience-card audience-sfw">
@@ -477,10 +478,11 @@
     </div>
   </div>
 
-  <hr class="divider" />
+  <hr class="divider" id="creator-pitch-divider" />
 
   <!-- ── Creator pitch ─────────────────────────────────── -->
-  <div class="section">
+  <!-- Hidden in single-creator mode -->
+  <div class="section" id="creator-pitch-section">
     <div class="creator-pitch">
       <a href="/explore">Browse creators →</a>
     </div>
@@ -543,6 +545,25 @@
           document.getElementById('featured-divider').style.display  = '';
         })
         .catch(function () { /* silently hide the card on error */ });
+
+      // ── Single-creator mode ────────────────────────────
+      // Hide sections that reveal this is a multi-creator platform until a
+      // second creator has been added.
+      fetch('/api/platform/info')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (info) {
+          if (!info || info.is_multi_creator) return;
+          // Hide audience-split and browse-creators sections
+          var audienceDiv      = document.getElementById('audience-section');
+          var audienceDivider  = document.getElementById('audience-divider');
+          var pitchDiv         = document.getElementById('creator-pitch-section');
+          var pitchDivider     = document.getElementById('creator-pitch-divider');
+          if (audienceDiv)     audienceDiv.style.display     = 'none';
+          if (audienceDivider) audienceDivider.style.display = 'none';
+          if (pitchDiv)        pitchDiv.style.display        = 'none';
+          if (pitchDivider)    pitchDivider.style.display    = 'none';
+        })
+        .catch(function () { /* non-critical — leave sections visible on error */ });
     })();
   </script>
   <script>
