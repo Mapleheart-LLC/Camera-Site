@@ -372,9 +372,6 @@ def browse_creators(
 # Content-filter preferences
 # ---------------------------------------------------------------------------
 
-_VALID_CONTENT_FILTERS = frozenset({"all", "sfw"})
-
-
 class ContentFilterUpdate(BaseModel):
     content_filter: str = Field(..., pattern=r"^(all|sfw)$")
 

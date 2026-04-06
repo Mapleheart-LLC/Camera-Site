@@ -212,19 +212,31 @@ def global_search(
 
     if type in ("all", "creators"):
         try:
-            rating_clause = "AND ca.content_rating = 'sfw'" if sfw_only else ""
-            rows = db.execute(
-                f"""
-                SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
-                       ca.content_rating, 'creator' AS result_type
-                  FROM fts_creators fc
-                  JOIN creator_accounts ca ON ca.id = fc.rowid
-                 WHERE fts_creators MATCH ? AND ca.is_active = 1
-                       {rating_clause}
-                 LIMIT ?
-                """,
-                (safe_q, limit),
-            ).fetchall()
+            if sfw_only:
+                rows = db.execute(
+                    """
+                    SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
+                           ca.content_rating, 'creator' AS result_type
+                      FROM fts_creators fc
+                      JOIN creator_accounts ca ON ca.id = fc.rowid
+                     WHERE fts_creators MATCH ? AND ca.is_active = 1
+                           AND ca.content_rating = 'sfw'
+                     LIMIT ?
+                    """,
+                    (safe_q, limit),
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    """
+                    SELECT ca.id, ca.handle, ca.display_name, ca.bio, ca.avatar_url,
+                           ca.content_rating, 'creator' AS result_type
+                      FROM fts_creators fc
+                      JOIN creator_accounts ca ON ca.id = fc.rowid
+                     WHERE fts_creators MATCH ? AND ca.is_active = 1
+                     LIMIT ?
+                    """,
+                    (safe_q, limit),
+                ).fetchall()
             results["creators"] = [dict(r) for r in rows]
         except Exception as exc:
             logger.debug("FTS creators error: %s", exc)
@@ -287,25 +299,37 @@ def explore_feed(
     if filter not in valid_explore_filters:
         raise HTTPException(status_code=400, detail=f"filter must be one of {valid_explore_filters}")
 
-    # Build content_rating WHERE clause for creators.
-    if filter == "sfw":
-        creator_rating_clause = "AND content_rating = 'sfw'"
-    elif filter == "nsfw":
-        creator_rating_clause = "AND content_rating IN ('nsfw', 'mixed')"
-    else:
-        creator_rating_clause = ""
-
     # Featured creators (most recent active ones, up to 8).
-    featured_creators = db.execute(
-        f"""
-        SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
-          FROM creator_accounts
-         WHERE is_active = 1
-               {creator_rating_clause}
-         ORDER BY created_at DESC
-         LIMIT 8
-        """
-    ).fetchall()
+    if filter == "sfw":
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1 AND content_rating = 'sfw'
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
+    elif filter == "nsfw":
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1 AND content_rating IN ('nsfw', 'mixed')
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
+    else:
+        featured_creators = db.execute(
+            """
+            SELECT handle, display_name, bio, avatar_url, accent_color, content_rating
+              FROM creator_accounts
+             WHERE is_active = 1
+             ORDER BY created_at DESC
+             LIMIT 8
+            """
+        ).fetchall()
 
     # Trending drool (top engagement last 7 days).
     trending_drool = db.execute(
