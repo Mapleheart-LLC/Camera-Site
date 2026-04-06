@@ -381,7 +381,7 @@ async def explore_feed(
         live_handles: set = set()
         # Fetch all cameras with their creator_handle mapping.
         cam_rows = db.execute(
-            "SELECT stream_slug, rtmp_key FROM cameras WHERE is_active IS NULL OR is_active != 0"
+            "SELECT stream_slug, rtmp_key FROM cameras"
         ).fetchall()
         if cam_rows:
             async with httpx.AsyncClient(timeout=2.0) as client:
@@ -395,21 +395,15 @@ async def explore_feed(
                     stream_info = streams_data.get(go2rtc_name) or {}
                     producers = stream_info.get("producers") or []
                     if any(p.get("url") for p in producers):
-                        # Map camera back to creator via stream_slug prefix (handle.slug convention).
                         slug = cam["stream_slug"] or ""
-                        # Cameras are owned per creator; look up by stream_slug in cameras table.
                         owner_row = db.execute(
                             """
-                            SELECT ca.handle FROM cameras c
-                              JOIN creator_accounts ca ON ca.handle = c.stream_slug
-                             WHERE c.stream_slug = ?
-                            UNION
                             SELECT ca.handle FROM cameras c
                               JOIN creator_accounts ca ON c.stream_slug LIKE ca.handle || '%'
                              WHERE c.stream_slug = ?
                              LIMIT 1
                             """,
-                            (slug, slug),
+                            (slug,),
                         ).fetchone()
                         if owner_row:
                             live_handles.add(owner_row["handle"])
