@@ -31,6 +31,10 @@ Endpoints
   POST   /api/admin/creators           – create a creator account (auto-provisions Cloudflare DNS + email routing)
   PUT    /api/admin/creators/{handle}  – update a creator account
   DELETE /api/admin/creators/{handle}  – delete a creator account (auto-deprovisions Cloudflare DNS + email routing)
+  GET    /api/admin/users              – search site users by email/username
+  GET    /api/admin/users/{id}/gifts   – list gifted subscriptions for a user
+  POST   /api/admin/users/{id}/gift    – gift a subscription to a user
+  DELETE /api/admin/users/{id}/gifts/{gift_id} – revoke a gifted subscription
 """
 
 import logging
@@ -42,6 +46,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote as _url_quote
+import uuid as _uuid_mod
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -1380,4 +1385,231 @@ def admin_delete_creator(
         root_domain = _urlparse(base_url).hostname or ""
         if root_domain:
             deprovision_creator_subdomain(handle, root_domain)
+
+
+# ---------------------------------------------------------------------------
+# User management & gift subscriptions (admin)
+# ---------------------------------------------------------------------------
+
+
+class GiftSubscriptionRequest(BaseModel):
+    creator_handle: str = Field(..., min_length=1, max_length=64)
+    access_level: int = Field(2, ge=1, le=3)
+    tier_id: Optional[int] = None
+    expires_at: Optional[str] = None   # ISO-8601 datetime string or None for permanent
+    note: Optional[str] = Field(None, max_length=500)
+
+
+@router.get("/users")
+def admin_search_users(
+    q: str = "",
+    limit: int = 50,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Search site_users by username or email prefix.
+
+    Returns id, username, email, access_level, display_name, created_at for
+    up to ``limit`` matching users.  Pass ``q=`` empty to list recent users.
+    """
+    limit = max(1, min(limit, 200))
+    pattern = f"%{q}%"
+    rows = db.execute(
+        """
+        SELECT id, username, email, access_level, display_name, created_at
+          FROM site_users
+         WHERE username LIKE ? OR email LIKE ?
+         ORDER BY created_at DESC
+         LIMIT ?
+        """,
+        (pattern, pattern, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/users/{user_id}/gifts")
+def admin_list_user_gifts(
+    user_id: str,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all gifted subscriptions for a specific user."""
+    user = db.execute("SELECT id, username, email, access_level FROM site_users WHERE id = ?", (user_id,)).fetchone()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    gifts = db.execute(
+        """
+        SELECT id, creator_handle, granted_by, access_level_granted, tier_id,
+               expires_at, note, is_active, created_at
+          FROM gifted_subscriptions
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    return {
+        "user": dict(user),
+        "gifts": [dict(g) for g in gifts],
+    }
+
+
+@router.post("/users/{user_id}/gift", status_code=status.HTTP_201_CREATED)
+def admin_gift_subscription(
+    user_id: str,
+    payload: GiftSubscriptionRequest,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Gift a subscription to a user.
+
+    Grants ``access_level`` to the user (using MAX so a higher existing level
+    is never downgraded) and records the gift in ``gifted_subscriptions`` for
+    auditing.  Optionally records an expiry date — the admin must manually
+    revoke when it lapses.
+    """
+    user = db.execute(
+        "SELECT id, username, email, access_level FROM site_users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if payload.tier_id is not None:
+        tier = db.execute(
+            "SELECT id, access_level FROM subscription_tiers WHERE id = ?", (payload.tier_id,)
+        ).fetchone()
+        if not tier:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tier not found.")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Grant the access level (never downgrade).
+    db.execute(
+        "UPDATE site_users SET access_level = MAX(access_level, ?) WHERE id = ?",
+        (payload.access_level, user_id),
+    )
+
+    # Record the gift.
+    cursor = db.execute(
+        """
+        INSERT INTO gifted_subscriptions
+            (user_id, creator_handle, granted_by, access_level_granted, tier_id,
+             expires_at, note, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        """,
+        (
+            user_id,
+            payload.creator_handle,
+            f"admin:{admin_user}",
+            payload.access_level,
+            payload.tier_id,
+            payload.expires_at or None,
+            payload.note or None,
+            now,
+        ),
+    )
+
+    # Upsert user_subscriptions so the member portal reflects the active sub.
+    db.execute(
+        """
+        INSERT INTO user_subscriptions (user_id, creator_handle, tier_id, status, started_at, expires_at)
+        VALUES (?, ?, ?, 'active', ?, ?)
+        ON CONFLICT(user_id, creator_handle)
+        DO UPDATE SET status = 'active', tier_id = excluded.tier_id,
+                      expires_at = excluded.expires_at
+        """,
+        (user_id, payload.creator_handle, payload.tier_id, now, payload.expires_at or None),
+    )
+
+    # Record subscription event.
+    db.execute(
+        """
+        INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at)
+        VALUES (?, ?, ?, 'subscribe', ?)
+        """,
+        (user_id, payload.creator_handle, payload.tier_id, now),
+    )
+
+    db.commit()
+    logger.info(
+        "Admin '%s' gifted access_level=%d to user %s (%s) for creator '%s'.",
+        admin_user, payload.access_level, user_id, user["email"], payload.creator_handle,
+    )
+
+    gift_id = cursor.lastrowid
+    return {
+        "gift_id": gift_id,
+        "user_id": user_id,
+        "username": user["username"],
+        "email": user["email"],
+        "access_level_granted": payload.access_level,
+        "creator_handle": payload.creator_handle,
+        "expires_at": payload.expires_at,
+    }
+
+
+@router.delete("/users/{user_id}/gifts/{gift_id}", status_code=status.HTTP_200_OK)
+def admin_revoke_gift(
+    user_id: str,
+    gift_id: int,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Revoke a gifted subscription.
+
+    Marks the gift as inactive.  If this was the user's only active gift at
+    or above access_level 2, resets their access_level to 0 (unless they have
+    an active Segpay subscription).
+    """
+    gift = db.execute(
+        "SELECT id, access_level_granted, creator_handle, is_active FROM gifted_subscriptions WHERE id = ? AND user_id = ?",
+        (gift_id, user_id),
+    ).fetchone()
+    if not gift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found.")
+    if not gift["is_active"]:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Gift already revoked.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "UPDATE gifted_subscriptions SET is_active = 0 WHERE id = ?", (gift_id,)
+    )
+
+    # Revoke user_subscriptions if no other active gift covers this creator.
+    other_active = db.execute(
+        """
+        SELECT id FROM gifted_subscriptions
+         WHERE user_id = ? AND creator_handle = ? AND is_active = 1 AND id != ?
+        """,
+        (user_id, gift["creator_handle"], gift_id),
+    ).fetchone()
+    if not other_active:
+        db.execute(
+            "UPDATE user_subscriptions SET status = 'cancelled' WHERE user_id = ? AND creator_handle = ?",
+            (user_id, gift["creator_handle"]),
+        )
+
+    # If no active gifts or Segpay subs at all, drop access to 0.
+    active_gifts = db.execute(
+        "SELECT id FROM gifted_subscriptions WHERE user_id = ? AND is_active = 1",
+        (user_id,),
+    ).fetchone()
+    active_segpay = db.execute(
+        "SELECT id FROM user_subscriptions WHERE user_id = ? AND status = 'active'",
+        (user_id,),
+    ).fetchone()
+    if not active_gifts and not active_segpay:
+        db.execute("UPDATE site_users SET access_level = 0 WHERE id = ?", (user_id,))
+
+    # Log cancel event.
+    db.execute(
+        """
+        INSERT INTO subscription_events (user_id, creator_handle, tier_id, event_type, created_at)
+        VALUES (?, ?, NULL, 'cancel', ?)
+        """,
+        (user_id, gift["creator_handle"], now),
+    )
+
+    db.commit()
+    logger.info("Admin '%s' revoked gift %d for user %s.", admin_user, gift_id, user_id)
+    return {"revoked": gift_id}
 

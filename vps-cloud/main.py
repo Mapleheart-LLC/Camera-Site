@@ -806,6 +806,26 @@ def init_db() -> None:
     except sqlite3.OperationalError as _e:
         if "duplicate column" not in str(_e).lower():
             raise
+    # ── Gifted subscriptions ───────────────────────────────────────────────
+    # Tracks subscriptions manually granted by an admin or creator (not via
+    # payment processor).  A gift sets the user's access_level and optionally
+    # expires at a given date.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS gifted_subscriptions (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id              TEXT    NOT NULL REFERENCES site_users(id),
+            creator_handle       TEXT    NOT NULL,
+            granted_by           TEXT    NOT NULL,
+            access_level_granted INTEGER NOT NULL DEFAULT 2,
+            tier_id              INTEGER REFERENCES subscription_tiers(id),
+            expires_at           TEXT,
+            note                 TEXT,
+            is_active            INTEGER NOT NULL DEFAULT 1,
+            created_at           TEXT    NOT NULL
+        )
+        """
+    )
     # Migration: is_hidden column on drool_archive for compliance/reports.
     try:
         conn.execute(

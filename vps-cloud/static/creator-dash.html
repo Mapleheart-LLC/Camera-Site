@@ -333,6 +333,7 @@
         <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
         <button class="nav-item" data-target="s-profile">👤 Profile</button>
         <button class="nav-item" data-target="s-streaming">📡 Streaming</button>
+        <button class="nav-item" data-target="s-subscribers">🎁 Subscribers</button>
         <button class="nav-item" data-target="s-qa">
           🐾 Q&amp;A
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
@@ -372,6 +373,7 @@
               <div class="quick-actions">
                 <button class="btn-quick" data-jump="s-profile">👤 Edit Profile</button>
                 <button class="btn-quick" data-jump="s-streaming">📡 Go Live</button>
+                <button class="btn-quick" data-jump="s-subscribers">🎁 Gift Sub</button>
                 <button class="btn-quick" data-jump="s-qa">🐾 Answer Questions</button>
                 <button class="btn-quick" data-jump="s-drool">💧 View Drool Log</button>
                 <button class="btn-quick" data-jump="s-email">📧 Send Email</button>
@@ -454,6 +456,79 @@
               </div>
               <p id="profile-error" role="alert" aria-live="polite"></p>
               <button id="profile-save-btn" class="btn-sm btn-edit" style="margin-top:.5rem">Save Profile 🐾</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Subscribers & Gift Subscriptions ─────── -->
+        <section id="s-subscribers" class="creator-section">
+          <h1 class="section-heading">🎁 Subscribers &amp; Gift Subscriptions</h1>
+
+          <!-- Gift form -->
+          <div class="card">
+            <div class="card-header"><h2>Gift a Subscription</h2></div>
+            <div class="card-body">
+              <p style="font-size:.85rem;color:#c49a9f;margin-bottom:.75rem;">
+                Enter the email or username of a user to gift them access. They will be able
+                to view your content immediately.
+              </p>
+              <div style="display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.5rem;">
+                <div class="form-field" style="flex:2;min-width:200px;">
+                  <label for="sub-search-q">Email or Username</label>
+                  <input id="sub-search-q" type="text" placeholder="fan@example.com or username" autocomplete="off" />
+                </div>
+                <button id="sub-search-btn" class="btn-sm btn-edit" style="margin-top:auto">Search</button>
+              </div>
+              <p id="sub-search-error" style="font-size:.8rem;color:#f87171;min-height:1em;"></p>
+              <div id="sub-search-results" style="margin-bottom:.75rem;display:none;">
+                <div style="background:#1a1a1a;border:1px solid #3d2a2e;border-radius:8px;padding:.75rem;font-size:.88rem;">
+                  Found: <strong id="sub-found-label">—</strong>
+                  &nbsp;<span id="sub-found-status" style="color:#9e7e82;font-size:.78rem;"></span>
+                  <input type="hidden" id="sub-found-id" />
+                </div>
+              </div>
+
+              <div id="sub-gift-fields" style="display:none;">
+                <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem;">
+                  <div class="form-field" style="flex:1;min-width:140px;">
+                    <label for="sub-gift-level">Access Level</label>
+                    <select id="sub-gift-level">
+                      <option value="1">1 – Follower</option>
+                      <option value="2" selected>2 – Subscriber</option>
+                      <option value="3">3 – Premium</option>
+                    </select>
+                  </div>
+                  <div class="form-field" style="flex:1;min-width:160px;">
+                    <label for="sub-gift-expires">Expires At <small style="font-weight:400">(optional)</small></label>
+                    <input id="sub-gift-expires" type="datetime-local" />
+                  </div>
+                  <div class="form-field" style="flex:2;min-width:200px;">
+                    <label for="sub-gift-note">Note <small style="font-weight:400">(optional)</small></label>
+                    <input id="sub-gift-note" type="text" placeholder="e.g. giveaway winner" maxlength="500" />
+                  </div>
+                </div>
+                <p id="sub-gift-error" style="font-size:.8rem;color:#f87171;min-height:1em;"></p>
+                <div style="display:flex;gap:.5rem;margin-top:.25rem;">
+                  <button id="sub-gift-btn" class="btn-sm btn-edit">🎁 Gift Subscription</button>
+                  <button id="sub-gift-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gifted subscriptions list -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Gifts Given</h2>
+              <button id="refresh-gifted-btn" class="btn-sm btn-edit">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <div style="overflow-x:auto;">
+                <table class="admin-table" aria-label="Gifts given">
+                  <thead><tr><th>User</th><th>Email</th><th>Level</th><th>Expires</th><th>Note</th><th>Status</th><th>Given</th><th></th></tr></thead>
+                  <tbody id="gifted-body"><tr class="empty-row"><td colspan="8">Loading…</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -780,12 +855,13 @@
       if (btn) btn.classList.add('active');
       closeMobileSidebar();
       if (triggerLoad !== false) {
-        if (targetId === 's-profile')   loadProfile();
-        if (targetId === 's-streaming') loadStreamInfo();
-        if (targetId === 's-qa')        loadQuestions();
-        if (targetId === 's-drool')     loadDrool();
-        if (targetId === 's-email')     loadEmailSection();
-        if (targetId === 's-stats')     loadStats();
+        if (targetId === 's-profile')     loadProfile();
+        if (targetId === 's-streaming')   loadStreamInfo();
+        if (targetId === 's-subscribers') loadGiftedList();
+        if (targetId === 's-qa')          loadQuestions();
+        if (targetId === 's-drool')       loadDrool();
+        if (targetId === 's-email')       loadEmailSection();
+        if (targetId === 's-stats')       loadStats();
       }
     }
 
@@ -1270,6 +1346,129 @@
     }
 
     document.getElementById('refresh-stats-btn').addEventListener('click', loadStats);
+
+    // ── Subscribers & Gift Subscriptions ───────────────
+    let _subFoundUserId = null;
+
+    document.getElementById('sub-search-btn').addEventListener('click', searchSubscribers);
+    document.getElementById('sub-search-q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchSubscribers();
+    });
+
+    async function searchSubscribers() {
+      const q     = document.getElementById('sub-search-q').value.trim();
+      const errEl = document.getElementById('sub-search-error');
+      errEl.textContent = '';
+      document.getElementById('sub-search-results').style.display = 'none';
+      document.getElementById('sub-gift-fields').style.display    = 'none';
+      _subFoundUserId = null;
+
+      if (!q) { errEl.textContent = 'Enter an email or username.'; return; }
+
+      try {
+        const results = await apiGet(`/api/creator/subscribers/search?q=${encodeURIComponent(q)}&limit=5`);
+        if (!results.length) {
+          errEl.textContent = 'No user found with that email or username.';
+          return;
+        }
+        const u = results[0];
+        _subFoundUserId = u.id;
+        const subStatus = u.sub_status === 'active' ? '(already subscribed)' : u.sub_status ? `(${u.sub_status})` : '';
+        document.getElementById('sub-found-id').value    = u.id;
+        document.getElementById('sub-found-label').textContent  = `${u.username} <${u.email}>`;
+        document.getElementById('sub-found-status').textContent = subStatus;
+        document.getElementById('sub-search-results').style.display = '';
+        document.getElementById('sub-gift-fields').style.display    = '';
+        document.getElementById('sub-gift-error').textContent        = '';
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = `Search failed: ${err.message}`;
+      }
+    }
+
+    document.getElementById('sub-gift-cancel-btn').addEventListener('click', () => {
+      document.getElementById('sub-search-results').style.display = 'none';
+      document.getElementById('sub-gift-fields').style.display    = 'none';
+      document.getElementById('sub-search-q').value = '';
+      _subFoundUserId = null;
+    });
+
+    document.getElementById('sub-gift-btn').addEventListener('click', async () => {
+      const errEl   = document.getElementById('sub-gift-error');
+      errEl.textContent = '';
+      if (!_subFoundUserId) { errEl.textContent = 'Search for a user first.'; return; }
+
+      const accessLevel = parseInt(document.getElementById('sub-gift-level').value, 10);
+      const expiresRaw  = document.getElementById('sub-gift-expires').value;
+      const note        = document.getElementById('sub-gift-note').value.trim() || null;
+      const body        = {
+        identifier: document.getElementById('sub-search-q').value.trim(),
+        access_level: accessLevel,
+        expires_at: expiresRaw ? new Date(expiresRaw).toISOString() : null,
+        note,
+      };
+
+      try {
+        const result = await apiPost('/api/creator/subscribers/gift', body);
+        showToast(`🎁 Gifted to ${result.username}!`);
+        document.getElementById('sub-search-results').style.display = 'none';
+        document.getElementById('sub-gift-fields').style.display    = 'none';
+        document.getElementById('sub-search-q').value = '';
+        _subFoundUserId = null;
+        loadGiftedList();
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = `Failed: ${err.message}`;
+      }
+    });
+
+    document.getElementById('refresh-gifted-btn').addEventListener('click', loadGiftedList);
+
+    async function loadGiftedList() {
+      const tbody = document.getElementById('gifted-body');
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Loading…</td></tr>';
+      try {
+        const gifts = await apiGet('/api/creator/subscribers/gifted');
+        if (!gifts.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No gifts given yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = gifts.map(g => {
+          const ts     = (g.created_at || '').replace('T',' ').replace(/\.\d+.*/,' UTC');
+          const exp    = g.expires_at ? g.expires_at.replace('T',' ').replace(/\.\d+.*/,' UTC') : 'Never';
+          const status = g.is_active
+            ? '<span style="color:#67d399">Active</span>'
+            : '<span style="color:#9e7e82">Revoked</span>';
+          const action = g.is_active
+            ? `<button class="btn-sm btn-delete revoke-gift-btn" data-id="${g.id}">Revoke</button>`
+            : '—';
+          const displayName = g.display_name ? ` (${escHtml(g.display_name)})` : '';
+          return `<tr>
+            <td>${escHtml(g.username)}${displayName}</td>
+            <td>${escHtml(g.email)}</td>
+            <td>${g.access_level_granted}</td>
+            <td class="ts-cell">${escHtml(exp)}</td>
+            <td>${escHtml(g.note || '—')}</td>
+            <td>${status}</td>
+            <td class="ts-cell">${escHtml(ts)}</td>
+            <td>${action}</td>
+          </tr>`;
+        }).join('');
+
+        tbody.querySelectorAll('.revoke-gift-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Revoke this gift?')) return;
+            try {
+              await apiDelete(`/api/creator/subscribers/gifted/${btn.dataset.id}`);
+              showToast('Gift revoked.');
+              loadGiftedList();
+            } catch (err) {
+              if (err.message !== '401') showToast(`Failed: ${err.message}`);
+            }
+          });
+        });
+      } catch (err) {
+        if (err.message !== '401') tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Failed to load: ${escHtml(err.message)}</td></tr>`;
+      }
+    }
   </script>
 </body>
 </html>

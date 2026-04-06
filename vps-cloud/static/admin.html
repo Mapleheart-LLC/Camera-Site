@@ -475,6 +475,7 @@
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">Creators</div>
         <button class="nav-item" data-target="s-pack-members">🐾 Pack Members</button>
+        <button class="nav-item" data-target="s-users">👥 Users & Gifts</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
       </nav>
@@ -1049,6 +1050,84 @@
         </section>
 
         <!-- ── Settings ───────────────────────────────── -->
+        <!-- ── Users & Gift Subscriptions ───────────── -->
+        <section id="s-users" class="admin-section">
+          <h1 class="section-heading">👥 Users &amp; Gift Subscriptions</h1>
+
+          <!-- User search -->
+          <div class="card">
+            <div class="card-header"><h2>Search Users</h2></div>
+            <div class="card-body">
+              <div class="form-row" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap;">
+                <div class="form-field" style="flex:2;min-width:200px;">
+                  <label for="user-search-q">Email or Username</label>
+                  <input id="user-search-q" type="text" placeholder="search@example.com or username" autocomplete="off" />
+                </div>
+                <button id="user-search-btn" class="btn-sm btn-edit" style="margin-top:auto">Search</button>
+              </div>
+              <p id="user-search-error" style="font-size:.8rem;color:#f87171;min-height:1em;margin-top:.35rem;"></p>
+              <div style="overflow-x:auto;margin-top:.75rem;">
+                <table class="admin-table" id="user-search-table" style="display:none" aria-label="User search results">
+                  <thead><tr><th>Username</th><th>Email</th><th>Access Level</th><th>Joined</th><th>Actions</th></tr></thead>
+                  <tbody id="user-search-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gift form (shown when a user is selected) -->
+          <div class="card" id="gift-form-card" style="display:none;">
+            <div class="card-header"><h2>🎁 Gift Subscription to <span id="gift-target-name">—</span></h2></div>
+            <div class="card-body">
+              <input type="hidden" id="gift-target-id" />
+              <div class="form-row" style="flex-wrap:wrap;gap:.75rem;">
+                <div class="form-field" style="flex:1;min-width:160px;">
+                  <label for="gift-creator-handle">Creator Handle</label>
+                  <input id="gift-creator-handle" type="text" placeholder="e.g. mochii" />
+                </div>
+                <div class="form-field" style="flex:1;min-width:140px;">
+                  <label for="gift-access-level">Access Level</label>
+                  <select id="gift-access-level">
+                    <option value="1">1 – Follower</option>
+                    <option value="2" selected>2 – Subscriber</option>
+                    <option value="3">3 – Premium</option>
+                  </select>
+                </div>
+                <div class="form-field" style="flex:1;min-width:160px;">
+                  <label for="gift-expires-at">Expires At <small style="font-weight:400">(optional)</small></label>
+                  <input id="gift-expires-at" type="datetime-local" />
+                </div>
+                <div class="form-field" style="flex:2;min-width:200px;">
+                  <label for="gift-note">Note <small style="font-weight:400">(optional)</small></label>
+                  <input id="gift-note" type="text" placeholder="e.g. contest winner" maxlength="500" />
+                </div>
+              </div>
+              <p id="gift-form-error" style="font-size:.8rem;color:#f87171;min-height:1em;margin-top:.35rem;"></p>
+              <div style="margin-top:.6rem;display:flex;gap:.5rem;">
+                <button id="gift-save-btn" class="btn-sm btn-edit">🎁 Gift Subscription</button>
+                <button id="gift-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Gift history for selected user -->
+          <div class="card" id="gift-history-card" style="display:none;">
+            <div class="card-header">
+              <h2>Gift History for <span id="gift-history-name">—</span></h2>
+              <button id="refresh-gift-history-btn" class="btn-sm btn-edit">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <div style="overflow-x:auto;">
+                <table class="admin-table" aria-label="Gift history">
+                  <thead><tr><th>Creator</th><th>Granted By</th><th>Level</th><th>Expires</th><th>Note</th><th>Status</th><th>Given</th><th></th></tr></thead>
+                  <tbody id="gift-history-body"><tr class="empty-row"><td colspan="8">No gifts yet.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Settings ──────────────────────────────── -->
         <section id="s-settings" class="admin-section">
           <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
 
@@ -2621,6 +2700,158 @@
             _oauthMessages[oauthError] || `OAuth error: ${oauthError}`;
         }
       }
+    // ── Users & Gift Subscriptions ─────────────────────
+    let _giftTargetUserId   = null;
+    let _giftHistoryUserId  = null;
+
+    document.getElementById('user-search-btn').addEventListener('click', searchUsers);
+    document.getElementById('user-search-q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchUsers();
+    });
+
+    async function searchUsers() {
+      const q    = document.getElementById('user-search-q').value.trim();
+      const errEl = document.getElementById('user-search-error');
+      errEl.textContent = '';
+      try {
+        const users = await apiGet(`/api/admin/users?q=${encodeURIComponent(q)}&limit=50`);
+        const tbody = document.getElementById('user-search-body');
+        const tbl   = document.getElementById('user-search-table');
+        if (!users.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No users found.</td></tr>';
+        } else {
+          tbody.innerHTML = users.map(u => {
+            const lvl  = u.access_level || 0;
+            const name = u.display_name ? `${escHtml(u.username)} <small style="color:#9e7e82">(${escHtml(u.display_name)})</small>` : escHtml(u.username);
+            const ts   = (u.created_at || '').replace('T',' ').replace(/\.\d+.*/,' UTC');
+            return `<tr>
+              <td>${name}</td>
+              <td>${escHtml(u.email)}</td>
+              <td><span class="badge-level ${tierClass(lvl)}">${lvl} – ${tierLabel(lvl)}</span></td>
+              <td class="ts-cell">${escHtml(ts)}</td>
+              <td style="display:flex;gap:.35rem;flex-wrap:wrap;">
+                <button class="btn-sm btn-edit gift-user-btn" data-id="${escHtml(u.id)}" data-name="${escHtml(u.username)}">🎁 Gift</button>
+                <button class="btn-sm btn-edit history-btn" data-id="${escHtml(u.id)}" data-name="${escHtml(u.username)}">📋 History</button>
+              </td>
+            </tr>`;
+          }).join('');
+        }
+        tbl.style.display = '';
+
+        tbody.querySelectorAll('.gift-user-btn').forEach(btn => {
+          btn.addEventListener('click', () => showGiftForm(btn.dataset.id, btn.dataset.name));
+        });
+        tbody.querySelectorAll('.history-btn').forEach(btn => {
+          btn.addEventListener('click', () => loadGiftHistory(btn.dataset.id, btn.dataset.name));
+        });
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = `Search failed: ${err.message}`;
+      }
+    }
+
+    function showGiftForm(userId, userName) {
+      _giftTargetUserId = userId;
+      document.getElementById('gift-target-id').value = userId;
+      document.getElementById('gift-target-name').textContent = userName;
+      document.getElementById('gift-creator-handle').value = '';
+      document.getElementById('gift-access-level').value = '2';
+      document.getElementById('gift-expires-at').value = '';
+      document.getElementById('gift-note').value = '';
+      document.getElementById('gift-form-error').textContent = '';
+      document.getElementById('gift-form-card').style.display = '';
+      document.getElementById('gift-form-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    document.getElementById('gift-cancel-btn').addEventListener('click', () => {
+      document.getElementById('gift-form-card').style.display = 'none';
+      _giftTargetUserId = null;
+    });
+
+    document.getElementById('gift-save-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('gift-form-error');
+      errEl.textContent = '';
+      const userId        = document.getElementById('gift-target-id').value;
+      const creatorHandle = document.getElementById('gift-creator-handle').value.trim();
+      const accessLevel   = parseInt(document.getElementById('gift-access-level').value, 10);
+      const expiresAt     = document.getElementById('gift-expires-at').value || null;
+      const note          = document.getElementById('gift-note').value.trim() || null;
+
+      if (!creatorHandle) { errEl.textContent = 'Creator handle is required.'; return; }
+
+      const body = {
+        creator_handle: creatorHandle,
+        access_level: accessLevel,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        note,
+      };
+
+      try {
+        const result = await apiPost(`/api/admin/users/${encodeURIComponent(userId)}/gift`, body);
+        showToast(`🎁 Gifted to ${result.username} (level ${result.access_level_granted})`);
+        document.getElementById('gift-form-card').style.display = 'none';
+        _giftTargetUserId = null;
+        loadGiftHistory(userId, result.username);
+      } catch (err) {
+        errEl.textContent = `Failed: ${err.message}`;
+      }
+    });
+
+    async function loadGiftHistory(userId, userName) {
+      _giftHistoryUserId = userId;
+      document.getElementById('gift-history-name').textContent = userName;
+      const card  = document.getElementById('gift-history-card');
+      const tbody = document.getElementById('gift-history-body');
+      card.style.display = '';
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Loading…</td></tr>';
+      try {
+        const data = await apiGet(`/api/admin/users/${encodeURIComponent(userId)}/gifts`);
+        if (!data.gifts || !data.gifts.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No gifts yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.gifts.map(g => {
+          const ts     = (g.created_at || '').replace('T',' ').replace(/\.\d+.*/,' UTC');
+          const exp    = g.expires_at ? g.expires_at.replace('T',' ').replace(/\.\d+.*/,' UTC') : 'Never';
+          const status = g.is_active ? '<span style="color:#67d399">Active</span>' : '<span style="color:#9e7e82">Revoked</span>';
+          const revoke = g.is_active
+            ? `<button class="btn-sm btn-delete revoke-btn" data-gift="${g.id}" data-user="${escHtml(userId)}" data-name="${escHtml(userName)}">Revoke</button>`
+            : '—';
+          return `<tr>
+            <td>${escHtml(g.creator_handle)}</td>
+            <td>${escHtml(g.granted_by)}</td>
+            <td><span class="badge-level ${tierClass(g.access_level_granted)}">${g.access_level_granted}</span></td>
+            <td class="ts-cell">${escHtml(exp)}</td>
+            <td>${escHtml(g.note || '—')}</td>
+            <td>${status}</td>
+            <td class="ts-cell">${escHtml(ts)}</td>
+            <td>${revoke}</td>
+          </tr>`;
+        }).join('');
+
+        tbody.querySelectorAll('.revoke-btn').forEach(btn => {
+          btn.addEventListener('click', () => revokeGift(btn.dataset.user, parseInt(btn.dataset.gift, 10), btn.dataset.name));
+        });
+      } catch (err) {
+        if (err.message !== '401') tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Failed to load: ${escHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function revokeGift(userId, giftId, userName) {
+      if (!confirm(`Revoke this gift for ${userName}?`)) return;
+      try {
+        await apiDelete(`/api/admin/users/${encodeURIComponent(userId)}/gifts/${giftId}`);
+        showToast('Gift revoked.');
+        loadGiftHistory(userId, userName);
+      } catch (err) {
+        if (err.message !== '401') showToast(`Failed to revoke: ${err.message}`);
+      }
+    }
+
+    document.getElementById('refresh-gift-history-btn').addEventListener('click', () => {
+      if (_giftHistoryUserId) loadGiftHistory(_giftHistoryUserId, document.getElementById('gift-history-name').textContent);
+    });
+
     })();
   </script>
 
