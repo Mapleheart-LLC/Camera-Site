@@ -33,7 +33,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from db import get_db
-from dependencies import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+from dependencies import ACCESS_TOKEN_EXPIRE_MINUTES, ADMIN_PASSWORD, ADMIN_USERNAME, create_access_token
 
 router = APIRouter(tags=["auth"])
 
@@ -246,6 +246,29 @@ def login(
     )
 
     if not row:
+        # ── Admin-credential fallback ───────────────────────────────────────
+        # If the submitted identifier matches the admin username and the
+        # password matches the admin password, issue a max-access subscriber
+        # JWT so the admin can use all subscriber-gated areas of the site.
+        if (
+            ADMIN_USERNAME
+            and ADMIN_PASSWORD
+            and secrets.compare_digest(identifier.encode(), ADMIN_USERNAME.lower().encode())
+            and secrets.compare_digest(payload.password.encode(), ADMIN_PASSWORD.encode())
+        ):
+            _clear_lockout(identifier)
+            token = create_access_token(
+                {"sub": f"admin:{ADMIN_USERNAME}", "access_level": 3},
+                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+            )
+            logger.info("Admin '%s' logged into subscriber portal via admin credentials.", ADMIN_USERNAME)
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "username": ADMIN_USERNAME,
+                "access_level": 3,
+            }
+
         # Always run the hash so response time doesn't reveal whether the
         # username/email exists (timing-safe user-enumeration prevention).
         _hash_password("__timing_guard__")
