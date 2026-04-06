@@ -674,10 +674,15 @@ def creator_add_drool(
             ),
         )
         db.commit()
-    except Exception as exc:
+    except sqlite3.IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Could not add entry (URL may already exist): {exc}",
+            detail="An entry with this URL already exists.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not add entry.",
         ) from exc
     row = db.execute(
         """
@@ -753,10 +758,15 @@ def creator_add_camera(
             ),
         )
         db.commit()
-    except Exception as exc:
+    except sqlite3.IntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Could not add camera (slug may already exist): {exc}",
+            detail="A camera with this stream slug already exists.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not add camera.",
         ) from exc
     row = db.execute(
         "SELECT id, display_name, stream_slug, minimum_access_level, rtmp_key, stream_title FROM cameras WHERE id = ?",

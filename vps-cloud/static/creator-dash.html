@@ -1183,14 +1183,14 @@
       form.style.display = shown ? 'none' : 'block';
     });
 
+    let _camSlugUserEdited = false;
     document.getElementById('new-cam-name').addEventListener('input', () => {
-      const slugEl = document.getElementById('new-cam-slug');
-      if (slugEl._userEdited) return;
-      slugEl.value = document.getElementById('new-cam-name').value
+      if (_camSlugUserEdited) return;
+      document.getElementById('new-cam-slug').value = document.getElementById('new-cam-name').value
         .toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '');
     });
     document.getElementById('new-cam-slug').addEventListener('input', function() {
-      this._userEdited = this.value.length > 0;
+      _camSlugUserEdited = this.value.length > 0;
     });
 
     document.getElementById('add-camera-cancel-btn').addEventListener('click', () => {
