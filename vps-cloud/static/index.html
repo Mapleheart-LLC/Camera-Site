@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live – Join the pack and access live streams." />
+  <meta name="description" content="come find your place in the pack." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="Join the pack and access live streams." />
+  <meta property="og:description" content="come find your place in the pack." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="mochii.live 🐾" />
-  <meta name="twitter:description" content="Join the pack and access live streams." />
+  <meta name="twitter:description" content="come find your place in the pack." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -240,7 +240,7 @@
       width: 100%;
       max-width: 560px;
       margin: 0 auto;
-      padding: 0 1.5rem 3rem;
+      padding: 0 1.5rem 1.5rem;
     }
 
     .links-section + .links-section {
@@ -970,20 +970,62 @@
     <!-- Hero -->
     <div class="landing-hero">
       <span class="hero-paw" aria-hidden="true">🐾</span>
-      <h1 aria-label="mochii.live">mochii.live</h1>
-      <p class="hero-tagline">come find your place in the pack. 🐾</p>
+      <h1 id="den-title" aria-label="Loading"><span class="paw-loading" aria-hidden="true">🐾</span></h1>
+      <p class="hero-tagline" id="den-tagline">come find your place in the pack. 🐾</p>
+    </div>
+
+    <!-- Static nav cards -->
+    <div class="links-section">
+      <p class="links-section-label">explore ✦</p>
+      <div class="links-list">
+        <a class="link-card" id="link-ask" href="#">
+          <span class="link-card-emoji" aria-hidden="true">🐾</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Ask a Question</span>
+            <span class="link-card-desc">drop me an anonymous question or message</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" id="link-drool" href="#">
+          <span class="link-card-emoji" aria-hidden="true">💧</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Drool Log</span>
+            <span class="link-card-desc">the shame gallery — everything i saved and liked</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" id="link-store" href="#">
+          <span class="link-card-emoji" aria-hidden="true">🛍️</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Pack Store</span>
+            <span class="link-card-desc">merch from across the pack</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+        <a class="link-card" id="link-links" href="#">
+          <span class="link-card-emoji" aria-hidden="true">🔗</span>
+          <span class="link-card-body">
+            <span class="link-card-title">All Links</span>
+            <span class="link-card-desc">browse my socials, shop, and more</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">→</span>
+        </a>
+      </div>
     </div>
 
     <!-- OAuth error/info message -->
     <p id="login-message" role="alert" aria-live="polite"></p>
 
-    <!-- Login / Register card -->
+    <!-- Login / Register / Creator card -->
+    <p style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:#6a4a4e;text-align:center;margin:.5rem 0 .75rem;">sign in to unlock streams ✦</p>
     <div id="auth-card">
       <div class="auth-tabs" role="tablist">
         <button class="auth-tab active" id="tab-login" role="tab" aria-selected="true"
                 onclick="switchAuthTab('login')">Sign In</button>
         <button class="auth-tab" id="tab-register" role="tab" aria-selected="false"
                 onclick="switchAuthTab('register')">Register</button>
+        <button class="auth-tab" id="tab-creator" role="tab" aria-selected="false"
+                onclick="switchAuthTab('creator')">Creator</button>
       </div>
 
       <!-- Login form -->
@@ -1007,42 +1049,30 @@
         <button class="auth-submit" type="submit" id="register-btn">Create Account 🐾</button>
       </form>
 
-      <div class="subscribe-row">
+      <!-- Creator login form (hidden until tab is switched) -->
+      <form id="creator-login-form" class="auth-form" style="display:none;"
+            onsubmit="handleCreatorLogin(event)" novalidate>
+        <input class="auth-input" id="creator-handle" type="text"
+               placeholder="Creator handle" autocomplete="username" required />
+        <input class="auth-input" id="creator-password" type="password"
+               placeholder="Password" autocomplete="current-password" required />
+        <button class="auth-submit" type="submit" id="creator-login-btn">Enter the Den 🐾</button>
+      </form>
+
+      <!-- Creator 2FA form (shown when login returns requires_2fa) -->
+      <form id="creator-otp-form" class="auth-form" style="display:none;"
+            onsubmit="handleCreatorOtp(event)" novalidate>
+        <p style="font-size:.82rem;color:#9e7e82;text-align:center;">Enter your authenticator code</p>
+        <input class="auth-input" id="creator-otp" type="text" inputmode="numeric"
+               placeholder="6-digit code" autocomplete="one-time-code" maxlength="6" required />
+        <button class="auth-submit" type="submit" id="creator-otp-btn">Confirm 🐾</button>
+      </form>
+
+      <div class="subscribe-row" id="subscribe-row">
         Not subscribed?
         <button class="subscribe-link" type="button" onclick="startSubscribe()">
           Subscribe to unlock streams →
         </button>
-      </div>
-    </div>
-
-    <!-- Static nav cards -->
-    <div class="links-section">
-      <p class="links-section-label">pages ✦</p>
-      <div class="links-list">
-        <a class="link-card" href="https://links.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">🔗</span>
-          <span class="link-card-body">
-            <span class="link-card-title">All Links</span>
-            <span class="link-card-desc">browse my socials, shop, and more</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
-        <a class="link-card" href="https://anon.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">🐾</span>
-          <span class="link-card-body">
-            <span class="link-card-title">Ask a Question</span>
-            <span class="link-card-desc">drop me an anonymous question or message</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
-        <a class="link-card" href="https://drool.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">💧</span>
-          <span class="link-card-body">
-            <span class="link-card-title">Drool Log</span>
-            <span class="link-card-desc">the shame gallery – she liked this</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">→</span>
-        </a>
       </div>
     </div>
 
@@ -1658,13 +1688,20 @@
 
     // ── Auth tab switcher ─────────────────────────────
     function switchAuthTab(tab) {
-      const isLogin = tab === 'login';
-      document.getElementById('login-form').style.display    = isLogin ? 'flex' : 'none';
-      document.getElementById('register-form').style.display = isLogin ? 'none' : 'flex';
+      const isLogin   = tab === 'login';
+      const isReg     = tab === 'register';
+      const isCreator = tab === 'creator';
+      document.getElementById('login-form').style.display          = isLogin   ? 'flex' : 'none';
+      document.getElementById('register-form').style.display       = isReg     ? 'flex' : 'none';
+      document.getElementById('creator-login-form').style.display  = isCreator ? 'flex' : 'none';
+      document.getElementById('creator-otp-form').style.display    = 'none';
       document.getElementById('tab-login').classList.toggle('active', isLogin);
-      document.getElementById('tab-register').classList.toggle('active', !isLogin);
+      document.getElementById('tab-register').classList.toggle('active', isReg);
+      document.getElementById('tab-creator').classList.toggle('active', isCreator);
       document.getElementById('tab-login').setAttribute('aria-selected', isLogin);
-      document.getElementById('tab-register').setAttribute('aria-selected', !isLogin);
+      document.getElementById('tab-register').setAttribute('aria-selected', isReg);
+      document.getElementById('tab-creator').setAttribute('aria-selected', isCreator);
+      document.getElementById('subscribe-row').style.display = isCreator ? 'none' : '';
     }
 
     // ── Native sign-in ────────────────────────────────
@@ -1739,6 +1776,71 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Create Account 🐾';
+      }
+    }
+
+    // ── Creator login ─────────────────────────────────
+    let _creatorPendingToken = null;
+
+    async function handleCreatorLogin(e) {
+      e.preventDefault();
+      const btn    = document.getElementById('creator-login-btn');
+      const handle = document.getElementById('creator-handle').value.trim();
+      const pass   = document.getElementById('creator-password').value;
+      btn.disabled = true;
+      btn.textContent = 'Entering den…';
+      try {
+        const res = await fetch('/api/creator/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ handle, password: pass }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Invalid handle or password.', 'error');
+          return;
+        }
+        if (data.requires_2fa) {
+          _creatorPendingToken = data.pending_token;
+          document.getElementById('creator-login-form').style.display = 'none';
+          document.getElementById('creator-otp-form').style.display   = 'flex';
+          return;
+        }
+        localStorage.setItem('creator_jwt', data.access_token);
+        window.location.href = '/creator-dash.html';
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enter the Den 🐾';
+      }
+    }
+
+    // ── Creator 2FA confirm ───────────────────────────
+    async function handleCreatorOtp(e) {
+      e.preventDefault();
+      const btn = document.getElementById('creator-otp-btn');
+      const otp = document.getElementById('creator-otp').value.trim();
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      try {
+        const res = await fetch('/api/creator/2fa/confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pending_token: _creatorPendingToken, otp }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLogin(data.detail || 'Invalid code. Please try again.', 'error');
+          return;
+        }
+        localStorage.setItem('creator_jwt', data.access_token);
+        window.location.href = '/creator-dash.html';
+      } catch {
+        showLogin('Could not connect. Please try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirm 🐾';
       }
     }
 
@@ -1849,6 +1951,85 @@
     </div>
   </div>
   <script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}</script>
+  <script>
+    // ── Creator den initialisation ────────────────────────
+    // Runs on every page load. Detects which creator's subdomain we're on,
+    // fetches their public profile, and populates the logged-out hero section.
+    // If the handle doesn't match an active creator, redirects to the
+    // platform landing page.
+    (async function initCreatorDen() {
+      const host  = window.location.hostname; // e.g. "mochii.mochii.live"
+      const parts = host.split('.');
+      // index.html is served for creator subdomains by the server-side middleware.
+      // If parts.length < 3 we're on the bare root domain or a local/test env —
+      // the server routes bare-domain traffic to landing.html, not here, so this
+      // is just a safety guard. Keep the default placeholder and do nothing.
+      if (parts.length < 3) return;
+
+      const handle     = parts[0];                    // "mochii"
+      const rootDomain = parts.slice(1).join('.');    // "mochii.live"
+      const proto      = window.location.protocol;   // preserves http: or https:
+
+      // Wire up link card hrefs from the detected root domain
+      const links = {
+        'link-ask':   `${proto}//anon.${rootDomain}`,
+        'link-drool': `${proto}//drool.${rootDomain}`,
+        'link-store': `${proto}//shop.${rootDomain}`,
+        'link-links': `${proto}//links.${rootDomain}`,
+      };
+      for (const [id, href] of Object.entries(links)) {
+        const el = document.getElementById(id);
+        if (el) el.href = href;
+      }
+
+      function applyFallback(name) {
+        document.title = `${name} 🐾`;
+        const titleEl = document.getElementById('den-title');
+        if (titleEl) { titleEl.textContent = name; titleEl.setAttribute('aria-label', name); }
+      }
+
+      // Fetch the creator's public profile
+      let creator;
+      try {
+        const res = await fetch(`/api/creators/${encodeURIComponent(handle)}`);
+        if (res.status === 404) {
+          // No active creator with this handle — send to platform landing.
+          // Any arbitrary subdomain that reaches here is caught and redirected.
+          window.location.replace(`${proto}//${rootDomain}/`);
+          return;
+        }
+        if (!res.ok) {
+          // Transient server error — show handle as fallback title so the
+          // page is usable rather than stuck on a loading spinner.
+          console.error(`[den] profile fetch failed: HTTP ${res.status}`);
+          applyFallback(handle);
+          return;
+        }
+        creator = await res.json();
+      } catch (err) {
+        // Network error — show handle as fallback, don't redirect.
+        console.error('[den] profile fetch error:', err);
+        applyFallback(handle);
+        return;
+      }
+
+      const displayName = creator.display_name || handle;
+
+      // Page title + meta description
+      document.title = `${displayName} 🐾`;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && creator.bio) metaDesc.setAttribute('content', creator.bio);
+
+      // Hero h1 and tagline
+      const titleEl   = document.getElementById('den-title');
+      const taglineEl = document.getElementById('den-tagline');
+      if (titleEl) {
+        titleEl.textContent = displayName;
+        titleEl.setAttribute('aria-label', displayName);
+      }
+      if (taglineEl && creator.bio) taglineEl.textContent = creator.bio;
+    })();
+  </script>
 </body>
 </html>
 

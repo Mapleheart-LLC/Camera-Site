@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live — the creator platform built for fans who want more. Live cams, anonymous Q&A, Drool Log, shared store, and a den all your own." />
+  <meta name="description" content="mochii.live — a creator platform with live cams, anonymous Q&A, curated feeds, and a den that's yours." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="The creator platform built for fans who want more — and creators who want their own den." />
+  <meta property="og:description" content="the den is open." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"        content="summary" />
   <meta name="twitter:title"       content="mochii.live 🐾" />
-  <meta name="twitter:description" content="The creator platform built for fans who want more — and creators who want their own den." />
+  <meta name="twitter:description" content="the den is open." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -28,9 +28,12 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% 0%, rgba(120, 20, 35, 0.18) 0%, transparent 70%),
+        #1a1a1a;
     }
 
-    /* ── Nav ────────────────────────────────────────────── */
+    /* ── Nav ──────────────────────────────────────────── */
     .nav {
       display: flex;
       align-items: center;
@@ -38,6 +41,7 @@
       padding: .85rem 1.75rem;
       background: #1e1e1e;
       border-bottom: 1px solid #3d2a2e;
+      box-shadow: 0 1px 0 #3d2a2e, 0 0 24px rgba(140, 20, 40, 0.1);
       position: sticky;
       top: 0;
       z-index: 10;
@@ -51,43 +55,48 @@
       letter-spacing: .01em;
     }
 
-    .nav-actions { display: flex; gap: .65rem; align-items: center; }
+    .nav-actions { display: flex; gap: .6rem; align-items: center; }
 
     .btn-nav {
-      display: inline-flex; align-items: center; gap: .4rem;
+      display: inline-flex; align-items: center; gap: .35rem;
       padding: .45rem 1rem;
       border-radius: 10px;
       font-size: .85rem; font-weight: 700; font-family: inherit;
       text-decoration: none; cursor: pointer;
-      transition: background .2s, color .2s, box-shadow .2s;
+      transition: background .2s, color .2s, border-color .2s, box-shadow .2s;
+      border: 1px solid transparent;
     }
 
     .btn-nav-ghost {
-      background: transparent; border: 1px solid #4b3538; color: #9e7e82;
+      background: transparent;
+      border-color: #4b3538;
+      color: #9e7e82;
     }
     .btn-nav-ghost:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
     .btn-nav-primary {
-      background: #3d2028; border: 1px solid #e8aeb7; color: #e8aeb7;
+      background: #3d2028;
+      border-color: #e8aeb7;
+      color: #e8aeb7;
     }
     .btn-nav-primary:hover {
       background: #e8aeb7; color: #1a1a1a;
-      box-shadow: 0 4px 18px rgba(232,174,183,.28);
+      box-shadow: 0 4px 16px rgba(232,174,183,.3);
     }
 
-    /* ── Hero ───────────────────────────────────────────── */
+    /* ── Hero ─────────────────────────────────────────── */
     .hero {
       text-align: center;
-      padding: 5.5rem 1.5rem 3.5rem;
+      padding: 5rem 1.5rem 3.5rem;
       flex-shrink: 0;
     }
 
     .hero-paw {
-      font-size: 3.8rem;
+      font-size: 3.6rem;
       display: block;
-      margin-bottom: 1.1rem;
+      margin-bottom: 1rem;
       animation: pawFloat 3s ease-in-out infinite;
-      filter: drop-shadow(0 0 20px rgba(220,80,100,.4));
+      filter: drop-shadow(0 0 22px rgba(220,80,100,.5));
     }
 
     @keyframes pawFloat {
@@ -96,21 +105,22 @@
     }
 
     .hero h1 {
-      font-size: clamp(2.1rem, 5.5vw, 3.4rem);
+      font-size: clamp(2.2rem, 5.5vw, 3.4rem);
       font-weight: 800;
       color: #e8aeb7;
       margin-bottom: .6rem;
-      letter-spacing: -.01em;
-      line-height: 1.15;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      text-shadow: 0 0 40px rgba(232, 100, 120, 0.3);
     }
 
     .hero-tagline {
       font-size: 1rem;
       color: #9e7e82;
       font-weight: 600;
-      max-width: 480px;
-      margin: 0 auto 2.5rem;
-      line-height: 1.6;
+      max-width: 420px;
+      margin: 0 auto 2.25rem;
+      line-height: 1.65;
     }
 
     .hero-ctas {
@@ -121,23 +131,23 @@
     }
 
     .btn-hero-primary {
-      padding: .75rem 1.75rem;
+      padding: .72rem 1.65rem;
       background: linear-gradient(135deg, #c4525e 0%, #e8aeb7 100%);
       border: none; border-radius: 12px;
       color: #fff; font-family: inherit; font-size: 1rem; font-weight: 800;
       text-decoration: none; cursor: pointer;
-      box-shadow: 0 6px 28px rgba(232,174,183,.3);
+      box-shadow: 0 6px 24px rgba(232,174,183,.32);
       transition: transform .15s, box-shadow .2s;
       display: inline-flex; align-items: center; gap: .45rem;
     }
     .btn-hero-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 36px rgba(232,174,183,.42);
+      box-shadow: 0 10px 32px rgba(232,174,183,.44);
     }
     .btn-hero-primary:active { transform: translateY(0); }
 
     .btn-hero-ghost {
-      padding: .75rem 1.75rem;
+      padding: .72rem 1.65rem;
       background: transparent; border: 1px solid #4b3538;
       border-radius: 12px; color: #9e7e82;
       font-family: inherit; font-size: 1rem; font-weight: 700;
@@ -148,12 +158,12 @@
     .btn-hero-ghost:hover { border-color: #e8aeb7; color: #e8aeb7; transform: translateY(-2px); }
     .btn-hero-ghost:active { transform: translateY(0); }
 
-    /* ── Creators section ───────────────────────────────── */
+    /* ── Section wrapper ─────────────────────────────── */
     .section {
-      padding: 3.5rem 1.5rem;
-      max-width: 860px;
-      margin: 0 auto;
       width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
     }
 
     .section-label {
@@ -162,188 +172,154 @@
       text-transform: uppercase;
       letter-spacing: .14em;
       color: #6a4a4e;
-      margin-bottom: .6rem;
       text-align: center;
+      margin-bottom: 1.25rem;
     }
 
-    .section-title {
-      font-size: 1.55rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      margin-bottom: .5rem;
-      text-align: center;
-    }
-
-    .section-sub {
-      font-size: .9rem;
-      color: #9e7e82;
-      text-align: center;
-      margin-bottom: 2.5rem;
-      line-height: 1.6;
-    }
-
-    /* Creator cards */
-    .creators-grid {
-      display: flex;
-      gap: 1.25rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
+    /* ── Featured creator card ───────────────────────── */
     .creator-card {
-      flex: 1;
-      min-width: 220px;
-      max-width: 300px;
+      display: flex;
+      align-items: center;
+      gap: 1.1rem;
+      padding: 1.25rem 1.4rem;
       background: #242424;
       border: 1px solid #3d2a2e;
       border-radius: 16px;
-      padding: 1.75rem 1.5rem;
-      text-align: center;
       text-decoration: none;
       color: #f0e6e8;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: .75rem;
+      position: relative;
+      overflow: hidden;
       transition: background .18s, border-color .18s, transform .15s, box-shadow .2s;
     }
 
+    .creator-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 40%, rgba(220, 100, 120, 0.07) 50%, transparent 60%);
+      transform: translateX(-100%);
+      transition: transform .55s ease;
+    }
+
+    .creator-card:hover::after { transform: translateX(100%); }
+
     .creator-card:hover {
-      background: #2d1f22;
-      border-color: #e8aeb7;
+      background: #2a1520;
+      border-color: #d4667a;
       transform: translateY(-3px);
-      box-shadow: 0 8px 32px rgba(232,174,183,.18);
+      box-shadow: 0 10px 36px rgba(200, 60, 85, 0.22);
     }
 
     .creator-avatar {
-      width: 72px; height: 72px;
+      width: 62px; height: 62px;
       border-radius: 50%;
       background: #3d2028;
-      border: 2px solid #e8aeb7;
+      border: 2px solid #5a2a32;
       display: flex; align-items: center; justify-content: center;
-      font-size: 2rem;
-      overflow: hidden;
+      font-size: 1.8rem;
+      flex-shrink: 0;
+      transition: border-color .18s;
     }
 
-    .creator-avatar img {
-      width: 100%; height: 100%; object-fit: cover;
-    }
+    .creator-card:hover .creator-avatar { border-color: #e8aeb7; }
+
+    .creator-info { flex: 1; min-width: 0; }
 
     .creator-name {
       font-size: 1.05rem;
       font-weight: 800;
       color: #e8aeb7;
+      margin-bottom: .2rem;
     }
 
     .creator-handle {
-      font-size: .78rem;
+      font-size: .75rem;
       color: #6a4a4e;
       font-weight: 600;
+      margin-bottom: .45rem;
     }
 
     .creator-bio {
       font-size: .82rem;
       color: #9e7e82;
-      line-height: 1.55;
-    }
-
-    .creator-visit-btn {
-      margin-top: .35rem;
-      padding: .45rem 1.1rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 8px;
-      color: #e8aeb7;
-      font-family: inherit;
-      font-size: .82rem;
-      font-weight: 700;
-      text-decoration: none;
-      transition: background .15s, color .15s;
-      display: inline-block;
-    }
-
-    .creator-card:hover .creator-visit-btn {
-      background: #e8aeb7;
-      color: #1a1a1a;
-    }
-
-    /* ── Features ───────────────────────────────────────── */
-    .features-grid {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .feature-card {
-      flex: 1;
-      min-width: 180px;
-      max-width: 200px;
-      background: #1e1e1e;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      padding: 1.5rem 1.25rem;
-      text-align: center;
-    }
-
-    .feature-icon {
-      font-size: 2.2rem;
-      display: block;
-      margin-bottom: .75rem;
-    }
-
-    .feature-title {
-      font-size: .88rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      margin-bottom: .35rem;
-    }
-
-    .feature-desc {
-      font-size: .78rem;
-      color: #9e7e82;
       line-height: 1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* ── Divider ─────────────────────────────────────────── */
-    .section-divider {
+    .creator-arrow {
+      font-size: .9rem;
+      color: #6a4a4e;
+      flex-shrink: 0;
+      transition: color .18s, transform .18s;
+    }
+
+    .creator-card:hover .creator-arrow { color: #e8aeb7; transform: translateX(4px); }
+
+    /* ── Divider ─────────────────────────────────────── */
+    .divider {
       width: 100%;
-      max-width: 860px;
-      margin: 0 auto;
+      max-width: 680px;
+      margin: .5rem auto;
       border: none;
       border-top: 1px solid #2d1f22;
     }
 
-    /* ── CTA banner ─────────────────────────────────────── */
-    .cta-banner {
-      background: linear-gradient(135deg, #1f1014 0%, #2a1520 100%);
+    /* ── Feature pills ───────────────────────────────── */
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .55rem;
+      justify-content: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .45rem .9rem;
+      background: #1e1e1e;
       border: 1px solid #3d2a2e;
-      border-radius: 18px;
-      padding: 2.5rem 2rem;
-      text-align: center;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    .cta-banner h2 {
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      margin-bottom: .5rem;
-    }
-
-    .cta-banner p {
-      font-size: .88rem;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 700;
       color: #9e7e82;
-      margin-bottom: 1.5rem;
-      line-height: 1.6;
     }
 
-    /* ── Footer ─────────────────────────────────────────── */
+    /* ── Creator CTA strip ───────────────────────────── */
+    .creator-pitch {
+      text-align: center;
+    }
+
+    .creator-pitch p {
+      font-size: .9rem;
+      color: #6a4a4e;
+      font-weight: 600;
+      margin-bottom: .65rem;
+    }
+
+    .creator-pitch a {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-size: .88rem;
+      font-weight: 800;
+      color: #9e7e82;
+      text-decoration: none;
+      border: 1px solid #4b3538;
+      border-radius: 10px;
+      padding: .5rem 1.1rem;
+      transition: border-color .2s, color .2s;
+    }
+
+    .creator-pitch a:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    /* ── Footer ──────────────────────────────────────── */
     footer {
       margin-top: auto;
       text-align: center;
-      padding: 2rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+      padding: 1.75rem 1.5rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
       border-top: 1px solid #2d1f22;
       font-size: .78rem;
       color: #4a2e30;
@@ -352,375 +328,118 @@
     footer a { color: #6a4a4e; text-decoration: none; }
     footer a:hover { color: #e8aeb7; }
 
-    /* ── Mobile ──────────────────────────────────────────── */
+    /* ── Mobile ──────────────────────────────────────── */
     @media (max-width: 520px) {
-      .hero { padding: 4rem 1rem 2.5rem; }
-      .section { padding: 2.5rem 1rem; }
-      .nav { padding: .75rem 1.1rem; }
-      .btn-hero-primary, .btn-hero-ghost { font-size: .9rem; padding: .65rem 1.25rem; }
+      .hero { padding: 3.5rem 1rem 2.5rem; }
+      .section { padding: 1.5rem 1rem; }
+      .nav { padding: .75rem 1rem; }
+      .creator-bio { display: none; }
     }
-
-    /* ── Dual-audience section ───────────────────────────── */
-    .audience-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.25rem;
-    }
-    @media (max-width: 640px) {
-      .audience-grid { grid-template-columns: 1fr; }
-    }
-
-    .audience-card {
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 18px;
-      padding: 2rem 1.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .audience-card.fans  { border-color: #3d2a2e; }
-    .audience-card.creators { border-color: #2a2a3d; }
-
-    .audience-card-header {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-    }
-
-    .audience-icon {
-      font-size: 2rem;
-      line-height: 1;
-    }
-
-    .audience-title {
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: #e8aeb7;
-    }
-
-    .audience-sub {
-      font-size: .85rem;
-      color: #9e7e82;
-      line-height: 1.6;
-    }
-
-    .audience-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: .55rem;
-    }
-
-    .audience-list li {
-      font-size: .85rem;
-      color: #c8b0b4;
-      display: flex;
-      align-items: flex-start;
-      gap: .55rem;
-      line-height: 1.5;
-    }
-
-    .audience-list li::before {
-      content: '✓';
-      color: #e8aeb7;
-      font-weight: 800;
-      flex-shrink: 0;
-      margin-top: .05rem;
-    }
-
-    .audience-cta {
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
-      padding: .6rem 1.25rem;
-      border-radius: 10px;
-      font-size: .88rem;
-      font-weight: 800;
-      font-family: inherit;
-      text-decoration: none;
-      cursor: pointer;
-      transition: background .2s, color .2s, box-shadow .2s;
-      align-self: flex-start;
-      margin-top: .25rem;
-    }
-
-    .audience-cta.fans-cta {
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      color: #e8aeb7;
-    }
-    .audience-cta.fans-cta:hover {
-      background: #e8aeb7;
-      color: #1a1a1a;
-      box-shadow: 0 4px 18px rgba(232,174,183,.28);
-    }
-
-    .audience-cta.creators-cta {
-      background: transparent;
-      border: 1px solid #5a5a9e;
-      color: #aab4f0;
-    }
-    .audience-cta.creators-cta:hover {
-      background: #aab4f0;
-      color: #1a1a1a;
-      box-shadow: 0 4px 18px rgba(170,180,240,.22);
-    }
-
-    /* ── Shared surfaces strip ───────────────────────────── */
-    .shared-strip {
-      display: flex;
-      gap: .75rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .shared-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: .45rem;
-      padding: .5rem 1rem;
-      background: #1e1e1e;
-      border: 1px solid #3d2a2e;
-      border-radius: 999px;
-      font-size: .82rem;
-      font-weight: 700;
-      color: #9e7e82;
-      text-decoration: none;
-      transition: border-color .2s, color .2s;
-    }
-    .shared-pill:hover { border-color: #e8aeb7; color: #e8aeb7; }
   </style>
   <link rel="manifest" href="/manifest.json">
   <script>
-    // Apply saved theme before paint to avoid flash
     (function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
   </script>
 </head>
 <body>
 
-  <!-- ── Nav ────────────────────────────────────────────── -->
+  <!-- ── Nav ──────────────────────────────────────────── -->
   <nav class="nav">
     <a href="/" class="nav-logo">🐾 mochii.live</a>
     <div class="nav-actions">
-      <a href="/creator.html" class="btn-nav btn-nav-ghost">Creators</a>
-      <a id="nav-signin" href="#" class="btn-nav btn-nav-primary">Sign In</a>
+      <a href="/creator-dash.html" class="btn-nav btn-nav-ghost">Creator Login</a>
+      <a id="nav-enter" href="#" class="btn-nav btn-nav-primary">Sign In 🐾</a>
     </div>
   </nav>
 
-  <!-- ── Hero ───────────────────────────────────────────── -->
+  <!-- ── Hero ─────────────────────────────────────────── -->
   <section class="hero">
     <span class="hero-paw" aria-hidden="true">🐾</span>
     <h1>the den is open.</h1>
     <p class="hero-tagline">
-      A platform for creators who want more than just followers —
-      and fans who want to actually be part of the pack.
+      a creator platform with live cams, anonymous Q&amp;A, curated feeds, and a den that's yours.
     </p>
     <div class="hero-ctas">
-      <a id="hero-enter-btn" href="#" class="btn-hero-primary">🐾 Enter the Den</a>
+      <a id="hero-enter" href="#" class="btn-hero-primary">🐾 Enter the Den</a>
       <a href="/creator.html" class="btn-hero-ghost">Become a Creator →</a>
     </div>
   </section>
 
-  <!-- ── Who is this for? ────────────────────────────────── -->
-  <section class="section">
-    <p class="section-label">Who it's for</p>
-    <h2 class="section-title">Built for Both Sides of the Pack</h2>
-    <p class="section-sub">Whether you're here to watch or here to create, there's a place for you.</p>
-
-    <div class="audience-grid">
-      <!-- Fans -->
-      <div class="audience-card fans">
-        <div class="audience-card-header">
-          <span class="audience-icon">🐾</span>
-          <div class="audience-title">For Fans</div>
-        </div>
-        <p class="audience-sub">
-          Get closer to your favourite creators than any other platform allows.
-          No algorithms hiding content, no ads — just direct access to the den.
-        </p>
-        <ul class="audience-list">
-          <li>Live webcam streams, gated to your subscription tier</li>
-          <li>Drop anonymous questions into the Puppy Pouch — no sign-in needed</li>
-          <li>Browse the Drool Log: everything the creator saved and liked, exposed</li>
-          <li>Shop a site-wide store where every purchase directly supports your creator</li>
-          <li>React and comment on Drool Log posts in real-time</li>
-          <li>See what the creator is listening to right now via Spotify</li>
-        </ul>
-        <a id="fans-cta" href="#" class="audience-cta fans-cta">🐾 Find a Creator</a>
-      </div>
-
-      <!-- Creators -->
-      <div class="audience-card creators">
-        <div class="audience-card-header">
-          <span class="audience-icon">🎬</span>
-          <div class="audience-title">For Creators</div>
-        </div>
-        <p class="audience-sub">
-          Your own fully-featured den — live streams, a Q&amp;A inbox, a curated content feed,
-          and a storefront — all on your own subdomain. You own it.
-        </p>
-        <ul class="audience-list">
-          <li>Your own subdomain (you.mochii.live) with a subscriber portal</li>
-          <li>Multi-camera live streaming via WebRTC, tiered by subscription level</li>
-          <li>Anonymous Q&amp;A inbox — answer publicly, share as individual links</li>
-          <li>Drool Log feed: auto-pulls your Reddit, Twitter/X, and Bluesky saves</li>
-          <li>Sell merch on the shared pack store — you set your revenue percentage</li>
-          <li>Subscription billing handled via Segpay — you get paid</li>
-          <li>PiShock and Lovense interactive controls for pack engagement</li>
-        </ul>
-        <a href="/creator.html" class="audience-cta creators-cta">🎬 Apply to Join →</a>
-      </div>
-    </div>
-  </section>
-
-  <hr class="section-divider" />
-
-  <!-- ── Featured Creators ──────────────────────────────── -->
-  <section class="section">
-    <p class="section-label">Now on mochii.live</p>
-    <h2 class="section-title">Featured Creators</h2>
-    <p class="section-sub">Each creator has their own den — live cams, Q&amp;A, and curated content just for their pack.</p>
-
-    <div class="creators-grid" id="creators-grid">
-      <!-- Static featured card for mochii (always shown) -->
-      <a class="creator-card" id="mochii-card" href="#" aria-label="Visit mochii's den">
-        <div class="creator-avatar">🐾</div>
+  <!-- ── Featured Creator ─────────────────────────────── -->
+  <div class="section">
+    <p class="section-label">now on mochii.live</p>
+    <a class="creator-card" id="mochii-card" href="#" aria-label="Visit mochii's den">
+      <div class="creator-avatar" aria-hidden="true">🐾</div>
+      <div class="creator-info">
         <div class="creator-name">mochii</div>
         <div class="creator-handle">mochii.mochii.live</div>
-        <div class="creator-bio">live streams, the drool log, and a growing pile of answered questions.</div>
-        <span class="creator-visit-btn">Enter Den →</span>
-      </a>
+        <div class="creator-bio">live streams, the drool log, anonymous Q&amp;A, and a growing pack.</div>
+      </div>
+      <span class="creator-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- ── What's in a den ───────────────────────────────── -->
+  <div class="section">
+    <p class="section-label">what's in every den</p>
+    <div class="pills">
+      <span class="pill">📷 Live Cams</span>
+      <span class="pill">💧 Drool Log</span>
+      <span class="pill">🐾 Puppy Pouch Q&amp;A</span>
+      <span class="pill">🎵 Now Playing</span>
+      <span class="pill">🛍️ Pack Store</span>
+      <span class="pill">🎮 Interactive</span>
     </div>
-  </section>
+  </div>
 
-  <hr class="section-divider" />
+  <hr class="divider" />
 
-  <!-- ── Features ───────────────────────────────────────── -->
-  <section class="section">
-    <p class="section-label">What's inside every den</p>
-    <h2 class="section-title">The Full Pack Experience</h2>
-    <p class="section-sub">Every creator den ships fully loaded — no extra setup.</p>
-
-    <div class="features-grid">
-      <div class="feature-card">
-        <span class="feature-icon">📷</span>
-        <div class="feature-title">Live Cams</div>
-        <div class="feature-desc">Real-time WebRTC streams across multiple cameras, tiered by subscription level.</div>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🐾</span>
-        <div class="feature-title">Puppy Pouch</div>
-        <div class="feature-desc">Anonymous Q&amp;A inbox — no sign-in needed to ask. Answered questions become public share pages.</div>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">💧</span>
-        <div class="feature-title">Drool Log</div>
-        <div class="feature-desc">Auto-curated feed of everything the creator saved on Reddit, X, and Bluesky — exposed for the pack.</div>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🛍️</span>
-        <div class="feature-title">Pack Store</div>
-        <div class="feature-desc">A site-wide storefront. Every creator lists products and earns their own revenue share per sale.</div>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🎵</span>
-        <div class="feature-title">Now Playing</div>
-        <div class="feature-desc">Live Spotify feed — fans always know what the creator is listening to right now.</div>
-      </div>
-      <div class="feature-card">
-        <span class="feature-icon">🎮</span>
-        <div class="feature-title">Interactive</div>
-        <div class="feature-desc">PiShock and Lovense controls — give the pack real-time engagement options if you dare.</div>
-      </div>
+  <!-- ── Creator pitch ─────────────────────────────────── -->
+  <div class="section">
+    <div class="creator-pitch">
+      <p>want your own den on the platform?</p>
+      <a href="/creator.html">Apply to join →</a>
     </div>
-  </section>
+  </div>
 
-  <hr class="section-divider" />
-
-  <!-- ── Shared Platform Surfaces ──────────────────────── -->
-  <section class="section">
-    <p class="section-label">Platform-wide</p>
-    <h2 class="section-title">Three Shared Spaces, All Creators</h2>
-    <p class="section-sub">
-      Beyond individual dens, the platform surfaces the best content from every creator in one place —
-      so fans discover more and creators get more visibility.
-    </p>
-    <div class="shared-strip">
-      <a href="/drool.html" class="shared-pill">💧 Drool Log — best posts from every creator</a>
-      <a href="/anon" class="shared-pill">🐾 Puppy Pouch — top answered Q&amp;A from all creators</a>
-      <a href="/store.html" class="shared-pill">🛍️ Pack Store — every creator's merch in one shop</a>
-    </div>
-  </section>
-
-  <hr class="section-divider" />
-
-  <!-- ── CTA ────────────────────────────────────────────── -->
-  <section class="section">
-    <div class="cta-banner">
-      <h2>ready to join the pack?</h2>
-      <p>Subscribe to a creator's den and unlock everything — live streams, exclusive content, and direct Q&amp;A access.
-         Or apply to become a creator and build your own den on the platform.</p>
-      <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;">
-        <a id="cta-enter-btn" href="#" class="btn-hero-primary">🐾 Find Your Creator</a>
-        <a href="/creator.html" class="btn-hero-ghost">Become a Creator →</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Footer ─────────────────────────────────────────── -->
+  <!-- ── Footer ────────────────────────────────────────── -->
   <footer>
-    <p>© mochii.live — built with passion 🐾 &nbsp;·&nbsp; <a href="/creator.html">Become a Creator</a> &nbsp;·&nbsp; <a href="/creator-dash.html">Creator Login</a> &nbsp;·&nbsp; <a href="/terms">Terms</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a> &nbsp;·&nbsp; <a href="/dmca">DMCA</a> &nbsp;·&nbsp; <a href="/2257">§ 2257</a></p>
+    <p>© mochii.live 🐾 &nbsp;·&nbsp; <a href="/creator-dash.html">Creator Login</a> &nbsp;·&nbsp; <a href="/creator.html">Become a Creator</a> &nbsp;·&nbsp; <a href="/terms">Terms</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a> &nbsp;·&nbsp; <a href="/dmca">DMCA</a> &nbsp;·&nbsp; <a href="/2257">§ 2257</a></p>
   </footer>
 
   <script>
     // ── Token / subscribed forwarding ────────────────────
-    // When a user signs in on the root domain (OAuth or native auth redirects
-    // back here with /#token=… or /?subscribed=1), forward them to the
-    // appropriate creator subdomain so the subscriber portal handles it.
+    // When auth callbacks land on the root domain, bounce to the
+    // mochii subscriber portal to handle the token or subscription state.
     (function () {
-      const host   = window.location.hostname; // e.g. "mochii.live"
-      const hash   = window.location.hash;     // e.g. "#token=eyJ…"
-      const search = window.location.search;   // e.g. "?subscribed=1"
+      const host   = window.location.hostname;
+      const hash   = window.location.hash;
+      const search = window.location.search;
+      const proto  = window.location.protocol;
 
-      // Default creator subdomain — the "anchor" creator for this platform.
-      // When users sign in from the root domain we forward them here.
-      const defaultCreator = 'mochii';
-      const portalOrigin   = `${window.location.protocol}//${defaultCreator}.${host}`;
+      const portalOrigin = `${proto}//mochii.${host}`;
 
       if (hash.startsWith('#token=') || hash.startsWith('#access_token=')) {
-        // Auth callback landed here — bounce to subscriber portal.
         window.location.replace(portalOrigin + '/' + hash);
         return;
       }
 
       if (search.includes('subscribed=')) {
-        // Segpay success/cancel redirect — bounce to subscriber portal.
         window.location.replace(portalOrigin + '/' + search + hash);
         return;
       }
 
-      // ── Wire up sign-in and Enter Den links ──────────────
-      // Point them all at the mochii subscriber portal.
-      document.getElementById('nav-signin').href      = portalOrigin + '/';
-      document.getElementById('hero-enter-btn').href  = portalOrigin + '/';
-      document.getElementById('cta-enter-btn').href   = portalOrigin + '/';
-      document.getElementById('fans-cta').href        = portalOrigin + '/';
-      document.getElementById('mochii-card').href     = portalOrigin + '/';
+      // Wire up dynamic links (no domain hardcoding)
+      document.getElementById('nav-enter').href   = portalOrigin + '/';
+      document.getElementById('hero-enter').href  = portalOrigin + '/';
+      document.getElementById('mochii-card').href = portalOrigin + '/';
     })();
   </script>
   <script>
-    // Service worker registration
-    if('serviceWorker' in navigator){
+    if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(function(){});
-    }
-    // Dark/light mode toggle helper (global)
-    function toggleTheme(){
-      var cur = document.documentElement.getAttribute('data-theme');
-      var next = cur === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
     }
   </script>
 
