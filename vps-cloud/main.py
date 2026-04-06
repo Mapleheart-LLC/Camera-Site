@@ -797,11 +797,16 @@ def init_db() -> None:
         if "duplicate column" not in str(_e).lower():
             raise
     # Migration: rtmp_key column on cameras (stream key for OBS/RTMP ingest).
+    # SQLite does not support ADD COLUMN ... UNIQUE, so add the column first
+    # then ensure the unique index exists separately.
     try:
-        conn.execute("ALTER TABLE cameras ADD COLUMN rtmp_key TEXT UNIQUE")
+        conn.execute("ALTER TABLE cameras ADD COLUMN rtmp_key TEXT")
     except sqlite3.OperationalError as _e:
         if "duplicate column" not in str(_e).lower():
             raise
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cameras_rtmp_key ON cameras(rtmp_key)"
+    )
     # Migration: stream_title column on cameras (live title shown to viewers).
     try:
         conn.execute("ALTER TABLE cameras ADD COLUMN stream_title TEXT")
