@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live – Join the pack and access live streams." />
+  <meta name="description" content="come find your place in the pack." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
   <meta property="og:title"       content="mochii.live 🐾" />
-  <meta property="og:description" content="Join the pack and access live streams." />
+  <meta property="og:description" content="come find your place in the pack." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="mochii.live 🐾" />
-  <meta name="twitter:description" content="Join the pack and access live streams." />
+  <meta name="twitter:description" content="come find your place in the pack." />
   <title>mochii.live 🐾</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -970,15 +970,15 @@
     <!-- Hero -->
     <div class="landing-hero">
       <span class="hero-paw" aria-hidden="true">🐾</span>
-      <h1 aria-label="mochii.live">mochii.live</h1>
-      <p class="hero-tagline">come find your place in the pack. 🐾</p>
+      <h1 id="den-title" aria-label="Loading"><span class="paw-loading" aria-hidden="true">🐾</span></h1>
+      <p class="hero-tagline" id="den-tagline">come find your place in the pack. 🐾</p>
     </div>
 
     <!-- Static nav cards -->
     <div class="links-section">
       <p class="links-section-label">explore ✦</p>
       <div class="links-list">
-        <a class="link-card" href="https://anon.mochii.live">
+        <a class="link-card" id="link-ask" href="#">
           <span class="link-card-emoji" aria-hidden="true">🐾</span>
           <span class="link-card-body">
             <span class="link-card-title">Ask a Question</span>
@@ -986,7 +986,7 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">→</span>
         </a>
-        <a class="link-card" href="https://drool.mochii.live">
+        <a class="link-card" id="link-drool" href="#">
           <span class="link-card-emoji" aria-hidden="true">💧</span>
           <span class="link-card-body">
             <span class="link-card-title">Drool Log</span>
@@ -994,7 +994,7 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">→</span>
         </a>
-        <a class="link-card" href="https://shop.mochii.live">
+        <a class="link-card" id="link-store" href="#">
           <span class="link-card-emoji" aria-hidden="true">🛍️</span>
           <span class="link-card-body">
             <span class="link-card-title">Pack Store</span>
@@ -1002,7 +1002,7 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">→</span>
         </a>
-        <a class="link-card" href="https://links.mochii.live">
+        <a class="link-card" id="link-links" href="#">
           <span class="link-card-emoji" aria-hidden="true">🔗</span>
           <span class="link-card-body">
             <span class="link-card-title">All Links</span>
@@ -1951,6 +1951,65 @@
     </div>
   </div>
   <script>if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}</script>
+  <script>
+    // ── Creator den initialisation ────────────────────────
+    // Runs on every page load. Detects which creator's subdomain we're on,
+    // fetches their public profile, and populates the logged-out hero section.
+    // If the handle doesn't match an active creator, redirects to the
+    // platform landing page.
+    (async function initCreatorDen() {
+      const host  = window.location.hostname; // e.g. "mochii.mochii.live"
+      const parts = host.split('.');
+      if (parts.length < 3) return; // bare domain or unexpected — nothing to do
+
+      const handle     = parts[0];                    // "mochii"
+      const rootDomain = parts.slice(1).join('.');    // "mochii.live"
+      const proto      = window.location.protocol;
+
+      // Wire up link card hrefs from the detected root domain
+      const links = {
+        'link-ask':   `${proto}//anon.${rootDomain}`,
+        'link-drool': `${proto}//drool.${rootDomain}`,
+        'link-store': `${proto}//shop.${rootDomain}`,
+        'link-links': `${proto}//links.${rootDomain}`,
+      };
+      for (const [id, href] of Object.entries(links)) {
+        const el = document.getElementById(id);
+        if (el) el.href = href;
+      }
+
+      // Fetch the creator's public profile
+      let creator;
+      try {
+        const res = await fetch(`/api/creators/${encodeURIComponent(handle)}`);
+        if (res.status === 404) {
+          // No active creator with this handle — send to platform landing
+          window.location.replace(`${proto}//${rootDomain}/`);
+          return;
+        }
+        if (!res.ok) return; // transient error — leave placeholder, don't redirect
+        creator = await res.json();
+      } catch {
+        return; // network error — leave placeholder
+      }
+
+      const displayName = creator.display_name || handle;
+
+      // Page title + meta description
+      document.title = `${displayName} 🐾`;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && creator.bio) metaDesc.setAttribute('content', creator.bio);
+
+      // Hero h1 and tagline
+      const titleEl   = document.getElementById('den-title');
+      const taglineEl = document.getElementById('den-tagline');
+      if (titleEl) {
+        titleEl.textContent = displayName;
+        titleEl.setAttribute('aria-label', displayName);
+      }
+      if (taglineEl && creator.bio) taglineEl.textContent = creator.bio;
+    })();
+  </script>
 </body>
 </html>
 

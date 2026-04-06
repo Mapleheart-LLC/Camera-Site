@@ -1413,13 +1413,19 @@ _compliance_limiter.app = app  # type: ignore[attr-defined]
 async def subdomain_routing(request: Request, call_next):
     """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
-    mochii.mochii.live/ → serves /index.html   (subscriber portal)
-    anon.mochii.live/   → serves /anon content
-    links.mochii.live/  → serves /links content
-    shop.mochii.live/   → serves /store.html
-    drool.mochii.live/  → serves /drool.html
-    creator.mochii.live/→ serves /creator.html  (creator pitch page)
+    {handle}.mochii.live/ → serves /index.html   (creator's subscriber portal)
+    anon.mochii.live/     → serves /anon content
+    links.mochii.live/    → serves /links content
+    shop.mochii.live/     → serves /store.html
+    drool.mochii.live/    → serves /drool.html
+    creator.mochii.live/  → serves /creator.html  (creator pitch page)
     mochii.live/ or www.mochii.live/ → serves /landing.html (platform home)
+
+    Creator dens are matched dynamically — any subdomain that is not one of the
+    well-known prefixes above and belongs to the root domain is treated as a
+    creator handle.  The index.html page detects the handle from
+    ``window.location.hostname`` and fetches ``GET /api/creators/{handle}``
+    to populate itself at runtime.
 
     Only GET requests to exactly "/" are rewritten so that the correct HTML
     page is returned.  All other paths (API calls, static assets, …) pass
@@ -1427,9 +1433,10 @@ async def subdomain_routing(request: Request, call_next):
     """
     if request.method == "GET" and request.url.path == "/":
         host = request.headers.get("host", "").lower().split(":")[0]
-        # Maps subdomain prefix → the path that should be served for that root.
+        # Maps well-known subdomain prefixes → the path that should be served.
+        # Creator dens (e.g. mochii., someother.) are handled by the dynamic
+        # fallback below so they are NOT listed here.
         _subdomain_map = {
-            "mochii.":  "/index.html",
             "anon.":    "/anon",
             "links.":   "/links",
             "shop.":    "/store.html",
@@ -1447,6 +1454,12 @@ async def subdomain_routing(request: Request, call_next):
         # Bare root domain (e.g. mochii.live) → platform landing page.
         if not matched and _ROOT_HOSTNAME and host == _ROOT_HOSTNAME:
             request.scope["path"] = "/landing.html"
+            matched = True
+        # Any other subdomain of the root domain is treated as a creator den.
+        # This covers mochii., someothercreator., and any future handles
+        # without needing to hard-code them here.
+        if not matched and _ROOT_HOSTNAME and host.endswith(f".{_ROOT_HOSTNAME}"):
+            request.scope["path"] = "/index.html"
     return await call_next(request)
 
 
