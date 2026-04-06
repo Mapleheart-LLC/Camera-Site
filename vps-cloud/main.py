@@ -477,7 +477,8 @@ def init_db() -> None:
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
     # Migration: add creator_handle column to questions and drool_archive so
-    # queries can be scoped per creator.  Existing rows default to 'mochii'.
+    # queries can be scoped per creator.  Existing rows default to 'mochii'
+    # (the platform primary creator — see _PRIMARY_CREATOR in each router).
     for _table in ("questions", "drool_archive"):
         try:
             conn.execute(
@@ -487,6 +488,8 @@ def init_db() -> None:
             if "duplicate column" not in str(_e).lower():
                 raise  # re-raise unexpected errors; swallow only duplicate-column
     # Migration: add creator attribution columns to products for site-wide store.
+    # The default 'mochii' is the platform primary creator; invited creators are
+    # set explicitly when a product is created via the admin API.
     for _col, _defn in [
         ("creator_handle",      "TEXT NOT NULL DEFAULT 'mochii'"),
         ("creator_revenue_pct", "REAL NOT NULL DEFAULT 0.0"),
@@ -578,24 +581,6 @@ def init_db() -> None:
                                  CHECK(status IN ('pending','reviewed','actioned')),
             created_at       TEXT    NOT NULL,
             resolved_at      TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS creator_applications (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            handle_requested    TEXT    NOT NULL UNIQUE,
-            display_name        TEXT    NOT NULL,
-            email               TEXT    NOT NULL,
-            bio                 TEXT,
-            social_links_json   TEXT    NOT NULL DEFAULT '{}',
-            age_verified_at     TEXT,
-            status              TEXT    NOT NULL DEFAULT 'pending'
-                                    CHECK(status IN ('pending','approved','rejected')),
-            reject_reason       TEXT,
-            created_at          TEXT    NOT NULL,
-            reviewed_at         TEXT
         )
         """
     )

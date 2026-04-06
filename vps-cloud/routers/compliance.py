@@ -6,7 +6,6 @@ Phase 1 of the platform expansion:
   - Content reporting
   - DMCA takedown workflow
   - Creator 2FA (TOTP via pyotp)
-  - Creator application / admin-approval onboarding
 
 Endpoints
 ---------
@@ -17,29 +16,22 @@ Endpoints
   POST /api/creator/2fa/verify               – verify OTP and enable 2FA (creator auth)
   DELETE /api/creator/2fa/disable            – disable 2FA (creator auth, requires OTP)
 
-  POST /api/creator/apply                    – public creator application (no auth)
-
   GET  /api/admin/reports                    – list content reports (admin)
   POST /api/admin/reports/{id}/action        – hide / dismiss a report (admin)
   GET  /api/admin/dmca                       – list DMCA requests (admin)
   POST /api/admin/dmca/{id}/action           – resolve a DMCA request (admin)
-  GET  /api/admin/creator-applications       – list creator applications (admin)
-  POST /api/admin/creator-applications/{id}/approve  – approve + provision (admin)
-  POST /api/admin/creator-applications/{id}/reject   – reject with reason (admin)
 """
 
 import logging
 import os
 import smtplib
 import sqlite3
-import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Optional
-from urllib.parse import urlparse
 
 import pyotp
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -122,23 +114,6 @@ class ReportActionRequest(BaseModel):
 class DmcaActionRequest(BaseModel):
     action: str = Field(..., pattern=r"^(action|dismiss)$")
     note: Optional[str] = Field(None, max_length=500)
-
-
-class CreatorApplicationRequest(BaseModel):
-    handle_requested: str = Field(..., min_length=5, max_length=32, pattern=r"^[a-z0-9_-]+$")
-    display_name: str = Field(..., min_length=2, max_length=64)
-    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    bio: Optional[str] = Field(None, max_length=500)
-    social_links: Optional[dict] = None
-    age_attested: bool = Field(..., description="Applicant confirms they are 18+ years of age")
-
-
-class ApplicationRejectRequest(BaseModel):
-    reason: str = Field(..., min_length=10, max_length=500)
-
-
-class ApplicationApproveRequest(BaseModel):
-    initial_password: str = Field(..., min_length=8, max_length=128)
 
 
 # ---------------------------------------------------------------------------
@@ -337,71 +312,6 @@ def creator_2fa_disable(
 
 
 # ---------------------------------------------------------------------------
-# Creator Application (admin-approval onboarding)
-# ---------------------------------------------------------------------------
-
-@router.post("/api/creator/apply", status_code=status.HTTP_201_CREATED)
-@_compliance_limiter.limit("3/hour")
-def apply_creator(
-    request: Request,
-    payload: CreatorApplicationRequest,
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """Public endpoint: submit a creator application.
-
-    Age attestation (``age_attested=true``) is required.  Admin approves or
-    rejects via the admin endpoints below.
-    """
-    if not payload.age_attested:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Age verification attestation is required.",
-        )
-
-    existing = db.execute(
-        "SELECT id FROM creator_applications WHERE handle_requested = ?",
-        (payload.handle_requested,),
-    ).fetchone()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A application for this handle already exists.",
-        )
-
-    # Also check if the handle is already a live creator account.
-    taken = db.execute(
-        "SELECT id FROM creator_accounts WHERE handle = ?", (payload.handle_requested,)
-    ).fetchone()
-    if taken:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="That creator handle is already in use.",
-        )
-
-    import json
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        """
-        INSERT INTO creator_applications
-            (handle_requested, display_name, email, bio, social_links_json, age_verified_at, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-        """,
-        (
-            payload.handle_requested,
-            payload.display_name,
-            payload.email,
-            payload.bio or "",
-            json.dumps(payload.social_links or {}),
-            now,  # timestamp of attestation
-            now,
-        ),
-    )
-    db.commit()
-    logger.info("Creator application submitted for handle: %s", payload.handle_requested)
-    return {"detail": "Application submitted. You will be contacted at your provided email."}
-
-
-# ---------------------------------------------------------------------------
 # Admin: content reports
 # ---------------------------------------------------------------------------
 
@@ -483,136 +393,3 @@ def action_dmca(
     db.commit()
     logger.info("DMCA request %s resolved as %s", dmca_id, new_status)
     return {"detail": f"DMCA request {new_status}."}
-
-
-# ---------------------------------------------------------------------------
-# Admin: creator applications
-# ---------------------------------------------------------------------------
-
-@router.get("/api/admin/creator-applications")
-def list_applications(
-    status_filter: Optional[str] = "pending",
-    _admin: str = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """List creator applications filtered by status."""
-    rows = db.execute(
-        "SELECT * FROM creator_applications WHERE status = ? ORDER BY created_at DESC",
-        (status_filter,),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-@router.post("/api/admin/creator-applications/{app_id}/approve")
-def approve_application(
-    app_id: int,
-    payload: ApplicationApproveRequest,
-    background_tasks: BackgroundTasks,
-    _admin: str = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """Approve a creator application.
-
-    Creates the creator_accounts row, marks the application approved, and
-    triggers Cloudflare subdomain provisioning + welcome email.
-    """
-    row = db.execute(
-        "SELECT * FROM creator_applications WHERE id = ?", (app_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Application not found.")
-    if row["status"] != "pending":
-        raise HTTPException(status_code=409, detail="Application already reviewed.")
-
-    handle = row["handle_requested"]
-    # Check handle still available.
-    if db.execute("SELECT id FROM creator_accounts WHERE handle = ?", (handle,)).fetchone():
-        raise HTTPException(status_code=409, detail="Handle already taken.")
-
-    now = datetime.now(timezone.utc).isoformat()
-    creator_id = str(uuid.uuid4())
-    hashed_pw = _hash_password(payload.initial_password)
-
-    db.execute(
-        """
-        INSERT INTO creator_accounts
-            (id, handle, display_name, bio, hashed_password, is_active, created_at)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
-        """,
-        (creator_id, handle, row["display_name"], row["bio"] or "", hashed_pw, now),
-    )
-    db.execute(
-        "UPDATE creator_applications SET status = 'approved', reviewed_at = ? WHERE id = ?",
-        (now, app_id),
-    )
-    db.commit()
-
-    applicant_email = row["email"]
-    base_url = os.environ.get("BASE_URL", "").rstrip("/")
-
-    def _post_approve():
-        # Attempt Cloudflare subdomain provisioning.
-        try:
-            from routers.cloudflare import provision_creator_subdomain
-            root_domain = urlparse(base_url).hostname or ""
-            if root_domain:
-                provision_creator_subdomain(handle, root_domain, forwarding_email=applicant_email)
-        except Exception as exc:
-            logger.warning("CF provisioning for %s failed: %s", handle, exc)
-        # Send welcome email.
-        _send_email(
-            applicant_email,
-            f"Welcome to {_ISSUER_NAME} — your creator account is ready!",
-            f"""
-            <p>Hi {row['display_name']},</p>
-            <p>Your creator application for <strong>{handle}</strong> has been approved!</p>
-            <p>You can log in at <a href="{base_url}/creator.html">{base_url}/creator.html</a>
-            using your handle and the password that was set for you.</p>
-            <p>Please change your password after first login.</p>
-            """,
-        )
-
-    background_tasks.add_task(_post_approve)
-    return {"detail": f"Creator account for '{handle}' created and provisioned."}
-
-
-@router.post("/api/admin/creator-applications/{app_id}/reject")
-def reject_application(
-    app_id: int,
-    payload: ApplicationRejectRequest,
-    background_tasks: BackgroundTasks,
-    _admin: str = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """Reject a creator application and notify the applicant by email."""
-    row = db.execute(
-        "SELECT * FROM creator_applications WHERE id = ?", (app_id,)
-    ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Application not found.")
-    if row["status"] != "pending":
-        raise HTTPException(status_code=409, detail="Application already reviewed.")
-
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "UPDATE creator_applications SET status = 'rejected', reject_reason = ?, reviewed_at = ? WHERE id = ?",
-        (payload.reason, now, app_id),
-    )
-    db.commit()
-
-    applicant_email = row["email"]
-
-    def _send_rejection():
-        _send_email(
-            applicant_email,
-            f"Your {_ISSUER_NAME} creator application",
-            f"""
-            <p>Hi {row['display_name']},</p>
-            <p>Thank you for applying. Unfortunately your application for
-            <strong>{row['handle_requested']}</strong> was not approved at this time.</p>
-            <p>Reason: {payload.reason}</p>
-            """,
-        )
-
-    background_tasks.add_task(_send_rejection)
-    return {"detail": "Application rejected and applicant notified."}

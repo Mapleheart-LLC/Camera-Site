@@ -28,6 +28,10 @@ router = APIRouter(tags=["subscriptions"])
 
 logger = logging.getLogger(__name__)
 
+# The platform primary creator; used as the fallback creator_handle when a
+# Segpay package ID does not map to a known subscription tier.
+_PRIMARY_CREATOR = "mochii"
+
 # ---------------------------------------------------------------------------
 # Segpay transaction type classification
 # ---------------------------------------------------------------------------
@@ -189,7 +193,7 @@ async def segpay_subscription_webhook(
             (package_id,),
         ).fetchone()
 
-    creator_handle = tier_row["creator_handle"] if tier_row else "mochii"
+    creator_handle = tier_row["creator_handle"] if tier_row else _PRIMARY_CREATOR
     tier_id = tier_row["id"] if tier_row else None
 
     if is_active:
