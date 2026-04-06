@@ -57,6 +57,9 @@ logger = logging.getLogger(__name__)
 
 _CF_BASE = "https://api.cloudflare.com/client/v4"
 
+# Well-known platform subdomain prefixes that are auto-provisioned on startup.
+_PLATFORM_SUBDOMAINS = ("anon", "links", "shop", "drool", "creator", "member", "www")
+
 # ---------------------------------------------------------------------------
 # Configuration helpers
 # ---------------------------------------------------------------------------
@@ -309,6 +312,63 @@ def provision_creator_subdomain(
         )
 
     return dns_ok
+
+
+def ensure_platform_subdomains(root_domain: str) -> None:
+    """Ensure all required platform subdomains exist as proxied CNAME DNS records.
+
+    Checks each well-known subdomain prefix (anon, links, shop, drool, creator,
+    member, www) and creates a proxied CNAME record pointing at
+    ``CLAPI_TUNNEL_HOSTNAME`` for any that are missing.  Existing records are
+    left untouched.
+
+    Called automatically at application startup.  Requires both ``CLAPI`` and
+    ``CLAPI_TUNNEL_HOSTNAME`` to be configured; silently skips otherwise.
+    Best-effort — failures are logged as warnings and never raised.
+    """
+    if not _cf_token():
+        logger.debug("CLAPI not set – skipping platform subdomain auto-provisioning.")
+        return
+
+    tunnel_host = _tunnel_hostname()
+    if not tunnel_host:
+        logger.debug(
+            "CLAPI_TUNNEL_HOSTNAME not set – skipping platform subdomain auto-provisioning."
+        )
+        return
+
+    try:
+        zone_id = _get_zone_id()
+    except HTTPException as exc:
+        logger.warning("CF platform subdomain provisioning: zone lookup failed: %s", exc.detail)
+        return
+
+    for prefix in _PLATFORM_SUBDOMAINS:
+        fqdn = f"{prefix}.{root_domain}"
+        try:
+            existing = _cf_request(
+                "GET",
+                f"/zones/{zone_id}/dns_records",
+                params={"name": fqdn},
+            )
+            if existing.get("result"):
+                logger.debug("CF: subdomain %s already exists – skipping.", fqdn)
+                continue
+            _cf_request(
+                "POST",
+                f"/zones/{zone_id}/dns_records",
+                json={
+                    "type": "CNAME",
+                    "name": fqdn,
+                    "content": tunnel_host,
+                    "proxied": True,
+                    "ttl": 1,
+                    "comment": "Auto-provisioned platform subdomain",
+                },
+            )
+            logger.info("CF: created platform CNAME %s → %s", fqdn, tunnel_host)
+        except HTTPException as exc:
+            logger.warning("CF: failed to provision platform subdomain %s: %s", fqdn, exc.detail)
 
 
 def deprovision_creator_subdomain(handle: str, root_domain: str) -> bool:
