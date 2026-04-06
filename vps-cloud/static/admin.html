@@ -485,6 +485,7 @@
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">Creators</div>
         <button class="nav-item" data-target="s-pack-members">🐾 Pack Members</button>
+        <button class="nav-item" data-target="s-featured-creator">⭐ Featured Creator</button>
         <button class="nav-item" data-target="s-users">👥 Users & Gifts</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
@@ -1059,6 +1060,52 @@
           </div>
         </section>
 
+        <!-- ── Featured Creator Queue ─────────────────── -->
+        <section id="s-featured-creator" class="admin-section">
+          <h1 class="section-heading">
+            ⭐ Featured Creator
+            <button id="refresh-featured-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <div class="card">
+            <div class="card-header">
+              <h2>Featured Queue</h2>
+              <button id="add-featured-btn" class="btn-sm btn-edit">+ Add Creator</button>
+            </div>
+            <div class="card-body">
+              <p style="font-size:.82rem;color:#9e7e82;margin-bottom:.85rem">
+                The creator at position&nbsp;<strong style="color:#e8aeb7">1</strong> is shown on the landing page.
+                Use ↑ / ↓ to reorder; remove a creator to advance the queue.
+              </p>
+
+              <!-- Add form -->
+              <div id="featured-add-form" style="display:none;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:10px;padding:1.1rem;margin-bottom:1rem">
+                <h3 style="font-size:.83rem;font-weight:800;color:#e8aeb7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.85rem">Add to Featured Queue</h3>
+                <div class="form-row">
+                  <div class="form-field">
+                    <label for="featured-handle-input">Creator Handle</label>
+                    <input id="featured-handle-input" type="text" placeholder="e.g. luna" autocomplete="off" />
+                  </div>
+                  <div class="form-actions" style="align-self:flex-end;padding-bottom:1px">
+                    <button id="featured-add-save-btn" class="btn-sm btn-edit">Add 🐾</button>
+                    <button id="featured-add-cancel-btn" class="btn-sm btn-delete">Cancel</button>
+                  </div>
+                </div>
+                <p id="featured-add-error" style="font-size:.8rem;color:#f87171;margin-top:.5rem;min-height:1em"></p>
+              </div>
+
+              <div style="overflow-x:auto">
+                <table class="admin-table" aria-label="Featured creator queue">
+                  <thead><tr><th>#</th><th>Handle</th><th>Display Name</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
+                  <tbody id="featured-queue-body">
+                    <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Settings ───────────────────────────────── -->
         <!-- ── Users & Gift Subscriptions ───────────── -->
         <section id="s-users" class="admin-section">
@@ -1377,7 +1424,7 @@
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
-        loadDroolCredentials(), loadDroolArchive(), loadCreators(),
+        loadDroolCredentials(), loadDroolArchive(), loadCreators(), loadFeaturedQueue(),
       ]);
     }
 
@@ -2669,6 +2716,111 @@
     });
 
     document.getElementById('refresh-creators-btn').addEventListener('click', loadCreators);
+
+
+    // ── Featured Creator Queue ────────────────────────────────────────────
+
+    async function loadFeaturedQueue() {
+      const tbody = document.getElementById('featured-queue-body');
+      try {
+        const queue = await apiGet('/api/admin/featured-creator');
+        if (!queue.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Queue is empty. Add a creator above.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = queue.map((entry, idx) => {
+          const ts = (entry.added_at || '').replace('T', ' ').slice(0, 16);
+          const activeBadge = entry.is_active
+            ? '<span class="link-active-badge on">Active</span>'
+            : '<span class="link-active-badge off">Inactive</span>';
+          const isFirst = idx === 0;
+          const isLast  = idx === queue.length - 1;
+          return `<tr>
+            <td style="font-weight:800;color:#e8aeb7">${entry.position}</td>
+            <td style="font-weight:700;color:#e8aeb7"><code>${escHtml(entry.creator_handle)}</code></td>
+            <td>${escHtml(entry.display_name || '—')}</td>
+            <td>${activeBadge}</td>
+            <td class="ts-cell">${escHtml(ts)}</td>
+            <td>
+              <div class="action-cell">
+                <button class="btn-sm btn-edit featured-up-btn" data-handle="${escHtml(entry.creator_handle)}" ${isFirst ? 'disabled' : ''}>↑</button>
+                <button class="btn-sm btn-edit featured-down-btn" data-handle="${escHtml(entry.creator_handle)}" ${isLast ? 'disabled' : ''}>↓</button>
+                <button class="btn-sm btn-delete featured-remove-btn" data-handle="${escHtml(entry.creator_handle)}">🗑️</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Failed to load queue.</td></tr>';
+      }
+    }
+
+    document.getElementById('add-featured-btn').addEventListener('click', () => {
+      document.getElementById('featured-handle-input').value  = '';
+      document.getElementById('featured-add-error').textContent = '';
+      document.getElementById('featured-add-form').style.display = 'block';
+      document.getElementById('featured-handle-input').focus();
+    });
+
+    document.getElementById('featured-add-cancel-btn').addEventListener('click', () => {
+      document.getElementById('featured-add-form').style.display = 'none';
+    });
+
+    document.getElementById('featured-add-save-btn').addEventListener('click', async () => {
+      const errEl  = document.getElementById('featured-add-error');
+      const handle = document.getElementById('featured-handle-input').value.trim().toLowerCase();
+      if (!handle) { errEl.textContent = 'Creator handle is required.'; return; }
+      try {
+        const resp = await apiPost('/api/admin/featured-creator', { creator_handle: handle });
+        if (!resp.ok) {
+          const d = await resp.json().catch(() => ({}));
+          errEl.textContent = d.detail || `Error ${resp.status}`;
+          return;
+        }
+        document.getElementById('featured-add-form').style.display = 'none';
+        await loadFeaturedQueue();
+        showToast(`⭐ @${handle} added to featured queue!`);
+      } catch (err) {
+        if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
+      }
+    });
+
+    document.getElementById('featured-queue-body').addEventListener('click', async e => {
+      const btn = e.target;
+
+      if (btn.classList.contains('featured-up-btn')) {
+        const handle = btn.dataset.handle;
+        try {
+          const resp = await apiPut(`/api/admin/featured-creator/${handle}/move-up`, {});
+          if (resp.ok) { await loadFeaturedQueue(); showToast(`⭐ @${handle} moved up.`); }
+          else { const d = await resp.json().catch(() => ({})); showToast('❌ ' + (d.detail || `Error ${resp.status}`)); }
+        } catch (err) { if (err.message !== '401') showToast('❌ Move failed.'); }
+        return;
+      }
+
+      if (btn.classList.contains('featured-down-btn')) {
+        const handle = btn.dataset.handle;
+        try {
+          const resp = await apiPut(`/api/admin/featured-creator/${handle}/move-down`, {});
+          if (resp.ok) { await loadFeaturedQueue(); showToast(`⭐ @${handle} moved down.`); }
+          else { const d = await resp.json().catch(() => ({})); showToast('❌ ' + (d.detail || `Error ${resp.status}`)); }
+        } catch (err) { if (err.message !== '401') showToast('❌ Move failed.'); }
+        return;
+      }
+
+      if (btn.classList.contains('featured-remove-btn')) {
+        const handle = btn.dataset.handle;
+        if (!confirm(`Remove @${handle} from the featured queue?`)) return;
+        try {
+          const resp = await apiDelete(`/api/admin/featured-creator/${handle}`);
+          if (resp.ok || resp.status === 204) { await loadFeaturedQueue(); showToast(`🗑️ @${handle} removed from featured queue.`); }
+          else { const d = await resp.json().catch(() => ({})); showToast('❌ ' + (d.detail || `Error ${resp.status}`)); }
+        } catch (err) { if (err.message !== '401') showToast('❌ Remove failed.'); }
+        return;
+      }
+    });
+
+    document.getElementById('refresh-featured-btn').addEventListener('click', loadFeaturedQueue);
 
 
     (function init() {

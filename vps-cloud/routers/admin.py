@@ -35,6 +35,11 @@ Endpoints
   GET    /api/admin/users/{id}/gifts   – list gifted subscriptions for a user
   POST   /api/admin/users/{id}/gift    – gift a subscription to a user
   DELETE /api/admin/users/{id}/gifts/{gift_id} – revoke a gifted subscription
+  GET    /api/admin/featured-creator          – list the featured creator queue
+  POST   /api/admin/featured-creator          – add a creator to the featured queue
+  DELETE /api/admin/featured-creator/{handle} – remove a creator from the queue
+  PUT    /api/admin/featured-creator/{handle}/move-up   – promote in queue
+  PUT    /api/admin/featured-creator/{handle}/move-down – demote in queue
 """
 
 import logging
@@ -1684,4 +1689,174 @@ def get_admin_creator_token(
         "handle": row["handle"],
         "display_name": row["display_name"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Featured creator queue (admin)
+# ---------------------------------------------------------------------------
+
+
+class FeaturedCreatorAdd(BaseModel):
+    creator_handle: str = Field(..., min_length=1, max_length=64)
+
+
+@router.get("/featured-creator")
+def admin_get_featured_queue(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the full featured creator queue, ordered by position."""
+    rows = db.execute(
+        """
+        SELECT fq.position, fq.creator_handle, fq.added_at,
+               ca.display_name, ca.bio, ca.avatar_url, ca.is_active
+          FROM featured_creator_queue fq
+          LEFT JOIN creator_accounts ca ON ca.handle = fq.creator_handle
+         ORDER BY fq.position ASC
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/featured-creator", status_code=status.HTTP_201_CREATED)
+def admin_add_featured_creator(
+    payload: FeaturedCreatorAdd,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Append a creator to the end of the featured queue."""
+    handle = payload.creator_handle.lower().strip()
+
+    creator = db.execute(
+        "SELECT handle, display_name FROM creator_accounts WHERE handle = ?", (handle,)
+    ).fetchone()
+    if not creator:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Creator '{handle}' not found.",
+        )
+
+    existing = db.execute(
+        "SELECT position FROM featured_creator_queue WHERE creator_handle = ?", (handle,)
+    ).fetchone()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Creator '{handle}' is already in the featured queue at position {existing['position']}.",
+        )
+
+    max_pos = db.execute(
+        "SELECT COALESCE(MAX(position), 0) FROM featured_creator_queue"
+    ).fetchone()[0]
+    new_pos = max_pos + 1
+    now = datetime.now(timezone.utc).isoformat()
+
+    db.execute(
+        "INSERT INTO featured_creator_queue (position, creator_handle, added_at) VALUES (?, ?, ?)",
+        (new_pos, handle, now),
+    )
+    db.commit()
+    logger.info("Admin '%s' added '%s' to featured queue at position %d.", admin_user, handle, new_pos)
+    return {"position": new_pos, "creator_handle": handle, "added_at": now}
+
+
+@router.delete("/featured-creator/{handle}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_remove_featured_creator(
+    handle: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Remove a creator from the featured queue and compact remaining positions."""
+    handle = handle.lower()
+    row = db.execute(
+        "SELECT position FROM featured_creator_queue WHERE creator_handle = ?", (handle,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Creator '{handle}' is not in the featured queue.",
+        )
+
+    removed_pos = row["position"]
+    db.execute("DELETE FROM featured_creator_queue WHERE creator_handle = ?", (handle,))
+    # Compact: shift all positions above the removed one down by 1.
+    db.execute(
+        "UPDATE featured_creator_queue SET position = position - 1 WHERE position > ?",
+        (removed_pos,),
+    )
+    db.commit()
+    logger.info("Admin '%s' removed '%s' from featured queue.", admin_user, handle)
+
+
+@router.put("/featured-creator/{handle}/move-up", status_code=status.HTTP_200_OK)
+def admin_move_featured_up(
+    handle: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Swap a queue entry with the one above it (lower position number)."""
+    handle = handle.lower()
+    row = db.execute(
+        "SELECT position FROM featured_creator_queue WHERE creator_handle = ?", (handle,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Creator '{handle}' not in queue.")
+    pos = row["position"]
+    if pos <= 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already at the top of the queue.")
+
+    above = db.execute(
+        "SELECT creator_handle FROM featured_creator_queue WHERE position = ?", (pos - 1,)
+    ).fetchone()
+    if not above:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No entry above to swap with.")
+
+    # Atomic swap: single UPDATE with CASE expression sets both positions at once.
+    db.execute(
+        """
+        UPDATE featured_creator_queue
+           SET position = CASE creator_handle WHEN ? THEN ? WHEN ? THEN ? END
+         WHERE creator_handle IN (?, ?)
+        """,
+        (handle, pos - 1, above["creator_handle"], pos, handle, above["creator_handle"]),
+    )
+    db.commit()
+    logger.info("Admin '%s' moved '%s' up in featured queue.", admin_user, handle)
+    return {"position": pos - 1, "creator_handle": handle}
+
+
+@router.put("/featured-creator/{handle}/move-down", status_code=status.HTTP_200_OK)
+def admin_move_featured_down(
+    handle: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Swap a queue entry with the one below it (higher position number)."""
+    handle = handle.lower()
+    row = db.execute(
+        "SELECT position FROM featured_creator_queue WHERE creator_handle = ?", (handle,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Creator '{handle}' not in queue.")
+    pos = row["position"]
+
+    below = db.execute(
+        "SELECT creator_handle FROM featured_creator_queue WHERE position = ?", (pos + 1,)
+    ).fetchone()
+    if not below:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already at the bottom of the queue.")
+
+    # Atomic swap: single UPDATE with CASE expression sets both positions at once.
+    db.execute(
+        """
+        UPDATE featured_creator_queue
+           SET position = CASE creator_handle WHEN ? THEN ? WHEN ? THEN ? END
+         WHERE creator_handle IN (?, ?)
+        """,
+        (handle, pos + 1, below["creator_handle"], pos, handle, below["creator_handle"]),
+    )
+    db.commit()
+    logger.info("Admin '%s' moved '%s' down in featured queue.", admin_user, handle)
+    return {"position": pos + 1, "creator_handle": handle}
+
 

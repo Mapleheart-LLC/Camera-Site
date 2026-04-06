@@ -954,6 +954,17 @@ def init_db() -> None:
         USING fts5(name, description, content='products', content_rowid='id')
         """
     )
+    # ── Phase 7: Featured Creator Queue ───────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS featured_creator_queue (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            position       INTEGER NOT NULL UNIQUE,
+            creator_handle TEXT    NOT NULL,
+            added_at       TEXT    NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -1896,6 +1907,28 @@ async def health_check():
         },
         status_code=status_code,
     )
+
+
+@app.get("/api/featured-creator", tags=["discovery"])
+def get_featured_creator(db: sqlite3.Connection = Depends(get_db)):
+    """Return the currently featured creator (position 1 in the queue).
+
+    Returns ``null`` when the queue is empty so the landing page can hide the
+    card gracefully.
+    """
+    row = db.execute(
+        """
+        SELECT fq.creator_handle, ca.display_name, ca.bio, ca.avatar_url, ca.accent_color
+          FROM featured_creator_queue fq
+          JOIN creator_accounts ca ON ca.handle = fq.creator_handle
+         WHERE ca.is_active = 1
+         ORDER BY fq.position ASC
+         LIMIT 1
+        """
+    ).fetchone()
+    if not row:
+        return JSONResponse(content=None)
+    return dict(row)
 
 
 @app.get("/admin", include_in_schema=False)
