@@ -94,12 +94,6 @@
 
   <!-- Explore feed -->
   <div id="explore-content">
-    <!-- Featured Creators -->
-    <section>
-      <h2>✨ Featured Creators</h2>
-      <div id="creators-grid" class="grid grid-4"><p class="empty">Loading…</p></div>
-    </section>
-
     <!-- Trending Drool -->
     <section>
       <h2>🔥 Trending This Week</h2>
@@ -137,26 +131,12 @@ function toggleTheme(){
 async function loadExplore(){
   try{
     const data = await fetch('/api/explore').then(r=>r.json());
-    renderCreators(data.featured_creators||[]);
     renderDrool(data.trending_drool||[]);
     renderPosts(data.newest_posts||[]);
     renderProducts(data.top_products||[]);
   }catch(e){
     console.error('Explore load failed',e);
   }
-}
-
-function renderCreators(items){
-  const el = document.getElementById('creators-grid');
-  if(!items.length){el.innerHTML='<p class="empty">No creators yet.</p>';return;}
-  el.innerHTML = items.map(c=>`
-    <div class="card creator-card">
-      <div class="avatar">${c.avatar_url?`<img src="${esc(c.avatar_url)}" alt="" style="width:52px;height:52px;border-radius:50%;object-fit:cover">`:esc(c.display_name[0]||'?')}</div>
-      <div class="creator-info">
-        <h3>${esc(c.display_name)}</h3>
-        <p>${esc(c.bio||'')}</p>
-      </div>
-    </div>`).join('');
 }
 
 function renderDrool(items){

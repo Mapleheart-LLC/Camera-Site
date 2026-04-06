@@ -47,6 +47,10 @@ if _DROOL_SALT == "drool-default-salt-change-me":
     )
 _MAX_COMMENT_LENGTH = 500
 
+# The platform primary creator; used as the default creator_handle for all
+# content not explicitly associated with an invited creator.
+_PRIMARY_CREATOR = "mochii"
+
 ReactionType = Literal["Good Girl", "Bad Puppy", "Dumb Thing", "Pretty Toy"]
 
 
@@ -86,7 +90,7 @@ class DroolItem(BaseModel):
     comment_count: int
     reaction_counts: dict[str, int]
     is_weekly_whimper: bool = False
-    creator_handle: str = "mochii"
+    creator_handle: str = _PRIMARY_CREATOR
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +173,7 @@ def _build_item(row: sqlite3.Row, whimper_id: Optional[int], db: sqlite3.Connect
         comment_count=_comment_count(item_id, db),
         reaction_counts=_reaction_counts(item_id, db),
         is_weekly_whimper=(item_id == whimper_id),
-        creator_handle=row["creator_handle"] if "creator_handle" in row else "mochii",
+        creator_handle=row["creator_handle"] if "creator_handle" in row else _PRIMARY_CREATOR,
     )
 
 

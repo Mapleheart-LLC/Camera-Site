@@ -18,6 +18,10 @@ from typing import Optional
 from db import get_db
 from discord_webhook import send_discord_notification
 
+# The platform primary creator; used as the default creator_handle for all
+# content not explicitly associated with an invited creator.
+_PRIMARY_CREATOR = "mochii"
+
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
 _MAX_QUESTION_LENGTH = 280  # Must stay in sync with _NOTE_MAX in static/index.html
@@ -37,7 +41,7 @@ class PublicQuestion(BaseModel):
     text: str
     answer: str
     created_at: str
-    creator_handle: str = "mochii"
+    creator_handle: str = _PRIMARY_CREATOR
 
 
 # ---------------------------------------------------------------------------
