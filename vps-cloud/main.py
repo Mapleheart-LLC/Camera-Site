@@ -124,7 +124,13 @@ _SEED_CREATOR_PASSWORD: str = os.environ.get("CREATOR_PASSWORD", "")
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool", "mochii", "creator", "member", "www")
+# Platform primary creator handle – used as the default owner for content
+# not explicitly associated with an invited creator.
+_PRIMARY_CREATOR = "mochii"
+
+# Subdomain prefixes that still exist as real subdomains (used for CORS).
+# member / creator / anon / drool have been migrated to path slugs.
+_SUBDOMAIN_PREFIXES = ("links", "shop", "mochii", "www")
 
 # Root hostname derived from BASE_URL (e.g. "mochii.live" from "https://mochii.live").
 # Used by the subdomain middleware to serve the platform landing page at the bare root.
@@ -2249,14 +2255,21 @@ _compliance_limiter.app = app  # type: ignore[attr-defined]
 # Maps well-known subdomain prefixes → the path that should be served.
 # Creator dens (e.g. mochii., someother.) are handled by the dynamic
 # fallback in subdomain_routing so they are NOT listed here.
+# NOTE: member / creator / anon / drool no longer have subdomains – they
+# are served via path slugs (/member, /creator, /{handle}/anon, /{handle}/drool).
 _SUBDOMAIN_MAP: dict[str, str] = {
-    "anon.":    "/anon",
     "links.":   "/links",
     "shop.":    "/store.html",
-    "drool.":   "/drool.html",
-    "creator.": "/creator.html",
-    "member.":  "/member.html",
     "www.":     "/landing.html",
+}
+
+# Old subdomains that have been retired: redirect their root (/) to the
+# canonical slug path so any existing bookmarks / links keep working.
+_SUBDOMAIN_REDIRECT_MAP: dict[str, str] = {
+    "member.":  "/member",
+    "creator.": "/creator",
+    "anon.":    f"/{_PRIMARY_CREATOR}/anon",
+    "drool.":   f"/{_PRIMARY_CREATOR}/drool",
 }
 
 
@@ -2265,12 +2278,15 @@ async def subdomain_routing(request: Request, call_next):
     """Transparently serve subdomain roots by rewriting the ASGI path in-place.
 
     {handle}.mochii.live/ → serves /index.html   (creator's subscriber portal)
-    anon.mochii.live/     → serves /anon content
     links.mochii.live/    → serves /links content
     shop.mochii.live/     → serves /store.html
-    drool.mochii.live/    → serves /drool.html
-    creator.mochii.live/  → serves /creator.html  (creator pitch page)
     mochii.live/ or www.mochii.live/ → serves /landing.html (platform home)
+
+    Retired subdomains are 301-redirected to their canonical slug paths:
+      member.mochii.live/  → /member
+      creator.mochii.live/ → /creator
+      anon.mochii.live/    → /{_PRIMARY_CREATOR}/anon
+      drool.mochii.live/   → /{_PRIMARY_CREATOR}/drool
 
     Creator dens are matched dynamically — any subdomain that is not one of the
     well-known prefixes above and belongs to the root domain is treated as a
@@ -2285,6 +2301,11 @@ async def subdomain_routing(request: Request, call_next):
     if request.method == "GET" and request.url.path == "/":
         host = request.headers.get("host", "").lower().split(":")[0]
         matched = False
+        # Retired subdomains: 301-redirect to the new slug path.
+        for prefix, redirect_path in _SUBDOMAIN_REDIRECT_MAP.items():
+            if host.startswith(prefix):
+                base = BASE_URL or f"{request.url.scheme}://{_ROOT_HOSTNAME}"
+                return RedirectResponse(url=f"{base}{redirect_path}", status_code=301)
         for prefix, target_path in _SUBDOMAIN_MAP.items():
             if host.startswith(prefix):
                 request.scope["path"] = target_path
@@ -2575,8 +2596,8 @@ def admin_page_redirect(request: Request):
 
 @app.get("/drool", include_in_schema=False)
 def drool_page_redirect():
-    """Redirect /drool to the static drool.html page (Shame Gallery)."""
-    return RedirectResponse(url="/drool.html", status_code=301)
+    """Redirect /drool to the primary creator's per-creator Shame Gallery."""
+    return RedirectResponse(url=f"/{_PRIMARY_CREATOR}/drool", status_code=301)
 
 
 @app.get("/explore", include_in_schema=False)
@@ -3234,20 +3255,54 @@ def question_share_page(
 
 
 # ---------------------------------------------------------------------------
-# Anonymous Q&A page  –  /anon  (also reached via anon.mochii.live/)
+# Anonymous Q&A page  –  /anon  (global view) and /{handle}/anon (per-creator)
 # ---------------------------------------------------------------------------
 
 @app.get("/anon", response_class=None)
 def anon_page(request: Request):
     """Standalone Puppy Pouch page: submit a question + browse all answered Q&A."""
     canonical = BASE_URL or str(request.base_url).rstrip("/")
-    page_url  = _html_escape(f"{canonical}/anon")
-    og_title  = "Puppy Pouch 🐾 – Ask mochii.live Anything"
-    og_desc   = _html_escape(
-        "Drop an anonymous question into the Puppy Pouch and browse every answered note."
-    )
+    return HTMLResponse(content=_build_anon_html(canonical))
 
-    html = f"""<!DOCTYPE html>
+
+@app.get("/{creator_handle}/anon", response_class=None)
+def anon_page_creator(creator_handle: str, request: Request):
+    """Per-creator Puppy Pouch page scoped to a specific creator's Q&A."""
+    canonical = BASE_URL or str(request.base_url).rstrip("/")
+    return HTMLResponse(content=_build_anon_html(canonical, creator_handle=creator_handle))
+
+
+def _build_anon_html(canonical: str, creator_handle: Optional[str] = None) -> str:
+    """Generate the Puppy Pouch HTML page.
+
+    When *creator_handle* is supplied the page is scoped to that creator:
+    submissions are tagged with the handle and the feed only shows that
+    creator's answered questions.  Without it the global (all-creator) view
+    is shown.
+    """
+    if creator_handle:
+        safe_handle = _html_escape(creator_handle)
+        page_url   = _html_escape(f"{canonical}/{creator_handle}/anon")
+        og_title   = f"Puppy Pouch 🐾 – Ask {safe_handle} Anything"
+        og_desc    = _html_escape(
+            f"Drop an anonymous note for {safe_handle} and browse their answered Q&A."
+        )
+        if _ROOT_HOSTNAME:
+            _parsed = urlparse(canonical)
+            back_href = _html_escape(f"{_parsed.scheme}://{creator_handle}.{_ROOT_HOSTNAME}")
+        else:
+            back_href = _html_escape(canonical)
+        back_label = f"← Back to {safe_handle}"
+    else:
+        page_url   = _html_escape(f"{canonical}/anon")
+        og_title   = "Puppy Pouch 🐾 – Ask mochii.live Anything"
+        og_desc    = _html_escape(
+            "Drop an anonymous question into the Puppy Pouch and browse every answered note."
+        )
+        back_href  = _html_escape(canonical)
+        back_label = "← Back to mochii.live"
+
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -3482,7 +3537,7 @@ def anon_page(request: Request):
 <body>
   <div class="page-header">
     <h1>🐾 Puppy Pouch</h1>
-    <a class="back-link" href="{_html_escape(canonical)}">← Back to mochii.live</a>
+    <a class="back-link" href="{back_href}">{back_label}</a>
   </div>
 
   <!-- Submit form -->
@@ -3507,6 +3562,11 @@ def anon_page(request: Request):
 
   <script>
     const MAX = 280;
+    // Detect per-creator context from URL path (e.g. /mochii/anon).
+    const CREATOR_HANDLE = (function() {{
+      const parts = window.location.pathname.split('/');
+      return (parts.length >= 3 && parts[2] === 'anon') ? parts[1] : null;
+    }})();
     const textarea  = document.getElementById('note-textarea');
     const charCount = document.getElementById('char-count');
     const sendBtn   = document.getElementById('send-btn');
@@ -3526,10 +3586,11 @@ def anon_page(request: Request):
       sendMsg.textContent = '';
       sendMsg.className = '';
       try {{
+        const payload = CREATOR_HANDLE ? {{ text, creator_handle: CREATOR_HANDLE }} : {{ text }};
         const resp = await fetch('/api/questions', {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ text }}),
+          body: JSON.stringify(payload),
         }});
         if (resp.ok) {{
           textarea.value = '';
@@ -3559,7 +3620,10 @@ def anon_page(request: Request):
 
     (async function loadFeed() {{
       try {{
-        const resp = await fetch('/api/questions/public');
+        const feedUrl = CREATOR_HANDLE
+          ? '/api/questions/public?creator_handle=' + encodeURIComponent(CREATOR_HANDLE)
+          : '/api/questions/public';
+        const resp = await fetch(feedUrl);
         document.getElementById('feed-loading').style.display = 'none';
         if (!resp.ok) return;
         const qs = await resp.json();
@@ -3571,7 +3635,8 @@ def anon_page(request: Request):
         qs.forEach(q => {{
           const div = document.createElement('div');
           div.className = 'qa-item';
-          const creatorTag = q.creator_handle && q.creator_handle !== 'mochii'
+          // Show creator badge only on the global feed where multiple creators mix.
+          const creatorTag = (!CREATOR_HANDLE && q.creator_handle && q.creator_handle !== 'mochii')
             ? `<span style="font-size:.7rem;font-weight:800;color:#6a4a4e;text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:.35rem;">🐾 ${{esc(q.creator_handle)}}</span>`
             : '';
           div.innerHTML =
@@ -3587,7 +3652,6 @@ def anon_page(request: Request):
   </script>
 </body>
 </html>"""
-    return HTMLResponse(content=html)
 
 
 # ---------------------------------------------------------------------------
@@ -3760,7 +3824,7 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Member portal  –  /member  (also reached via any subdomain/member)
+# Member portal  –  /member  (slug; member.mochii.live/ redirects here)
 # ---------------------------------------------------------------------------
 
 @app.get("/member", response_class=HTMLResponse, include_in_schema=False)
@@ -3768,6 +3832,32 @@ def member_portal():
     """Serve the subscriber member portal SPA."""
     import os as _os
     _path = _os.path.join(_os.path.dirname(__file__), "static", "member.html")
+    with open(_path, encoding="utf-8") as _f:
+        return HTMLResponse(content=_f.read())
+
+
+# ---------------------------------------------------------------------------
+# Creator pitch page  –  /creator  (slug; creator.mochii.live/ redirects here)
+# ---------------------------------------------------------------------------
+
+@app.get("/creator", response_class=HTMLResponse, include_in_schema=False)
+def creator_pitch_page():
+    """Serve the creator pitch/info page."""
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), "static", "creator.html")
+    with open(_path, encoding="utf-8") as _f:
+        return HTMLResponse(content=_f.read())
+
+
+# ---------------------------------------------------------------------------
+# Per-creator Shame Gallery  –  /{handle}/drool
+# ---------------------------------------------------------------------------
+
+@app.get("/{creator_handle}/drool", response_class=HTMLResponse, include_in_schema=False)
+def drool_page_creator(creator_handle: str):
+    """Serve the Shame Gallery filtered to a specific creator."""
+    import os as _os
+    _path = _os.path.join(_os.path.dirname(__file__), "static", "drool.html")
     with open(_path, encoding="utf-8") as _f:
         return HTMLResponse(content=_f.read())
 

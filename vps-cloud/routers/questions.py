@@ -34,6 +34,7 @@ _MAX_QUESTION_LENGTH = 280  # Must stay in sync with _NOTE_MAX in static/index.h
 
 class QuestionSubmit(BaseModel):
     text: str = Field(..., min_length=1, max_length=_MAX_QUESTION_LENGTH)
+    creator_handle: Optional[str] = None
 
 
 class PublicQuestion(BaseModel):
@@ -57,12 +58,13 @@ async def submit_question(
     """Accept an anonymous question and store it for admin review."""
     question_id = str(uuid.uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
+    handle = payload.creator_handle or _PRIMARY_CREATOR
     db.execute(
         """
-        INSERT INTO questions (id, text, answer, is_public, created_at)
-        VALUES (?, ?, NULL, 0, ?)
+        INSERT INTO questions (id, text, answer, is_public, created_at, creator_handle)
+        VALUES (?, ?, NULL, 0, ?, ?)
         """,
-        (question_id, payload.text, created_at),
+        (question_id, payload.text, created_at, handle),
     )
     db.commit()
 
