@@ -22,6 +22,7 @@ from urllib.parse import parse_qs
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from db import get_db
+from routers.alerts import dispatch_alert as _dispatch_alert
 
 router = APIRouter(tags=["subscriptions"])
 
@@ -234,6 +235,26 @@ async def segpay_subscription_webhook(
             trans_type,
             creator_handle,
         )
+        # Fire stream-overlay alert for new subscriptions (not rebills).
+        if trans_type == "new_sale":
+            try:
+                subscriber = db.execute(
+                    "SELECT COALESCE(display_name, username) AS display "
+                    "FROM site_users WHERE id = ?",
+                    (user_id,),
+                ).fetchone()
+                tier_name = tier_row["name"] if tier_row and "name" in tier_row.keys() else ""
+                _dispatch_alert(
+                    creator_handle,
+                    "subscribe",
+                    {
+                        "username": subscriber["display"] if subscriber else email,
+                        "tier_name": tier_name,
+                    },
+                    db,
+                )
+            except Exception as _exc:
+                logger.debug("Alert dispatch failed for subscription: %s", _exc)
         return {"status": "granted", "access_level": new_level}
 
     else:  # is_inactive

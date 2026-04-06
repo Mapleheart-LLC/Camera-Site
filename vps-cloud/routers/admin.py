@@ -1535,6 +1535,18 @@ def admin_gift_subscription(
         admin_user, payload.access_level, user_id, user["email"], payload.creator_handle,
     )
 
+    # Fire stream-overlay alert for admin-gifted subscription.
+    try:
+        from routers.alerts import dispatch_alert as _dispatch_alert
+        _dispatch_alert(
+            payload.creator_handle,
+            "subscribe",
+            {"username": user["username"], "tier_name": "", "gifted": True, "gifted_by": "admin"},
+            db,
+        )
+    except Exception as _exc:
+        logger.debug("Alert dispatch failed for admin gift: %s", _exc)
+
     gift_id = cursor.lastrowid
     return {
         "gift_id": gift_id,

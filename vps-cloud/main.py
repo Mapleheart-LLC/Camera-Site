@@ -49,6 +49,7 @@ from routers.community import router as community_router
 from routers.monetization import router as monetization_router
 from routers.analytics import router as analytics_router
 from routers.discovery import router as discovery_router
+from routers.alerts import router as alerts_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -827,6 +828,40 @@ def init_db() -> None:
         )
         """
     )
+    # ── Stream-alert system ────────────────────────────────────────────────
+    # creator_alert_settings: per-creator, per-event configuration.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS creator_alert_settings (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator_handle    TEXT    NOT NULL,
+            event_type        TEXT    NOT NULL CHECK(event_type IN ('tip','subscribe','follow')),
+            enabled           INTEGER NOT NULL DEFAULT 1,
+            message_template  TEXT    NOT NULL DEFAULT '',
+            min_amount_cents  INTEGER NOT NULL DEFAULT 0,
+            duration_ms       INTEGER NOT NULL DEFAULT 5000,
+            created_at        TEXT    NOT NULL,
+            updated_at        TEXT    NOT NULL,
+            UNIQUE(creator_handle, event_type)
+        )
+        """
+    )
+    # stream_alerts: ring-buffer of dispatched alert events (kept for WS poll).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS stream_alerts (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            creator_handle TEXT    NOT NULL,
+            event_type     TEXT    NOT NULL,
+            payload        TEXT    NOT NULL,
+            created_at     TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stream_alerts_handle_id "
+        "ON stream_alerts (creator_handle, id)"
+    )
     # Migration: is_hidden column on drool_archive for compliance/reports.
     try:
         conn.execute(
@@ -1513,6 +1548,7 @@ app.include_router(community_router)
 app.include_router(monetization_router)
 app.include_router(analytics_router)
 app.include_router(discovery_router)
+app.include_router(alerts_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in all rate-limited routers function correctly.

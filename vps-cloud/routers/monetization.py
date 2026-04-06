@@ -45,6 +45,7 @@ from pydantic import BaseModel, Field
 
 from db import get_db
 from dependencies import get_admin_user, get_current_creator, get_current_user, get_optional_user
+from routers.alerts import dispatch_alert
 
 router = APIRouter(tags=["monetization"])
 
@@ -149,6 +150,13 @@ def send_tip(
     if not creator:
         raise HTTPException(status_code=404, detail="Creator not found.")
 
+    # Resolve display name for the alert.
+    sender = db.execute(
+        "SELECT COALESCE(display_name, username) AS display FROM site_users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    display_name = sender["display"] if sender else "Someone"
+
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
         """
@@ -158,6 +166,22 @@ def send_tip(
         (user_id, payload.creator_handle, payload.amount_cents, payload.message, now),
     )
     db.commit()
+
+    # Fire stream-overlay alert.
+    try:
+        dispatch_alert(
+            payload.creator_handle,
+            "tip",
+            {
+                "username": display_name,
+                "amount_cents": payload.amount_cents,
+                "message": payload.message or "",
+            },
+            db,
+        )
+    except Exception as _exc:
+        logger.debug("Alert dispatch failed for tip: %s", _exc)
+
     return {
         "detail": "Tip recorded.",
         "amount_cents": payload.amount_cents,

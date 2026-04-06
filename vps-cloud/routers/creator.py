@@ -61,6 +61,15 @@ logger = logging.getLogger(__name__)
 
 _creator_limiter = Limiter(key_func=get_remote_address)
 
+
+def _alerts_dispatch(creator_handle: str, event_type: str, data: dict, db) -> None:
+    """Fire a stream-overlay alert (lazy import to avoid circular deps)."""
+    try:
+        from routers.alerts import dispatch_alert
+        dispatch_alert(creator_handle, event_type, data, db)
+    except Exception as _exc:
+        logger.debug("Alert dispatch failed (%s/%s): %s", event_type, creator_handle, _exc)
+
 # ---------------------------------------------------------------------------
 # Creator JWT lifetime (longer than subscriber tokens — 24 h default)
 # ---------------------------------------------------------------------------
@@ -724,6 +733,14 @@ def creator_gift_subscription(
     )
 
     db.commit()
+
+    # Fire stream-overlay alert for gifted subscription.
+    _alerts_dispatch(
+        handle,
+        "subscribe",
+        {"username": user["username"], "tier_name": "", "gifted": True},
+        db,
+    )
 
     return {
         "gift_id": cursor.lastrowid,
