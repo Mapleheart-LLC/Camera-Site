@@ -1960,11 +1960,15 @@
     (async function initCreatorDen() {
       const host  = window.location.hostname; // e.g. "mochii.mochii.live"
       const parts = host.split('.');
-      if (parts.length < 3) return; // bare domain or unexpected — nothing to do
+      // index.html is served for creator subdomains by the server-side middleware.
+      // If parts.length < 3 we're on the bare root domain or a local/test env —
+      // the server routes bare-domain traffic to landing.html, not here, so this
+      // is just a safety guard. Keep the default placeholder and do nothing.
+      if (parts.length < 3) return;
 
       const handle     = parts[0];                    // "mochii"
       const rootDomain = parts.slice(1).join('.');    // "mochii.live"
-      const proto      = window.location.protocol;
+      const proto      = window.location.protocol;   // preserves http: or https:
 
       // Wire up link card hrefs from the detected root domain
       const links = {
@@ -1978,19 +1982,35 @@
         if (el) el.href = href;
       }
 
+      function applyFallback(name) {
+        document.title = `${name} 🐾`;
+        const titleEl = document.getElementById('den-title');
+        if (titleEl) { titleEl.textContent = name; titleEl.setAttribute('aria-label', name); }
+      }
+
       // Fetch the creator's public profile
       let creator;
       try {
         const res = await fetch(`/api/creators/${encodeURIComponent(handle)}`);
         if (res.status === 404) {
-          // No active creator with this handle — send to platform landing
+          // No active creator with this handle — send to platform landing.
+          // Any arbitrary subdomain that reaches here is caught and redirected.
           window.location.replace(`${proto}//${rootDomain}/`);
           return;
         }
-        if (!res.ok) return; // transient error — leave placeholder, don't redirect
+        if (!res.ok) {
+          // Transient server error — show handle as fallback title so the
+          // page is usable rather than stuck on a loading spinner.
+          console.error(`[den] profile fetch failed: HTTP ${res.status}`);
+          applyFallback(handle);
+          return;
+        }
         creator = await res.json();
-      } catch {
-        return; // network error — leave placeholder
+      } catch (err) {
+        // Network error — show handle as fallback, don't redirect.
+        console.error('[den] profile fetch error:', err);
+        applyFallback(handle);
+        return;
       }
 
       const displayName = creator.display_name || handle;

@@ -1458,6 +1458,9 @@ async def subdomain_routing(request: Request, call_next):
         # Any other subdomain of the root domain is treated as a creator den.
         # This covers mochii., someothercreator., and any future handles
         # without needing to hard-code them here.
+        # Handle validation is intentionally delegated to the client: index.html
+        # calls GET /api/creators/{handle} and redirects to the platform landing
+        # page when the handle does not match an active creator account.
         if not matched and _ROOT_HOSTNAME and host.endswith(f".{_ROOT_HOSTNAME}"):
             request.scope["path"] = "/index.html"
     return await call_next(request)
