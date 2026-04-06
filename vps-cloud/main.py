@@ -124,7 +124,7 @@ _SEED_CREATOR_PASSWORD: str = os.environ.get("CREATOR_PASSWORD", "")
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool", "mochii", "creator", "member")
+_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool", "mochii", "creator", "member", "www")
 
 # Root hostname derived from BASE_URL (e.g. "mochii.live" from "https://mochii.live").
 # Used by the subdomain middleware to serve the platform landing page at the bare root.
@@ -2234,6 +2234,19 @@ _c_limiter.app = app  # type: ignore[attr-defined]
 _api_limiter.app = app  # type: ignore[attr-defined]
 _compliance_limiter.app = app  # type: ignore[attr-defined]
 
+# Maps well-known subdomain prefixes → the path that should be served.
+# Creator dens (e.g. mochii., someother.) are handled by the dynamic
+# fallback in subdomain_routing so they are NOT listed here.
+_SUBDOMAIN_MAP: dict[str, str] = {
+    "anon.":    "/anon",
+    "links.":   "/links",
+    "shop.":    "/store.html",
+    "drool.":   "/drool.html",
+    "creator.": "/creator.html",
+    "member.":  "/member.html",
+    "www.":     "/landing.html",
+}
+
 
 @app.middleware("http")
 async def subdomain_routing(request: Request, call_next):
@@ -2259,20 +2272,8 @@ async def subdomain_routing(request: Request, call_next):
     """
     if request.method == "GET" and request.url.path == "/":
         host = request.headers.get("host", "").lower().split(":")[0]
-        # Maps well-known subdomain prefixes → the path that should be served.
-        # Creator dens (e.g. mochii., someother.) are handled by the dynamic
-        # fallback below so they are NOT listed here.
-        _subdomain_map = {
-            "anon.":    "/anon",
-            "links.":   "/links",
-            "shop.":    "/store.html",
-            "drool.":   "/drool.html",
-            "creator.": "/creator.html",
-            "member.":  "/member.html",
-            "www.":     "/landing.html",
-        }
         matched = False
-        for prefix, target_path in _subdomain_map.items():
+        for prefix, target_path in _SUBDOMAIN_MAP.items():
             if host.startswith(prefix):
                 request.scope["path"] = target_path
                 matched = True

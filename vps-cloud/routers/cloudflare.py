@@ -327,28 +327,6 @@ def remove_tunnel_ingress_route(hostname: str) -> None:
         logger.warning("CF tunnel ingress remove: failed to update config: %s", exc.detail)
 
 
-
-    """Make a *synchronous* Cloudflare API request and return the JSON body.
-
-    Raises ``HTTPException`` on network errors or API-level failures.
-    """
-    _require_token()
-    url = f"{_CF_BASE}{path}"
-    try:
-        r = httpx.request(method, url, headers=_auth_headers(), timeout=15.0, **kwargs)
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Cloudflare API unreachable: {exc}") from exc
-    try:
-        data = r.json()
-    except ValueError as exc:
-        raise HTTPException(status_code=502, detail="Cloudflare returned a non-JSON response.") from exc
-    if not data.get("success", False):
-        errors = data.get("errors", [])
-        msg = errors[0].get("message", "Unknown Cloudflare error") if errors else "Unknown Cloudflare error"
-        raise HTTPException(status_code=r.status_code or 502, detail=f"Cloudflare: {msg}")
-    return data
-
-
 def _cf_request(method: str, path: str, **kwargs) -> dict:
     """Make a *synchronous* Cloudflare API request and return the JSON body.
 
