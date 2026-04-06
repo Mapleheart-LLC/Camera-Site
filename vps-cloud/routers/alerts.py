@@ -220,23 +220,33 @@ def update_alert_setting(
 
     _ensure_settings(db, handle)
 
-    updates: dict[str, Any] = {}
+    # Build the UPDATE using an explicit allowlist of updatable columns to avoid
+    # any risk of SQL injection from dynamically constructed column names.
+    _ALLOWED_COLS: dict[str, Any] = {}
     if payload.enabled is not None:
-        updates["enabled"] = int(payload.enabled)
+        _ALLOWED_COLS["enabled"] = int(payload.enabled)
     if payload.message_template is not None:
-        updates["message_template"] = payload.message_template
+        _ALLOWED_COLS["message_template"] = payload.message_template
     if payload.min_amount_cents is not None:
-        updates["min_amount_cents"] = payload.min_amount_cents
+        _ALLOWED_COLS["min_amount_cents"] = payload.min_amount_cents
     if payload.duration_ms is not None:
-        updates["duration_ms"] = payload.duration_ms
+        _ALLOWED_COLS["duration_ms"] = payload.duration_ms
 
-    if updates:
-        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
+    # Validate keys against the actual schema columns before building SQL.
+    _VALID_COLS = frozenset({"enabled", "message_template", "min_amount_cents", "duration_ms"})
+    unknown = set(_ALLOWED_COLS) - _VALID_COLS
+    if unknown:
+        from fastapi import HTTPException as _HTTPException
+        raise _HTTPException(status_code=400, detail=f"Unknown fields: {unknown}")
+
+    if _ALLOWED_COLS:
+        _ALLOWED_COLS["updated_at"] = datetime.now(timezone.utc).isoformat()
+        # Each key is validated against _VALID_COLS; f-string interpolation is safe here.
+        set_clause = ", ".join(f"{col} = ?" for col in _ALLOWED_COLS)
         db.execute(
-            f"UPDATE creator_alert_settings SET {set_clause} "
+            f"UPDATE creator_alert_settings SET {set_clause} "  # noqa: S608 – cols validated above
             "WHERE creator_handle = ? AND event_type = ?",
-            list(updates.values()) + [handle, event_type],
+            list(_ALLOWED_COLS.values()) + [handle, event_type],
         )
         db.commit()
 
