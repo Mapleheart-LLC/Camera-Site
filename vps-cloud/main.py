@@ -7,17 +7,18 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import urlencode, urlparse, quote as _url_quote
+from urllib.parse import urlparse, quote as _url_quote
 
 import httpx
 import html as _html_lib
+from passlib.context import CryptContext
 
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from db import DATABASE_PATH, get_db, get_db_connection, get_setting
 from dependencies import (
@@ -48,26 +49,43 @@ GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 GO2RTC_TIMEOUT: float = 15.0
 
-# Fanvue OAuth 2.0 settings – set these in your environment / docker-compose.yml
-FANVUE_CLIENT_ID: str = os.environ.get("FANVUE_CLIENT_ID", "")
-FANVUE_CLIENT_SECRET: str = os.environ.get("FANVUE_CLIENT_SECRET", "")
-FANVUE_REDIRECT_URI: str = os.environ.get(
-    "FANVUE_REDIRECT_URI", "http://localhost:8000/auth/callback"
-)
-FANVUE_AUTH_URL: str = os.environ.get(
-    "FANVUE_AUTH_URL", "https://app.fanvue.com/oauth/authorize"
-)
-FANVUE_TOKEN_URL: str = os.environ.get(
-    "FANVUE_TOKEN_URL", "https://api.fanvue.com/oauth/token"
-)
-FANVUE_PROFILE_URL: str = os.environ.get(
-    "FANVUE_PROFILE_URL", "https://api.fanvue.com/profile"
-)
-# Optional: restrict access checks to a specific creator's subscriber list.
-FANVUE_CREATOR_ID: str = os.environ.get("FANVUE_CREATOR_ID", "")
+# ---------------------------------------------------------------------------
+# Password hashing
+# ---------------------------------------------------------------------------
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Set MOCK_AUTH=true to bypass Fanvue OAuth and issue a fake token.
-# Useful for demos when the Fanvue API keys are not yet available.
+
+def _hash_password(password: str) -> str:
+    return _pwd_context.hash(password)
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    return _pwd_context.verify(plain, hashed)
+
+
+# ---------------------------------------------------------------------------
+# Discord role → access-level configuration
+#
+# Set DISCORD_GUILD_ID plus one or more role-ID variables so that the login
+# endpoint can look up the authenticated user's server roles and map them to
+# the correct access level.  Roles are evaluated highest-first; the first
+# match wins.
+#
+#   DISCORD_GUILD_ID       – Discord server (guild) to query for member roles.
+#   DISCORD_ROLE_LEVEL_3   – Role ID that grants access_level 3 (tier 2+).
+#   DISCORD_ROLE_LEVEL_2   – Role ID that grants access_level 2 (tier 1).
+#   DISCORD_ROLE_LEVEL_1   – Role ID that grants access_level 1 (free follower).
+#
+# If DISCORD_GUILD_ID is not set, or the user has no linked Discord account,
+# the stored access_level is returned unchanged.
+# ---------------------------------------------------------------------------
+DISCORD_GUILD_ID: str = os.environ.get("DISCORD_GUILD_ID", "")
+DISCORD_ROLE_LEVEL_3: str = os.environ.get("DISCORD_ROLE_LEVEL_3", "")
+DISCORD_ROLE_LEVEL_2: str = os.environ.get("DISCORD_ROLE_LEVEL_2", "")
+DISCORD_ROLE_LEVEL_1: str = os.environ.get("DISCORD_ROLE_LEVEL_1", "")
+
+# Set MOCK_AUTH=true to bypass password verification and issue a fake token.
+# Useful for demos when Discord is not yet configured.
 # NEVER enable this in production.
 _mock_auth_raw = os.environ.get("MOCK_AUTH", "")
 MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool/str check
@@ -127,8 +145,6 @@ def _cookie_domain() -> str:
 
 
 COOKIE_DOMAIN: str = _cookie_domain()
-STATE_TTL: int = 600
-_oauth_states: dict[str, datetime] = {}
 
 _DEFAULT_KEY = "changeme-replace-in-production!!"
 
@@ -152,9 +168,10 @@ def init_db() -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
-            id           TEXT    PRIMARY KEY,
-            fanvue_id    TEXT    NOT NULL UNIQUE,
-            access_level INTEGER NOT NULL DEFAULT 0
+            id            TEXT    PRIMARY KEY,
+            username      TEXT    NOT NULL UNIQUE,
+            password_hash TEXT    NOT NULL DEFAULT '',
+            access_level  INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -364,6 +381,16 @@ def init_db() -> None:
         conn.execute("INSERT INTO drool_archive_v2 SELECT * FROM drool_archive")
         conn.execute("DROP TABLE drool_archive")
         conn.execute("ALTER TABLE drool_archive_v2 RENAME TO drool_archive")
+    # Migration: add username/password_hash columns to existing users tables
+    # that were created before the Fanvue → username/password migration.
+    for _col, _defn in [
+        ("username",      "TEXT NOT NULL DEFAULT ''"),
+        ("password_hash", "TEXT NOT NULL DEFAULT ''"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {_col} {_defn}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     conn.close()
 
@@ -414,57 +441,52 @@ async def _sync_cameras_to_go2rtc() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fanvue OAuth helpers
+# Discord role → access-level helper
 # ---------------------------------------------------------------------------
 
 
-def _generate_state() -> str:
-    """Create a cryptographically random CSRF state token and store it."""
-    _prune_expired_states()
-    token = secrets.token_urlsafe(32)
-    _oauth_states[token] = datetime.now(timezone.utc) + timedelta(seconds=STATE_TTL)
-    return token
+async def _fetch_discord_access_level(discord_id: str) -> Optional[int]:
+    """Query the Discord Bot API for the user's guild roles and map to access_level.
 
-
-def _consume_state(token: str) -> bool:
-    """Return True and remove the state if it is valid and not expired."""
-    _prune_expired_states()
-    expiry = _oauth_states.pop(token, None)
-    return expiry is not None and datetime.now(timezone.utc) < expiry
-
-
-def _prune_expired_states() -> None:
-    now = datetime.now(timezone.utc)
-    expired = [k for k, v in _oauth_states.items() if v <= now]
-    for k in expired:
-        del _oauth_states[k]
-
-
-def determine_access_level(profile: dict) -> int:
+    Returns the highest matching access level (0–3), or None if the guild or
+    bot token is not configured, or the member is not in the guild.
     """
-    Map a Fanvue profile API response to an integer access level.
+    bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
+    if not bot_token or not DISCORD_GUILD_ID:
+        return None
 
-      0 – not a follower / no relationship
-      1 – free follower
-      2 – active Tier 1 subscriber
-      3 – active Tier 2+ subscriber
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_id}",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Discord guild member fetch failed for %s: %s", discord_id, exc)
+        return None
 
-    Adjust the field names below to match the actual Fanvue API response.
-    See https://api.fanvue.com/docs for the current profile response format.
-    """
-    # Subscription block (may be nested or flat depending on API version)
-    subscription = profile.get("subscription") or {}
-    tier: int = int(subscription.get("tier", 0))
-    is_active: bool = bool(subscription.get("is_active", False))
+    if resp.status_code == 404:
+        # User is not in the guild → no access
+        return 0
 
-    if is_active and tier >= 2:
-        return 3
-    if is_active and tier == 1:
-        return 2
+    if resp.status_code != 200:
+        logger.warning(
+            "Discord guild member lookup returned %s for discord_id=%s",
+            resp.status_code,
+            discord_id,
+        )
+        return None
 
-    # Free follower
-    if profile.get("is_following") or profile.get("following"):
-        return 1
+    member_roles: list[str] = resp.json().get("roles", [])
+
+    # Evaluate highest matching role, tier 3 first
+    for level, role_id in [
+        (3, DISCORD_ROLE_LEVEL_3),
+        (2, DISCORD_ROLE_LEVEL_2),
+        (1, DISCORD_ROLE_LEVEL_1),
+    ]:
+        if role_id and role_id in member_roles:
+            return level
 
     return 0
 
@@ -487,13 +509,14 @@ async def lifespan(app: FastAPI):
     if MOCK_AUTH:
         print("MOCK MODE IS ENABLED")
         logger.warning(
-            "MOCK_AUTH is enabled. /auth/login will issue a fake access_level=3 token "
-            "without any Fanvue authentication. Do NOT use this in production."
+            "MOCK_AUTH is enabled. /api/auth/login will issue a fake access_level=3 token "
+            "without password verification. Do NOT use this in production."
         )
-    elif not FANVUE_CLIENT_ID or not FANVUE_CLIENT_SECRET:
+    if not DISCORD_GUILD_ID:
         logger.warning(
-            "FANVUE_CLIENT_ID and/or FANVUE_CLIENT_SECRET are not set. "
-            "OAuth login will not work until these are configured."
+            "DISCORD_GUILD_ID is not set. Access levels will not be synced from Discord "
+            "roles on login. Set DISCORD_GUILD_ID and DISCORD_ROLE_LEVEL_* to enable "
+            "automatic role-based tier assignment."
         )
     init_db()
     await _sync_cameras_to_go2rtc()
@@ -533,20 +556,62 @@ class CameraResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Auth endpoints
+# Auth endpoints – username / password
 # ---------------------------------------------------------------------------
 
 
-@app.get("/auth/login")
-def auth_login(db: sqlite3.Connection = Depends(get_db)):
-    """Redirect the browser to Fanvue's OAuth 2.0 authorization page.
+class _RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_\-]+$")
+    password: str = Field(..., min_length=8, max_length=128)
 
-    If MOCK_AUTH is enabled (via env var or the admin Danger Zone DB override),
-    skip the Fanvue redirect entirely and issue a fake JWT with access_level=3
-    so the site's features can be demoed without real Fanvue API credentials.
+
+class _LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/register", status_code=201)
+def auth_register(body: _RegisterRequest, db: sqlite3.Connection = Depends(get_db)):
+    """Create a new site account.
+
+    Usernames are case-insensitive and may only contain letters, numbers,
+    underscores, and hyphens (3–32 characters).  New accounts start at
+    access_level=0; a Discord role link is required to gain tier access.
     """
-    # DB setting takes precedence over the env var so the admin can toggle
-    # mock-auth at runtime without restarting the container.
+    username_lower = body.username.lower()
+    existing = db.execute(
+        "SELECT id FROM users WHERE username = ?", (username_lower,)
+    ).fetchone()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken.",
+        )
+
+    user_id = secrets.token_hex(16)
+    pw_hash = _hash_password(body.password)
+    db.execute(
+        "INSERT INTO users (id, username, password_hash, access_level) VALUES (?, ?, ?, 0)",
+        (user_id, username_lower, pw_hash),
+    )
+    db.commit()
+    logger.info("New user registered: username=%s id=%s", username_lower, user_id)
+    return {"message": "Account created. Link your Discord to unlock tier access."}
+
+
+@app.post("/api/auth/login")
+async def auth_login(
+    body: _LoginRequest,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Authenticate with username and password.
+
+    If MOCK_AUTH is enabled, any credentials are accepted and access_level=3
+    is issued.  Otherwise the password is verified and, if the account has a
+    linked Discord, guild roles are queried to refresh the stored access_level
+    before issuing the JWT.
+    """
+    # DB setting takes precedence over the env var for runtime toggle.
     db_mock_auth = get_setting(db, "mock_auth")
     effective_mock_auth = (
         db_mock_auth.lower() == "true" if db_mock_auth is not None else MOCK_AUTH
@@ -557,136 +622,55 @@ def auth_login(db: sqlite3.Connection = Depends(get_db)):
             {"sub": "mock-user", "access_level": 3},
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         )
-        return RedirectResponse(url=f"/#token={mock_token}", status_code=302)
+        return {"access_token": mock_token, "token_type": "bearer"}
 
-    if not FANVUE_CLIENT_ID:
+    username_lower = body.username.lower()
+    row = db.execute(
+        "SELECT id, password_hash, access_level FROM users WHERE username = ?",
+        (username_lower,),
+    ).fetchone()
+
+    # Use a constant-time comparison even on failure to prevent user enumeration
+    # via timing attacks.  We hash a dummy value when no row is found.
+    dummy_hash = "$2b$12$" + "x" * 53
+    stored_hash = row["password_hash"] if row else dummy_hash
+    password_ok = _verify_password(body.password, stored_hash)
+
+    if not row or not password_ok:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OAuth is not configured on this server.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
         )
-    state = _generate_state()
-    params = urlencode(
-        {
-            "client_id": FANVUE_CLIENT_ID,
-            "redirect_uri": FANVUE_REDIRECT_URI,
-            "response_type": "code",
-            "scope": "openid profile",
-            "state": state,
-        }
-    )
-    return RedirectResponse(url=f"{FANVUE_AUTH_URL}?{params}", status_code=302)
 
+    user_id: str = row["id"]
+    access_level: int = row["access_level"]
 
-@app.get("/auth/callback")
-async def auth_callback(
-    code: Optional[str] = None,
-    state: Optional[str] = None,
-    error: Optional[str] = None,
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """
-    Handle the OAuth 2.0 authorization code callback from Fanvue.
+    # Refresh access_level from Discord guild roles if the account is linked.
+    discord_row = db.execute(
+        "SELECT discord_id FROM discord_accounts WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
 
-    On success: exchange the code for a token, fetch the user profile,
-    assign an access level, persist the user, issue a short-lived JWT,
-    and redirect to the frontend with the token in the URL fragment.
-    """
-    # If the provider returned an error, log it and redirect to the login page.
-    # We intentionally do NOT forward the raw provider error code into the
-    # redirect URL to prevent URL injection / open-redirect via the query string.
-    if error:
-        logger.warning("Fanvue OAuth error received: %s", error)
-        return RedirectResponse(url="/?error=oauth_error", status_code=302)
-
-    if not code or not state:
-        return RedirectResponse(url="/?error=missing_params", status_code=302)
-
-    if not _consume_state(state):
-        return RedirectResponse(url="/?error=invalid_state", status_code=302)
-
-    # Exchange authorization code for an access token
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            token_resp = await client.post(
-                FANVUE_TOKEN_URL,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": FANVUE_REDIRECT_URI,
-                    "client_id": FANVUE_CLIENT_ID,
-                    "client_secret": FANVUE_CLIENT_SECRET,
-                },
-                headers={"Accept": "application/json"},
+    if discord_row:
+        discord_access = await _fetch_discord_access_level(discord_row["discord_id"])
+        if discord_access is not None and discord_access != access_level:
+            access_level = discord_access
+            db.execute(
+                "UPDATE users SET access_level = ? WHERE id = ?",
+                (access_level, user_id),
             )
-    except httpx.RequestError as exc:
-        logger.error("Token exchange request failed: %s", exc)
-        return RedirectResponse(url="/?error=token_request_failed", status_code=302)
-
-    if token_resp.status_code != 200:
-        logger.error("Token exchange failed: %s %s", token_resp.status_code, token_resp.text)
-        return RedirectResponse(url="/?error=token_exchange_failed", status_code=302)
-
-    fanvue_token = token_resp.json().get("access_token")
-    if not fanvue_token:
-        return RedirectResponse(url="/?error=no_access_token", status_code=302)
-
-    # Fetch the user's Fanvue profile
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            profile_resp = await client.get(
-                FANVUE_PROFILE_URL,
-                headers={
-                    "Authorization": f"Bearer {fanvue_token}",
-                    "Accept": "application/json",
-                },
+            db.commit()
+            logger.info(
+                "Access level updated from Discord roles: user_id=%s level=%s",
+                user_id,
+                access_level,
             )
-    except httpx.RequestError as exc:
-        logger.error("Profile request failed: %s", exc)
-        return RedirectResponse(url="/?error=profile_request_failed", status_code=302)
 
-    if profile_resp.status_code != 200:
-        logger.error("Profile fetch failed: %s %s", profile_resp.status_code, profile_resp.text)
-        return RedirectResponse(url="/?error=profile_fetch_failed", status_code=302)
-
-    profile = profile_resp.json()
-
-    # Resolve the Fanvue user ID from the profile response.
-    # Common field names: "uuid", "id", "user_id" – adjust to match the API.
-    fanvue_id: Optional[str] = (
-        profile.get("uuid")
-        or profile.get("id")
-        or profile.get("user_id")
-    )
-    if not fanvue_id:
-        logger.error("Could not determine fanvue_id from profile: %s", profile)
-        return RedirectResponse(url="/?error=no_user_id", status_code=302)
-
-    fanvue_id = str(fanvue_id)
-    access_level = determine_access_level(profile)
-
-    # Persist or update the user in the local database.
-    # `user_id` is only stored on first insert; ON CONFLICT leaves the existing
-    # `id` unchanged and only refreshes the access_level.
-    new_user_id = secrets.token_hex(16)
-    db.execute(
-        """
-        INSERT INTO users (id, fanvue_id, access_level)
-        VALUES (?, ?, ?)
-        ON CONFLICT(fanvue_id) DO UPDATE SET access_level = excluded.access_level
-        """,
-        (new_user_id, fanvue_id, access_level),
-    )
-    db.commit()
-
-    # Issue a short-lived JWT for the frontend
     site_token = create_access_token(
-        {"sub": fanvue_id, "access_level": access_level},
+        {"sub": user_id, "access_level": access_level},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-
-    # Redirect to the SPA; deliver token via URL fragment so it is never sent
-    # to the server in subsequent requests.
-    return RedirectResponse(url=f"/#token={site_token}", status_code=302)
+    return {"access_token": site_token, "token_type": "bearer"}
 
 
 # ---------------------------------------------------------------------------
@@ -701,7 +685,7 @@ def get_my_cameras(
 ):
     """Return cameras the authenticated user is permitted to view."""
     access_level: int = current_user["access_level"]
-    user_id: str = current_user["fanvue_id"]
+    user_id: str = current_user["user_id"]
 
     rows = db.execute(
             """

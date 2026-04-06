@@ -3,7 +3,7 @@ routers/admin.py – Admin-only management endpoints for mochii.live.
 
 All endpoints are protected by HTTP Basic Auth via the ``get_admin_user``
 dependency (ADMIN_USERNAME / ADMIN_PASSWORD environment variables).
-This auth system is entirely separate from the Fanvue OAuth / JWT flow.
+This auth system is entirely separate from the username/password JWT flow.
 
 Endpoints
 ---------
@@ -30,6 +30,7 @@ Endpoints
 
 import logging
 import os
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
@@ -37,10 +38,13 @@ from urllib.parse import quote as _url_quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from passlib.context import CryptContext
+from pydantic import BaseModel, Field
 
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -331,7 +335,7 @@ def admin_control_device(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Manually trigger an IoT device without rate limiting or a Fanvue JWT.
+    Manually trigger an IoT device without rate limiting or an auth JWT.
 
     Logs the activation to the ``activations`` table with the admin username
     as the actor so it appears in the stats history.
@@ -591,12 +595,11 @@ def get_settings(
         "mock_auth_env": mock_auth_env,
         "mock_auth_db": mock_auth_db,
         "mock_auth_effective": mock_auth_effective,
-        "fanvue_client_id_set": bool(os.environ.get("FANVUE_CLIENT_ID")),
-        "fanvue_client_secret_set": bool(os.environ.get("FANVUE_CLIENT_SECRET")),
-        "fanvue_redirect_uri": os.environ.get(
-            "FANVUE_REDIRECT_URI", "http://localhost:8000/auth/callback"
-        ),
-        "fanvue_creator_id_set": bool(os.environ.get("FANVUE_CREATOR_ID")),
+        "discord_guild_id_set": bool(os.environ.get("DISCORD_GUILD_ID")),
+        "discord_bot_token_set": bool(os.environ.get("DISCORD_BOT_TOKEN")),
+        "discord_role_level_1_set": bool(os.environ.get("DISCORD_ROLE_LEVEL_1")),
+        "discord_role_level_2_set": bool(os.environ.get("DISCORD_ROLE_LEVEL_2")),
+        "discord_role_level_3_set": bool(os.environ.get("DISCORD_ROLE_LEVEL_3")),
         "admin_configured": (
             bool(os.environ.get("ADMIN_USERNAME"))
             and bool(os.environ.get("ADMIN_PASSWORD"))
@@ -1027,3 +1030,102 @@ def purge_bad_drool_entries(
     )
     return {"deleted": len(bad_ids), "ids": bad_ids}
 
+
+
+# ---------------------------------------------------------------------------
+# User management
+# ---------------------------------------------------------------------------
+
+
+class _CreateUserPayload(BaseModel):
+    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_\-]+$")
+    password: str = Field(..., min_length=8, max_length=128)
+    access_level: int = Field(0, ge=0, le=3)
+
+
+class _UpdateUserPayload(BaseModel):
+    password: Optional[str] = Field(None, min_length=8, max_length=128)
+    access_level: Optional[int] = Field(None, ge=0, le=3)
+
+
+@router.get("/users")
+def list_users(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return all registered site users (no password hashes)."""
+    rows = db.execute(
+        "SELECT id, username, access_level FROM users ORDER BY rowid DESC"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/users", status_code=201)
+def create_user(
+    body: _CreateUserPayload,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Create a new site user account."""
+    username_lower = body.username.lower()
+    existing = db.execute(
+        "SELECT id FROM users WHERE username = ?", (username_lower,)
+    ).fetchone()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken.",
+        )
+    user_id = secrets.token_hex(16)
+    pw_hash = _pwd_context.hash(body.password)
+    db.execute(
+        "INSERT INTO users (id, username, password_hash, access_level) VALUES (?, ?, ?, ?)",
+        (user_id, username_lower, pw_hash, body.access_level),
+    )
+    db.commit()
+    logger.info("Admin '%s' created user: username=%s id=%s", admin_user, username_lower, user_id)
+    return {"id": user_id, "username": username_lower, "access_level": body.access_level}
+
+
+@router.patch("/users/{user_id}")
+def update_user(
+    user_id: str,
+    body: _UpdateUserPayload,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update a user's password and/or access_level."""
+    row = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if body.password is not None:
+        db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (_pwd_context.hash(body.password), user_id),
+        )
+    if body.access_level is not None:
+        db.execute(
+            "UPDATE users SET access_level = ? WHERE id = ?",
+            (body.access_level, user_id),
+        )
+    db.commit()
+    logger.info("Admin '%s' updated user id=%s", admin_user, user_id)
+    return {"updated": user_id}
+
+
+@router.delete("/users/{user_id}", status_code=200)
+def delete_user(
+    user_id: str,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Delete a user account and their linked Discord entry."""
+    row = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    db.execute("UPDATE discord_accounts SET user_id = NULL WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+    logger.info("Admin '%s' deleted user id=%s", admin_user, user_id)
+    return {"deleted": user_id}
