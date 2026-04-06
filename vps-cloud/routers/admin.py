@@ -77,6 +77,10 @@ _VALID_DEVICES = {"pishock", "lovense"}
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
+# The platform primary creator; used as the default creator_handle for store
+# products and other content not explicitly associated with an invited creator.
+_PRIMARY_CREATOR = "mochii"
+
 logger = logging.getLogger(__name__)
 
 
@@ -785,7 +789,7 @@ class ProductCreate(BaseModel):
     is_printful: bool = False
     printful_variant_id: Optional[str] = None
     stock_count: Optional[int] = None
-    creator_handle: str = "mochii"
+    creator_handle: str = _PRIMARY_CREATOR
     creator_revenue_pct: float = 0.0
 
 
