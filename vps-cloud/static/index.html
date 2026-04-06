@@ -1066,8 +1066,6 @@
                 onclick="switchAuthTab('login')">Sign In</button>
         <button class="auth-tab" id="tab-register" role="tab" aria-selected="false"
                 onclick="switchAuthTab('register')">Register</button>
-        <button class="auth-tab" id="tab-creator" role="tab" aria-selected="false"
-                onclick="switchAuthTab('creator')">Creator</button>
       </div>
 
       <!-- Login form -->
@@ -1089,25 +1087,6 @@
         <input class="auth-input" id="reg-password" type="password"
                placeholder="Password (8+ characters)" autocomplete="new-password" required />
         <button class="auth-submit" type="submit" id="register-btn">Create Account 🐾</button>
-      </form>
-
-      <!-- Creator login form (hidden until tab is switched) -->
-      <form id="creator-login-form" class="auth-form" style="display:none;"
-            onsubmit="handleCreatorLogin(event)" novalidate>
-        <input class="auth-input" id="creator-handle" type="text"
-               placeholder="Creator handle" autocomplete="username" required />
-        <input class="auth-input" id="creator-password" type="password"
-               placeholder="Password" autocomplete="current-password" required />
-        <button class="auth-submit" type="submit" id="creator-login-btn">Enter the Den 🐾</button>
-      </form>
-
-      <!-- Creator 2FA form (shown when login returns requires_2fa) -->
-      <form id="creator-otp-form" class="auth-form" style="display:none;"
-            onsubmit="handleCreatorOtp(event)" novalidate>
-        <p style="font-size:.82rem;color:#9e7e82;text-align:center;">Enter your authenticator code</p>
-        <input class="auth-input" id="creator-otp" type="text" inputmode="numeric"
-               placeholder="6-digit code" autocomplete="one-time-code" maxlength="6" required />
-        <button class="auth-submit" type="submit" id="creator-otp-btn">Confirm 🐾</button>
       </form>
 
       <div class="subscribe-row" id="subscribe-row">
@@ -1841,20 +1820,14 @@
 
     // ── Auth tab switcher ─────────────────────────────
     function switchAuthTab(tab) {
-      const isLogin   = tab === 'login';
-      const isReg     = tab === 'register';
-      const isCreator = tab === 'creator';
-      document.getElementById('login-form').style.display          = isLogin   ? 'flex' : 'none';
-      document.getElementById('register-form').style.display       = isReg     ? 'flex' : 'none';
-      document.getElementById('creator-login-form').style.display  = isCreator ? 'flex' : 'none';
-      document.getElementById('creator-otp-form').style.display    = 'none';
+      const isLogin = tab === 'login';
+      const isReg   = tab === 'register';
+      document.getElementById('login-form').style.display    = isLogin ? 'flex' : 'none';
+      document.getElementById('register-form').style.display = isReg   ? 'flex' : 'none';
       document.getElementById('tab-login').classList.toggle('active', isLogin);
       document.getElementById('tab-register').classList.toggle('active', isReg);
-      document.getElementById('tab-creator').classList.toggle('active', isCreator);
       document.getElementById('tab-login').setAttribute('aria-selected', isLogin);
       document.getElementById('tab-register').setAttribute('aria-selected', isReg);
-      document.getElementById('tab-creator').setAttribute('aria-selected', isCreator);
-      document.getElementById('subscribe-row').style.display = isCreator ? 'none' : '';
     }
 
     // ── Native sign-in ────────────────────────────────
@@ -1929,71 +1902,6 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Create Account 🐾';
-      }
-    }
-
-    // ── Creator login ─────────────────────────────────
-    let _creatorPendingToken = null;
-
-    async function handleCreatorLogin(e) {
-      e.preventDefault();
-      const btn    = document.getElementById('creator-login-btn');
-      const handle = document.getElementById('creator-handle').value.trim();
-      const pass   = document.getElementById('creator-password').value;
-      btn.disabled = true;
-      btn.textContent = 'Entering den…';
-      try {
-        const res = await fetch('/api/creator/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ handle, password: pass }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          showLogin(data.detail || 'Invalid handle or password.', 'error');
-          return;
-        }
-        if (data.requires_2fa) {
-          _creatorPendingToken = data.pending_token;
-          document.getElementById('creator-login-form').style.display = 'none';
-          document.getElementById('creator-otp-form').style.display   = 'flex';
-          return;
-        }
-        localStorage.setItem('creator_jwt', data.access_token);
-        window.location.href = '/creator-dash.html';
-      } catch {
-        showLogin('Could not connect. Please try again.', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Enter the Den 🐾';
-      }
-    }
-
-    // ── Creator 2FA confirm ───────────────────────────
-    async function handleCreatorOtp(e) {
-      e.preventDefault();
-      const btn = document.getElementById('creator-otp-btn');
-      const otp = document.getElementById('creator-otp').value.trim();
-      btn.disabled = true;
-      btn.textContent = 'Verifying…';
-      try {
-        const res = await fetch('/api/creator/2fa/confirm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pending_token: _creatorPendingToken, otp }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          showLogin(data.detail || 'Invalid code. Please try again.', 'error');
-          return;
-        }
-        localStorage.setItem('creator_jwt', data.access_token);
-        window.location.href = '/creator-dash.html';
-      } catch {
-        showLogin('Could not connect. Please try again.', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Confirm 🐾';
       }
     }
 
