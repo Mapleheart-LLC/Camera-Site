@@ -794,6 +794,18 @@ def init_db() -> None:
     except sqlite3.OperationalError as _e:
         if "duplicate column" not in str(_e).lower():
             raise
+    # Migration: rtmp_key column on cameras (stream key for OBS/RTMP ingest).
+    try:
+        conn.execute("ALTER TABLE cameras ADD COLUMN rtmp_key TEXT UNIQUE")
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
+    # Migration: stream_title column on cameras (live title shown to viewers).
+    try:
+        conn.execute("ALTER TABLE cameras ADD COLUMN stream_title TEXT")
+    except sqlite3.OperationalError as _e:
+        if "duplicate column" not in str(_e).lower():
+            raise
     # Migration: is_hidden column on drool_archive for compliance/reports.
     try:
         conn.execute(
@@ -859,12 +871,18 @@ def init_db() -> None:
 
 
 async def _sync_cameras_to_go2rtc() -> None:
-    """On startup, register every camera that has connection info with go2rtc."""
+    """On startup, register every RTSP/Tapo camera with go2rtc.
+
+    RTMP cameras (those with an rtmp_key) are push-based: OBS/streaming software
+    publishes directly to go2rtc on port 1935 using the rtmp_key as the stream path.
+    No pre-registration is needed for RTMP – go2rtc creates the stream automatically
+    when the publisher connects.
+    """
     go2rtc_base = f"http://{GO2RTC_HOST}:{GO2RTC_PORT}"
     conn = get_db_connection()
     try:
         rows = conn.execute(
-            "SELECT stream_slug, rtsp_url, tapo_ip, tapo_username, tapo_password FROM cameras"
+            "SELECT stream_slug, rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key FROM cameras"
         ).fetchall()
     finally:
         conn.close()
@@ -874,6 +892,10 @@ async def _sync_cameras_to_go2rtc() -> None:
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         for row in rows:
+            # RTMP cameras are push-based – skip pre-registration.
+            if row["rtmp_key"]:
+                continue
+
             tapo_ip = row["tapo_ip"]
             if tapo_ip:
                 user = _url_quote(row["tapo_username"] or "", safe="")
@@ -1098,6 +1120,8 @@ app.add_middleware(
 class CameraResponse(BaseModel):
     display_name: str
     stream_slug: str
+    ppv_price_cents: Optional[int] = None
+    stream_title: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1278,7 +1302,7 @@ def get_my_cameras(
 
     rows = db.execute(
             """
-            SELECT display_name, stream_slug
+            SELECT display_name, stream_slug, ppv_price_cents, stream_title
             FROM cameras
             WHERE minimum_access_level <= ?
             ORDER BY minimum_access_level, id
@@ -1293,7 +1317,15 @@ def get_my_cameras(
     db.commit()
 
     return JSONResponse(
-        [{"display_name": row["display_name"], "stream_slug": row["stream_slug"]} for row in rows]
+        [
+            {
+                "display_name": row["display_name"],
+                "stream_slug": row["stream_slug"],
+                "ppv_price_cents": row["ppv_price_cents"],
+                "stream_title": row["stream_title"],
+            }
+            for row in rows
+        ]
     )
 
 
@@ -1310,12 +1342,15 @@ async def proxy_webrtc(
     Access is granted when EITHER:
       (a) the user's access_level meets the camera's minimum_access_level, OR
       (b) the user has a valid (non-expired) PPV purchase for the camera.
+
+    For RTMP cameras (those with an rtmp_key), the go2rtc stream name is the
+    rtmp_key rather than the stream_slug, since OBS publishes to that path.
     """
     access_level: int = current_user["access_level"]
     user_id: str = current_user["fanvue_id"]
 
     camera = db.execute(
-        "SELECT id, minimum_access_level, ppv_price_cents FROM cameras WHERE stream_slug = ?",
+        "SELECT id, minimum_access_level, ppv_price_cents, rtmp_key FROM cameras WHERE stream_slug = ?",
         (src,),
     ).fetchone()
 
@@ -1342,10 +1377,14 @@ async def proxy_webrtc(
     if not has_sub_access and not has_ppv_access:
         raise HTTPException(status_code=403, detail="Access denied to this stream")
 
+    # RTMP cameras use rtmp_key as the go2rtc stream name; RTSP/Tapo cameras
+    # are pre-registered under stream_slug.
+    go2rtc_src = camera["rtmp_key"] if camera["rtmp_key"] else src
+
     body = await request.body()
     go2rtc_url = (
         f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/webrtc"
-        f"?src={_url_quote(src, safe='')}"
+        f"?src={_url_quote(go2rtc_src, safe='')}"
     )
 
     async with httpx.AsyncClient(timeout=GO2RTC_TIMEOUT) as client:
@@ -1364,6 +1403,71 @@ async def proxy_webrtc(
         raise HTTPException(status_code=502, detail="Stream service returned an error")
 
     return Response(content=resp.content, media_type="text/plain")
+
+
+@app.get("/api/stream-status")
+@_api_limiter.limit("60/minute")
+async def get_stream_status(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return live status and viewer count for each accessible camera.
+
+    Queries go2rtc's /api/streams endpoint and maps the result back to
+    user-facing stream_slugs.  A stream is considered live when go2rtc
+    reports at least one active producer (RTSP connection or RTMP publisher).
+    Viewer count is derived from the number of active go2rtc consumers.
+    """
+    access_level: int = current_user["access_level"]
+
+    cameras = db.execute(
+        """
+        SELECT stream_slug, rtmp_key
+        FROM cameras
+        WHERE minimum_access_level <= ?
+        ORDER BY id
+        """,
+        (access_level,),
+    ).fetchall()
+
+    # Default: all cameras offline
+    status: dict = {
+        row["stream_slug"]: {"is_live": False, "viewer_count": 0}
+        for row in cameras
+    }
+
+    if not cameras:
+        return JSONResponse(status)
+
+    # Build slug → go2rtc_name mapping
+    slug_to_go2rtc = {
+        row["stream_slug"]: (row["rtmp_key"] if row["rtmp_key"] else row["stream_slug"])
+        for row in cameras
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/streams")
+        if resp.is_success:
+            go2rtc_data: dict = resp.json()
+            for slug, go2rtc_name in slug_to_go2rtc.items():
+                stream_info = go2rtc_data.get(go2rtc_name) or {}
+                producers = stream_info.get("producers") or []
+                consumers = stream_info.get("consumers") or []
+                is_live = any(
+                    p.get("state") not in (None, "offline", "error") or "url" in p
+                    for p in producers
+                )
+                status[slug] = {
+                    "is_live": is_live,
+                    "viewer_count": len(consumers),
+                }
+    except Exception as exc:
+        logger.warning("Could not fetch stream status from go2rtc: %s", exc)
+        # Return all-offline rather than propagating the error
+
+    return JSONResponse(status)
 
 
 # ---------------------------------------------------------------------------

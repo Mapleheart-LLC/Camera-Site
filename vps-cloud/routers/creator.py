@@ -14,6 +14,7 @@ Endpoints
   GET    /api/creator/me                        – own profile (includes forwarding_email)
   PATCH  /api/creator/me                        – update bio / avatar / accent colour / forwarding_email
   POST   /api/creator/email/send                – send email FROM handle@domain via SMTP
+  GET    /api/creator/stream-info               – stream keys, RTMP server URL, live status per camera
   GET    /api/creator/questions                 – unanswered questions (own only)
   GET    /api/creator/questions/answered        – answered questions (own only)
   POST   /api/creator/questions/{id}/answer     – answer a question
@@ -36,6 +37,7 @@ from email.message import EmailMessage
 from typing import Optional
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from slowapi import Limiter
@@ -509,6 +511,68 @@ def creator_delete_drool(
     db.execute("DELETE FROM drool_archive WHERE id = ?", (entry_id,))
     db.commit()
     return {"deleted": entry_id}
+
+
+# ---------------------------------------------------------------------------
+# Streaming – stream keys and live status
+# ---------------------------------------------------------------------------
+
+_GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
+_GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
+
+
+@router.get("/stream-info")
+async def creator_stream_info(
+    handle: str = Depends(get_current_creator),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return streaming credentials and live status for all cameras.
+
+    Includes the RTMP ingest URL and stream key (rtmp_key) that the creator
+    enters into OBS or other streaming software.  Also returns whether each
+    stream is currently live, derived from go2rtc's /api/streams API.
+    """
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    from urllib.parse import urlparse as _up
+    hostname = _up(base_url).hostname if base_url else "localhost"
+    rtmp_server = f"rtmp://{hostname}:1935"
+
+    rows = db.execute(
+        "SELECT id, display_name, stream_slug, rtmp_key, stream_title FROM cameras ORDER BY id"
+    ).fetchall()
+
+    # Attempt to fetch live status from go2rtc
+    go2rtc_data: dict = {}
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"http://{_GO2RTC_HOST}:{_GO2RTC_PORT}/api/streams")
+        if resp.is_success:
+            go2rtc_data = resp.json()
+    except Exception as exc:
+        logger.warning("Could not fetch go2rtc stream status: %s", exc)
+
+    cameras = []
+    for row in rows:
+        go2rtc_name = row["rtmp_key"] if row["rtmp_key"] else row["stream_slug"]
+        stream_info = go2rtc_data.get(go2rtc_name) or {}
+        producers = stream_info.get("producers") or []
+        consumers = stream_info.get("consumers") or []
+        is_live = any(
+            p.get("state") not in (None, "offline", "error") or "url" in p
+            for p in producers
+        )
+        cameras.append({
+            "id": row["id"],
+            "display_name": row["display_name"],
+            "stream_slug": row["stream_slug"],
+            "stream_title": row["stream_title"],
+            "rtmp_key": row["rtmp_key"],
+            "rtmp_server": rtmp_server if row["rtmp_key"] else None,
+            "is_live": is_live,
+            "viewer_count": len(consumers),
+        })
+
+    return {"cameras": cameras, "rtmp_server": rtmp_server}
 
 
 # ---------------------------------------------------------------------------

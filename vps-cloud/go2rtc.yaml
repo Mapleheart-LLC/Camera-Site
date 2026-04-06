@@ -1,15 +1,22 @@
 # go2rtc configuration
 # Camera streams are registered dynamically by the FastAPI backend via the
 # go2rtc REST API (PUT /api/streams?name=<slug>&src=<rtsp_url>).
+# RTMP streams are published by OBS/streaming software directly to port 1935.
 # You do not need to add streams here manually.
 # Documentation: https://github.com/AlexxIT/go2rtc
 
 api:
   listen: ":1984"
-  # Restrict to the hostname/port where the FastAPI frontend is served.
-  # Replace with your actual domain in production (e.g. "https://example.com").
-  # Using "*" is convenient for local development but should not be used in production.
-  cors_origin: "http://localhost:8000"
+  # go2rtc's API is accessed only by the FastAPI backend (internal network).
+  # CORS here allows the backend container to reach it; the WebRTC SDP
+  # exchange is proxied through FastAPI so browsers never hit go2rtc directly.
+  cors_origin: "*"
+
+rtmp:
+  listen: ":1935"
 
 webrtc:
   listen: ":8555/tcp"
+
+log:
+  level: info

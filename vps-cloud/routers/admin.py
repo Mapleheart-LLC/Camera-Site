@@ -7,10 +7,11 @@ This auth system is entirely separate from the Fanvue OAuth / JWT flow.
 
 Endpoints
 ---------
-  GET    /api/admin/cameras            – list all cameras (full details)
-  POST   /api/admin/cameras            – add a new camera
-  PUT    /api/admin/cameras/{cam_id}   – update an existing camera
-  DELETE /api/admin/cameras/{cam_id}   – remove a camera
+  GET    /api/admin/cameras                    – list all cameras (full details incl. rtmp_key)
+  POST   /api/admin/cameras                    – add a new camera (RTMP key auto-generated)
+  PUT    /api/admin/cameras/{cam_id}           – update an existing camera
+  DELETE /api/admin/cameras/{cam_id}           – remove a camera
+  POST   /api/admin/cameras/{cam_id}/rotate-key – generate a new RTMP stream key
   GET    /api/admin/stats              – user/camera counts + recent activations + camera access count
   GET    /api/admin/camera-logs        – 50 most recent camera service access log entries
   POST   /api/admin/control/{device}   – manually trigger an IoT device
@@ -35,6 +36,7 @@ Endpoints
 import logging
 import os
 import re
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -116,6 +118,8 @@ class CameraCreate(BaseModel):
     tapo_ip: Optional[str] = None
     tapo_username: Optional[str] = None
     tapo_password: Optional[str] = None
+    rtmp_key: Optional[str] = None
+    stream_title: Optional[str] = None
 
 
 class CameraUpdate(BaseModel):
@@ -126,6 +130,8 @@ class CameraUpdate(BaseModel):
     tapo_ip: Optional[str] = None
     tapo_username: Optional[str] = None
     tapo_password: Optional[str] = None
+    rtmp_key: Optional[str] = None
+    stream_title: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +148,8 @@ def admin_list_cameras(
     rows = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password,
+               rtmp_key, stream_title
         FROM cameras ORDER BY id
         """
     ).fetchall()
@@ -155,14 +162,24 @@ def admin_add_camera(
     _: str = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Insert a new camera record and register its stream with go2rtc."""
+    """Insert a new camera record and register its stream with go2rtc.
+
+    For RTMP cameras (no rtsp_url / tapo_ip), an rtmp_key is auto-generated
+    if not supplied.  OBS should stream to rtmp://<host>:1935/<rtmp_key>.
+    RTSP/Tapo cameras are immediately registered with go2rtc on creation.
+    """
+    is_rtmp = not payload.rtsp_url and not payload.tapo_ip
+    rtmp_key = None
+    if is_rtmp:
+        rtmp_key = (payload.rtmp_key or "").strip() or secrets.token_urlsafe(24)
     try:
         cursor = db.execute(
             """
             INSERT INTO cameras
                 (display_name, stream_slug, minimum_access_level,
-                 rtsp_url, tapo_ip, tapo_username, tapo_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 rtsp_url, tapo_ip, tapo_username, tapo_password,
+                 rtmp_key, stream_title)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.display_name,
@@ -172,6 +189,8 @@ def admin_add_camera(
                 payload.tapo_ip or None,
                 payload.tapo_username or None,
                 payload.tapo_password or None,
+                rtmp_key,
+                payload.stream_title or None,
             ),
         )
         db.commit()
@@ -189,7 +208,8 @@ def admin_add_camera(
     row = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password,
+               rtmp_key, stream_title
         FROM cameras WHERE id = ?
         """,
         (cursor.lastrowid,),
@@ -224,15 +244,19 @@ def admin_update_camera(
     new_tapo_ip   = _pick(payload.tapo_ip,       row["tapo_ip"])
     new_tapo_user = _pick(payload.tapo_username, row["tapo_username"])
     new_tapo_pass = _pick(payload.tapo_password, row["tapo_password"])
+    new_rtmp_key  = _pick(payload.rtmp_key,      row["rtmp_key"])
+    new_title     = payload.stream_title if payload.stream_title is not None else row["stream_title"]
     try:
         db.execute(
             """
             UPDATE cameras
             SET display_name = ?, stream_slug = ?, minimum_access_level = ?,
-                rtsp_url = ?, tapo_ip = ?, tapo_username = ?, tapo_password = ?
+                rtsp_url = ?, tapo_ip = ?, tapo_username = ?, tapo_password = ?,
+                rtmp_key = ?, stream_title = ?
             WHERE id = ?
             """,
-            (new_name, new_slug, new_level, new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass, cam_id),
+            (new_name, new_slug, new_level, new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass,
+             new_rtmp_key, new_title or None, cam_id),
         )
         db.commit()
     except Exception as exc:
@@ -245,13 +269,15 @@ def admin_update_camera(
     if new_slug != old_slug:
         _deregister_stream(old_slug)
 
+    # Only register RTSP/Tapo streams; RTMP streams are push-based.
     effective_url = _effective_rtsp_url(new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass)
     _register_stream(new_slug, effective_url)
 
     updated = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password,
+               rtmp_key, stream_title
         FROM cameras WHERE id = ?
         """,
         (cam_id,),
@@ -276,6 +302,37 @@ def admin_delete_camera(
     db.execute("DELETE FROM cameras WHERE id = ?", (cam_id,))
     db.commit()
     _deregister_stream(slug)
+
+
+@router.post("/cameras/{cam_id}/rotate-key", status_code=status.HTTP_200_OK)
+def admin_rotate_camera_key(
+    cam_id: int,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Generate a new RTMP stream key for an RTMP camera.
+
+    Only applies to cameras that already have an rtmp_key (i.e. push/RTMP
+    cameras).  The new key must be entered into OBS / streaming software.
+    """
+    row = db.execute("SELECT id, rtmp_key FROM cameras WHERE id = ?", (cam_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    if not row["rtmp_key"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This camera does not use RTMP ingest.",
+        )
+    new_key = secrets.token_urlsafe(24)
+    try:
+        db.execute("UPDATE cameras SET rtmp_key = ? WHERE id = ?", (new_key, cam_id))
+        db.commit()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Could not rotate key: {exc}",
+        ) from exc
+    return {"rtmp_key": new_key}
 
 
 # ---------------------------------------------------------------------------

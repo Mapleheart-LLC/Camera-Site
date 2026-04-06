@@ -332,6 +332,7 @@
         <div class="sidebar-section-label">Creator</div>
         <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
         <button class="nav-item" data-target="s-profile">👤 Profile</button>
+        <button class="nav-item" data-target="s-streaming">📡 Streaming</button>
         <button class="nav-item" data-target="s-qa">
           🐾 Q&amp;A
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
@@ -370,11 +371,49 @@
               </div>
               <div class="quick-actions">
                 <button class="btn-quick" data-jump="s-profile">👤 Edit Profile</button>
+                <button class="btn-quick" data-jump="s-streaming">📡 Go Live</button>
                 <button class="btn-quick" data-jump="s-qa">🐾 Answer Questions</button>
                 <button class="btn-quick" data-jump="s-drool">💧 View Drool Log</button>
                 <button class="btn-quick" data-jump="s-email">📧 Send Email</button>
                 <button class="btn-quick" data-jump="s-stats">📈 See Stats</button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Streaming ─────────────────────────────── -->
+        <section id="s-streaming" class="creator-section">
+          <h1 class="section-heading">📡 Live Streaming</h1>
+
+          <div class="card">
+            <div class="card-header"><h2>OBS / Streaming Software Setup</h2></div>
+            <div class="card-body">
+              <p style="font-size:.88rem;color:#c49a9f;margin-bottom:1rem;">
+                Use the credentials below in OBS Studio or any RTMP-compatible streaming software.
+                Each camera has a unique stream key — keep these private.
+              </p>
+              <p id="stream-info-error" role="alert" style="color:#f87171;font-size:.85rem;min-height:1.2em;margin-bottom:.5rem;"></p>
+              <div id="stream-cameras-list">
+                <p style="color:#9e7e82;font-size:.85rem;">Loading…</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2>Quick Guide</h2></div>
+            <div class="card-body">
+              <ol style="font-size:.88rem;color:#c49a9f;line-height:2;padding-left:1.2rem;">
+                <li>Open <strong>OBS Studio</strong> (or any RTMP client).</li>
+                <li>Go to <em>Settings → Stream</em>.</li>
+                <li>Set <strong>Service</strong> to <em>Custom…</em></li>
+                <li>Paste the <strong>Server</strong> URL shown above.</li>
+                <li>Paste the <strong>Stream Key</strong> for the camera you want to broadcast.</li>
+                <li>Click <strong>Start Streaming</strong> — your viewers see you live immediately.</li>
+              </ol>
+              <p style="margin-top:.75rem;font-size:.8rem;color:#7a5a5e;">
+                💡 To add or manage cameras, ask your administrator to use the admin panel.
+                You can view the live status of all cameras here once you are streaming.
+              </p>
             </div>
           </div>
         </section>
@@ -741,11 +780,12 @@
       if (btn) btn.classList.add('active');
       closeMobileSidebar();
       if (triggerLoad !== false) {
-        if (targetId === 's-profile') loadProfile();
-        if (targetId === 's-qa') loadQuestions();
-        if (targetId === 's-drool') loadDrool();
-        if (targetId === 's-email') loadEmailSection();
-        if (targetId === 's-stats') loadStats();
+        if (targetId === 's-profile')   loadProfile();
+        if (targetId === 's-streaming') loadStreamInfo();
+        if (targetId === 's-qa')        loadQuestions();
+        if (targetId === 's-drool')     loadDrool();
+        if (targetId === 's-email')     loadEmailSection();
+        if (targetId === 's-stats')     loadStats();
       }
     }
 
@@ -790,6 +830,110 @@
       const badge = document.getElementById('nav-unanswered-badge');
       badge.textContent = count;
       badge.classList.toggle('visible', count > 0);
+    }
+
+    function updateUnansweredBadge(count) {
+      const badge = document.getElementById('nav-unanswered-badge');
+      badge.textContent = count;
+      badge.classList.toggle('visible', count > 0);
+    }
+
+    // ── Streaming ──────────────────────────────────────
+    async function loadStreamInfo() {
+      const errEl  = document.getElementById('stream-info-error');
+      const listEl = document.getElementById('stream-cameras-list');
+      errEl.textContent  = '';
+      listEl.innerHTML   = '<p style="color:#9e7e82;font-size:.85rem;">Loading…</p>';
+
+      let data;
+      try {
+        data = await apiGet('/api/creator/stream-info');
+      } catch (err) {
+        errEl.textContent = 'Failed to load stream info.';
+        listEl.innerHTML  = '';
+        return;
+      }
+
+      const { cameras, rtmp_server } = data;
+
+      if (!cameras || cameras.length === 0) {
+        listEl.innerHTML = '<p style="color:#9e7e82;font-size:.85rem;">No cameras configured yet. Ask your administrator to add a camera.</p>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      cameras.forEach((cam) => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background:#1a1a1a;border:1px solid #3d2a2e;border-radius:8px;padding:1rem;margin-bottom:1rem;';
+
+        const live = cam.is_live
+          ? '<span style="display:inline-block;background:#ef4444;color:#fff;font-size:.65rem;font-weight:800;padding:.1em .4em;border-radius:3px;vertical-align:middle;margin-left:.5rem;">LIVE</span>'
+          : '<span style="display:inline-block;background:#3d2a2e;color:#9e7e82;font-size:.65rem;font-weight:800;padding:.1em .4em;border-radius:3px;vertical-align:middle;margin-left:.5rem;">OFFLINE</span>';
+
+        const viewers = cam.is_live
+          ? `<span style="font-size:.78rem;color:#9e7e82;margin-left:.75rem;">👁 ${cam.viewer_count} viewer${cam.viewer_count !== 1 ? 's' : ''}</span>`
+          : '';
+
+        let keyBlock = '';
+        if (cam.rtmp_key) {
+          const slug = escHtmlAttr(cam.stream_slug);
+          const key  = escHtmlAttr(cam.rtmp_key);
+          const srv  = escHtmlAttr(rtmp_server || '');
+          keyBlock = `
+            <div style="margin-top:.75rem;display:grid;gap:.5rem;">
+              <div>
+                <div style="font-size:.7rem;font-weight:700;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem;">RTMP Server (OBS "Server" field)</div>
+                <div style="display:flex;gap:.5rem;align-items:center;">
+                  <code style="background:#0d0d0d;border:1px solid #3d2a2e;border-radius:5px;padding:.3rem .6rem;font-size:.82rem;color:#e8aeb7;flex:1;word-break:break-all;">${srv}</code>
+                  <button class="btn-sm btn-edit" onclick="copyText('${srv}')">Copy</button>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:.7rem;font-weight:700;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem;">Stream Key (OBS "Stream Key" field)</div>
+                <div style="display:flex;gap:.5rem;align-items:center;">
+                  <code id="key-${slug}" style="background:#0d0d0d;border:1px solid #3d2a2e;border-radius:5px;padding:.3rem .6rem;font-size:.82rem;color:#e8aeb7;flex:1;word-break:break-all;filter:blur(4px);">${key}</code>
+                  <button class="btn-sm btn-edit" onclick="toggleKeyVisibility('key-${slug}', this)">Show</button>
+                  <button class="btn-sm btn-edit" onclick="copyText('${key}')">Copy</button>
+                </div>
+                <p style="font-size:.72rem;color:#7a5a5e;margin-top:.25rem;">⚠️ Keep this secret. Anyone with this key can broadcast to this camera.</p>
+              </div>
+            </div>`;
+        } else {
+          keyBlock = `<p style="font-size:.8rem;color:#7a5a5e;margin-top:.5rem;">This camera uses RTSP — no stream key needed. It streams automatically.</p>`;
+        }
+
+        card.innerHTML = `
+          <div style="font-weight:700;font-size:.95rem;color:#e8aeb7;">
+            ${escHtml(cam.display_name)} ${live} ${viewers}
+          </div>
+          ${cam.stream_title ? `<div style="font-size:.8rem;color:#9e7e82;margin-top:.25rem;font-style:italic;">${escHtml(cam.stream_title)}</div>` : ''}
+          ${keyBlock}`;
+        listEl.appendChild(card);
+      });
+    }
+
+    function toggleKeyVisibility(keyElId, btn) {
+      const el = document.getElementById(keyElId);
+      if (!el) return;
+      const hidden = el.style.filter === 'blur(4px)';
+      el.style.filter = hidden ? 'none' : 'blur(4px)';
+      btn.textContent = hidden ? 'Hide' : 'Show';
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(
+        () => showToast('Copied to clipboard ✓'),
+        () => showToast('Copy failed – select text manually'),
+      );
+    }
+
+    function escHtmlAttr(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     }
 
     // ── Profile ────────────────────────────────────────

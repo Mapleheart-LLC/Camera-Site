@@ -424,6 +424,9 @@
       font-family: inherit;
       font-weight: 600;
       transition: background .15s, border-color .15s, color .15s;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
     }
 
     .cam-btn:hover {
@@ -437,6 +440,32 @@
       border-color: #e8aeb7;
       color: #e8aeb7;
       font-weight: 700;
+    }
+
+    .cam-btn .cam-name { flex: 1; }
+
+    .live-badge {
+      display: inline-block;
+      background: #ef4444;
+      color: #fff;
+      font-size: .6rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      padding: .1em .35em;
+      border-radius: 3px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .ppv-badge {
+      display: inline-block;
+      background: #f0b040;
+      color: #1a1a1a;
+      font-size: .6rem;
+      font-weight: 800;
+      padding: .1em .35em;
+      border-radius: 3px;
+      flex-shrink: 0;
     }
 
     #sidebar-message {
@@ -509,6 +538,19 @@
     #stream-status.connecting { color: #f0b040; }
     #stream-status.live       { color: #67d399; }
     #stream-status.error      { color: #f87171; }
+
+    #viewer-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      align-self: flex-start;
+      margin-top: .4rem;
+      font-size: .8rem;
+      color: #7a5a5e;
+    }
+
+    #viewer-count-wrap { display: flex; align-items: center; gap: .3rem; }
+    #viewer-title-sub  { font-style: italic; }
 
     #viewer-placeholder {
       color: #5a3a3e;
@@ -1109,9 +1151,13 @@
       <!-- Viewer -->
       <div id="viewer">
         <p id="viewer-placeholder">🐾 Pick a spot in The Yard.</p>
+        <p id="viewer-title" style="display:none;"></p>
         <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
         <p id="stream-status" class="stream-status" style="display:none;"></p>
-        <p id="viewer-title" style="display:none;"></p>
+        <div id="viewer-meta" style="display:none;">
+          <span id="viewer-count-wrap">👁 <span id="viewer-count">—</span></span>
+          <span id="viewer-title-sub"></span>
+        </div>
       </div>
     </div>
     <!-- ── IoT Controls bar ──────────────────────────── -->
@@ -1175,19 +1221,34 @@
 
     // ── Active WebRTC peer connection ─────────────────
     let activePc = null;
+    let _activeStreamSlug = null;
+    let _activeStreamUrl  = null;
+    let _reconnectTimer   = null;
+    let _reconnectAttempt = 0;
+    const _MAX_RECONNECT_ATTEMPTS = 10;
+
+    // STUN servers so WebRTC can traverse NATs / firewalls.
+    const ICE_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ];
 
     // ── WebRTC stream using go2rtc API ────────────────
-    async function startWebRTCStream(webrtcApiUrl) {
+    async function startWebRTCStream(webrtcApiUrl, isReconnect) {
       const videoEl  = document.getElementById('stream-video');
       const statusEl = document.getElementById('stream-status');
 
       if (activePc) { activePc.close(); activePc = null; }
       videoEl.srcObject = null;
+      videoEl.classList.remove('live-glow');
 
-      statusEl.textContent = 'Connecting…';
+      if (!isReconnect) { _reconnectAttempt = 0; }
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+
+      statusEl.textContent = isReconnect ? `Reconnecting… (${_reconnectAttempt})` : 'Connecting…';
       statusEl.className   = 'stream-status connecting';
 
-      const pc = new RTCPeerConnection({ iceServers: [] });
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       activePc = pc;
 
       pc.addTransceiver('video', { direction: 'recvonly' });
@@ -1199,13 +1260,16 @@
           statusEl.textContent = '● Live';
           statusEl.className   = 'stream-status live';
           videoEl.classList.add('live-glow');
+          _reconnectAttempt = 0;
         }
       };
 
       pc.oniceconnectionstatechange = () => {
-        if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
-          statusEl.textContent = 'Connection lost – reload to retry';
-          statusEl.className   = 'stream-status error';
+        if (['failed', 'disconnected'].includes(pc.iceConnectionState)) {
+          _scheduleReconnect(webrtcApiUrl, statusEl, videoEl);
+        } else if (pc.iceConnectionState === 'closed') {
+          // Closed intentionally (user switched camera) – do not reconnect.
+          statusEl.textContent = '';
           videoEl.classList.remove('live-glow');
         }
       };
@@ -1245,15 +1309,38 @@
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
       } catch (err) {
         console.error('WebRTC error:', err);
-        statusEl.textContent = `Error: ${err.message}`;
-        statusEl.className   = 'stream-status error';
+        // Don't auto-reconnect on auth errors
+        if (err.message && (err.message.includes('Access denied') || err.message.includes('401'))) {
+          statusEl.textContent = `Error: ${err.message}`;
+          statusEl.className   = 'stream-status error';
+        } else {
+          _scheduleReconnect(webrtcApiUrl, statusEl, videoEl);
+        }
       }
     }
 
+    function _scheduleReconnect(webrtcApiUrl, statusEl, videoEl) {
+      if (_reconnectAttempt >= _MAX_RECONNECT_ATTEMPTS) {
+        statusEl.textContent = 'Stream offline – refresh to retry';
+        statusEl.className   = 'stream-status error';
+        videoEl.classList.remove('live-glow');
+        return;
+      }
+      const delay = Math.min(2000 * Math.pow(1.5, _reconnectAttempt), 30000);
+      _reconnectAttempt++;
+      statusEl.textContent = `Stream offline – reconnecting in ${Math.round(delay / 1000)}s…`;
+      statusEl.className   = 'stream-status error';
+      videoEl.classList.remove('live-glow');
+      _reconnectTimer = setTimeout(() => startWebRTCStream(webrtcApiUrl, true), delay);
+    }
+
     // ── Switch to a camera ────────────────────────────
-    function selectCamera(displayName, streamSlug, buttonEl) {
+    function selectCamera(displayName, streamSlug, streamTitle, buttonEl) {
       document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
       buttonEl.classList.add('active');
+
+      _activeStreamSlug = streamSlug;
+      _activeStreamUrl  = `/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
 
       document.getElementById('viewer-placeholder').style.display = 'none';
       document.getElementById('stream-video').style.display       = 'block';
@@ -1261,9 +1348,43 @@
       document.getElementById('viewer-title').style.display       = 'block';
       document.getElementById('viewer-title').textContent         = displayName;
 
-      const webrtcApiUrl = `/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
+      const metaEl = document.getElementById('viewer-meta');
+      const titleSubEl = document.getElementById('viewer-title-sub');
+      metaEl.style.display    = 'flex';
+      titleSubEl.textContent  = streamTitle || '';
 
-      startWebRTCStream(webrtcApiUrl);
+      startWebRTCStream(_activeStreamUrl, false);
+    }
+
+    // ── Live status & viewer count polling ────────────
+    let _streamStatusMap = {};
+
+    async function pollStreamStatus() {
+      const token = getToken();
+      if (!token) return;
+      try {
+        const resp = await fetch('/api/stream-status', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) return;
+        _streamStatusMap = await resp.json();
+        _applyStreamStatus();
+      } catch (_) { /* non-fatal */ }
+    }
+
+    function _applyStreamStatus() {
+      document.querySelectorAll('.cam-btn[data-slug]').forEach((btn) => {
+        const slug   = btn.dataset.slug;
+        const info   = _streamStatusMap[slug] || {};
+        const badge  = btn.querySelector('.live-badge');
+        if (badge) badge.style.display = info.is_live ? 'inline-block' : 'none';
+
+        // Update viewer count if this is the active stream
+        if (slug === _activeStreamSlug && info.viewer_count != null) {
+          const vcEl = document.getElementById('viewer-count');
+          if (vcEl) vcEl.textContent = info.viewer_count;
+        }
+      });
     }
 
     // ── Render sidebar camera buttons ─────────────────
@@ -1283,12 +1404,35 @@
       upgradeEl.style.display = 'none';
       cameras.forEach((cam) => {
         const btn = document.createElement('button');
-        btn.className   = 'cam-btn';
-        btn.textContent = cam.display_name;
-        btn.addEventListener('click', () => selectCamera(cam.display_name, cam.stream_slug, btn));
-        // Insert before upgrade-prompt so it stays at the bottom
+        btn.className        = 'cam-btn';
+        btn.dataset.slug     = cam.stream_slug;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className   = 'cam-name';
+        nameSpan.textContent = cam.display_name;
+        btn.appendChild(nameSpan);
+
+        const liveBadge = document.createElement('span');
+        liveBadge.className   = 'live-badge';
+        liveBadge.textContent = 'LIVE';
+        liveBadge.style.display = 'none';
+        btn.appendChild(liveBadge);
+
+        if (cam.ppv_price_cents) {
+          const ppvBadge = document.createElement('span');
+          ppvBadge.className   = 'ppv-badge';
+          ppvBadge.textContent = `$${(cam.ppv_price_cents / 100).toFixed(2)}`;
+          btn.appendChild(ppvBadge);
+        }
+
+        btn.addEventListener('click', () =>
+          selectCamera(cam.display_name, cam.stream_slug, cam.stream_title || '', btn)
+        );
         sidebar.insertBefore(btn, upgradeEl);
       });
+
+      // Apply any already-fetched status
+      _applyStreamStatus();
     }
 
     // ── Load allowed cameras from the protected API ───
@@ -1306,6 +1450,10 @@
 
         const cameras = await resp.json();
         renderSidebar(cameras);
+
+        // Start polling stream status every 30 s
+        pollStreamStatus();
+        setInterval(pollStreamStatus, 30_000);
       } catch (err) {
         const sidebar = document.getElementById('camera-sidebar');
         sidebar.querySelectorAll('.cam-btn, #sidebar-message').forEach(el => el.remove());
@@ -1659,6 +1807,9 @@
     // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (activePc) { activePc.close(); activePc = null; }
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+      _activeStreamSlug = null;
+      _activeStreamUrl  = null;
       // Clear any active countdown timers and hide controls bar
       Object.values(controlTimers).forEach(clearInterval);
       Object.keys(controlTimers).forEach(k => delete controlTimers[k]);
