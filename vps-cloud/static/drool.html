@@ -1058,6 +1058,23 @@
         const whimperSection = document.getElementById('whimper-section');
         whimperSection.style.display = 'block';
         buildWhimperCard(whimperItem);
+        feedItems = items.filter(i => !i.is_weekly_whimper);
+      }
+
+      const grid = document.getElementById('feed-grid');
+      grid.style.display = '';
+      feedItems.forEach(item => {
+        grid.appendChild(buildCard(item));
+      });
+
+      // If only the whimper exists and no other items
+      if (feedItems.length === 0 && whimperItem) {
+        document.getElementById('feed-label').style.display = 'none';
+      }
+    }
+
+    // Load preference first so cards render with correct pixelation state.
+    loadPixelatePreference().then(loadFeed);
   </script>
 
   <!-- ── Spotify Now Playing (fixed bottom bar) ──────── -->
