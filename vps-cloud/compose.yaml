@@ -182,6 +182,18 @@ services:
   # Exposes the backend through a Cloudflare Tunnel without opening inbound
   # firewall ports.  Create a tunnel in the Cloudflare Zero Trust dashboard,
   # then set CLFD_TOKEN in the Komodo stack environment.
+  #
+  # In the Zero Trust dashboard (Networks → Tunnels → <your tunnel> →
+  # Configure → Public Hostnames) add two entries:
+  #
+  #   Subdomain          Domain            Service
+  #   ──────────────     ───────────────   ──────────────────────────
+  #   <your-domain>      mochii.live       http://backend:8000
+  #   verify             mochii.live       http://idswyft-frontend:80
+  #   verify-api         mochii.live       http://idswyft-api:3001
+  #
+  # Then set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live in your
+  # Komodo stack environment so the idswyft SPA can reach its API.
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLFD_TOKEN}
@@ -189,6 +201,8 @@ services:
       - CLFD_TOKEN=${CLFD_TOKEN}
     depends_on:
       - backend
+      - idswyft-frontend
+      - idswyft-api
     restart: unless-stopped
 
   # ── Tailscale – secure site-to-site VPN ─────────────
@@ -261,10 +275,12 @@ services:
 
   idswyft-frontend:
     image: ghcr.io/team-idswyft/frontend:latest
-    ports:
-      - "8090:80"
+    # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
     environment:
-      - VITE_API_URL=http://idswyft-api:3001
+      # Must be the public tunnel URL for the idswyft API so the browser SPA
+      # can reach it.  Set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live
+      # (or your equivalent) in the Komodo stack environment.
+      - VITE_API_URL=${IDSWYFT_PUBLIC_API_URL:-http://idswyft-api:3001}
     depends_on:
       - idswyft-api
     restart: unless-stopped
