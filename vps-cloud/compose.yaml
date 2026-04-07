@@ -196,6 +196,7 @@ services:
       - "1984:1984"   # HTTP API / web UI
       - "8554:8554"   # RTSP server (re-stream)
       - "8555:8555"   # WebRTC/ICE TCP
+      - "1935:1935"   # RTMP ingest (OBS streaming)
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
     networks:

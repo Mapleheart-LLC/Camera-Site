@@ -157,6 +157,17 @@ async def cmd_stream(interaction: discord.Interaction) -> None:
     is_live = await _check_any_stream_live()
     stream_url = f"{BASE_URL}/member" if BASE_URL else None
 
+    # Count total viewers across all streams
+    total_viewers = 0
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"http://{GO2RTC_HOST}:{GO2RTC_PORT}/api/streams")
+        if resp.status_code == 200:
+            for stream_info in resp.json().values():
+                total_viewers += len(stream_info.get("consumers", []))
+    except Exception:
+        pass
+
     if is_live:
         embed = discord.Embed(
             title="🔴 Stream is LIVE!",
@@ -165,6 +176,7 @@ async def cmd_stream(interaction: discord.Interaction) -> None:
             url=stream_url,
             timestamp=datetime.now(timezone.utc),
         )
+        embed.add_field(name="👀 Viewers", value=str(total_viewers), inline=True)
         embed.set_footer(text="mochii.live")
         await interaction.followup.send(embed=embed)
     else:
@@ -175,6 +187,45 @@ async def cmd_stream(interaction: discord.Interaction) -> None:
         )
         embed.set_footer(text="mochii.live")
         await interaction.followup.send(embed=embed)
+
+
+@bot.tree.command(name="schedule", description="View the upcoming stream schedule")
+async def cmd_schedule(interaction: discord.Interaction) -> None:
+    import json as _json
+    raw = _get_setting("stream_schedule")
+    schedule = []
+    if raw:
+        try:
+            schedule = _json.loads(raw)
+        except Exception:
+            pass
+    if not schedule:
+        embed = discord.Embed(
+            title="📅 Stream Schedule",
+            description="No upcoming streams scheduled yet – check back later! 🐾",
+            color=_MOCHII_PINK,
+        )
+        await interaction.response.send_message(embed=embed)
+        return
+    lines = []
+    for slot in schedule[:10]:
+        day = slot.get("day", "")
+        time_str = slot.get("time", "")
+        note = slot.get("note", "")
+        line = f"**{day}** {time_str}"
+        if note:
+            line += f" – {note}"
+        lines.append(line)
+    embed = discord.Embed(
+        title="📅 Stream Schedule",
+        description="\n".join(lines),
+        color=_MOCHII_PINK,
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_footer(text="mochii.live")
+    if BASE_URL:
+        embed.url = BASE_URL
+    await interaction.response.send_message(embed=embed)
 
 
 @bot.tree.command(

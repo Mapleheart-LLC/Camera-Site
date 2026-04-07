@@ -117,6 +117,7 @@ class CameraCreate(BaseModel):
     tapo_ip: Optional[str] = None
     tapo_username: Optional[str] = None
     tapo_password: Optional[str] = None
+    rtmp_key: Optional[str] = None
 
 
 class CameraUpdate(BaseModel):
@@ -127,6 +128,7 @@ class CameraUpdate(BaseModel):
     tapo_ip: Optional[str] = None
     tapo_username: Optional[str] = None
     tapo_password: Optional[str] = None
+    rtmp_key: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ def admin_list_cameras(
     rows = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key
         FROM cameras ORDER BY id
         """
     ).fetchall()
@@ -162,8 +164,8 @@ def admin_add_camera(
             """
             INSERT INTO cameras
                 (display_name, stream_slug, minimum_access_level,
-                 rtsp_url, tapo_ip, tapo_username, tapo_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.display_name,
@@ -173,6 +175,7 @@ def admin_add_camera(
                 payload.tapo_ip or None,
                 payload.tapo_username or None,
                 payload.tapo_password or None,
+                payload.rtmp_key or None,
             ),
         )
         db.commit()
@@ -182,15 +185,19 @@ def admin_add_camera(
             detail=f"Could not add camera: {exc}",
         ) from exc
 
-    effective_url = _effective_rtsp_url(
-        payload.rtsp_url, payload.tapo_ip, payload.tapo_username, payload.tapo_password
-    )
+    rtmp_key = payload.rtmp_key or None
+    if rtmp_key:
+        effective_url = f"rtmp://localhost:1935/{rtmp_key}"
+    else:
+        effective_url = _effective_rtsp_url(
+            payload.rtsp_url, payload.tapo_ip, payload.tapo_username, payload.tapo_password
+        )
     _register_stream(payload.stream_slug, effective_url)
 
     row = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key
         FROM cameras WHERE id = ?
         """,
         (cursor.lastrowid,),
@@ -225,15 +232,16 @@ def admin_update_camera(
     new_tapo_ip   = _pick(payload.tapo_ip,       row["tapo_ip"])
     new_tapo_user = _pick(payload.tapo_username, row["tapo_username"])
     new_tapo_pass = _pick(payload.tapo_password, row["tapo_password"])
+    new_rtmp_key  = _pick(payload.rtmp_key,      row["rtmp_key"])
     try:
         db.execute(
             """
             UPDATE cameras
             SET display_name = ?, stream_slug = ?, minimum_access_level = ?,
-                rtsp_url = ?, tapo_ip = ?, tapo_username = ?, tapo_password = ?
+                rtsp_url = ?, tapo_ip = ?, tapo_username = ?, tapo_password = ?, rtmp_key = ?
             WHERE id = ?
             """,
-            (new_name, new_slug, new_level, new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass, cam_id),
+            (new_name, new_slug, new_level, new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass, new_rtmp_key, cam_id),
         )
         db.commit()
     except Exception as exc:
@@ -246,13 +254,16 @@ def admin_update_camera(
     if new_slug != old_slug:
         _deregister_stream(old_slug)
 
-    effective_url = _effective_rtsp_url(new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass)
+    if new_rtmp_key:
+        effective_url = f"rtmp://localhost:1935/{new_rtmp_key}"
+    else:
+        effective_url = _effective_rtsp_url(new_rtsp, new_tapo_ip, new_tapo_user, new_tapo_pass)
     _register_stream(new_slug, effective_url)
 
     updated = db.execute(
         """
         SELECT id, display_name, stream_slug, minimum_access_level,
-               rtsp_url, tapo_ip, tapo_username, tapo_password
+               rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key
         FROM cameras WHERE id = ?
         """,
         (cam_id,),
@@ -277,6 +288,25 @@ def admin_delete_camera(
     db.execute("DELETE FROM cameras WHERE id = ?", (cam_id,))
     db.commit()
     _deregister_stream(slug)
+
+
+@router.post("/cameras/{cam_id}/generate-rtmp-key", status_code=status.HTTP_200_OK)
+def admin_generate_rtmp_key(
+    cam_id: int,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Generate a new random RTMP key for the given camera and register the stream."""
+    row = db.execute("SELECT * FROM cameras WHERE id = ?", (cam_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found.")
+    rtmp_key = secrets.token_hex(16)
+    db.execute("UPDATE cameras SET rtmp_key = ? WHERE id = ?", (rtmp_key, cam_id))
+    db.commit()
+    # Deregister any existing source then register RTMP
+    _deregister_stream(row["stream_slug"])
+    _register_stream(row["stream_slug"], f"rtmp://localhost:1935/{rtmp_key}")
+    return {"rtmp_key": rtmp_key}
 
 
 # ---------------------------------------------------------------------------
@@ -1489,3 +1519,227 @@ async def discord_test_notification(
         f"🧪 Test notification from the admin panel (triggered by **{admin_user}**) 🐾"
     )
     return {"sent": True}
+
+
+# ---------------------------------------------------------------------------
+# Stream goal
+# ---------------------------------------------------------------------------
+
+
+class _GoalPatch(BaseModel):
+    enabled: Optional[bool] = None
+    label: Optional[str] = None
+    target_cents: Optional[int] = None
+    current_cents: Optional[int] = None
+
+
+@router.patch("/stream/goal", status_code=200)
+def patch_stream_goal(
+    body: _GoalPatch,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    updated = []
+    if body.enabled is not None:
+        set_setting(db, "tip_goal_enabled", "true" if body.enabled else "false")
+        updated.append("enabled")
+    if body.label is not None:
+        set_setting(db, "tip_goal_label", body.label)
+        updated.append("label")
+    if body.target_cents is not None:
+        set_setting(db, "tip_goal_target_cents", str(body.target_cents))
+        updated.append("target_cents")
+    if body.current_cents is not None:
+        set_setting(db, "tip_goal_current_cents", str(body.current_cents))
+        updated.append("current_cents")
+    return {"updated": updated}
+
+
+# ---------------------------------------------------------------------------
+# Stream schedule
+# ---------------------------------------------------------------------------
+
+
+@router.get("/schedule")
+def admin_get_schedule(_: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    import json as _json
+    raw = get_setting(db, "stream_schedule", None)
+    if raw:
+        try:
+            return {"schedule": _json.loads(raw)}
+        except Exception:
+            pass
+    return {"schedule": []}
+
+
+class _SchedulePatch(BaseModel):
+    schedule: list
+
+
+@router.patch("/schedule", status_code=200)
+def admin_update_schedule(
+    body: _SchedulePatch,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    import json as _json
+    set_setting(db, "stream_schedule", _json.dumps(body.schedule))
+    return {"updated": True, "schedule": body.schedule}
+
+
+# ---------------------------------------------------------------------------
+# File vault (content drops)
+# ---------------------------------------------------------------------------
+
+
+class _VaultItemCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    file_url: str
+    minimum_access_level: int = 1
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class _VaultItemUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    file_url: Optional[str] = None
+    minimum_access_level: Optional[int] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/vault")
+def admin_list_vault(_: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    rows = db.execute("SELECT * FROM content_drops ORDER BY sort_order, id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/vault", status_code=201)
+def admin_create_vault_item(
+    body: _VaultItemCreate,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    now = datetime.now(timezone.utc).isoformat()
+    cur = db.execute(
+        "INSERT INTO content_drops (title, description, file_url, minimum_access_level, sort_order, is_active, created_at) VALUES (?,?,?,?,?,?,?)",
+        (body.title, body.description, body.file_url, body.minimum_access_level, body.sort_order, 1 if body.is_active else 0, now),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM content_drops WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+@router.put("/vault/{item_id}")
+def admin_update_vault_item(
+    item_id: int,
+    body: _VaultItemUpdate,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    row = db.execute("SELECT * FROM content_drops WHERE id = ?", (item_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    new_title = body.title if body.title is not None else row["title"]
+    new_desc = body.description if body.description is not None else row["description"]
+    new_url = body.file_url if body.file_url is not None else row["file_url"]
+    new_level = body.minimum_access_level if body.minimum_access_level is not None else row["minimum_access_level"]
+    new_sort = body.sort_order if body.sort_order is not None else row["sort_order"]
+    new_active = (1 if body.is_active else 0) if body.is_active is not None else row["is_active"]
+    db.execute(
+        "UPDATE content_drops SET title=?, description=?, file_url=?, minimum_access_level=?, sort_order=?, is_active=? WHERE id=?",
+        (new_title, new_desc, new_url, new_level, new_sort, new_active, item_id),
+    )
+    db.commit()
+    updated = db.execute("SELECT * FROM content_drops WHERE id = ?", (item_id,)).fetchone()
+    return dict(updated)
+
+
+@router.delete("/vault/{item_id}", status_code=204)
+def admin_delete_vault_item(
+    item_id: int,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    row = db.execute("SELECT id FROM content_drops WHERE id = ?", (item_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Item not found.")
+    db.execute("DELETE FROM content_drops WHERE id = ?", (item_id,))
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# VOD gallery
+# ---------------------------------------------------------------------------
+
+
+class _VodCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    file_url: str
+    thumbnail_url: Optional[str] = None
+    minimum_access_level: int = 1
+    duration_seconds: Optional[int] = None
+    is_active: bool = True
+
+
+class _VodUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    file_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    minimum_access_level: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/vods")
+def admin_list_vods(_: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    rows = db.execute("SELECT * FROM vods ORDER BY id DESC").fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/vods", status_code=201)
+def admin_create_vod(body: _VodCreate, _: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    now = datetime.now(timezone.utc).isoformat()
+    cur = db.execute(
+        "INSERT INTO vods (title, description, file_url, thumbnail_url, minimum_access_level, duration_seconds, is_active, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        (body.title, body.description, body.file_url, body.thumbnail_url, body.minimum_access_level, body.duration_seconds, 1 if body.is_active else 0, now),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM vods WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return dict(row)
+
+
+@router.put("/vods/{vod_id}")
+def admin_update_vod(vod_id: int, body: _VodUpdate, _: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    row = db.execute("SELECT * FROM vods WHERE id = ?", (vod_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="VOD not found.")
+    db.execute(
+        "UPDATE vods SET title=?, description=?, file_url=?, thumbnail_url=?, minimum_access_level=?, duration_seconds=?, is_active=? WHERE id=?",
+        (
+            body.title if body.title is not None else row["title"],
+            body.description if body.description is not None else row["description"],
+            body.file_url if body.file_url is not None else row["file_url"],
+            body.thumbnail_url if body.thumbnail_url is not None else row["thumbnail_url"],
+            body.minimum_access_level if body.minimum_access_level is not None else row["minimum_access_level"],
+            body.duration_seconds if body.duration_seconds is not None else row["duration_seconds"],
+            (1 if body.is_active else 0) if body.is_active is not None else row["is_active"],
+            vod_id,
+        ),
+    )
+    db.commit()
+    updated = db.execute("SELECT * FROM vods WHERE id = ?", (vod_id,)).fetchone()
+    return dict(updated)
+
+
+@router.delete("/vods/{vod_id}", status_code=204)
+def admin_delete_vod(vod_id: int, _: str = Depends(get_admin_user), db: sqlite3.Connection = Depends(get_db)):
+    row = db.execute("SELECT id FROM vods WHERE id = ?", (vod_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="VOD not found.")
+    db.execute("DELETE FROM vods WHERE id = ?", (vod_id,))
+    db.commit()

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mochii.live — Past Streams</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a1a;
+      color: #e8ddd5;
+      font-family: 'Nunito', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #231418;
+      border-bottom: 1px solid #3d2028;
+      padding: 0.9rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #e8aeb7;
+    }
+
+    header a {
+      color: #9e7e82;
+      text-decoration: none;
+      font-size: 0.85rem;
+    }
+
+    header a:hover { color: #e8aeb7; }
+
+    .container {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.2rem;
+    }
+
+    .vod-card {
+      background: #231418;
+      border: 1px solid #3d2028;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .vod-card .thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #12090c;
+      object-fit: cover;
+    }
+
+    .vod-card .thumb-placeholder {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #12090c;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #3d2028;
+      font-size: 2.5rem;
+    }
+
+    .vod-card .body {
+      padding: 0.9rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .vod-card h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #e8aeb7;
+    }
+
+    .vod-card p.desc {
+      font-size: 0.82rem;
+      color: #9e7e82;
+      flex: 1;
+    }
+
+    .vod-card .meta {
+      font-size: 0.78rem;
+      color: #6a4a4e;
+    }
+
+    .vod-card a.btn {
+      display: block;
+      background: #3d2028;
+      color: #e8aeb7;
+      border: 1px solid #6a3040;
+      border-radius: 6px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      text-align: center;
+      margin-top: 0.4rem;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .vod-card a.btn:hover {
+      background: #5a2030;
+      border-color: #e8aeb7;
+    }
+
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: #5a3a3e;
+      font-size: 1rem;
+      padding: 3rem 0;
+    }
+
+    #auth-prompt {
+      text-align: center;
+      padding: 4rem 1rem;
+    }
+
+    #auth-prompt p {
+      color: #9e7e82;
+      margin-bottom: 1.5rem;
+      font-size: 1.1rem;
+    }
+
+    #auth-prompt button {
+      background: #e8aeb7;
+      color: #1a1a1a;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.8rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #auth-prompt button:hover { background: #c49a9f; }
+
+    #modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #modal-backdrop.open { display: flex; }
+
+    #modal-card {
+      background: #231418;
+      border: 1px solid #3d2028;
+      border-radius: 12px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    #modal-card h2 { color: #e8aeb7; font-size: 1.1rem; margin-bottom: 1rem; }
+
+    #modal-card input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #3d2028;
+      border-radius: 6px;
+      color: #e8ddd5;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      font-family: inherit;
+    }
+
+    #modal-card button {
+      width: 100%;
+      background: #e8aeb7;
+      color: #1a1a1a;
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #modal-card button:hover { background: #c49a9f; }
+
+    #modal-msg {
+      font-size: 0.8rem;
+      color: #f87171;
+      margin-top: 0.5rem;
+      min-height: 1em;
+    }
+
+    #spinner { text-align: center; padding: 4rem; color: #9e7e82; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🐾 mochii.live — Past Streams</h1>
+    <a href="/">← Back</a>
+  </header>
+
+  <div class="container">
+    <div id="spinner">🐾 Loading…</div>
+    <div id="auth-prompt" style="display:none">
+      <p>🔒 Sign in to watch past streams</p>
+      <button onclick="openModal()">Sign In 🐾</button>
+    </div>
+    <div id="vods-grid" class="grid" style="display:none"></div>
+  </div>
+
+  <div id="modal-backdrop">
+    <div id="modal-card">
+      <h2>Sign In 🐾</h2>
+      <form id="login-form" onsubmit="doLogin(event)">
+        <input id="username" type="text" placeholder="Username" autocomplete="username" required />
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" required />
+        <button type="submit">Sign In</button>
+      </form>
+      <p id="modal-msg"></p>
+    </div>
+  </div>
+
+  <script>
+    const TOKEN_KEY = 'mochii_token';
+    const getToken = () => sessionStorage.getItem(TOKEN_KEY);
+    const saveToken = t => sessionStorage.setItem(TOKEN_KEY, t);
+
+    function openModal() {
+      document.getElementById('modal-backdrop').classList.add('open');
+      document.getElementById('username').focus();
+    }
+
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.remove('open');
+    }
+
+    document.getElementById('modal-backdrop').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+
+    async function doLogin(e) {
+      e.preventDefault();
+      const msg = document.getElementById('modal-msg');
+      msg.textContent = '';
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value;
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({username: u, password: p}),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          msg.textContent = d.detail || 'Login failed.';
+          return;
+        }
+        const d = await r.json();
+        saveToken(d.access_token);
+        closeModal();
+        loadVods();
+      } catch {
+        msg.textContent = 'Network error.';
+      }
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function fmtDuration(secs) {
+      if (!secs) return '';
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      if (h > 0) {
+        return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+      return `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    async function loadVods() {
+      const token = getToken();
+      document.getElementById('spinner').style.display = 'block';
+      document.getElementById('auth-prompt').style.display = 'none';
+      document.getElementById('vods-grid').style.display = 'none';
+
+      if (!token) {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('auth-prompt').style.display = 'block';
+        return;
+      }
+
+      try {
+        const r = await fetch('/api/vods', {
+          headers: {Authorization: 'Bearer ' + token},
+        });
+        document.getElementById('spinner').style.display = 'none';
+
+        if (r.status === 401 || r.status === 403) {
+          document.getElementById('auth-prompt').style.display = 'block';
+          return;
+        }
+
+        const vods = await r.json();
+        const grid = document.getElementById('vods-grid');
+        grid.innerHTML = '';
+
+        if (!vods.length) {
+          grid.innerHTML = '<p class="empty">🐾 No recordings yet – catch the next live stream!</p>';
+        } else {
+          vods.forEach(v => {
+            const dur = fmtDuration(v.duration_seconds);
+            const thumbHtml = v.thumbnail_url
+              ? `<img class="thumb" src="${esc(v.thumbnail_url)}" alt="" loading="lazy" />`
+              : `<div class="thumb-placeholder">🎬</div>`;
+            grid.innerHTML += `
+              <div class="vod-card">
+                ${thumbHtml}
+                <div class="body">
+                  <h2>${esc(v.title)}</h2>
+                  ${v.description ? `<p class="desc">${esc(v.description)}</p>` : '<p class="desc"></p>'}
+                  ${dur ? `<p class="meta">⏱ ${esc(dur)}</p>` : ''}
+                  <a class="btn" href="${esc(v.file_url)}" target="_blank" rel="noopener">▶ Watch</a>
+                </div>
+              </div>`;
+          });
+        }
+        grid.style.display = 'grid';
+      } catch {
+        document.getElementById('spinner').style.display = 'none';
+        document.getElementById('auth-prompt').style.display = 'block';
+      }
+    }
+
+    loadVods();
+  </script>
+</body>
+</html>

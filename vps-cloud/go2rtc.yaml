@@ -13,3 +13,6 @@ api:
 
 webrtc:
   listen: ":8555/tcp"
+
+rtmp:
+  listen: ":1935"

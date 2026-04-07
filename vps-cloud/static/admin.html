@@ -400,6 +400,7 @@
         <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
         <button class="nav-item" data-target="s-analytics">📈 Analytics</button>
         <button class="nav-item" data-target="s-cameras">📷 Cameras</button>
+        <button class="nav-item" data-target="s-stream">🎬 Stream</button>
         <button class="nav-item" data-target="s-qa">
           🐾 Q&amp;A
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
@@ -411,6 +412,8 @@
         <button class="nav-item" data-target="s-drool">🐾 Drool Log</button>
         <button class="nav-item" data-target="s-spotify">🎵 Spotify</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
+        <button class="nav-item" data-target="s-vault">🗄️ Vault</button>
+        <button class="nav-item" data-target="s-vods">🎬 VODs</button>
         <div class="sidebar-section-label">System</div>
         <button class="nav-item" data-target="s-discord">🤖 Discord Bot</button>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
@@ -596,6 +599,64 @@
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Stream ────────────────────────────────── -->
+        <section id="s-stream" class="admin-section">
+          <h1 class="section-heading">🎬 Stream Settings</h1>
+
+          <!-- OBS / RTMP -->
+          <div class="card">
+            <div class="card-header"><h2>📡 OBS / RTMP Setup</h2></div>
+            <div class="card-body">
+              <p style="font-size:.85rem;color:#9e7e82;margin-bottom:1rem;">
+                Set OBS stream URL to <strong>rtmp://your-server:1935/&lt;stream_key&gt;</strong>.
+                Generate a key per camera below.
+              </p>
+              <div id="rtmp-camera-list">
+                <p style="color:#5a3a3e;font-size:.85rem">Loading cameras…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stream Goal -->
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header"><h2>🎯 Stream Goal</h2></div>
+            <div class="card-body">
+              <div class="form-row" style="gap:.75rem;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem">
+                  <input type="checkbox" id="goal-enabled-chk" /> Enabled
+                </label>
+                <div class="form-field" style="flex:1;min-width:180px">
+                  <label for="goal-label-inp">Label</label>
+                  <input id="goal-label-inp" type="text" placeholder="Stream Goal" />
+                </div>
+                <div class="form-field" style="min-width:140px">
+                  <label for="goal-target-inp">Target (pence)</label>
+                  <input id="goal-target-inp" type="number" min="0" placeholder="0" />
+                </div>
+                <div class="form-field" style="min-width:140px">
+                  <label for="goal-current-inp">Current (pence)</label>
+                  <input id="goal-current-inp" type="number" min="0" placeholder="0" />
+                </div>
+              </div>
+              <button id="goal-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">💾 Save Goal</button>
+              <p id="goal-msg" style="font-size:.8rem;color:#67d399;margin-top:.4rem"></p>
+            </div>
+          </div>
+
+          <!-- Stream Schedule -->
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header">
+              <h2>📅 Stream Schedule</h2>
+              <button id="schedule-add-btn" class="btn-sm btn-edit">+ Add Slot</button>
+            </div>
+            <div class="card-body">
+              <div id="schedule-list"></div>
+              <button id="schedule-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">💾 Save Schedule</button>
+              <p id="schedule-msg" style="font-size:.8rem;color:#67d399;margin-top:.4rem"></p>
             </div>
           </div>
         </section>
@@ -1024,6 +1085,69 @@
                   <tbody id="camera-logs-body">
                     <tr class="empty-row"><td colspan="4">No camera accesses logged yet.</td></tr>
                   </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Vault ──────────────────────────────────── -->
+        <section id="s-vault" class="admin-section">
+          <h1 class="section-heading">🗄️ File Vault</h1>
+          <div class="card">
+            <div class="card-header">
+              <h2>Content Drops</h2>
+              <button id="vault-add-toggle-btn" class="btn-sm btn-edit">+ Add Item</button>
+            </div>
+            <div class="card-body" id="vault-add-form" style="display:none;border-bottom:1px solid #3d2028;margin-bottom:.75rem;padding-bottom:.75rem">
+              <h3 style="font-size:.9rem;color:#e8aeb7;margin-bottom:.6rem">New Item</h3>
+              <div class="form-row" style="flex-wrap:wrap;gap:.5rem">
+                <div class="form-field" style="flex:1;min-width:160px"><label>Title</label><input id="vault-new-title" type="text" /></div>
+                <div class="form-field" style="flex:2;min-width:200px"><label>File URL</label><input id="vault-new-url" type="text" /></div>
+                <div class="form-field" style="flex:2;min-width:200px"><label>Description</label><input id="vault-new-desc" type="text" /></div>
+                <div class="form-field" style="min-width:100px"><label>Min Level</label><input id="vault-new-level" type="number" value="1" min="0" max="3" /></div>
+                <div class="form-field" style="min-width:80px"><label>Sort Order</label><input id="vault-new-sort" type="number" value="0" /></div>
+              </div>
+              <button id="vault-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">💾 Save</button>
+              <p id="vault-add-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
+            </div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" id="vault-table">
+                  <thead><tr><th>Title</th><th>File URL</th><th>Min Level</th><th>Active</th><th>Actions</th></tr></thead>
+                  <tbody id="vault-tbody"><tr class="empty-row"><td colspan="5">No items yet.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── VODs ───────────────────────────────────── -->
+        <section id="s-vods" class="admin-section">
+          <h1 class="section-heading">🎬 VOD Gallery</h1>
+          <div class="card">
+            <div class="card-header">
+              <h2>Recordings</h2>
+              <button id="vod-add-toggle-btn" class="btn-sm btn-edit">+ Add VOD</button>
+            </div>
+            <div class="card-body" id="vod-add-form" style="display:none;border-bottom:1px solid #3d2028;margin-bottom:.75rem;padding-bottom:.75rem">
+              <h3 style="font-size:.9rem;color:#e8aeb7;margin-bottom:.6rem">New VOD</h3>
+              <div class="form-row" style="flex-wrap:wrap;gap:.5rem">
+                <div class="form-field" style="flex:1;min-width:160px"><label>Title</label><input id="vod-new-title" type="text" /></div>
+                <div class="form-field" style="flex:2;min-width:200px"><label>File URL</label><input id="vod-new-url" type="text" /></div>
+                <div class="form-field" style="min-width:160px"><label>Thumbnail URL</label><input id="vod-new-thumb" type="text" /></div>
+                <div class="form-field" style="flex:2;min-width:200px"><label>Description</label><input id="vod-new-desc" type="text" /></div>
+                <div class="form-field" style="min-width:100px"><label>Min Level</label><input id="vod-new-level" type="number" value="1" min="0" max="3" /></div>
+                <div class="form-field" style="min-width:100px"><label>Duration (s)</label><input id="vod-new-dur" type="number" min="0" /></div>
+              </div>
+              <button id="vod-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">💾 Save</button>
+              <p id="vod-add-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
+            </div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" id="vod-table">
+                  <thead><tr><th>Title</th><th>File URL</th><th>Min Level</th><th>Duration</th><th>Active</th><th>Actions</th></tr></thead>
+                  <tbody id="vod-tbody"><tr class="empty-row"><td colspan="6">No VODs yet.</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -2936,8 +3060,239 @@
           }
         });
       }
+      if (btn.dataset.target === 's-stream') {
+        btn.addEventListener('click', () => {
+          loadStreamSection();
+        });
+      }
+      if (btn.dataset.target === 's-vault') {
+        btn.addEventListener('click', () => {
+          loadVaultAdmin();
+        });
+      }
+      if (btn.dataset.target === 's-vods') {
+        btn.addEventListener('click', () => {
+          loadVodsAdmin();
+        });
+      }
     });
-  </script>
 
+    // ── Stream Section ────────────────────────────────────────────────────
+
+    async function loadStreamSection() {
+      // Load RTMP camera list
+      try {
+        const cams = await apiGet('/api/admin/cameras');
+        const el = document.getElementById('rtmp-camera-list');
+        if (!cams.length) { el.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No cameras configured.</p>'; }
+        else {
+          el.innerHTML = cams.map(c => `
+            <div style="display:flex;align-items:center;gap:.75rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
+              <span style="flex:1;font-size:.85rem;color:#e8ddd5">${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
+              <code style="font-size:.78rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
+              <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Generate Key</button>
+            </div>`).join('');
+        }
+      } catch(e) { console.error(e); }
+
+      // Load goal
+      try {
+        const g = await apiGet('/api/admin/stream/goal');
+        document.getElementById('goal-enabled-chk').checked = !!g.enabled;
+        document.getElementById('goal-label-inp').value = g.label || '';
+        document.getElementById('goal-target-inp').value = g.target_cents || 0;
+        document.getElementById('goal-current-inp').value = g.current_cents || 0;
+      } catch(e) {}
+
+      // Load schedule
+      try {
+        const s = await apiGet('/api/admin/schedule');
+        renderSchedule(s.schedule || []);
+      } catch(e) {}
+    }
+
+    async function generateRtmpKey(camId) {
+      try {
+        const resp = await apiPost(`/api/admin/cameras/${camId}/generate-rtmp-key`);
+        if (resp.ok) {
+          const d = await resp.json();
+          document.getElementById(`rtmp-key-${camId}`).textContent = d.rtmp_key;
+        }
+      } catch(e) { alert('Failed: ' + e.message); }
+    }
+
+    document.getElementById('goal-save-btn').addEventListener('click', async () => {
+      const msg = document.getElementById('goal-msg');
+      msg.textContent = '';
+      try {
+        const resp = await apiPatch('/api/admin/stream/goal', {
+          enabled: document.getElementById('goal-enabled-chk').checked,
+          label: document.getElementById('goal-label-inp').value,
+          target_cents: parseInt(document.getElementById('goal-target-inp').value) || 0,
+          current_cents: parseInt(document.getElementById('goal-current-inp').value) || 0,
+        });
+        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = '✓ Saved'; }
+        else { msg.style.color = '#f87171'; msg.textContent = 'Error: ' + resp.status; }
+      } catch(e) {
+        msg.style.color = '#f87171';
+        msg.textContent = 'Error: ' + e.message;
+      }
+    });
+
+    let _scheduleSlots = [];
+
+    function renderSchedule(slots) {
+      _scheduleSlots = slots.map(s => ({...s}));
+      const el = document.getElementById('schedule-list');
+      if (!_scheduleSlots.length) {
+        el.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No slots yet. Add one above.</p>';
+        return;
+      }
+      el.innerHTML = _scheduleSlots.map((s, i) => `
+        <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.4rem" data-idx="${i}">
+          <input type="text" placeholder="Day" value="${esc(s.day||'')}" onchange="_scheduleSlots[${i}].day=this.value" style="width:100px" />
+          <input type="text" placeholder="Time" value="${esc(s.time||'')}" onchange="_scheduleSlots[${i}].time=this.value" style="width:80px" />
+          <input type="text" placeholder="Note" value="${esc(s.note||'')}" onchange="_scheduleSlots[${i}].note=this.value" style="flex:1" />
+          <button class="btn-sm btn-danger" onclick="removeScheduleSlot(${i})">✕</button>
+        </div>`).join('');
+    }
+
+    function removeScheduleSlot(i) {
+      _scheduleSlots.splice(i, 1);
+      renderSchedule(_scheduleSlots);
+    }
+
+    document.getElementById('schedule-add-btn').addEventListener('click', () => {
+      _scheduleSlots.push({day:'', time:'', note:''});
+      renderSchedule(_scheduleSlots);
+    });
+
+    document.getElementById('schedule-save-btn').addEventListener('click', async () => {
+      const msg = document.getElementById('schedule-msg');
+      msg.textContent = '';
+      try {
+        const resp = await apiPatch('/api/admin/schedule', {schedule: _scheduleSlots});
+        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = '✓ Saved'; }
+        else { msg.style.color = '#f87171'; msg.textContent = 'Error: ' + resp.status; }
+      } catch(e) {
+        msg.style.color = '#f87171';
+        msg.textContent = 'Error: ' + e.message;
+      }
+    });
+
+    // ── Vault Admin ───────────────────────────────────────────────────────
+
+    document.getElementById('vault-add-toggle-btn').addEventListener('click', () => {
+      const f = document.getElementById('vault-add-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('vault-create-btn').addEventListener('click', async () => {
+      const msg = document.getElementById('vault-add-msg');
+      msg.textContent = '';
+      const body = {
+        title: document.getElementById('vault-new-title').value.trim(),
+        file_url: document.getElementById('vault-new-url').value.trim(),
+        description: document.getElementById('vault-new-desc').value.trim() || null,
+        minimum_access_level: parseInt(document.getElementById('vault-new-level').value) || 1,
+        sort_order: parseInt(document.getElementById('vault-new-sort').value) || 0,
+        is_active: true,
+      };
+      if (!body.title || !body.file_url) { msg.textContent = 'Title and File URL are required.'; return; }
+      try {
+        const resp = await apiPost('/api/admin/vault', body);
+        if (resp.ok) {
+          document.getElementById('vault-add-form').style.display = 'none';
+          loadVaultAdmin();
+        } else { msg.textContent = 'Error: ' + resp.status; }
+      } catch(e) { msg.textContent = 'Error: ' + e.message; }
+    });
+
+    async function loadVaultAdmin() {
+      try {
+        const items = await apiGet('/api/admin/vault');
+        const tbody = document.getElementById('vault-tbody');
+        if (!items.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No items yet.</td></tr>'; return; }
+        tbody.innerHTML = items.map(it => `
+          <tr>
+            <td>${esc(it.title)}</td>
+            <td><a href="${esc(it.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(it.file_url.slice(0,40))}…</a></td>
+            <td>${it.minimum_access_level}</td>
+            <td>${it.is_active ? '✓' : '—'}</td>
+            <td>
+              <button class="btn-sm btn-danger" onclick="deleteVaultItem(${it.id})">Delete</button>
+            </td>
+          </tr>`).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    async function deleteVaultItem(id) {
+      if (!confirm('Delete this vault item?')) return;
+      try {
+        await apiDelete(`/api/admin/vault/${id}`);
+        loadVaultAdmin();
+      } catch(e) { alert('Error: ' + e.message); }
+    }
+
+    // ── VODs Admin ────────────────────────────────────────────────────────
+
+    document.getElementById('vod-add-toggle-btn').addEventListener('click', () => {
+      const f = document.getElementById('vod-add-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('vod-create-btn').addEventListener('click', async () => {
+      const msg = document.getElementById('vod-add-msg');
+      msg.textContent = '';
+      const body = {
+        title: document.getElementById('vod-new-title').value.trim(),
+        file_url: document.getElementById('vod-new-url').value.trim(),
+        thumbnail_url: document.getElementById('vod-new-thumb').value.trim() || null,
+        description: document.getElementById('vod-new-desc').value.trim() || null,
+        minimum_access_level: parseInt(document.getElementById('vod-new-level').value) || 1,
+        duration_seconds: parseInt(document.getElementById('vod-new-dur').value) || null,
+        is_active: true,
+      };
+      if (!body.title || !body.file_url) { msg.textContent = 'Title and File URL are required.'; return; }
+      try {
+        const resp = await apiPost('/api/admin/vods', body);
+        if (resp.ok) {
+          document.getElementById('vod-add-form').style.display = 'none';
+          loadVodsAdmin();
+        } else { msg.textContent = 'Error: ' + resp.status; }
+      } catch(e) { msg.textContent = 'Error: ' + e.message; }
+    });
+
+    async function loadVodsAdmin() {
+      try {
+        const vods = await apiGet('/api/admin/vods');
+        const tbody = document.getElementById('vod-tbody');
+        if (!vods.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No VODs yet.</td></tr>'; return; }
+        tbody.innerHTML = vods.map(v => `
+          <tr>
+            <td>${esc(v.title)}</td>
+            <td><a href="${esc(v.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(v.file_url.slice(0,40))}…</a></td>
+            <td>${v.minimum_access_level}</td>
+            <td>${v.duration_seconds ? v.duration_seconds + 's' : '—'}</td>
+            <td>${v.is_active ? '✓' : '—'}</td>
+            <td>
+              <button class="btn-sm btn-danger" onclick="deleteVod(${v.id})">Delete</button>
+            </td>
+          </tr>`).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    async function deleteVod(id) {
+      if (!confirm('Delete this VOD?')) return;
+      try {
+        await apiDelete(`/api/admin/vods/${id}`);
+        loadVodsAdmin();
+      } catch(e) { alert('Error: ' + e.message); }
+    }
+
+    function esc(s) {
+      return escHtml(String(s));
+    }
+  </script>
 </body>
 </html>

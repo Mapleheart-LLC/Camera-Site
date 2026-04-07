@@ -563,6 +563,106 @@
       flex-wrap: wrap;
     }
 
+    /* ── Viewer count badge ──────────────────────────── */
+    #viewer-count-badge {
+      font-size: .78rem;
+      color: #9e7e82;
+      font-weight: 600;
+      margin-left: .4rem;
+    }
+
+    /* ── Goal bar ────────────────────────────────────── */
+    #goal-bar-wrap {
+      padding: .6rem 1.5rem;
+      background: #202020;
+      border-bottom: 1px solid #3d2a2e;
+      flex-shrink: 0;
+    }
+
+    #goal-bar-label {
+      font-size: .78rem;
+      color: #9e7e82;
+      font-weight: 700;
+      margin-bottom: .3rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #goal-bar-track {
+      background: #3d2028;
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    #goal-bar-fill {
+      background: #e8aeb7;
+      height: 100%;
+      border-radius: 4px;
+      transition: width .4s ease;
+    }
+
+    /* ── Chat panel ──────────────────────────────────── */
+    #chat-panel {
+      display: none;
+      flex-direction: column;
+      border-top: 1px solid #3d2a2e;
+      background: #1e1215;
+      flex-shrink: 0;
+      max-height: 260px;
+    }
+
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: .5rem .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: .82rem;
+    }
+
+    .chat-msg .chat-username {
+      color: #e8aeb7;
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .chat-msg .chat-text {
+      color: #c8babb;
+    }
+
+    #chat-form {
+      display: flex;
+      border-top: 1px solid #3d2028;
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: #1a1a1a;
+      border: none;
+      color: #e8ddd5;
+      padding: .45rem .75rem;
+      font-size: .82rem;
+      font-family: inherit;
+      outline: none;
+    }
+
+    #chat-send-btn {
+      background: #3d2028;
+      color: #e8aeb7;
+      border: none;
+      border-left: 1px solid #3d2028;
+      padding: .45rem .9rem;
+      font-size: .82rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    #chat-send-btn:hover { background: #5a2030; }
+
     #controls-bar h2 {
       font-size: .75rem;
       text-transform: uppercase;
@@ -1070,8 +1170,17 @@
         <p id="viewer-placeholder">🐾 Pick a spot in The Yard.</p>
         <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
         <p id="stream-status" class="stream-status" style="display:none;"></p>
+        <span id="viewer-count-badge"></span>
         <p id="viewer-title" style="display:none;"></p>
       </div>
+    </div>
+    <!-- ── Goal bar ──────────────────────────────────── -->
+    <div id="goal-bar-wrap" style="display:none" aria-label="Stream goal">
+      <div id="goal-bar-label">
+        <span id="goal-bar-text">Stream Goal</span>
+        <span id="goal-bar-amounts"></span>
+      </div>
+      <div id="goal-bar-track"><div id="goal-bar-fill" style="width:0%"></div></div>
     </div>
     <!-- ── IoT Controls bar ──────────────────────────── -->
     <div id="controls-bar" aria-label="Interactive device controls">
@@ -1086,6 +1195,14 @@
           <div id="lovense-cooldown-bar" class="cooldown-bar"><div class="cooldown-bar-fill"></div></div>
         </div>
       </div>
+    </div>
+    <!-- ── Chat panel ─────────────────────────────────── -->
+    <div id="chat-panel" role="complementary" aria-label="Live chat">
+      <div id="chat-messages"></div>
+      <form id="chat-form" onsubmit="sendChatMsg(event)">
+        <input id="chat-input" type="text" placeholder="Say something…" maxlength="500" autocomplete="off" />
+        <button id="chat-send-btn" type="submit">Send</button>
+      </form>
     </div>
   </section>
 
@@ -1260,6 +1377,7 @@
       const webrtcApiUrl = `/api/webrtc?src=${encodeURIComponent(streamSlug)}`;
 
       startWebRTCStream(webrtcApiUrl);
+      startViewerPoll(streamSlug);
     }
 
     // ── Render sidebar camera buttons ─────────────────
@@ -1659,6 +1777,10 @@
       Object.values(controlTimers).forEach(clearInterval);
       Object.keys(controlTimers).forEach(k => delete controlTimers[k]);
       document.getElementById('controls-bar').style.display = 'none';
+      // Stop viewer count polling and close chat
+      stopViewerPoll();
+      if (_chatWs) { _chatWs.close(); _chatWs = null; }
+      document.getElementById('chat-panel').style.display = 'none';
       // Hide tier badge
       const badge = document.getElementById('tier-badge');
       if (badge) badge.style.display = 'none';
@@ -1725,6 +1847,8 @@
             loadCameras();
             initControls();
             initSpotify();
+            loadGoalBar();
+            initChat();
           } else if (resp.status === 401) {
             showLogin('🐾 Bad Dog! Invalid username or password.', 'error');
           } else {
@@ -1770,10 +1894,109 @@
         loadCameras();
         initControls();
         initSpotify();
+        loadGoalBar();
+        initChat();
       } else {
         showLogin();
       }
     })();
+
+    // ── Stream goal bar ───────────────────────────────
+    async function loadGoalBar() {
+      try {
+        const r = await fetch('/api/stream/goal');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.enabled) return;
+        const wrap = document.getElementById('goal-bar-wrap');
+        const pct = d.target_cents > 0 ? Math.min(100, Math.round(d.current_cents / d.target_cents * 100)) : 0;
+        const fmt = c => (c / 100).toFixed(2);
+        document.getElementById('goal-bar-text').textContent = d.label || 'Stream Goal';
+        document.getElementById('goal-bar-amounts').textContent = `£${fmt(d.current_cents)} / £${fmt(d.target_cents)}`;
+        document.getElementById('goal-bar-fill').style.width = pct + '%';
+        wrap.style.display = 'block';
+      } catch (_) {}
+    }
+
+    // ── Viewer count polling ──────────────────────────
+    let _viewerPollInterval = null;
+    let _currentStreamSlug = null;
+
+    function startViewerPoll(slug) {
+      _currentStreamSlug = slug;
+      updateViewerCount();
+      if (!_viewerPollInterval) {
+        _viewerPollInterval = setInterval(updateViewerCount, 30000);
+      }
+    }
+
+    function stopViewerPoll() {
+      _currentStreamSlug = null;
+      if (_viewerPollInterval) { clearInterval(_viewerPollInterval); _viewerPollInterval = null; }
+      document.getElementById('viewer-count-badge').textContent = '';
+    }
+
+    async function updateViewerCount() {
+      if (!_currentStreamSlug) return;
+      try {
+        const r = await fetch('/api/stream-status');
+        if (!r.ok) return;
+        const d = await r.json();
+        const info = d.streams && d.streams[_currentStreamSlug];
+        const badge = document.getElementById('viewer-count-badge');
+        if (info && info.viewer_count > 0) {
+          badge.textContent = `👀 ${info.viewer_count} watching`;
+        } else {
+          badge.textContent = '';
+        }
+      } catch (_) {}
+    }
+
+    // ── Chat ──────────────────────────────────────────
+    let _chatWs = null;
+
+    function initChat() {
+      const token = getToken();
+      if (!token) return;
+      const panel = document.getElementById('chat-panel');
+      panel.style.display = 'flex';
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProto}//${location.host}/ws/chat?token=${encodeURIComponent(token)}`;
+      _chatWs = new WebSocket(wsUrl);
+      _chatWs.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        const container = document.getElementById('chat-messages');
+        if (data.type === 'history') {
+          container.innerHTML = '';
+          data.messages.forEach(m => appendChatMsg(m));
+        } else if (data.type === 'message') {
+          appendChatMsg(data);
+        }
+        container.scrollTop = container.scrollHeight;
+      };
+      _chatWs.onclose = (e) => {
+        if (e.code !== 4001 && getToken()) {
+          setTimeout(initChat, 5000);
+        }
+      };
+    }
+
+    function appendChatMsg(msg) {
+      const container = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = `<span class="chat-username">${escHtmlNote(msg.username)}:</span><span class="chat-text">${escHtmlNote(msg.message)}</span>`;
+      container.appendChild(div);
+    }
+
+    function sendChatMsg(e) {
+      e.preventDefault();
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text || !_chatWs || _chatWs.readyState !== WebSocket.OPEN) return;
+      _chatWs.send(text);
+      input.value = '';
+    }
   </script>
 
   <!-- ── Spotify bar (fixed bottom, all screens) ────── -->
