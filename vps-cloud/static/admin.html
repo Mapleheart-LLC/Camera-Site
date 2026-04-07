@@ -515,6 +515,30 @@
             <div class="card-header"><h2>🐾 Drool Posts – last 30 days</h2></div>
             <div class="chart-body"><canvas id="chart-drool-day" height="160"></canvas></div>
           </div>
+
+          <!-- Cloudflare Traffic -->
+          <div id="cf-analytics-section">
+            <h2 style="font-size:.92rem;font-weight:800;color:#e8aeb7;text-transform:uppercase;letter-spacing:.06em;margin:1.5rem 0 .85rem;display:flex;align-items:center;gap:.5rem">
+              ☁️ Cloudflare Traffic
+              <span id="cf-config-badge"></span>
+            </h2>
+            <div id="cf-not-configured" style="display:none;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:10px;padding:1rem 1.25rem;font-size:.83rem;color:#9e7e82;margin-bottom:1.5rem">
+              ☁️ Cloudflare analytics are not configured. Set <code style="color:#e8aeb7">CF_API_TOKEN</code> and <code style="color:#e8aeb7">CF_ZONE_ID</code> in your environment to enable Cloudflare traffic data.
+            </div>
+            <div id="cf-configured-content" style="display:none">
+              <div class="analytics-grid" style="margin-bottom:1.5rem">
+                <div class="analytics-stat"><div class="as-label">Total Requests (30d)</div><div id="cf-requests" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Pageviews (30d)</div><div id="cf-pageviews" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Unique Visitors (30d)</div><div id="cf-uniques" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Bandwidth (30d)</div><div id="cf-bandwidth" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Threats Blocked (30d)</div><div id="cf-threats" class="as-value">—</div></div>
+              </div>
+              <div class="chart-card">
+                <div class="card-header"><h2>☁️ Cloudflare Requests &amp; Pageviews – last 30 days</h2></div>
+                <div class="chart-body"><canvas id="chart-cf-traffic" height="200"></canvas></div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- ── Cameras ────────────────────────────────── -->
@@ -1188,7 +1212,7 @@
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
-        loadDroolCredentials(), loadDroolArchive(), loadAnalytics(),
+        loadDroolCredentials(), loadDroolArchive(), loadAnalytics(), loadCloudflareAnalytics(),
       ]);
     }
 
@@ -2474,6 +2498,57 @@
     }
 
     document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
+
+    // ── Cloudflare Analytics ───────────────────────────
+    function _fmtBytes(bytes) {
+      if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' GB';
+      if (bytes >= 1e6) return (bytes / 1e6).toFixed(2) + ' MB';
+      if (bytes >= 1e3) return (bytes / 1e3).toFixed(2) + ' KB';
+      return bytes + ' B';
+    }
+    function _fmtNum(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+      return String(n);
+    }
+
+    async function loadCloudflareAnalytics() {
+      try {
+        const d = await apiGet('/api/admin/analytics/cloudflare');
+        const notCfg = document.getElementById('cf-not-configured');
+        const cfContent = document.getElementById('cf-configured-content');
+        const badge = document.getElementById('cf-config-badge');
+
+        if (!d.configured) {
+          notCfg.style.display = '';
+          cfContent.style.display = 'none';
+          badge.innerHTML = '<span class="badge-warn">⚠ Not configured</span>';
+          return;
+        }
+
+        notCfg.style.display = 'none';
+        cfContent.style.display = '';
+        badge.innerHTML = '<span class="badge-ok">✔ Connected</span>';
+
+        document.getElementById('cf-requests').textContent  = _fmtNum(d.totals.requests);
+        document.getElementById('cf-pageviews').textContent = _fmtNum(d.totals.pageviews);
+        document.getElementById('cf-uniques').textContent   = _fmtNum(d.totals.uniques);
+        document.getElementById('cf-bandwidth').textContent = _fmtBytes(d.totals.bandwidth);
+        document.getElementById('cf-threats').textContent   = _fmtNum(d.totals.threats);
+
+        _makeOrUpdate('chart-cf-traffic', _buildLineConfig(
+          d.by_day.map(x => x.date),
+          [
+            { label: 'Requests',  data: d.by_day.map(x => x.requests) },
+            { label: 'Pageviews', data: d.by_day.map(x => x.pageviews) },
+          ]
+        ));
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load Cloudflare analytics.');
+      }
+    }
+
+    document.getElementById('refresh-analytics-btn').addEventListener('click', loadCloudflareAnalytics);
 
 
     (function init() {

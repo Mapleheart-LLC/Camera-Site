@@ -53,6 +53,9 @@ _VALID_DEVICES = {"pishock", "lovense"}
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
+CF_API_TOKEN: str = os.environ.get("CF_API_TOKEN", "")
+CF_ZONE_ID: str = os.environ.get("CF_ZONE_ID", "")
+
 logger = logging.getLogger(__name__)
 
 
@@ -1272,4 +1275,96 @@ def get_analytics(
             "by_platform": {r["platform"]: r["cnt"] for r in drool_by_platform},
             "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in drool_by_day],
         },
+    }
+
+
+@router.get("/analytics/cloudflare")
+def get_cloudflare_analytics(
+    _: str = Depends(get_admin_user),
+):
+    """Fetch 30-day Zone analytics from the Cloudflare Analytics API.
+
+    Returns ``{"configured": False}`` when ``CF_API_TOKEN`` or ``CF_ZONE_ID``
+    are not set.  The time-series is aggregated to daily buckets so the
+    frontend can render a consistent chart regardless of Cloudflare's chosen
+    granularity (hourly or daily depending on the query window).
+
+    Requires the API token to have *Zone → Analytics → Read* and
+    *Zone → Zone → Read* permissions.
+    """
+    if not CF_API_TOKEN or not CF_ZONE_ID:
+        return {"configured": False}
+
+    # 30 days = 43 200 minutes before now
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(
+                f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/analytics/dashboard",
+                params={"since": -43200, "continuous": True},
+                headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
+            )
+    except Exception as exc:
+        logger.warning("Cloudflare analytics request failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach Cloudflare API.",
+        )
+
+    if resp.status_code == 403:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Cloudflare API returned 403 – check CF_API_TOKEN permissions.",
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Cloudflare API returned HTTP {resp.status_code}.",
+        )
+
+    body = resp.json()
+    if not body.get("success"):
+        errors = body.get("errors", [])
+        detail = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Cloudflare API error: {detail}",
+        )
+
+    result = body.get("result", {})
+    totals = result.get("totals", {})
+
+    # Aggregate time-series buckets to daily granularity
+    by_day: dict[str, dict] = {}
+    for bucket in result.get("timeseries", []):
+        day = (bucket.get("since") or "")[:10]
+        if not day:
+            continue
+        if day not in by_day:
+            by_day[day] = {"requests": 0, "pageviews": 0, "bandwidth": 0, "threats": 0, "uniques": 0}
+        by_day[day]["requests"]  += bucket.get("requests",  {}).get("all", 0)
+        by_day[day]["pageviews"] += bucket.get("pageviews", {}).get("all", 0)
+        by_day[day]["bandwidth"] += bucket.get("bandwidth", {}).get("all", 0)
+        by_day[day]["threats"]   += bucket.get("threats",   {}).get("all", 0)
+        by_day[day]["uniques"]   += bucket.get("uniques",   {}).get("all", 0)
+
+    return {
+        "configured": True,
+        "totals": {
+            "requests":  totals.get("requests",  {}).get("all", 0),
+            "pageviews": totals.get("pageviews", {}).get("all", 0),
+            "bandwidth": totals.get("bandwidth", {}).get("all", 0),
+            "threats":   totals.get("threats",   {}).get("all", 0),
+            "uniques":   totals.get("uniques",   {}).get("all", 0),
+        },
+        "by_day": [
+            {
+                "date":      d,
+                "requests":  by_day[d]["requests"],
+                "pageviews": by_day[d]["pageviews"],
+                "bandwidth": by_day[d]["bandwidth"],
+                "threats":   by_day[d]["threats"],
+                "uniques":   by_day[d]["uniques"],
+            }
+            for d in sorted(by_day.keys())
+        ],
     }
