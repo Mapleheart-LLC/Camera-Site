@@ -745,6 +745,12 @@
     const q = searchInput.value.trim();
     if (!q) return;
 
+    if (!getToken()) {
+      queueAuth.style.display = 'block';
+      queueUi.style.display   = 'none';
+      return;
+    }
+
     searchBtn.disabled = true;
     resultsEl.innerHTML = '<p class="queue-empty">Searching…</p>';
 
