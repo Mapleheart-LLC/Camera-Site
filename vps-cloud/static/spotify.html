@@ -247,6 +247,26 @@
     }
     .fade-section.fading { opacity: 0; }
 
+    /* ── Jam button ───────────────────────────────────────── */
+    .jam-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      background: #1db954;
+      color: #000;
+      font-weight: 700;
+      font-size: .85rem;
+      border-radius: 2rem;
+      padding: .45rem 1.1rem;
+      text-decoration: none;
+      transition: background .2s, transform .1s;
+      align-self: center;
+      margin-top: .25rem;
+    }
+    .jam-btn:hover { background: #1ed760; transform: scale(1.03); }
+    #jam-banner { display: none; }
+    #jam-banner.visible { display: flex; justify-content: center; }
+
     /* ── Queue section ────────────────────────────────────── */
     .queue-card {
       width: 100%;
@@ -492,6 +512,13 @@
       <span id="status-label">Loading…</span>
     </div>
 
+    <!-- Jam banner (shown only when a Jam URL is active) -->
+    <div id="jam-banner">
+      <a id="jam-link" class="jam-btn" href="#" target="_blank" rel="noopener noreferrer">
+        🎧 Join the Jam
+      </a>
+    </div>
+
   </div><!-- /playing-view -->
 
   <!-- Idle state -->
@@ -561,6 +588,8 @@
   const progressTot  = document.getElementById('progress-total');
   const statusDot    = document.getElementById('status-dot');
   const statusLabel  = document.getElementById('status-label');
+  const jamBanner    = document.getElementById('jam-banner');
+  const jamLink      = document.getElementById('jam-link');
   const idleIcon     = document.getElementById('idle-icon');
   const idleTitle    = document.getElementById('idle-title');
   const idleSub      = document.getElementById('idle-sub');
@@ -626,7 +655,15 @@
       return;
     }
 
-    const { is_playing, configured, track } = data;
+    const { is_playing, configured, track, jam_url } = data;
+
+    // Update Jam banner on every poll regardless of playing state
+    if (jam_url) {
+      jamLink.href = jam_url;
+      jamBanner.classList.add('visible');
+    } else {
+      jamBanner.classList.remove('visible');
+    }
 
     if (!configured) {
       stopTicker();

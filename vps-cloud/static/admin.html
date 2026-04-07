@@ -985,6 +985,29 @@
               </div>
             </div>
           </div>
+
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header"><h2>🎧 Spotify Jam</h2></div>
+            <div class="card-body">
+              <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.75rem">
+                Start a Jam in your Spotify app, copy the invite link, then paste it here.
+                Viewers on the Now Playing page will see a <strong>Join the Jam</strong> button.
+                Clear the URL to hide the button.
+              </p>
+              <div class="form-row" style="gap:.5rem;flex-wrap:wrap">
+                <input
+                  id="jam-url-input"
+                  type="url"
+                  placeholder="https://jam.spotify.com/session/…"
+                  style="flex:1;min-width:240px"
+                  aria-label="Spotify Jam invite URL"
+                />
+                <button class="btn-sm btn-edit" onclick="saveJamUrl()">💾 Save</button>
+                <button class="btn-sm btn-delete" onclick="clearJamUrl()">✕ Clear</button>
+              </div>
+              <p id="jam-status" style="font-size:.75rem;color:#8a7a7d;margin-top:.5rem"></p>
+            </div>
+          </div>
         </section>
 
         <!-- ── Logs ───────────────────────────────────── -->

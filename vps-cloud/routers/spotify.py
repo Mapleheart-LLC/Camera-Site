@@ -22,7 +22,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from db import get_db, get_setting, set_setting
-from dependencies import get_current_user
+from dependencies import get_admin_user, get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -204,9 +204,11 @@ async def now_playing(db: sqlite3.Connection = Depends(get_db)):
     if _np_cache and now < _np_cache[0]:
         return _np_cache[1]
 
+    jam_url = get_setting(db, "spotify_jam_url") or None
+
     access_token = await _get_valid_access_token(db)
     if not access_token:
-        result: dict = {"is_playing": False, "configured": False}
+        result: dict = {"is_playing": False, "configured": False, "jam_url": jam_url}
         _np_cache = (now + _NP_CACHE_TTL, result)
         return result
 
@@ -217,20 +219,20 @@ async def now_playing(db: sqlite3.Connection = Depends(get_db)):
         )
 
     if resp.status_code == 204:
-        result = {"is_playing": False, "configured": True}
+        result = {"is_playing": False, "configured": True, "jam_url": jam_url}
         _np_cache = (now + _NP_CACHE_TTL, result)
         return result
 
     if not resp.is_success:
         logger.warning("Spotify now-playing error: %s", resp.status_code)
-        result = {"is_playing": False, "configured": True}
+        result = {"is_playing": False, "configured": True, "jam_url": jam_url}
         _np_cache = (now + _NP_CACHE_TTL, result)
         return result
 
     data = resp.json()
     item = data.get("item")
     if not item or data.get("currently_playing_type") != "track":
-        result = {"is_playing": data.get("is_playing", False), "configured": True}
+        result = {"is_playing": data.get("is_playing", False), "configured": True, "jam_url": jam_url}
         _np_cache = (now + _NP_CACHE_TTL, result)
         return result
 
@@ -248,6 +250,7 @@ async def now_playing(db: sqlite3.Connection = Depends(get_db)):
             "uri": item["uri"],
             "external_url": item.get("external_urls", {}).get("spotify"),
         },
+        "jam_url": jam_url,
     }
     _np_cache = (now + _NP_CACHE_TTL, result)
     return result
@@ -364,3 +367,41 @@ async def add_to_queue(
 
     logger.error("Spotify add-to-queue failed (%d): %s", resp.status_code, resp.text)
     raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=err_msg)
+
+
+# ── Admin Jam link management ─────────────────────────────────────────────────
+
+class JamRequest(BaseModel):
+    url: str
+
+
+@router.put("/api/admin/spotify/jam", status_code=status.HTTP_200_OK)
+async def set_jam_url(
+    body: JamRequest,
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Store a Spotify Jam invite URL. Admin only."""
+    url = body.url.strip()
+    if not url.startswith("https://jam.spotify.com/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="URL must start with https://jam.spotify.com/",
+        )
+    set_setting(db, "spotify_jam_url", url)
+    # Bust the now-playing cache so next poll reflects the new URL immediately
+    global _np_cache
+    _np_cache = None
+    return {"ok": True, "jam_url": url}
+
+
+@router.delete("/api/admin/spotify/jam", status_code=status.HTTP_200_OK)
+async def clear_jam_url(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Remove the stored Spotify Jam invite URL. Admin only."""
+    set_setting(db, "spotify_jam_url", "")
+    global _np_cache
+    _np_cache = None
+    return {"ok": True}
