@@ -130,8 +130,8 @@ services:
       # API Token with Zone:Read + Zone:Analytics:Read permissions.
       # Zone ID can be found on the Overview page for your domain in the
       # Cloudflare dashboard (right-hand "API" panel).
-      - CF_API_TOKEN=${CF_API_TOKEN:-}
-      - CF_ZONE_ID=${CF_ZONE_ID:-}
+      - CLAPI=${CLAPI:-}
+      - CLZONE=${CLZONE:-}
       # ── Spotify – Now Playing & Queue ─────────────────
       # Create an app at https://developer.spotify.com/dashboard and add
       # {BASE_URL}/auth/spotify/callback as a Redirect URI.

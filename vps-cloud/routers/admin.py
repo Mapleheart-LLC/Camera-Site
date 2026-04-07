@@ -53,8 +53,8 @@ _VALID_DEVICES = {"pishock", "lovense"}
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
-CF_API_TOKEN: str = os.environ.get("CF_API_TOKEN", "")
-CF_ZONE_ID: str = os.environ.get("CF_ZONE_ID", "")
+CF_API_TOKEN: str = os.environ.get("CLAPI", "")
+CF_ZONE_ID: str = os.environ.get("CLZONE", "")
 
 logger = logging.getLogger(__name__)
 
@@ -1284,7 +1284,7 @@ def get_cloudflare_analytics(
 ):
     """Fetch 30-day Zone analytics from the Cloudflare Analytics API.
 
-    Returns ``{"configured": False}`` when ``CF_API_TOKEN`` or ``CF_ZONE_ID``
+    Returns ``{"configured": False}`` when ``CLAPI`` or ``CLZONE``
     are not set.  The time-series is aggregated to daily buckets so the
     frontend can render a consistent chart regardless of Cloudflare's chosen
     granularity (hourly or daily depending on the query window).
@@ -1313,7 +1313,7 @@ def get_cloudflare_analytics(
     if resp.status_code == 403:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Cloudflare API returned 403 – check CF_API_TOKEN permissions.",
+            detail="Cloudflare API returned 403 – check CLAPI permissions.",
         )
     if resp.status_code != 200:
         raise HTTPException(
