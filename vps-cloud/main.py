@@ -455,6 +455,11 @@ def init_db() -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_age_verifications_session ON age_verifications(session_token)"
     )
+    # Idempotent migration: add provider column for multi-provider age-gate support.
+    try:
+        conn.execute("ALTER TABLE age_verifications ADD COLUMN provider TEXT NOT NULL DEFAULT 'idswyft'")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     conn.commit()
     conn.close()
 
