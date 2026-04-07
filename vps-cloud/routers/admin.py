@@ -1295,7 +1295,7 @@ def get_cloudflare_analytics(
     if not CF_API_TOKEN or not CF_ZONE_ID:
         return {"configured": False}
 
-    # 30 days = 43 200 minutes before now
+    # since=-43200 → 43,200 minutes ago (30 days); Cloudflare expects a negative integer of minutes
     try:
         with httpx.Client(timeout=15.0) as client:
             resp = client.get(
