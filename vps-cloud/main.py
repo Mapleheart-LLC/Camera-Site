@@ -38,6 +38,7 @@ from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
+from routers.age_gate import router as age_gate_router
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -97,6 +98,28 @@ MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool
 # HTTPS URLs even when the backend is behind a reverse proxy or tunnel.
 # Falls back to the request base_url when not set.
 BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
+
+# ---------------------------------------------------------------------------
+# Age gate configuration
+#
+# AGE_GATE_ENABLED – set to "true" to require age verification before any
+#   page is served.  Defaults to false so existing deployments are unaffected
+#   until the operator explicitly opts in.
+# ---------------------------------------------------------------------------
+_age_gate_raw = os.environ.get("AGE_GATE_ENABLED", "false")
+AGE_GATE_ENABLED: bool = _age_gate_raw.lower() == "true"
+
+# Paths that are always accessible without age verification.
+# Anything starting with one of these prefixes is exempt.
+_AGE_GATE_EXEMPT_PREFIXES = (
+    "/api/",
+    "/age-gate",
+    "/static/",
+    "/favicon.ico",
+    "/sw.js",
+    "/manifest.json",
+    "/offline.html",
+)
 
 # ---------------------------------------------------------------------------
 # CORS / cookie-domain configuration
@@ -415,6 +438,23 @@ def init_db() -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_drool_archive_timestamp ON drool_archive(timestamp)"
     )
+    # ── Age verification table ────────────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS age_verifications (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            verification_id  TEXT    NOT NULL UNIQUE,
+            session_token    TEXT    NOT NULL UNIQUE,
+            idswyft_user_id  TEXT    NOT NULL,
+            status           TEXT    NOT NULL DEFAULT 'pending',
+            created_at       TEXT    NOT NULL,
+            verified_at      TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_age_verifications_session ON age_verifications(session_token)"
+    )
     conn.commit()
     conn.close()
 
@@ -516,6 +556,71 @@ async def _fetch_discord_access_level(discord_id: str) -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
+# Idswyft webhook auto-registration
+# ---------------------------------------------------------------------------
+
+
+async def _register_idswyft_webhook() -> None:
+    """Register our age-gate webhook with idswyft on startup (idempotent).
+
+    Requires IDSWYFT_API_KEY and BASE_URL to be set.  If either is missing the
+    step is skipped and the operator must register the webhook manually via the
+    idswyft developer portal at http://localhost:8090.
+    """
+    from routers.age_gate import IDSWYFT_API_URL, IDSWYFT_API_KEY, AGE_GATE_ENABLED
+    if not AGE_GATE_ENABLED:
+        return
+    if not IDSWYFT_API_KEY:
+        logger.info(
+            "IDSWYFT_API_KEY not set – skipping automatic webhook registration. "
+            "Create an API key via the idswyft portal (http://localhost:8090) and set it "
+            "in the IDSWYFT_API_KEY environment variable."
+        )
+        return
+    if not BASE_URL:
+        logger.info(
+            "BASE_URL not set – skipping automatic idswyft webhook registration. "
+            "Set BASE_URL (e.g. http://backend:8000) for automatic registration."
+        )
+        return
+
+    webhook_url = f"{BASE_URL.rstrip('/')}/api/age-gate/webhook"
+    from routers.age_gate import IDSWYFT_WEBHOOK_SECRET
+    payload: dict = {"url": webhook_url, "is_sandbox": False}
+    if IDSWYFT_WEBHOOK_SECRET:
+        payload["secret_token"] = IDSWYFT_WEBHOOK_SECRET
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Check if already registered
+            list_resp = await client.get(
+                f"{IDSWYFT_API_URL}/api/webhooks",
+                headers={"X-API-Key": IDSWYFT_API_KEY},
+            )
+            if list_resp.is_success:
+                existing = [w for w in list_resp.json().get("webhooks", []) if w.get("url") == webhook_url]
+                if existing:
+                    logger.info("Idswyft webhook already registered: %s", webhook_url)
+                    return
+
+            resp = await client.post(
+                f"{IDSWYFT_API_URL}/api/webhooks/register",
+                json=payload,
+                headers={"X-API-Key": IDSWYFT_API_KEY, "Content-Type": "application/json"},
+            )
+    except httpx.RequestError as exc:
+        logger.warning("Could not register idswyft webhook on startup: %s", exc)
+        return
+
+    if resp.is_success:
+        logger.info("Idswyft webhook registered: %s", webhook_url)
+    else:
+        logger.warning(
+            "Idswyft webhook registration returned %s: %s", resp.status_code, resp.text
+        )
+
+
+# ---------------------------------------------------------------------------
 # FastAPI app lifecycle
 # ---------------------------------------------------------------------------
 
@@ -546,6 +651,7 @@ async def lifespan(app: FastAPI):
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
+    await _register_idswyft_webhook()
     yield
     stop_drool_scheduler()
     # Close the Redis connection pool on shutdown to release resources.
@@ -787,6 +893,7 @@ app.include_router(drool_router)
 app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
+app.include_router(age_gate_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
@@ -823,6 +930,38 @@ async def subdomain_routing(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def age_gate_middleware(request: Request, call_next):
+    """Redirect unverified visitors to the age-gate page.
+
+    Checks the HttpOnly ``age_verified`` cookie.  If it is absent (or not
+    equal to "1") *and* the request is for a page-level resource (not an API
+    call, static asset, or the age-gate itself), the user is redirected to
+    ``/age-gate`` so they can complete identity verification.
+
+    The gate is bypassed entirely when ``AGE_GATE_ENABLED`` is false.
+    """
+    if not AGE_GATE_ENABLED:
+        return await call_next(request)
+
+    path = request.url.path
+
+    # Exempt paths – always let these through
+    for prefix in _AGE_GATE_EXEMPT_PREFIXES:
+        if path == prefix or path.startswith(prefix):
+            return await call_next(request)
+
+    # Check the age_verified cookie
+    if request.cookies.get("age_verified") == "1":
+        return await call_next(request)
+
+    # Redirect to the age gate, preserving the originally-requested URL as
+    # a query parameter so the gate can send the user back after verification.
+    from fastapi.responses import RedirectResponse as _RR
+    from urllib.parse import quote as _q
+    return _RR(url=f"/age-gate?next={_q(str(request.url), safe='')}", status_code=302)
+
+
 @app.get("/admin", include_in_schema=False)
 def admin_page_redirect(request: Request):
     """Redirect /admin (and /admin?q=...) to the static admin.html page."""
@@ -841,6 +980,12 @@ def drool_page_redirect():
 def spotify_page():
     """Serve the Spotify now-playing page at /spotify (no .html needed)."""
     return FileResponse("static/spotify.html")
+
+
+@app.get("/age-gate", include_in_schema=False)
+def age_gate_page():
+    """Serve the age verification landing page."""
+    return FileResponse("static/age-gate.html")
 
 
 # ---------------------------------------------------------------------------
