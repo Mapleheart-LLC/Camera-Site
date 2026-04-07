@@ -666,12 +666,7 @@
       wrapper.className = 'card-media';
 
       if (urls.length === 0) {
-        const ph = document.createElement('div');
-        ph.className = 'card-media-placeholder';
-        ph.setAttribute('aria-hidden', 'true');
-        ph.textContent = '🐾';
-        wrapper.appendChild(ph);
-        return wrapper;
+        return null;
       }
 
       // Always show first URL as an image thumbnail
@@ -707,7 +702,8 @@
       card.setAttribute('aria-label', `${item.platform} post`);
 
       // Media element (handles single image, video, GIF, and multi-image gallery)
-      card.appendChild(buildMediaElement(item, 'She liked this'));
+      const mediaEl = buildMediaElement(item, 'She liked this');
+      if (mediaEl) card.appendChild(mediaEl);
 
       // Platform icon
       const platformIcon = ICONS[item.platform] || '';
@@ -878,16 +874,18 @@
 
       // Media (larger, with rounded corners matching the hero layout)
       const whimperMediaEl = buildMediaElement(item, 'Weekly Whimper – she liked this');
-      whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden; cursor: pointer;';
-      whimperMediaEl.querySelectorAll('img').forEach(el => {
-        el.style.maxHeight = '400px';
-        el.style.objectFit = 'cover';
-        el.style.borderRadius = '12px';
-      });
-      whimperMediaEl.addEventListener('click', () => {
-        window.open(item.original_url, '_blank', 'noopener,noreferrer');
-      });
-      inner.appendChild(whimperMediaEl);
+      if (whimperMediaEl) {
+        whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden; cursor: pointer;';
+        whimperMediaEl.querySelectorAll('img').forEach(el => {
+          el.style.maxHeight = '400px';
+          el.style.objectFit = 'cover';
+          el.style.borderRadius = '12px';
+        });
+        whimperMediaEl.addEventListener('click', () => {
+          window.open(item.original_url, '_blank', 'noopener,noreferrer');
+        });
+        inner.appendChild(whimperMediaEl);
+      }
 
       // Body
       const body = document.createElement('div');
