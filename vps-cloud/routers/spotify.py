@@ -2,23 +2,26 @@
 
 Endpoints
 ---------
-GET  /auth/spotify/login       Admin-initiated OAuth authorization redirect
-GET  /auth/spotify/callback    OAuth callback – exchanges code and stores tokens
-GET  /api/spotify/now-playing  Current playback state (no viewer auth required)
-GET  /api/spotify/search       Search for tracks (access_level >= 1)
-POST /api/spotify/queue        Add a track to the creator's queue (access_level >= 1)
+GET  /auth/spotify/login          Admin-initiated OAuth authorization redirect
+GET  /auth/spotify/callback       OAuth callback – exchanges code and stores tokens
+GET  /api/spotify/now-playing     Current playback state (no viewer auth required)
+GET  /api/spotify/og-image        Dynamic 1200×630 social-preview PNG (no auth)
+GET  /api/spotify/search          Search for tracks (access_level >= 1)
+POST /api/spotify/queue           Add a track to the creator's queue (access_level >= 1)
 """
 
+import io
 import logging
 import os
 import secrets
 import sqlite3
+import textwrap
 import time
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 
 from db import get_db, get_setting, set_setting
@@ -405,3 +408,151 @@ async def clear_jam_url(
     global _np_cache
     _np_cache = None
     return {"ok": True}
+
+
+# ── Social preview image ───────────────────────────────────────────────────────
+
+# Font paths installed via apt fonts-dejavu-core (see Dockerfile)
+_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+_FONT_REG  = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+# OG image dimensions (standard 1.91:1 ratio)
+_OG_W, _OG_H = 1200, 630
+
+# Design tokens matching the page palette
+_C_BG      = (18,  18,  18)    # --bg
+_C_SURFACE = (30,  30,  46)    # --surface
+_C_ACCENT  = (232, 174, 183)   # --accent (pink)
+_C_GREEN   = (29,  185, 84)    # Spotify green
+_C_TEXT    = (240, 230, 232)   # --text
+_C_MUTED   = (158, 142, 144)   # --text-muted
+
+
+def _load_font(path: str, size: int):
+    from PIL import ImageFont
+    try:
+        return ImageFont.truetype(path, size)
+    except (IOError, OSError):
+        return ImageFont.load_default(size=size)
+
+
+def _rounded_mask(size: int, radius: int = 20):
+    """Return an 'L'-mode mask with rounded corners for pasting."""
+    from PIL import Image, ImageDraw
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=255)
+    return mask
+
+
+@router.get("/api/spotify/og-image", include_in_schema=False)
+async def og_image(db: sqlite3.Connection = Depends(get_db)):
+    """Return a dynamic 1200×630 PNG social preview for the /spotify page."""
+    from PIL import Image, ImageDraw
+
+    # ── resolve current playback ──────────────────────────────────────────────
+    np = await now_playing(db)
+    track = np.get("track") if np.get("is_playing") else None
+
+    # ── canvas ────────────────────────────────────────────────────────────────
+    img  = Image.new("RGB", (_OG_W, _OG_H), _C_BG)
+    draw = ImageDraw.Draw(img)
+
+    # Spotify green top bar
+    draw.rectangle([0, 0, _OG_W, 8], fill=_C_GREEN)
+
+    # ── fonts ─────────────────────────────────────────────────────────────────
+    f_title  = _load_font(_FONT_BOLD, 54)
+    f_artist = _load_font(_FONT_REG,  34)
+    f_album  = _load_font(_FONT_REG,  26)
+    f_badge  = _load_font(_FONT_BOLD, 22)
+    f_brand  = _load_font(_FONT_BOLD, 30)
+    f_url    = _load_font(_FONT_REG,  22)
+
+    # ── album art (left column) ───────────────────────────────────────────────
+    ART_X, ART_Y, ART_SIZE = 60, 110, 410
+    art_drawn = False
+
+    if track and track.get("album_art"):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                art_resp = await client.get(track["album_art"])
+            if art_resp.is_success:
+                art_img = Image.open(io.BytesIO(art_resp.content)).convert("RGB")
+                art_img = art_img.resize((ART_SIZE, ART_SIZE), Image.LANCZOS)
+                img.paste(art_img, (ART_X, ART_Y), _rounded_mask(ART_SIZE, radius=24))
+                art_drawn = True
+        except Exception:
+            pass
+
+    if not art_drawn:
+        # Placeholder box with a music note
+        draw.rounded_rectangle(
+            [ART_X, ART_Y, ART_X + ART_SIZE, ART_Y + ART_SIZE],
+            radius=24, fill=_C_SURFACE,
+        )
+        note_font = _load_font(_FONT_BOLD, 130)
+        draw.text(
+            (ART_X + ART_SIZE // 2, ART_Y + ART_SIZE // 2),
+            "\u266b",
+            font=note_font,
+            fill=_C_GREEN,
+            anchor="mm",
+        )
+
+    # ── text panel (right column) ─────────────────────────────────────────────
+    TX = ART_X + ART_SIZE + 60
+    TY = ART_Y + 10
+
+    if track:
+        # "Now Playing" badge
+        badge_text = "NOW PLAYING"
+        draw.rounded_rectangle(
+            [TX, TY, TX + 170, TY + 34],
+            radius=8, fill=_C_GREEN,
+        )
+        draw.text((TX + 12, TY + 5), badge_text, font=f_badge, fill=_C_BG)
+
+        TY += 52
+
+        # Track title (wrapped)
+        max_chars = 20
+        wrapped = textwrap.fill(track["name"], width=max_chars)
+        draw.text((TX, TY), wrapped, font=f_title, fill=_C_TEXT)
+        TY += len(wrapped.splitlines()) * 64 + 8
+
+        # Artists
+        artists = ", ".join(track["artists"])
+        if len(artists) > 38:
+            artists = artists[:35] + "…"
+        draw.text((TX, TY), artists, font=f_artist, fill=_C_ACCENT)
+        TY += 46
+
+        # Album
+        album = track["album"]
+        if len(album) > 42:
+            album = album[:39] + "…"
+        draw.text((TX, TY), album, font=f_album, fill=_C_MUTED)
+    else:
+        # No track playing – show branded placeholder text
+        draw.text((TX, TY + 60),  "mochii's",      font=f_title,  fill=_C_ACCENT)
+        draw.text((TX, TY + 130), "Music Station",  font=f_title,  fill=_C_TEXT)
+        draw.text(
+            (TX, TY + 220),
+            "See what's playing\nand join the stream.",
+            font=f_artist,
+            fill=_C_MUTED,
+        )
+
+    # ── bottom brand bar ──────────────────────────────────────────────────────
+    draw.rectangle([0, _OG_H - 72, _OG_W, _OG_H], fill=_C_SURFACE)
+    draw.text((60, _OG_H - 36),         "mochii.live",  font=f_brand, fill=_C_ACCENT, anchor="lm")
+    draw.text((_OG_W - 60, _OG_H - 36), "mochii.live/spotify", font=f_url, fill=_C_MUTED, anchor="rm")
+
+    # ── encode & return ───────────────────────────────────────────────────────
+    buf = io.BytesIO()
+    img.save(buf, "PNG", optimize=True)
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=30"},
+    )
