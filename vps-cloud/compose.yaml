@@ -43,6 +43,8 @@ services:
       - DISCORD_NOTIFICATION_CHANNEL_ID=${DISCORD_NOTIFICATION_CHANNEL_ID:-}
       # admin channel: private operational alerts (e.g. new store purchases)
       - DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID:-}
+      # stream channel: go-live / stream-ended announcements
+      - DISCORD_STREAM_CHANNEL_ID=${DISCORD_STREAM_CHANNEL_ID:-}
       # Ed25519 public key from the Discord Developer Portal (Application →
       # General Information → Public Key).  Required for the reply button /
       # modal feature.  Leave empty to disable Discord interactions.
@@ -57,6 +59,12 @@ services:
       # Bot token – used on startup to register the Linked Roles metadata schema.
       # Create a Bot user in the Discord Developer Portal and copy its token here.
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      # Discord guild (server) ID used for role-level syncing on login.
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+      # Role IDs that map to site access levels (set in Discord server settings).
+      - DISCORD_ROLE_LEVEL_1=${DISCORD_ROLE_LEVEL_1:-}
+      - DISCORD_ROLE_LEVEL_2=${DISCORD_ROLE_LEVEL_2:-}
+      - DISCORD_ROLE_LEVEL_3=${DISCORD_ROLE_LEVEL_3:-}
       # Public root URL of the site used to generate deep-links in Discord
       # embeds (e.g. https://mochii.live).  Leave empty to omit deep-links.
       - BASE_URL=${BASE_URL:-}
@@ -253,6 +261,38 @@ services:
       - SYS_MODULE
     networks:
       - camera_net
+    restart: unless-stopped
+
+  # ── Discord gateway bot ─────────────────────────────
+  # Standalone discord.py bot that handles slash commands (/stream, /link,
+  # /ask, /tier), the Q&A Reply button → modal flow, member-join welcome DMs,
+  # and the stream go-live / stream-ended watcher.
+  # Shares the same SQLite volume as the backend so it can read/write questions
+  # and subscriber data without an additional API layer.
+  # Set DISCORD_BOT_TOKEN (and optionally DISCORD_GUILD_ID for faster command
+  # sync during development) to enable.  Leave DISCORD_BOT_TOKEN empty to
+  # skip building/starting this service.
+  discord-bot:
+    build: ./discord-bot
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}
+      - DISCORD_QUESTION_CHANNEL_ID=${DISCORD_QUESTION_CHANNEL_ID:-}
+      - DISCORD_NOTIFICATION_CHANNEL_ID=${DISCORD_NOTIFICATION_CHANNEL_ID:-}
+      - DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID:-}
+      - DISCORD_STREAM_CHANNEL_ID=${DISCORD_STREAM_CHANNEL_ID:-}
+      - GO2RTC_HOST=go2rtc
+      - GO2RTC_PORT=1984
+      - BASE_URL=${BASE_URL:-}
+      - DATABASE_PATH=/app/data/camera_site.db
+    volumes:
+      # Mount the same SQLite volume as the backend (read + write)
+      - camera_data:/app/data
+    networks:
+      - camera_net
+    depends_on:
+      - backend
+      - go2rtc
     restart: unless-stopped
 
 volumes:

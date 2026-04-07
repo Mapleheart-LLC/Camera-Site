@@ -37,7 +37,7 @@ from typing import Optional
 from urllib.parse import quote as _url_quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 
@@ -1091,7 +1091,7 @@ def create_user(
 
 
 @router.patch("/users/{user_id}")
-def update_user(
+async def update_user(
     user_id: str,
     body: _UpdateUserPayload,
     admin_user: str = Depends(get_admin_user),
@@ -1368,3 +1368,124 @@ def get_cloudflare_analytics(
             for d in sorted(by_day.keys())
         ],
     }
+
+
+# ---------------------------------------------------------------------------
+# Discord bot – settings & status
+# ---------------------------------------------------------------------------
+
+
+def _bool_setting(db: sqlite3.Connection, key: str, default: Optional[bool] = None) -> Optional[bool]:
+    val = get_setting(db, key)
+    if val is None:
+        return default
+    return val.strip().lower() == "true"
+
+
+class _DiscordSettingsPatch(BaseModel):
+    discord_question_channel_id: Optional[str] = None
+    discord_notification_channel_id: Optional[str] = None
+    discord_admin_channel_id: Optional[str] = None
+    discord_stream_channel_id: Optional[str] = None
+    discord_stream_notifications_enabled: Optional[bool] = None
+    discord_stream_live_message: Optional[str] = None
+    discord_welcome_dm_enabled: Optional[bool] = None
+    discord_welcome_dm_message: Optional[str] = None
+    discord_notify_questions: Optional[bool] = None
+    discord_notify_answers: Optional[bool] = None
+    discord_notify_purchases: Optional[bool] = None
+
+
+@router.get("/discord/settings")
+def get_discord_settings(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return Discord bot settings (settings-table values take precedence over env vars)."""
+
+    def _str_setting(key: str, env: str = "") -> Optional[str]:
+        """Settings-table value first, then env var, then None."""
+        v = get_setting(db, key)
+        if v is not None:
+            return v
+        ev = os.environ.get(env, "")
+        return ev or None
+
+    return {
+        "discord_question_channel_id":         _str_setting("discord_question_channel_id",         "DISCORD_QUESTION_CHANNEL_ID"),
+        "discord_notification_channel_id":     _str_setting("discord_notification_channel_id",     "DISCORD_NOTIFICATION_CHANNEL_ID"),
+        "discord_admin_channel_id":            _str_setting("discord_admin_channel_id",            "DISCORD_ADMIN_CHANNEL_ID"),
+        "discord_stream_channel_id":           _str_setting("discord_stream_channel_id",           "DISCORD_STREAM_CHANNEL_ID"),
+        "discord_stream_notifications_enabled": _bool_setting(db, "discord_stream_notifications_enabled", default=False),
+        "discord_stream_live_message":          get_setting(db, "discord_stream_live_message"),
+        "discord_welcome_dm_enabled":           _bool_setting(db, "discord_welcome_dm_enabled",          default=False),
+        "discord_welcome_dm_message":           get_setting(db, "discord_welcome_dm_message"),
+        "discord_notify_questions":             _bool_setting(db, "discord_notify_questions",             default=True),
+        "discord_notify_answers":               _bool_setting(db, "discord_notify_answers",               default=True),
+        "discord_notify_purchases":             _bool_setting(db, "discord_notify_purchases",             default=True),
+    }
+
+
+@router.patch("/discord/settings", status_code=status.HTTP_200_OK)
+def patch_discord_settings(
+    body: _DiscordSettingsPatch,
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Update Discord bot settings in the settings table (takes effect immediately)."""
+    updated: list[str] = []
+
+    str_fields = [
+        ("discord_question_channel_id",     body.discord_question_channel_id),
+        ("discord_notification_channel_id", body.discord_notification_channel_id),
+        ("discord_admin_channel_id",        body.discord_admin_channel_id),
+        ("discord_stream_channel_id",       body.discord_stream_channel_id),
+        ("discord_stream_live_message",     body.discord_stream_live_message),
+        ("discord_welcome_dm_message",      body.discord_welcome_dm_message),
+    ]
+    bool_fields = [
+        ("discord_stream_notifications_enabled", body.discord_stream_notifications_enabled),
+        ("discord_welcome_dm_enabled",           body.discord_welcome_dm_enabled),
+        ("discord_notify_questions",             body.discord_notify_questions),
+        ("discord_notify_answers",               body.discord_notify_answers),
+        ("discord_notify_purchases",             body.discord_notify_purchases),
+    ]
+
+    for key, val in str_fields:
+        if val is not None:
+            set_setting(db, key, val)
+            updated.append(key)
+
+    for key, val in bool_fields:
+        if val is not None:
+            set_setting(db, key, "true" if val else "false")
+            updated.append(key)
+
+    logger.info("Admin '%s' updated Discord settings: %s", admin_user, updated)
+    return {"updated": updated}
+
+
+@router.get("/discord/status")
+async def get_discord_status(_: str = Depends(get_admin_user)):
+    """Return live Discord bot status (token validity, guild info)."""
+    from discord_webhook import get_bot_status
+    return await get_bot_status()
+
+
+@router.post("/discord/test", status_code=status.HTTP_200_OK)
+async def discord_test_notification(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Send a test notification to the admin Discord channel."""
+    from discord_webhook import send_admin_notification
+    admin_channel = get_setting(db, "discord_admin_channel_id") or os.environ.get("DISCORD_ADMIN_CHANNEL_ID", "")
+    if not admin_channel:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="DISCORD_ADMIN_CHANNEL_ID is not configured.",
+        )
+    await send_admin_notification(
+        f"🧪 Test notification from the admin panel (triggered by **{admin_user}**) 🐾"
+    )
+    return {"sent": True}

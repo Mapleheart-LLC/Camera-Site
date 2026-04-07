@@ -412,6 +412,7 @@
         <button class="nav-item" data-target="s-spotify">🎵 Spotify</button>
         <button class="nav-item" data-target="s-logs">📋 Logs</button>
         <div class="sidebar-section-label">System</div>
+        <button class="nav-item" data-target="s-discord">🤖 Discord Bot</button>
         <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
       </nav>
 
@@ -1029,6 +1030,119 @@
           </div>
         </section>
 
+        <!-- ── Discord Bot ────────────────────────────── -->
+        <section id="s-discord" class="admin-section">
+          <h1 class="section-heading">🤖 Discord Bot</h1>
+
+          <!-- Bot Status -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Bot Status</h2>
+              <button id="discord-refresh-status-btn" class="btn-sm btn-edit">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <div class="settings-grid" id="discord-status-grid">
+                <div class="setting-tile"><div class="setting-label">Loading…</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Channel Settings -->
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header"><h2>Channel IDs</h2></div>
+            <div class="card-body">
+              <p style="font-size:.8rem;color:#9e7e82;margin-bottom:1rem;">
+                Channel IDs entered here are stored in the database and override the environment variables without a restart.
+                Leave blank to use the env-var value.
+              </p>
+              <div class="form-row">
+                <div class="form-field">
+                  <label for="dch-question">Questions Channel ID</label>
+                  <input id="dch-question" type="text" placeholder="e.g. 1234567890123456789" />
+                </div>
+                <div class="form-field">
+                  <label for="dch-notification">Notifications Channel ID</label>
+                  <input id="dch-notification" type="text" placeholder="e.g. 1234567890123456789" />
+                </div>
+              </div>
+              <div class="form-row" style="margin-top:.6rem">
+                <div class="form-field">
+                  <label for="dch-admin">Admin Alerts Channel ID</label>
+                  <input id="dch-admin" type="text" placeholder="e.g. 1234567890123456789" />
+                </div>
+                <div class="form-field">
+                  <label for="dch-stream">Stream Announcements Channel ID</label>
+                  <input id="dch-stream" type="text" placeholder="e.g. 1234567890123456789" />
+                </div>
+              </div>
+              <div class="form-row" style="margin-top:.75rem;align-items:center">
+                <button id="discord-save-channels-btn" class="btn-sm btn-edit">Save Channel IDs 🐾</button>
+                <span id="discord-channels-status" style="font-size:.82rem;color:#9e7e82;margin-left:.75rem"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Toggles & Templates -->
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header"><h2>Notification Settings</h2></div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1rem">
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.88rem">
+                  <input id="dtoggle-questions" type="checkbox" />
+                  Notify on new questions (Puppy Pouch)
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.88rem">
+                  <input id="dtoggle-answers" type="checkbox" />
+                  Notify when an answer is published
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.88rem">
+                  <input id="dtoggle-purchases" type="checkbox" />
+                  Notify on store purchases
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.88rem">
+                  <input id="dtoggle-stream" type="checkbox" />
+                  Stream go-live / offline notifications
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.88rem">
+                  <input id="dtoggle-welcome-dm" type="checkbox" />
+                  Send welcome DM when a new member joins the server
+                </label>
+              </div>
+
+              <div class="form-field" style="max-width:600px;margin-bottom:.75rem">
+                <label for="dtemplate-live">Go-Live Message Template</label>
+                <input id="dtemplate-live" type="text" placeholder="@here 🔴 **{title}** is now LIVE! {url}" />
+                <small style="color:#9e7e82;display:block;margin-top:.25rem">Variables: <code>{title}</code> (camera name), <code>{url}</code> (stream link)</small>
+              </div>
+
+              <div class="form-field" style="max-width:600px;margin-bottom:.75rem">
+                <label for="dtemplate-welcome">Welcome DM Template</label>
+                <textarea id="dtemplate-welcome" rows="3" placeholder="Hey, welcome to the pack! 🐾"></textarea>
+              </div>
+
+              <div class="form-row" style="margin-top:.5rem;align-items:center">
+                <button id="discord-save-settings-btn" class="btn-sm btn-edit">Save Notification Settings 🐾</button>
+                <span id="discord-settings-status" style="font-size:.82rem;color:#9e7e82;margin-left:.75rem"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header"><h2>Actions</h2></div>
+            <div class="card-body">
+              <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+                <button id="discord-test-btn" class="btn-sm btn-edit">🔔 Send Test Notification</button>
+              </div>
+              <p id="discord-action-status" style="margin-top:.6rem;font-size:.82rem;color:#9e7e82;min-height:1.2em"></p>
+              <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem">
+                💡 Slash commands (<code>/stream</code>, <code>/link</code>, <code>/ask</code>, <code>/tier</code>) are registered automatically when the <strong>discord-bot</strong> container starts.
+                Set <code>DISCORD_GUILD_ID</code> for instant guild sync during development, or leave it blank for global commands (up to 1 hour to propagate).
+              </p>
+            </div>
+          </div>
+        </section>
+
         <!-- ── Settings ───────────────────────────────── -->
         <section id="s-settings" class="admin-section">
           <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
@@ -1236,6 +1350,7 @@
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
         loadDroolCredentials(), loadDroolArchive(), loadAnalytics(), loadCloudflareAnalytics(),
+        loadDiscordSettings(),
       ]);
     }
 
@@ -2687,6 +2802,141 @@
         status.textContent = '✗ Network error.';
       }
     }
+
+    // ── Discord Bot ────────────────────────────────────
+
+    async function loadDiscordStatus() {
+      const grid = document.getElementById('discord-status-grid');
+      if (!grid) return;
+      grid.innerHTML = '<div class="setting-tile"><div class="setting-label">Loading…</div></div>';
+      try {
+        const d = await apiGet('/api/admin/discord/status');
+        const tiles = [
+          { label: 'Bot Token',   value: d.bot_token_set ? (d.bot_valid ? '✅ Valid' : '❌ Invalid') : '— Not set' },
+          { label: 'Bot Username', value: d.bot_username ? `@${escHtml(d.bot_username)}` : '—' },
+          { label: 'Guild ID',    value: d.guild_id_set  ? '✅ Set' : '— Not set' },
+          { label: 'Guild Name',  value: d.guild_name   ? escHtml(d.guild_name)   : '—' },
+          { label: 'Members (approx)', value: d.guild_member_count != null ? String(d.guild_member_count) : '—' },
+        ];
+        grid.innerHTML = tiles.map(t =>
+          `<div class="setting-tile">
+            <div class="setting-label">${t.label}</div>
+            <div class="setting-value">${t.value}</div>
+          </div>`
+        ).join('');
+      } catch (err) {
+        if (err.message !== '401') {
+          grid.innerHTML = '<div class="setting-tile"><div class="setting-label">Error loading status</div></div>';
+        }
+      }
+    }
+
+    async function loadDiscordSettings() {
+      try {
+        const d = await apiGet('/api/admin/discord/settings');
+        document.getElementById('dch-question').value     = d.discord_question_channel_id     || '';
+        document.getElementById('dch-notification').value = d.discord_notification_channel_id || '';
+        document.getElementById('dch-admin').value        = d.discord_admin_channel_id        || '';
+        document.getElementById('dch-stream').value       = d.discord_stream_channel_id       || '';
+        document.getElementById('dtoggle-questions').checked    = !!d.discord_notify_questions;
+        document.getElementById('dtoggle-answers').checked      = !!d.discord_notify_answers;
+        document.getElementById('dtoggle-purchases').checked    = !!d.discord_notify_purchases;
+        document.getElementById('dtoggle-stream').checked       = !!d.discord_stream_notifications_enabled;
+        document.getElementById('dtoggle-welcome-dm').checked   = !!d.discord_welcome_dm_enabled;
+        document.getElementById('dtemplate-live').value         = d.discord_stream_live_message    || '';
+        document.getElementById('dtemplate-welcome').value      = d.discord_welcome_dm_message     || '';
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load Discord settings.');
+      }
+    }
+
+    document.getElementById('discord-save-channels-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('discord-channels-status');
+      statusEl.textContent = 'Saving…';
+      try {
+        const res = await apiPatch('/api/admin/discord/settings', {
+          discord_question_channel_id:     document.getElementById('dch-question').value.trim()     || null,
+          discord_notification_channel_id: document.getElementById('dch-notification').value.trim() || null,
+          discord_admin_channel_id:        document.getElementById('dch-admin').value.trim()        || null,
+          discord_stream_channel_id:       document.getElementById('dch-stream').value.trim()       || null,
+        });
+        if (res.ok) {
+          statusEl.style.color = '#4ade80';
+          statusEl.textContent = '✓ Saved';
+          showToast('Discord channel IDs saved 🐾');
+        } else {
+          statusEl.style.color = '#f87171';
+          statusEl.textContent = '✗ Failed';
+        }
+      } catch {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = '✗ Network error';
+      }
+    });
+
+    document.getElementById('discord-save-settings-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('discord-settings-status');
+      statusEl.textContent = 'Saving…';
+      try {
+        const res = await apiPatch('/api/admin/discord/settings', {
+          discord_notify_questions:             document.getElementById('dtoggle-questions').checked,
+          discord_notify_answers:               document.getElementById('dtoggle-answers').checked,
+          discord_notify_purchases:             document.getElementById('dtoggle-purchases').checked,
+          discord_stream_notifications_enabled: document.getElementById('dtoggle-stream').checked,
+          discord_welcome_dm_enabled:           document.getElementById('dtoggle-welcome-dm').checked,
+          discord_stream_live_message:          document.getElementById('dtemplate-live').value.trim()   || null,
+          discord_welcome_dm_message:           document.getElementById('dtemplate-welcome').value.trim() || null,
+        });
+        if (res.ok) {
+          statusEl.style.color = '#4ade80';
+          statusEl.textContent = '✓ Saved';
+          showToast('Discord notification settings saved 🐾');
+        } else {
+          statusEl.style.color = '#f87171';
+          statusEl.textContent = '✗ Failed';
+        }
+      } catch {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = '✗ Network error';
+      }
+    });
+
+    document.getElementById('discord-refresh-status-btn').addEventListener('click', loadDiscordStatus);
+
+    document.getElementById('discord-test-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('discord-action-status');
+      statusEl.style.color = '#9e7e82';
+      statusEl.textContent = 'Sending…';
+      try {
+        const res = await apiPost('/api/admin/discord/test');
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          statusEl.style.color = '#4ade80';
+          statusEl.textContent = '✓ Test notification sent to admin channel 🐾';
+          showToast('Discord test notification sent!');
+        } else {
+          statusEl.style.color = '#f87171';
+          statusEl.textContent = '✗ ' + (data.detail || 'Failed to send.');
+        }
+      } catch {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = '✗ Network error.';
+      }
+    });
+
+    // Load Discord status when the Discord section is navigated to
+    // (lazy: only on first visit; use the ↻ Refresh button afterwards)
+    let _discordStatusLoaded = false;
+    document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
+      if (btn.dataset.target === 's-discord') {
+        btn.addEventListener('click', () => {
+          if (!_discordStatusLoaded) {
+            _discordStatusLoaded = true;
+            loadDiscordStatus();
+          }
+        });
+      }
+    });
   </script>
 
 </body>
