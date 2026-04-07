@@ -159,7 +159,6 @@ services:
     depends_on:
       - go2rtc
       - redis
-      - idswyft-api
     restart: unless-stopped
 
   # ── go2rtc – RTSP → WebRTC bridge ───────────────────
@@ -201,8 +200,6 @@ services:
       - CLFD_TOKEN=${CLFD_TOKEN}
     depends_on:
       - backend
-      - idswyft-frontend
-      - idswyft-api
     restart: unless-stopped
 
   # ── Tailscale – secure site-to-site VPN ─────────────
@@ -228,10 +225,20 @@ services:
 
   # ── Idswyft – self-hosted age / identity verification ──
   # Full ML verification stack (document OCR, liveness, face match).
-  # Images are pulled from GitHub Container Registry automatically.
+  # Images are hosted on GitHub Container Registry (ghcr.io) as private packages
+  # and require a GitHub PAT with read:packages scope before pulling:
+  #
+  #   echo $GHCR_TOKEN | docker login ghcr.io -u <github-username> --password-stdin
+  #
+  # These services are grouped under the "age-gate" profile so they are NOT
+  # started (or pulled) by default.  Enable them alongside AGE_GATE_ENABLED=true:
+  #
+  #   docker compose --profile age-gate up -d
+  #
   # Generate secrets with: openssl rand -hex 32
   idswyft-db:
     image: postgres:16-alpine
+    profiles: ["age-gate"]
     environment:
       - POSTGRES_DB=idswyft
       - POSTGRES_USER=idswyft
@@ -247,6 +254,7 @@ services:
 
   idswyft-engine:
     image: ghcr.io/team-idswyft/engine:latest
+    profiles: ["age-gate"]
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
       - NODE_ENV=production
@@ -257,6 +265,7 @@ services:
 
   idswyft-api:
     image: ghcr.io/team-idswyft/api:latest
+    profiles: ["age-gate"]
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
       - ENGINE_URL=http://idswyft-engine:3002
@@ -275,6 +284,7 @@ services:
 
   idswyft-frontend:
     image: ghcr.io/team-idswyft/frontend:latest
+    profiles: ["age-gate"]
     # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
     environment:
       # Must be the public tunnel URL for the idswyft API so the browser SPA
