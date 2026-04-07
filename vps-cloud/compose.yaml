@@ -285,6 +285,8 @@ services:
       - GO2RTC_PORT=1984
       - BASE_URL=${BASE_URL:-}
       - DATABASE_PATH=/app/data/camera_site.db
+      # How often to poll go2rtc for live-state changes (seconds, default 30)
+      - DISCORD_STREAM_POLL_INTERVAL=${DISCORD_STREAM_POLL_INTERVAL:-30}
     volumes:
       # Mount the same SQLite volume as the backend (read + write)
       - camera_data:/app/data

@@ -1091,7 +1091,7 @@ def create_user(
 
 
 @router.patch("/users/{user_id}")
-async def update_user(
+def update_user(
     user_id: str,
     body: _UpdateUserPayload,
     admin_user: str = Depends(get_admin_user),

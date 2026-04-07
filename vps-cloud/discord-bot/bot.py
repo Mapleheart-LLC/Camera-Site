@@ -60,6 +60,8 @@ GO2RTC_HOST  = os.environ.get("GO2RTC_HOST", "go2rtc")
 GO2RTC_PORT  = os.environ.get("GO2RTC_PORT", "1984")
 BASE_URL     = os.environ.get("BASE_URL", "").rstrip("/")
 DATABASE_PATH = os.environ.get("DATABASE_PATH", "/app/data/camera_site.db")
+# How often (seconds) to poll go2rtc for live-state changes; override via env var.
+STREAM_POLL_INTERVAL = int(os.environ.get("DISCORD_STREAM_POLL_INTERVAL", "30"))
 
 # Channel ID env-var fallbacks (settings table values take precedence at runtime)
 _ENV_QUESTION_CH     = os.environ.get("DISCORD_QUESTION_CHANNEL_ID", "")
@@ -467,7 +469,7 @@ async def _stream_live_watcher() -> None:
     logger.info("Stream live watcher started")
 
     while not bot.is_closed():
-        await asyncio.sleep(30)
+        await asyncio.sleep(STREAM_POLL_INTERVAL)
 
         if not _is_enabled("discord_stream_notifications_enabled", default=False):
             continue
