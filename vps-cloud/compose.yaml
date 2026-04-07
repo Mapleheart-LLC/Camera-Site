@@ -139,23 +139,43 @@ services:
       # panel to authorize the creator's Spotify account.
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
-      # ── Age Verification – Idswyft ────────────────────
+      # ── Age Verification ──────────────────────────────
       # Set AGE_GATE_ENABLED=true to require age verification before any page
-      # is served.  Configure the idswyft service credentials below.
-      # IDSWYFT_API_KEY: generate from the idswyft developer portal at
-      #   http://localhost:8090 after starting the stack (or your domain).
+      # is served.  Set AGE_GATE_PROVIDER to select the backend:
+      #   idswyft  – self-hosted stack (run compose.idswyft.yaml alongside this one)
+      #   didit    – cloud-hosted service (no extra stack needed)
+      - AGE_GATE_ENABLED=${AGE_GATE_ENABLED:-false}
+      - AGE_GATE_PROVIDER=${AGE_GATE_PROVIDER:-idswyft}
+      # ── Age Verification – Idswyft (AGE_GATE_PROVIDER=idswyft) ───────────
+      # IDSWYFT_API_KEY: generate from the idswyft admin portal at
+      #   http://localhost:8090 after starting compose.idswyft.yaml.
       # IDSWYFT_WEBHOOK_SECRET: arbitrary secret shared between idswyft and
       #   this backend to authenticate incoming webhook deliveries.
-      - AGE_GATE_ENABLED=${AGE_GATE_ENABLED:-false}
       - IDSWYFT_API_URL=http://idswyft-api:3001
       - IDSWYFT_API_KEY=${IDSWYFT_API_KEY:-}
       - IDSWYFT_WEBHOOK_SECRET=${IDSWYFT_WEBHOOK_SECRET:-}
+      # ── Age Verification – DiDit (AGE_GATE_PROVIDER=didit) ───────────────
+      # Register at https://didit.me and create a verification workflow.
+      # DIDIT_CLIENT_ID / DIDIT_CLIENT_SECRET: from the DiDit console
+      #   (Settings → API Keys).
+      # DIDIT_WORKFLOW_ID: the ID of the age-verification workflow to run.
+      # DIDIT_WEBHOOK_SECRET: webhook secret key from the DiDit console
+      #   (API & Webhooks → Webhook Secret Key).
+      # DIDIT_CALLBACK_URL: where DiDit redirects the browser after
+      #   verification.  Defaults to {BASE_URL}/age-gate when BASE_URL is set.
+      - DIDIT_CLIENT_ID=${DIDIT_CLIENT_ID:-}
+      - DIDIT_CLIENT_SECRET=${DIDIT_CLIENT_SECRET:-}
+      - DIDIT_WORKFLOW_ID=${DIDIT_WORKFLOW_ID:-}
+      - DIDIT_WEBHOOK_SECRET=${DIDIT_WEBHOOK_SECRET:-}
+      - DIDIT_CALLBACK_URL=${DIDIT_CALLBACK_URL:-}
       # Set SECURE_COOKIES=false when running over plain HTTP (local dev without TLS).
       # Leave unset or set to true in production behind HTTPS.
       - SECURE_COOKIES=${SECURE_COOKIES:-true}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
+    networks:
+      - camera_net
     depends_on:
       - go2rtc
       - redis
@@ -223,89 +243,13 @@ services:
       - SYS_MODULE
     restart: unless-stopped
 
-  # ── Idswyft – self-hosted age / identity verification ──
-  # Full ML verification stack (document OCR, liveness, face match).
-  # These services are grouped under the "age-gate" Compose profile so they
-  # are NOT started (and their images are NOT pulled) during a plain
-  # `docker compose up -d`.
-  #
-  # To enable age-verification, start the stack with:
-  #   COMPOSE_PROFILES=age-gate docker compose up -d
-  # or add AGE_GATE_ENABLED=true and COMPOSE_PROFILES=age-gate to your
-  # Komodo stack environment.
-  #
-  # Generate secrets with: openssl rand -hex 32
-  idswyft-db:
-    profiles: [age-gate]
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_DB=idswyft
-      - POSTGRES_USER=idswyft
-      - POSTGRES_PASSWORD=${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}
-    volumes:
-      - idswyft_db:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U idswyft"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  idswyft-engine:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git
-      dockerfile: engine/Dockerfile
-    image: ghcr.io/team-idswyft/engine:latest
-    environment:
-      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
-      - NODE_ENV=production
-    depends_on:
-      idswyft-db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  idswyft-api:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git
-      dockerfile: backend/Dockerfile
-    image: ghcr.io/team-idswyft/api:latest
-    environment:
-      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
-      - ENGINE_URL=http://idswyft-engine:3002
-      - JWT_SECRET=${IDSWYFT_JWT_SECRET:-changeme-replace-in-production}
-      - API_KEY_SECRET=${IDSWYFT_API_KEY_SECRET:-changeme-replace-in-production}
-      - ENCRYPTION_KEY=${IDSWYFT_ENCRYPTION_KEY:-changeme-replace-32chars!!}
-      - NODE_ENV=production
-      - PORT=3001
-      - SANDBOX_MODE=${IDSWYFT_SANDBOX_MODE:-false}
-    depends_on:
-      idswyft-db:
-        condition: service_healthy
-      idswyft-engine:
-        condition: service_started
-    restart: unless-stopped
-
-  idswyft-frontend:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git#main:frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_EDITION: community
-    image: ghcr.io/team-idswyft/frontend:latest
-    # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
-    environment:
-      # Must be the public tunnel URL for the idswyft API so the browser SPA
-      # can reach it.  Set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live
-      # (or your equivalent) in the Komodo stack environment.
-      - VITE_API_URL=${IDSWYFT_PUBLIC_API_URL:-http://idswyft-api:3001}
-    depends_on:
-      - idswyft-api
-    restart: unless-stopped
-
 volumes:
   camera_data:
   tailscale_state:
-  idswyft_db:
+
+networks:
+  # Shared bridge network so the backend can reach idswyft-api when
+  # compose.idswyft.yaml is also running.  Created here (as the primary
+  # stack) and referenced as external: true in compose.idswyft.yaml.
+  camera_net:
+    driver: bridge
