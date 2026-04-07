@@ -1005,7 +1005,7 @@
                 <button class="btn-sm btn-edit" onclick="saveJamUrl()">💾 Save</button>
                 <button class="btn-sm btn-delete" onclick="clearJamUrl()">✕ Clear</button>
               </div>
-              <p id="jam-status" style="font-size:.75rem;color:#8a7a7d;margin-top:.5rem"></p>
+              <p id="jam-status" aria-live="polite" style="font-size:.75rem;color:#8a7a7d;margin-top:.5rem"></p>
             </div>
           </div>
         </section>
@@ -2638,6 +2638,55 @@
         }
       }
     })();
+
+    async function saveJamUrl() {
+      const input = document.getElementById('jam-url-input');
+      const status = document.getElementById('jam-status');
+      const url = (input.value || '').trim();
+      if (!url) { status.textContent = 'Please enter a URL.'; return; }
+      try {
+        const res = await fetch('/api/admin/spotify/jam', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          status.style.color = '#1db954';
+          status.textContent = '✓ Jam link saved. Viewers will see the button on the next poll.';
+          showToast('🎧 Jam link saved!');
+        } else {
+          status.style.color = '#e05c7a';
+          status.textContent = '✗ ' + (data.detail || 'Failed to save.');
+        }
+      } catch (e) {
+        status.style.color = '#e05c7a';
+        status.textContent = '✗ Network error.';
+      }
+    }
+
+    async function clearJamUrl() {
+      const status = document.getElementById('jam-status');
+      try {
+        const res = await fetch('/api/admin/spotify/jam', {
+          method: 'DELETE',
+          headers: authHeader(),
+        });
+        if (res.ok) {
+          document.getElementById('jam-url-input').value = '';
+          status.style.color = '#8a7a7d';
+          status.textContent = 'Jam link cleared. Button will disappear for viewers on the next poll.';
+          showToast('🎧 Jam link cleared.');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          status.style.color = '#e05c7a';
+          status.textContent = '✗ ' + (data.detail || 'Failed to clear.');
+        }
+      } catch (e) {
+        status.style.color = '#e05c7a';
+        status.textContent = '✗ Network error.';
+      }
+    }
   </script>
 
 </body>
