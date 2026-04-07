@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Age Verification – mochii.live</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 8px 40px rgba(232,174,183,0.10);
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 2.6rem;
+      margin-bottom: 0.4rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #e8aeb7;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #9e7e82;
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+
+    /* Steps */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #c49a9f;
+      border-radius: 12px;
+      padding: 2rem 1rem;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      margin-bottom: 1.25rem;
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      background: #3d2028;
+      border-color: #e8aeb7;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .upload-icon { font-size: 2.5rem; display: block; margin-bottom: 0.5rem; }
+    .upload-zone p { font-size: 0.9rem; color: #c49a9f; pointer-events: none; }
+    .upload-zone .file-name { font-size: 0.85rem; color: #e8aeb7; margin-top: 0.4rem; font-weight: 700; }
+
+    /* Preview */
+    #preview-img {
+      width: 100%;
+      max-height: 220px;
+      object-fit: contain;
+      border-radius: 10px;
+      margin-bottom: 1.25rem;
+      display: none;
+      border: 1px solid #3d2a2e;
+    }
+
+    /* Button */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 0.85rem;
+      border-radius: 12px;
+      border: none;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: linear-gradient(135deg, #c49a9f, #e8aeb7);
+      color: #1a1a1a;
+    }
+    .btn-primary:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid #4a4a4a;
+      color: #9e7e82;
+      margin-top: 0.75rem;
+    }
+
+    /* Status messages */
+    .status-box {
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+    .status-info    { background: #1e2a3a; border: 1px solid #2a4a6a; color: #90c4f0; }
+    .status-success { background: #1a3a1a; border: 1px solid #2a6a2a; color: #90f090; }
+    .status-error   { background: #3a1a1a; border: 1px solid #6a2a2a; color: #f09090; }
+    .status-warn    { background: #3a2a1a; border: 1px solid #6a4a1a; color: #f0c890; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block;
+      width: 1.1em; height: 1.1em;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: #e8aeb7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4em;
+    }
+
+    /* Progress dots */
+    .progress {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4a4a4a;
+      transition: background 0.3s;
+    }
+    .dot.active  { background: #e8aeb7; }
+    .dot.done    { background: #c49a9f; }
+
+    .legal {
+      font-size: 0.78rem;
+      color: #6a4a4e;
+      margin-top: 1.5rem;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">🐾</div>
+  <h1>Age Verification Required</h1>
+  <p class="subtitle">
+    This site contains adult content. We use secure identity verification to confirm you are 18+.
+    Your document is processed locally and is never stored by this site.
+  </p>
+
+  <div class="progress">
+    <div class="dot active" id="dot-1"></div>
+    <div class="dot" id="dot-2"></div>
+    <div class="dot" id="dot-3"></div>
+  </div>
+
+  <!-- Step 1: Start -->
+  <div class="step active" id="step-start">
+    <div class="status-box status-info" style="margin-bottom:1.5rem;">
+      📋 You'll need to upload a photo of your government-issued ID (passport, driver's licence, or national ID card).
+    </div>
+    <button class="btn btn-primary" id="btn-start">Start Verification →</button>
+  </div>
+
+  <!-- Step 2: Upload -->
+  <div class="step" id="step-upload">
+    <p style="margin-bottom:1rem; color:#c49a9f; font-weight:700;">Step 1 of 1 – Front of ID</p>
+
+    <div class="upload-zone" id="upload-zone">
+      <input type="file" id="file-input" accept="image/*,application/pdf" />
+      <span class="upload-icon">📷</span>
+      <p>Tap to take a photo or choose a file</p>
+      <p class="file-name" id="file-name-display"></p>
+    </div>
+
+    <img id="preview-img" src="" alt="ID preview" />
+
+    <div id="upload-status"></div>
+
+    <button class="btn btn-primary" id="btn-upload" disabled>Upload ID</button>
+    <button class="btn btn-secondary" id="btn-restart-upload">← Back</button>
+  </div>
+
+  <!-- Step 3: Result -->
+  <div class="step" id="step-result">
+    <div id="result-content"></div>
+  </div>
+
+  <p class="legal">
+    Age verification is powered by <strong>Idswyft</strong>, a self-hosted identity platform.
+    Documents are encrypted in transit, processed on-premises, and deleted after verification.
+    See our <a href="/static/privacy.html" style="color:#c49a9f;">Privacy Policy</a> for details.
+  </p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── State ─────────────────────────────────────────────────────────────
+  let _sessionToken = null;
+  let _verificationId = null;
+  let _pollTimer = null;
+  let _selectedFile = null;
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  function showStep(name) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    $('step-' + name).classList.add('active');
+  }
+
+  function setDot(n, cls) {
+    for (let i = 1; i <= 3; i++) {
+      const d = $('dot-' + i);
+      d.className = 'dot';
+      if (i < n) d.classList.add('done');
+      if (i === n) d.classList.add('active');
+    }
+  }
+
+  function setStatus(el, type, html) {
+    el.innerHTML = `<div class="status-box status-${type}">${html}</div>`;
+  }
+
+  // ── Destination URL after verification ────────────────────────────────
+  function getNextUrl() {
+    const p = new URLSearchParams(window.location.search);
+    const next = p.get('next');
+    if (next) {
+      try {
+        const u = new URL(next);
+        if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
+      } catch (_) {}
+    }
+    return '/';
+  }
+
+  // ── Step 1: Start ─────────────────────────────────────────────────────
+  $('btn-start').addEventListener('click', async () => {
+    $('btn-start').disabled = true;
+    $('btn-start').innerHTML = '<span class="spinner"></span> Initialising…';
+
+    try {
+      const res = await fetch('/api/age-gate/init', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+      const data = await res.json();
+      _sessionToken = data.session_token;
+      _verificationId = data.verification_id;
+      setDot(2);
+      showStep('upload');
+    } catch (e) {
+      setStatus($('btn-start').parentElement, 'error', '⚠️ ' + e.message);
+      $('btn-start').disabled = false;
+      $('btn-start').textContent = 'Start Verification →';
+    }
+  });
+
+  // ── Step 2: File selection ────────────────────────────────────────────
+  const fileInput = $('file-input');
+  const uploadZone = $('upload-zone');
+  const previewImg = $('preview-img');
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    _selectedFile = file;
+    $('file-name-display').textContent = file.name;
+    $('btn-upload').disabled = false;
+    $('upload-status').innerHTML = '';
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        previewImg.src = e.target.result;
+        previewImg.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      previewImg.style.display = 'none';
+    }
+  });
+
+  uploadZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      fileInput.files = e.dataTransfer.files;
+      fileInput.dispatchEvent(new Event('change'));
+    }
+  });
+
+  $('btn-restart-upload').addEventListener('click', () => {
+    setDot(1);
+    showStep('start');
+    $('btn-start').disabled = false;
+    $('btn-start').textContent = 'Start Verification →';
+  });
+
+  // ── Step 2: Upload ────────────────────────────────────────────────────
+  $('btn-upload').addEventListener('click', async () => {
+    if (!_selectedFile || !_sessionToken) return;
+
+    $('btn-upload').disabled = true;
+    $('btn-upload').innerHTML = '<span class="spinner"></span> Uploading…';
+    setStatus($('upload-status'), 'info', '⏳ Processing your document — this may take up to 30 seconds…');
+
+    const fd = new FormData();
+    fd.append('file', _selectedFile, _selectedFile.name);
+
+    try {
+      const res = await fetch(`/api/age-gate/upload/${_sessionToken}`, {
+        method: 'POST',
+        body: fd,
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || `Upload failed (${res.status})`);
+      }
+
+      // Check if result is already terminal (age_only can resolve after front doc)
+      const status = data.status || data.verification_status;
+      if (status === 'verified') {
+        await _confirm();
+        return;
+      }
+      if (status === 'failed') {
+        _showResult('failed', data);
+        return;
+      }
+      if (status === 'manual_review') {
+        _showResult('manual_review', data);
+        return;
+      }
+
+      // Otherwise start polling
+      setStatus($('upload-status'), 'info', '⏳ Verification in progress — please wait…');
+      $('btn-upload').innerHTML = '<span class="spinner"></span> Verifying…';
+      _startPolling();
+
+    } catch (e) {
+      setStatus($('upload-status'), 'error', '⚠️ ' + e.message);
+      $('btn-upload').disabled = false;
+      $('btn-upload').textContent = 'Upload ID';
+    }
+  });
+
+  // ── Polling ───────────────────────────────────────────────────────────
+  function _startPolling() {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 60; // 60 × 3s = 3 minutes
+
+    _pollTimer = setInterval(async () => {
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        clearInterval(_pollTimer);
+        setStatus($('upload-status'), 'error', '⌛ Verification timed out. Please try again.');
+        $('btn-upload').disabled = false;
+        $('btn-upload').textContent = 'Upload ID';
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/age-gate/status/${_sessionToken}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === 'verified') {
+          clearInterval(_pollTimer);
+          await _confirm();
+        } else if (data.status === 'failed') {
+          clearInterval(_pollTimer);
+          _showResult('failed', data);
+        } else if (data.status === 'manual_review') {
+          clearInterval(_pollTimer);
+          _showResult('manual_review', data);
+        }
+      } catch (_) { /* network blip – retry */ }
+    }, 3000);
+  }
+
+  // ── Confirm (set cookie) ──────────────────────────────────────────────
+  async function _confirm() {
+    try {
+      const res = await fetch('/api/age-gate/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_token: _sessionToken }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Confirmation failed');
+      }
+      _showResult('verified', {});
+    } catch (e) {
+      setStatus($('upload-status'), 'error', '⚠️ ' + e.message);
+      $('btn-upload').disabled = false;
+      $('btn-upload').textContent = 'Upload ID';
+    }
+  }
+
+  // ── Result display ────────────────────────────────────────────────────
+  function _showResult(status, data) {
+    setDot(3);
+    showStep('result');
+    const el = $('result-content');
+
+    if (status === 'verified') {
+      const nextUrl = getNextUrl();
+      el.innerHTML = `
+        <div class="status-box status-success">
+          ✅ <strong>Age verified!</strong><br>
+          You've been confirmed as 18+. Redirecting you now…
+        </div>
+        <button class="btn btn-primary" onclick="window.location.href='${nextUrl}'">
+          Enter Site →
+        </button>
+      `;
+      setTimeout(() => { window.location.href = nextUrl; }, 2000);
+
+    } else if (status === 'manual_review') {
+      el.innerHTML = `
+        <div class="status-box status-warn">
+          🔍 <strong>Under Review</strong><br>
+          Your ID has been flagged for manual review. Access will be granted once approved.
+          Please check back later.
+        </div>
+        <button class="btn btn-secondary" onclick="window.location.reload()">Try Again</button>
+      `;
+
+    } else {
+      el.innerHTML = `
+        <div class="status-box status-error">
+          ❌ <strong>Verification Failed</strong><br>
+          We could not confirm your age from the provided document. Please ensure the image
+          is clear, well-lit, and unobscured, then try again.
+        </div>
+        <button class="btn btn-primary" onclick="window.location.reload()">Try Again</button>
+      `;
+    }
+  }
+
+})();
+</script>
+</body>
+</html>

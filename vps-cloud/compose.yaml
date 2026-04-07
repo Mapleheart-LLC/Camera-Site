@@ -139,12 +139,24 @@ services:
       # panel to authorize the creator's Spotify account.
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      # ── Age Verification – Idswyft ────────────────────
+      # Set AGE_GATE_ENABLED=true to require age verification before any page
+      # is served.  Configure the idswyft service credentials below.
+      # IDSWYFT_API_KEY: generate from the idswyft developer portal at
+      #   http://localhost:8090 after starting the stack (or your domain).
+      # IDSWYFT_WEBHOOK_SECRET: arbitrary secret shared between idswyft and
+      #   this backend to authenticate incoming webhook deliveries.
+      - AGE_GATE_ENABLED=${AGE_GATE_ENABLED:-false}
+      - IDSWYFT_API_URL=http://idswyft-api:3001
+      - IDSWYFT_API_KEY=${IDSWYFT_API_KEY:-}
+      - IDSWYFT_WEBHOOK_SECRET=${IDSWYFT_WEBHOOK_SECRET:-}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
     depends_on:
       - go2rtc
       - redis
+      - idswyft-api
     restart: unless-stopped
 
   # ── go2rtc – RTSP → WebRTC bridge ───────────────────
@@ -197,6 +209,64 @@ services:
       - SYS_MODULE
     restart: unless-stopped
 
+  # ── Idswyft – self-hosted age / identity verification ──
+  # Full ML verification stack (document OCR, liveness, face match).
+  # Images are pulled from GitHub Container Registry automatically.
+  # Generate secrets with: openssl rand -hex 32
+  idswyft-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=idswyft
+      - POSTGRES_USER=idswyft
+      - POSTGRES_PASSWORD=${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}
+    volumes:
+      - idswyft_db:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idswyft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  idswyft-engine:
+    image: ghcr.io/team-idswyft/engine:latest
+    environment:
+      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
+      - NODE_ENV=production
+    depends_on:
+      idswyft-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  idswyft-api:
+    image: ghcr.io/team-idswyft/api:latest
+    environment:
+      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
+      - ENGINE_URL=http://idswyft-engine:3002
+      - JWT_SECRET=${IDSWYFT_JWT_SECRET:-changeme-replace-in-production}
+      - API_KEY_SECRET=${IDSWYFT_API_KEY_SECRET:-changeme-replace-in-production}
+      - ENCRYPTION_KEY=${IDSWYFT_ENCRYPTION_KEY:-changeme-replace-32chars!!}
+      - NODE_ENV=production
+      - PORT=3001
+      - SANDBOX_MODE=${IDSWYFT_SANDBOX_MODE:-false}
+    depends_on:
+      idswyft-db:
+        condition: service_healthy
+      idswyft-engine:
+        condition: service_started
+    restart: unless-stopped
+
+  idswyft-frontend:
+    image: ghcr.io/team-idswyft/frontend:latest
+    ports:
+      - "8090:80"
+    environment:
+      - VITE_API_URL=http://idswyft-api:3001
+    depends_on:
+      - idswyft-api
+    restart: unless-stopped
+
 volumes:
   camera_data:
   tailscale_state:
+  idswyft_db:
