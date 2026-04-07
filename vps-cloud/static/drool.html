@@ -997,19 +997,30 @@
     }
 
     // ── Load feed from API ────────────────────────────────
+    async function fetchFeed(retrying) {
+      const r = await fetch('/api/drool?page=1&page_size=50', {
+        signal: AbortSignal.timeout(retrying ? 25000 : 20000),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
     async function loadFeed() {
       let items;
       try {
-        const r = await fetch('/api/drool?page=1&page_size=50', {
-          signal: AbortSignal.timeout(20000),
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        items = await r.json();
+        items = await fetchFeed(false);
       } catch (err) {
-        console.error('Failed to load drool feed:', err);
-        document.getElementById('loading-state').style.display = 'none';
-        document.getElementById('empty-state').style.display = 'block';
-        return;
+        // One automatic retry after a short pause before giving up
+        console.warn('Drool feed: first attempt failed, retrying…', err);
+        try {
+          await new Promise(res => setTimeout(res, 3000));
+          items = await fetchFeed(true);
+        } catch (err2) {
+          console.error('Failed to load drool feed:', err2);
+          document.getElementById('loading-state').style.display = 'none';
+          document.getElementById('empty-state').style.display = 'block';
+          return;
+        }
       }
 
       document.getElementById('loading-state').style.display = 'none';
@@ -1023,16 +1034,24 @@
       let feedItems = items;
       const whimperItem = items.find(i => i.is_weekly_whimper);
       if (whimperItem) {
-        const whimperSection = document.getElementById('whimper-section');
-        whimperSection.style.display = 'block';
-        buildWhimperCard(whimperItem);
+        try {
+          const whimperSection = document.getElementById('whimper-section');
+          whimperSection.style.display = 'block';
+          buildWhimperCard(whimperItem);
+        } catch (e) {
+          console.warn('Failed to render weekly whimper card', e);
+        }
         feedItems = items.filter(i => !i.is_weekly_whimper);
       }
 
       const grid = document.getElementById('feed-grid');
       grid.style.display = '';
       feedItems.forEach(item => {
-        grid.appendChild(buildCard(item));
+        try {
+          grid.appendChild(buildCard(item));
+        } catch (e) {
+          console.warn('Failed to render card for item', item?.id, e);
+        }
       });
 
       // If only the whimper exists and no other items
