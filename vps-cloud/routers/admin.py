@@ -53,6 +53,9 @@ _VALID_DEVICES = {"pishock", "lovense"}
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 
+CF_API_TOKEN: str = os.environ.get("CLAPI", "")
+CF_ZONE_ID: str = os.environ.get("CLZONE", "")
+
 logger = logging.getLogger(__name__)
 
 
@@ -1129,3 +1132,239 @@ def delete_user(
     db.commit()
     logger.info("Admin '%s' deleted user id=%s", admin_user, user_id)
     return {"deleted": user_id}
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+
+@router.get("/analytics")
+def get_analytics(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return aggregated analytics across users, cameras, store, Q&A, activations, and drool."""
+    # ── Users ──────────────────────────────────────────────────────────────
+    total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    user_levels = db.execute(
+        "SELECT access_level, COUNT(*) AS cnt FROM users GROUP BY access_level"
+    ).fetchall()
+    by_access_level = {str(r["access_level"]): r["cnt"] for r in user_levels}
+
+    # ── Camera access (last 30 days) ───────────────────────────────────────
+    cam_total_30d = db.execute(
+        "SELECT COUNT(*) FROM camera_service_logs WHERE accessed_at >= date('now','-30 days')"
+    ).fetchone()[0]
+    cam_by_day = db.execute(
+        """
+        SELECT substr(accessed_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM camera_service_logs
+         WHERE accessed_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+    cam_by_level = db.execute(
+        "SELECT access_level, COUNT(*) AS cnt FROM camera_service_logs GROUP BY access_level"
+    ).fetchall()
+
+    # ── Activations (last 30 days) ─────────────────────────────────────────
+    act_total_30d = db.execute(
+        "SELECT COUNT(*) FROM activations WHERE activated_at >= date('now','-30 days')"
+    ).fetchone()[0]
+    act_by_day = db.execute(
+        """
+        SELECT substr(activated_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM activations
+         WHERE activated_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+    act_by_device = db.execute(
+        "SELECT device, COUNT(*) AS cnt FROM activations GROUP BY device"
+    ).fetchall()
+
+    # ── Q&A ────────────────────────────────────────────────────────────────
+    q_total = db.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
+    q_answered = db.execute("SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL").fetchone()[0]
+    q_by_day = db.execute(
+        """
+        SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM questions
+         WHERE created_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    # ── Orders / revenue (last 30 days) ────────────────────────────────────
+    orders_total = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    revenue_total_row = db.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid'"
+    ).fetchone()
+    revenue_total = round(float(revenue_total_row[0]), 2)
+    revenue_30d_row = db.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid' AND created_at >= date('now','-30 days')"
+    ).fetchone()
+    revenue_30d = round(float(revenue_30d_row[0]), 2)
+    orders_by_status = db.execute(
+        "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status"
+    ).fetchall()
+    orders_by_day = db.execute(
+        """
+        SELECT substr(created_at, 1, 10) AS day,
+               COUNT(*) AS cnt,
+               ROUND(COALESCE(SUM(CASE WHEN status='paid' THEN total_amount ELSE 0 END), 0), 2) AS revenue
+          FROM orders
+         WHERE created_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    # ── Drool archive ───────────────────────────────────────────────────────
+    drool_total = db.execute("SELECT COUNT(*) FROM drool_archive").fetchone()[0]
+    drool_views_row = db.execute(
+        "SELECT COALESCE(SUM(view_count), 0) FROM drool_archive"
+    ).fetchone()
+    drool_total_views = int(drool_views_row[0])
+    drool_by_platform = db.execute(
+        "SELECT platform, COUNT(*) AS cnt FROM drool_archive GROUP BY platform"
+    ).fetchall()
+    drool_by_day = db.execute(
+        """
+        SELECT substr(timestamp, 1, 10) AS day, COUNT(*) AS cnt
+          FROM drool_archive
+         WHERE timestamp >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    return {
+        "users": {
+            "total": total_users,
+            "by_access_level": by_access_level,
+        },
+        "camera_access": {
+            "total_30d": cam_total_30d,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in cam_by_day],
+            "by_access_level": {str(r["access_level"]): r["cnt"] for r in cam_by_level},
+        },
+        "activations": {
+            "total_30d": act_total_30d,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in act_by_day],
+            "by_device": {r["device"]: r["cnt"] for r in act_by_device},
+        },
+        "questions": {
+            "total": q_total,
+            "answered": q_answered,
+            "unanswered": q_total - q_answered,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in q_by_day],
+        },
+        "orders": {
+            "total": orders_total,
+            "revenue_total": revenue_total,
+            "revenue_30d": revenue_30d,
+            "by_status": {r["status"]: r["cnt"] for r in orders_by_status},
+            "by_day_30d": [
+                {"date": r["day"], "count": r["cnt"], "revenue": r["revenue"]}
+                for r in orders_by_day
+            ],
+        },
+        "drool": {
+            "total": drool_total,
+            "total_views": drool_total_views,
+            "by_platform": {r["platform"]: r["cnt"] for r in drool_by_platform},
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in drool_by_day],
+        },
+    }
+
+
+@router.get("/analytics/cloudflare")
+def get_cloudflare_analytics(
+    _: str = Depends(get_admin_user),
+):
+    """Fetch 30-day Zone analytics from the Cloudflare Analytics API.
+
+    Returns ``{"configured": False}`` when ``CLAPI`` or ``CLZONE``
+    are not set.  The time-series is aggregated to daily buckets so the
+    frontend can render a consistent chart regardless of Cloudflare's chosen
+    granularity (hourly or daily depending on the query window).
+
+    Requires the API token to have *Zone → Analytics → Read* and
+    *Zone → Zone → Read* permissions.
+    """
+    if not CF_API_TOKEN or not CF_ZONE_ID:
+        return {"configured": False}
+
+    # since=-43200 → 43,200 minutes ago (30 days); Cloudflare expects a negative integer of minutes
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(
+                f"https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/analytics/dashboard",
+                params={"since": -43200, "continuous": True},
+                headers={"Authorization": f"Bearer {CF_API_TOKEN}"},
+            )
+    except Exception as exc:
+        logger.warning("Cloudflare analytics request failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not reach Cloudflare API.",
+        )
+
+    if resp.status_code == 403:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Cloudflare API returned 403 – check CLAPI permissions.",
+        )
+    if resp.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Cloudflare API returned HTTP {resp.status_code}.",
+        )
+
+    body = resp.json()
+    if not body.get("success"):
+        errors = body.get("errors", [])
+        detail = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Cloudflare API error: {detail}",
+        )
+
+    result = body.get("result", {})
+    totals = result.get("totals", {})
+
+    # Aggregate time-series buckets to daily granularity
+    by_day: dict[str, dict] = {}
+    for bucket in result.get("timeseries", []):
+        day = (bucket.get("since") or "")[:10]
+        if not day:
+            continue
+        if day not in by_day:
+            by_day[day] = {"requests": 0, "pageviews": 0, "bandwidth": 0, "threats": 0, "uniques": 0}
+        by_day[day]["requests"]  += bucket.get("requests",  {}).get("all", 0)
+        by_day[day]["pageviews"] += bucket.get("pageviews", {}).get("all", 0)
+        by_day[day]["bandwidth"] += bucket.get("bandwidth", {}).get("all", 0)
+        by_day[day]["threats"]   += bucket.get("threats",   {}).get("all", 0)
+        by_day[day]["uniques"]   += bucket.get("uniques",   {}).get("all", 0)
+
+    return {
+        "configured": True,
+        "totals": {
+            "requests":  totals.get("requests",  {}).get("all", 0),
+            "pageviews": totals.get("pageviews", {}).get("all", 0),
+            "bandwidth": totals.get("bandwidth", {}).get("all", 0),
+            "threats":   totals.get("threats",   {}).get("all", 0),
+            "uniques":   totals.get("uniques",   {}).get("all", 0),
+        },
+        "by_day": [
+            {
+                "date":      d,
+                "requests":  by_day[d]["requests"],
+                "pageviews": by_day[d]["pageviews"],
+                "bandwidth": by_day[d]["bandwidth"],
+                "threats":   by_day[d]["threats"],
+                "uniques":   by_day[d]["uniques"],
+            }
+            for d in sorted(by_day.keys())
+        ],
+    }

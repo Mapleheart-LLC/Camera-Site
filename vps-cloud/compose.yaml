@@ -126,6 +126,12 @@ services:
       - DROOL_SALT=${DROOL_SALT:-}
       # Printful API key – required for automatic print-on-demand fulfilment
       - PRINTFUL_API_KEY=${PRINTFUL_API_KEY:-}
+      # ── Cloudflare Analytics ──────────────────────────
+      # API Token with Zone:Read + Zone:Analytics:Read permissions.
+      # Zone ID can be found on the Overview page for your domain in the
+      # Cloudflare dashboard (right-hand "API" panel).
+      - CLAPI=${CLAPI:-}
+      - CLZONE=${CLZONE:-}
       # ── Spotify – Now Playing & Queue ─────────────────
       # Create an app at https://developer.spotify.com/dashboard and add
       # {BASE_URL}/auth/spotify/callback as a Redirect URI.
