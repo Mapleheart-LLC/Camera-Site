@@ -399,6 +399,22 @@ def init_db() -> None:
             conn.execute(f"ALTER TABLE users ADD COLUMN {_col} {_defn}")
         except Exception:
             pass  # column already exists
+    # Indexes for analytics date-range queries (idempotent – safe to re-run)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_camera_service_logs_accessed_at ON camera_service_logs(accessed_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_activations_activated_at ON activations(activated_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_questions_created_at ON questions(created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_drool_archive_timestamp ON drool_archive(timestamp)"
+    )
     conn.commit()
     conn.close()
 
