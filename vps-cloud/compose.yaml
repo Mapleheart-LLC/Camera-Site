@@ -156,6 +156,8 @@ services:
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
+    networks:
+      - camera_net
     depends_on:
       - go2rtc
       - redis
@@ -223,89 +225,13 @@ services:
       - SYS_MODULE
     restart: unless-stopped
 
-  # ── Idswyft – self-hosted age / identity verification ──
-  # Full ML verification stack (document OCR, liveness, face match).
-  # These services are grouped under the "age-gate" Compose profile so they
-  # are NOT started (and their images are NOT pulled) during a plain
-  # `docker compose up -d`.
-  #
-  # To enable age-verification, start the stack with:
-  #   COMPOSE_PROFILES=age-gate docker compose up -d
-  # or add AGE_GATE_ENABLED=true and COMPOSE_PROFILES=age-gate to your
-  # Komodo stack environment.
-  #
-  # Generate secrets with: openssl rand -hex 32
-  idswyft-db:
-    profiles: [age-gate]
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_DB=idswyft
-      - POSTGRES_USER=idswyft
-      - POSTGRES_PASSWORD=${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}
-    volumes:
-      - idswyft_db:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U idswyft"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  idswyft-engine:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git
-      dockerfile: engine/Dockerfile
-    image: ghcr.io/team-idswyft/engine:latest
-    environment:
-      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
-      - NODE_ENV=production
-    depends_on:
-      idswyft-db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  idswyft-api:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git
-      dockerfile: backend/Dockerfile
-    image: ghcr.io/team-idswyft/api:latest
-    environment:
-      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
-      - ENGINE_URL=http://idswyft-engine:3002
-      - JWT_SECRET=${IDSWYFT_JWT_SECRET:-changeme-replace-in-production}
-      - API_KEY_SECRET=${IDSWYFT_API_KEY_SECRET:-changeme-replace-in-production}
-      - ENCRYPTION_KEY=${IDSWYFT_ENCRYPTION_KEY:-changeme-replace-32chars!!}
-      - NODE_ENV=production
-      - PORT=3001
-      - SANDBOX_MODE=${IDSWYFT_SANDBOX_MODE:-false}
-    depends_on:
-      idswyft-db:
-        condition: service_healthy
-      idswyft-engine:
-        condition: service_started
-    restart: unless-stopped
-
-  idswyft-frontend:
-    profiles: [age-gate]
-    build:
-      context: https://github.com/team-idswyft/idswyft.git#main:frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_EDITION: community
-    image: ghcr.io/team-idswyft/frontend:latest
-    # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
-    environment:
-      # Must be the public tunnel URL for the idswyft API so the browser SPA
-      # can reach it.  Set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live
-      # (or your equivalent) in the Komodo stack environment.
-      - VITE_API_URL=${IDSWYFT_PUBLIC_API_URL:-http://idswyft-api:3001}
-    depends_on:
-      - idswyft-api
-    restart: unless-stopped
-
 volumes:
   camera_data:
   tailscale_state:
-  idswyft_db:
+
+networks:
+  # Shared bridge network so the backend can reach idswyft-api when
+  # compose.idswyft.yaml is also running.  Created here (as the primary
+  # stack) and referenced as external: true in compose.idswyft.yaml.
+  camera_net:
+    driver: bridge

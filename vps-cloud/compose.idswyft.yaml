@@ -1,0 +1,106 @@
+# ── Idswyft – self-hosted age / identity verification ──────────────────────
+# Full ML verification stack (document OCR, liveness, face match).
+#
+# Run alongside the main stack:
+#   docker compose -f compose.yaml -f compose.idswyft.yaml up -d
+#
+# Or independently (the main stack must be up first so the shared
+# "camera_net" network already exists):
+#   docker compose up -d                          # main stack first
+#   docker compose -f compose.idswyft.yaml up -d  # then idswyft
+#
+# Generate secrets with: openssl rand -hex 32
+# After first start, open http://localhost:8090 to create an API key,
+# then set IDSWYFT_API_KEY in the main stack environment and restart.
+#
+# In the Cloudflare Zero Trust dashboard (Networks → Tunnels → <your tunnel>
+# → Configure → Public Hostnames) add two entries:
+#
+#   Subdomain        Domain          Service
+#   ─────────────    ──────────────  ────────────────────────
+#   verify           mochii.live     http://idswyft-frontend:80
+#   verify-api       mochii.live     http://idswyft-api:3001
+#
+# Then set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live so the
+# idswyft SPA can reach its API from the browser.
+
+services:
+  idswyft-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=idswyft
+      - POSTGRES_USER=idswyft
+      - POSTGRES_PASSWORD=${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}
+    volumes:
+      - idswyft_db:/var/lib/postgresql/data
+    networks:
+      - camera_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idswyft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  idswyft-engine:
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: engine/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
+      - NODE_ENV=production
+    networks:
+      - camera_net
+    depends_on:
+      idswyft-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  idswyft-api:
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8090:3001"   # admin / API portal: http://localhost:8090
+    environment:
+      - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
+      - ENGINE_URL=http://idswyft-engine:3002
+      - JWT_SECRET=${IDSWYFT_JWT_SECRET:-changeme-replace-in-production}
+      - API_KEY_SECRET=${IDSWYFT_API_KEY_SECRET:-changeme-replace-in-production}
+      - ENCRYPTION_KEY=${IDSWYFT_ENCRYPTION_KEY:-changeme-replace-32chars!!}
+      - NODE_ENV=production
+      - PORT=3001
+      - SANDBOX_MODE=${IDSWYFT_SANDBOX_MODE:-false}
+    networks:
+      - camera_net
+    depends_on:
+      idswyft-db:
+        condition: service_healthy
+      idswyft-engine:
+        condition: service_started
+    restart: unless-stopped
+
+  idswyft-frontend:
+    build:
+      context: https://github.com/team-idswyft/idswyft.git#main:frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_EDITION: community
+    # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
+    environment:
+      # Must be the public tunnel URL for the idswyft API so the browser SPA
+      # can reach it.  Set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live
+      # (or your equivalent) in the environment.
+      - VITE_API_URL=${IDSWYFT_PUBLIC_API_URL:-http://idswyft-api:3001}
+    networks:
+      - camera_net
+    depends_on:
+      - idswyft-api
+    restart: unless-stopped
+
+volumes:
+  idswyft_db:
+
+networks:
+  camera_net:
+    external: true
