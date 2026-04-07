@@ -37,7 +37,7 @@ from typing import Optional
 from urllib.parse import quote as _url_quote
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 

@@ -281,7 +281,8 @@
         saveToken(d.access_token);
         closeModal();
         loadVods();
-      } catch {
+      } catch (err) {
+        console.error('Login error:', err);
         msg.textContent = 'Network error.';
       }
     }
@@ -353,7 +354,8 @@
           });
         }
         grid.style.display = 'grid';
-      } catch {
+      } catch (err) {
+        console.error('VODs load error:', err);
         document.getElementById('spinner').style.display = 'none';
         document.getElementById('auth-prompt').style.display = 'block';
       }

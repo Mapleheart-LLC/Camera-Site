@@ -1915,7 +1915,7 @@
         document.getElementById('goal-bar-amounts').textContent = `£${fmt(d.current_cents)} / £${fmt(d.target_cents)}`;
         document.getElementById('goal-bar-fill').style.width = pct + '%';
         wrap.style.display = 'block';
-      } catch (_) {}
+      } catch (err) { console.warn('Goal bar:', err); }
     }
 
     // ── Viewer count polling ──────────────────────────
@@ -1949,7 +1949,7 @@
         } else {
           badge.textContent = '';
         }
-      } catch (_) {}
+      } catch (err) { console.warn('Viewer count:', err); }
     }
 
     // ── Chat ──────────────────────────────────────────
