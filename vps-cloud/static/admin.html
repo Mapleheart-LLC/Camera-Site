@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -335,6 +336,19 @@
     .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,.4); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 300; }
     .toast.show { opacity: 1; transform: translateY(0); }
 
+    /* ── Analytics ───────────────────────────────────── */
+    .analytics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; }
+    .analytics-stat { background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: .25rem; }
+    .analytics-stat .as-label { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #9e7e82; }
+    .analytics-stat .as-value { font-size: 1.8rem; font-weight: 800; color: #e8aeb7; line-height: 1; }
+    .analytics-stat .as-sub { font-size: .75rem; color: #9e7e82; margin-top: .15rem; }
+    .chart-card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+    .chart-card .card-header { display: flex; align-items: center; justify-content: space-between; padding: .8rem 1.25rem; border-bottom: 1px solid #3d2a2e; background: #242424; }
+    .chart-card .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
+    .chart-body { padding: 1.1rem 1.25rem; }
+    .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
+    @media (max-width: 860px) { .chart-row { grid-template-columns: 1fr; } }
+
     /* ── Mobile ──────────────────────────────────────── */
     @media (max-width: 740px) {
       #mob-menu-btn { display: flex; }
@@ -384,6 +398,7 @@
       <nav class="sidebar" id="sidebar" aria-label="Admin navigation">
         <div class="sidebar-section-label">Main</div>
         <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
+        <button class="nav-item" data-target="s-analytics">📈 Analytics</button>
         <button class="nav-item" data-target="s-cameras">📷 Cameras</button>
         <button class="nav-item" data-target="s-qa">
           🐾 Q&amp;A
@@ -435,6 +450,70 @@
                 </table>
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- ── Analytics ─────────────────────────────── -->
+        <section id="s-analytics" class="admin-section">
+          <h1 class="section-heading">
+            📈 Analytics
+            <button id="refresh-analytics-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <!-- Summary tiles -->
+          <div class="analytics-grid" id="analytics-tiles">
+            <div class="analytics-stat"><div class="as-label">Total Users</div><div id="an-users" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Camera Accesses (30d)</div><div id="an-cam-30d" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Device Activations (30d)</div><div id="an-act-30d" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Total Revenue</div><div id="an-rev-total" class="as-value">—</div><div id="an-rev-30d" class="as-sub">— last 30 days</div></div>
+            <div class="analytics-stat"><div class="as-label">Questions</div><div id="an-q-total" class="as-value">—</div><div id="an-q-rate" class="as-sub">—% answer rate</div></div>
+            <div class="analytics-stat"><div class="as-label">Drool Posts</div><div id="an-drool-total" class="as-value">—</div><div id="an-drool-views" class="as-sub">— total views</div></div>
+          </div>
+
+          <!-- Charts row 1: Camera access & Activations -->
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="card-header"><h2>🎥 Camera Accesses – last 30 days</h2></div>
+              <div class="chart-body"><canvas id="chart-cam-day" height="200"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="card-header"><h2>🎮 Activations – last 30 days</h2></div>
+              <div class="chart-body"><canvas id="chart-act-day" height="200"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Charts row 2: Revenue & Q&A -->
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="card-header"><h2>💰 Revenue (paid) – last 30 days</h2></div>
+              <div class="chart-body"><canvas id="chart-rev-day" height="200"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="card-header"><h2>🐾 Questions – last 30 days</h2></div>
+              <div class="chart-body"><canvas id="chart-q-day" height="200"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Charts row 3: Breakdowns -->
+          <div class="chart-row">
+            <div class="chart-card">
+              <div class="card-header"><h2>👥 Users by Access Level</h2></div>
+              <div class="chart-body" style="max-height:240px;display:flex;align-items:center;justify-content:center">
+                <canvas id="chart-users-level" height="220"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="card-header"><h2>🐾 Drool Posts by Platform</h2></div>
+              <div class="chart-body" style="max-height:240px;display:flex;align-items:center;justify-content:center">
+                <canvas id="chart-drool-platform" height="220"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Drool 30-day chart -->
+          <div class="chart-card">
+            <div class="card-header"><h2>🐾 Drool Posts – last 30 days</h2></div>
+            <div class="chart-body"><canvas id="chart-drool-day" height="160"></canvas></div>
           </div>
         </section>
 
@@ -1109,7 +1188,7 @@
       await Promise.all([
         loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
         loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
-        loadDroolCredentials(), loadDroolArchive(),
+        loadDroolCredentials(), loadDroolArchive(), loadAnalytics(),
       ]);
     }
 
@@ -2234,6 +2313,167 @@
     });
 
     document.getElementById('refresh-drool-archive-btn').addEventListener('click', loadDroolArchive);
+
+
+    // ── Analytics ──────────────────────────────────────
+    const _CHART_DEFAULTS = {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#9e7e82', font: { family: 'Nunito', size: 11 } } } },
+    };
+    const _LINE_COLORS = ['#e8aeb7', '#c49a9f', '#f0b0c0', '#d8a7b1'];
+    const _DOUGHNUT_COLORS = ['#e8aeb7', '#c49a9f', '#f0b0c0', '#d8a7b1', '#a07880', '#7a5a60'];
+
+    // Track Chart.js instances so we can destroy them on refresh
+    const _charts = {};
+
+    function _makeOrUpdate(id, config) {
+      if (_charts[id]) {
+        _charts[id].destroy();
+      }
+      const ctx = document.getElementById(id);
+      if (!ctx) return;
+      _charts[id] = new Chart(ctx, config);
+    }
+
+    function _dayLabels(seriesArr, dateKey = 'date') {
+      return seriesArr.map(d => d[dateKey]);
+    }
+
+    function _buildLineConfig(labels, datasets) {
+      return {
+        type: 'line',
+        data: {
+          labels,
+          datasets: datasets.map((ds, i) => ({
+            label: ds.label,
+            data: ds.data,
+            borderColor: _LINE_COLORS[i % _LINE_COLORS.length],
+            backgroundColor: _LINE_COLORS[i % _LINE_COLORS.length] + '22',
+            borderWidth: 2,
+            pointRadius: 3,
+            fill: true,
+            tension: 0.3,
+          })),
+        },
+        options: {
+          ..._CHART_DEFAULTS,
+          scales: {
+            x: { ticks: { color: '#9e7e82', font: { size: 10 } }, grid: { color: '#2a1e20' } },
+            y: { ticks: { color: '#9e7e82', font: { size: 10 } }, grid: { color: '#2a1e20' }, beginAtZero: true },
+          },
+        },
+      };
+    }
+
+    function _buildBarConfig(labels, datasets) {
+      const cfg = _buildLineConfig(labels, datasets);
+      cfg.type = 'bar';
+      cfg.data.datasets = cfg.data.datasets.map((ds, i) => ({
+        ...ds,
+        backgroundColor: (_LINE_COLORS[i % _LINE_COLORS.length]) + 'aa',
+        borderColor: _LINE_COLORS[i % _LINE_COLORS.length],
+        borderWidth: 1,
+        fill: false,
+      }));
+      return cfg;
+    }
+
+    function _buildDoughnutConfig(labels, data) {
+      return {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: _DOUGHNUT_COLORS.slice(0, labels.length),
+            borderColor: '#1a1a1a',
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          ..._CHART_DEFAULTS,
+          cutout: '62%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#9e7e82', font: { family: 'Nunito', size: 11 }, padding: 12 },
+            },
+          },
+        },
+      };
+    }
+
+    const _ACCESS_LABELS = { '0': 'Guest (0)', '1': 'Good Pupil (1)', '2': 'Loyal Doggo (2)', '3': 'Alpha Pack (3)' };
+
+    async function loadAnalytics() {
+      try {
+        const d = await apiGet('/api/admin/analytics');
+
+        // ── Tiles ───────────────────────────────────────
+        document.getElementById('an-users').textContent = d.users.total;
+        document.getElementById('an-cam-30d').textContent = d.camera_access.total_30d;
+        document.getElementById('an-act-30d').textContent = d.activations.total_30d;
+        document.getElementById('an-rev-total').textContent = '$' + d.orders.revenue_total.toFixed(2);
+        document.getElementById('an-rev-30d').textContent = '$' + d.orders.revenue_30d.toFixed(2) + ' last 30 days';
+        document.getElementById('an-q-total').textContent = d.questions.total;
+        const answerRate = d.questions.total > 0
+          ? Math.round((d.questions.answered / d.questions.total) * 100)
+          : 0;
+        document.getElementById('an-q-rate').textContent = answerRate + '% answer rate (' + d.questions.answered + ' answered)';
+        document.getElementById('an-drool-total').textContent = d.drool.total;
+        document.getElementById('an-drool-views').textContent = d.drool.total_views.toLocaleString() + ' total views';
+
+        // ── Camera access by day ─────────────────────────
+        _makeOrUpdate('chart-cam-day', _buildLineConfig(
+          _dayLabels(d.camera_access.by_day_30d),
+          [{ label: 'Camera Accesses', data: d.camera_access.by_day_30d.map(x => x.count) }]
+        ));
+
+        // ── Activations by day ───────────────────────────
+        _makeOrUpdate('chart-act-day', _buildLineConfig(
+          _dayLabels(d.activations.by_day_30d),
+          [{ label: 'Activations', data: d.activations.by_day_30d.map(x => x.count) }]
+        ));
+
+        // ── Revenue by day ───────────────────────────────
+        _makeOrUpdate('chart-rev-day', _buildBarConfig(
+          _dayLabels(d.orders.by_day_30d),
+          [{ label: 'Revenue ($)', data: d.orders.by_day_30d.map(x => x.revenue) }]
+        ));
+
+        // ── Questions by day ─────────────────────────────
+        _makeOrUpdate('chart-q-day', _buildLineConfig(
+          _dayLabels(d.questions.by_day_30d),
+          [{ label: 'Questions', data: d.questions.by_day_30d.map(x => x.count) }]
+        ));
+
+        // ── Users by access level (doughnut) ─────────────
+        const userLevelEntries = Object.entries(d.users.by_access_level);
+        _makeOrUpdate('chart-users-level', _buildDoughnutConfig(
+          userLevelEntries.map(([k]) => _ACCESS_LABELS[k] || 'Level ' + k),
+          userLevelEntries.map(([, v]) => v)
+        ));
+
+        // ── Drool by platform (doughnut) ─────────────────
+        const droolPlatEntries = Object.entries(d.drool.by_platform);
+        _makeOrUpdate('chart-drool-platform', _buildDoughnutConfig(
+          droolPlatEntries.map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)),
+          droolPlatEntries.map(([, v]) => v)
+        ));
+
+        // ── Drool posts by day ────────────────────────────
+        _makeOrUpdate('chart-drool-day', _buildLineConfig(
+          _dayLabels(d.drool.by_day_30d),
+          [{ label: 'Drool Posts', data: d.drool.by_day_30d.map(x => x.count) }]
+        ));
+
+      } catch (err) {
+        if (err.message !== '401') showToast('Failed to load analytics.');
+      }
+    }
+
+    document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
 
 
     (function init() {

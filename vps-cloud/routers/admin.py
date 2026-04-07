@@ -1129,3 +1129,147 @@ def delete_user(
     db.commit()
     logger.info("Admin '%s' deleted user id=%s", admin_user, user_id)
     return {"deleted": user_id}
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+
+@router.get("/analytics")
+def get_analytics(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return aggregated analytics across users, cameras, store, Q&A, activations, and drool."""
+    # ── Users ──────────────────────────────────────────────────────────────
+    total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    user_levels = db.execute(
+        "SELECT access_level, COUNT(*) AS cnt FROM users GROUP BY access_level"
+    ).fetchall()
+    by_access_level = {str(r["access_level"]): r["cnt"] for r in user_levels}
+
+    # ── Camera access (last 30 days) ───────────────────────────────────────
+    cam_total_30d = db.execute(
+        "SELECT COUNT(*) FROM camera_service_logs WHERE accessed_at >= date('now','-30 days')"
+    ).fetchone()[0]
+    cam_by_day = db.execute(
+        """
+        SELECT substr(accessed_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM camera_service_logs
+         WHERE accessed_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+    cam_by_level = db.execute(
+        "SELECT access_level, COUNT(*) AS cnt FROM camera_service_logs GROUP BY access_level"
+    ).fetchall()
+
+    # ── Activations (last 30 days) ─────────────────────────────────────────
+    act_total_30d = db.execute(
+        "SELECT COUNT(*) FROM activations WHERE activated_at >= date('now','-30 days')"
+    ).fetchone()[0]
+    act_by_day = db.execute(
+        """
+        SELECT substr(activated_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM activations
+         WHERE activated_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+    act_by_device = db.execute(
+        "SELECT device, COUNT(*) AS cnt FROM activations GROUP BY device"
+    ).fetchall()
+
+    # ── Q&A ────────────────────────────────────────────────────────────────
+    q_total = db.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
+    q_answered = db.execute("SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL").fetchone()[0]
+    q_by_day = db.execute(
+        """
+        SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS cnt
+          FROM questions
+         WHERE created_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    # ── Orders / revenue (last 30 days) ────────────────────────────────────
+    orders_total = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+    revenue_total_row = db.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid'"
+    ).fetchone()
+    revenue_total = round(float(revenue_total_row[0]), 2)
+    revenue_30d_row = db.execute(
+        "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid' AND created_at >= date('now','-30 days')"
+    ).fetchone()
+    revenue_30d = round(float(revenue_30d_row[0]), 2)
+    orders_by_status = db.execute(
+        "SELECT status, COUNT(*) AS cnt FROM orders GROUP BY status"
+    ).fetchall()
+    orders_by_day = db.execute(
+        """
+        SELECT substr(created_at, 1, 10) AS day,
+               COUNT(*) AS cnt,
+               ROUND(COALESCE(SUM(CASE WHEN status='paid' THEN total_amount ELSE 0 END), 0), 2) AS revenue
+          FROM orders
+         WHERE created_at >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    # ── Drool archive ───────────────────────────────────────────────────────
+    drool_total = db.execute("SELECT COUNT(*) FROM drool_archive").fetchone()[0]
+    drool_views_row = db.execute(
+        "SELECT COALESCE(SUM(view_count), 0) FROM drool_archive"
+    ).fetchone()
+    drool_total_views = int(drool_views_row[0])
+    drool_by_platform = db.execute(
+        "SELECT platform, COUNT(*) AS cnt FROM drool_archive GROUP BY platform"
+    ).fetchall()
+    drool_by_day = db.execute(
+        """
+        SELECT substr(timestamp, 1, 10) AS day, COUNT(*) AS cnt
+          FROM drool_archive
+         WHERE timestamp >= date('now','-30 days')
+         GROUP BY day ORDER BY day
+        """
+    ).fetchall()
+
+    return {
+        "users": {
+            "total": total_users,
+            "by_access_level": by_access_level,
+        },
+        "camera_access": {
+            "total_30d": cam_total_30d,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in cam_by_day],
+            "by_access_level": {str(r["access_level"]): r["cnt"] for r in cam_by_level},
+        },
+        "activations": {
+            "total_30d": act_total_30d,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in act_by_day],
+            "by_device": {r["device"]: r["cnt"] for r in act_by_device},
+        },
+        "questions": {
+            "total": q_total,
+            "answered": q_answered,
+            "unanswered": q_total - q_answered,
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in q_by_day],
+        },
+        "orders": {
+            "total": orders_total,
+            "revenue_total": revenue_total,
+            "revenue_30d": revenue_30d,
+            "by_status": {r["status"]: r["cnt"] for r in orders_by_status},
+            "by_day_30d": [
+                {"date": r["day"], "count": r["cnt"], "revenue": r["revenue"]}
+                for r in orders_by_day
+            ],
+        },
+        "drool": {
+            "total": drool_total,
+            "total_views": drool_total_views,
+            "by_platform": {r["platform"]: r["cnt"] for r in drool_by_platform},
+            "by_day_30d": [{"date": r["day"], "count": r["cnt"]} for r in drool_by_day],
+        },
+    }
