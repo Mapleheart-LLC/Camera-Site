@@ -159,7 +159,6 @@ services:
     depends_on:
       - go2rtc
       - redis
-      - idswyft-api
     restart: unless-stopped
 
   # ── go2rtc – RTSP → WebRTC bridge ───────────────────
@@ -201,8 +200,6 @@ services:
       - CLFD_TOKEN=${CLFD_TOKEN}
     depends_on:
       - backend
-      - idswyft-frontend
-      - idswyft-api
     restart: unless-stopped
 
   # ── Tailscale – secure site-to-site VPN ─────────────
@@ -228,7 +225,13 @@ services:
 
   # ── Idswyft – self-hosted age / identity verification ──
   # Full ML verification stack (document OCR, liveness, face match).
-  # Images are pulled from GitHub Container Registry automatically.
+  # Pre-built images are public on GitHub Container Registry (ghcr.io) —
+  # no authentication required.  They are pulled automatically on every
+  # `docker compose up -d` (first pull ~2 min; ~1.9 GB total).
+  #
+  # AGE_GATE_ENABLED defaults to false so these services start but sit idle
+  # until you set AGE_GATE_ENABLED=true in your Komodo stack environment.
+  #
   # Generate secrets with: openssl rand -hex 32
   idswyft-db:
     image: postgres:16-alpine
