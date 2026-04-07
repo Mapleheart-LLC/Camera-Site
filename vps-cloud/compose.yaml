@@ -225,15 +225,18 @@ services:
 
   # ── Idswyft – self-hosted age / identity verification ──
   # Full ML verification stack (document OCR, liveness, face match).
-  # Pre-built images are public on GitHub Container Registry (ghcr.io) —
-  # no authentication required.  They are pulled automatically on every
-  # `docker compose up -d` (first pull ~2 min; ~1.9 GB total).
+  # These services are grouped under the "age-gate" Compose profile so they
+  # are NOT started (and their images are NOT pulled) during a plain
+  # `docker compose up -d`.
   #
-  # AGE_GATE_ENABLED defaults to false so these services start but sit idle
-  # until you set AGE_GATE_ENABLED=true in your Komodo stack environment.
+  # To enable age-verification, start the stack with:
+  #   COMPOSE_PROFILES=age-gate docker compose up -d
+  # or add AGE_GATE_ENABLED=true and COMPOSE_PROFILES=age-gate to your
+  # Komodo stack environment.
   #
   # Generate secrets with: openssl rand -hex 32
   idswyft-db:
+    profiles: [age-gate]
     image: postgres:16-alpine
     environment:
       - POSTGRES_DB=idswyft
@@ -249,6 +252,10 @@ services:
       retries: 5
 
   idswyft-engine:
+    profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: engine/Dockerfile
     image: ghcr.io/team-idswyft/engine:latest
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
@@ -259,6 +266,10 @@ services:
     restart: unless-stopped
 
   idswyft-api:
+    profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: backend/Dockerfile
     image: ghcr.io/team-idswyft/api:latest
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
@@ -277,6 +288,12 @@ services:
     restart: unless-stopped
 
   idswyft-frontend:
+    profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git#main:frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_EDITION: community
     image: ghcr.io/team-idswyft/frontend:latest
     # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
     environment:
