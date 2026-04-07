@@ -360,26 +360,27 @@
   const idleSub      = document.getElementById('idle-sub');
 
   // Local progress interpolation state
-  let _progressMs  = 0;
-  let _durationMs  = 0;
-  let _isPlaying   = false;
-  let _lastTick    = 0;
-  let _tickTimer   = null;
-  let _lastTrackId = null;
+  let _progressMs    = 0;
+  let _durationMs    = 0;
+  let _isPlaying     = false;
+  let _lastTick      = 0;
+  let _tickTimer     = null;
+  let _lastTrackId   = null;
+  let _preloadImage  = null; // track pending image preload so we can abort it
 
-  function fmt(ms) {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${r.toString().padStart(2, '0')}`;
+  function formatMs(ms) {
+    const totalSeconds    = Math.floor(ms / 1000);
+    const minutes         = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
   function renderProgress() {
     if (_durationMs <= 0) return;
     const pct = Math.min(100, (_progressMs / _durationMs) * 100);
     progressFill.style.width = pct + '%';
-    progressCur.textContent  = fmt(_progressMs);
-    progressTot.textContent  = fmt(_durationMs);
+    progressCur.textContent  = formatMs(_progressMs);
+    progressTot.textContent  = formatMs(_durationMs);
   }
 
   function tick() {
@@ -462,14 +463,25 @@
     if (newTrack) {
       _lastTrackId = trackId;
 
-      // Fade and swap art
+      // Fade and swap art — abort any in-flight preload first
+      if (_preloadImage) {
+        _preloadImage.onload  = null;
+        _preloadImage.onerror = null;
+        _preloadImage = null;
+      }
       if (track.album_art) {
-        const img = new Image();
-        img.onload = () => {
+        const preloadImage = new Image();
+        _preloadImage = preloadImage;
+        preloadImage.onload = () => {
+          if (_preloadImage !== preloadImage) return; // superseded
+          _preloadImage = null;
           fadeEl(artWrap, () => { artEl.src = track.album_art; });
         };
-        img.onerror = () => { artEl.src = ''; };
-        img.src = track.album_art;
+        preloadImage.onerror = () => {
+          if (_preloadImage === preloadImage) _preloadImage = null;
+          artEl.src = '';
+        };
+        preloadImage.src = track.album_art;
       } else {
         artEl.src = '';
       }
