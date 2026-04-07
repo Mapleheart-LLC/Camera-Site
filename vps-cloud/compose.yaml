@@ -190,11 +190,15 @@ services:
       - "8555:8555"   # WebRTC/ICE TCP
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    networks:
+      - camera_net
     restart: unless-stopped
 
   # ── Redis – rate-limiting store ─────────────────────
   redis:
     image: redis:7-alpine
+    networks:
+      - camera_net
     restart: unless-stopped
 
   # ── Cloudflare Tunnel – VPS to public web ───────────
@@ -203,21 +207,27 @@ services:
   # then set CLFD_TOKEN in the Komodo stack environment.
   #
   # In the Zero Trust dashboard (Networks → Tunnels → <your tunnel> →
-  # Configure → Public Hostnames) add two entries:
+  # Configure → Public Hostnames) add entries for each subdomain, e.g.:
   #
   #   Subdomain          Domain            Service
   #   ──────────────     ───────────────   ──────────────────────────
-  #   <your-domain>      mochii.live       http://backend:8000
+  #   (none)             mochii.live       http://backend:8000
+  #   anon               mochii.live       http://backend:8000
+  #   links              mochii.live       http://backend:8000
+  #   shop               mochii.live       http://backend:8000
+  #   drool              mochii.live       http://backend:8000
+  #
+  # If using AGE_GATE_PROVIDER=idswyft, also add:
   #   verify             mochii.live       http://idswyft-frontend:80
   #   verify-api         mochii.live       http://idswyft-api:3001
-  #
-  # Then set IDSWYFT_PUBLIC_API_URL=https://verify-api.mochii.live in your
-  # Komodo stack environment so the idswyft SPA can reach its API.
+  # and run compose.idswyft.yaml alongside this stack.
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLFD_TOKEN}
     environment:
       - CLFD_TOKEN=${CLFD_TOKEN}
+    networks:
+      - camera_net
     depends_on:
       - backend
     restart: unless-stopped
@@ -241,6 +251,8 @@ services:
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
+    networks:
+      - camera_net
     restart: unless-stopped
 
 volumes:
