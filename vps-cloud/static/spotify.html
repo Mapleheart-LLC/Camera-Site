@@ -3,7 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Now Playing</title>
+  <meta name="description"            content="See what mochii is listening to right now — and jump in with a Spotify Jam." />
+  <meta property="og:type"            content="website" />
+  <meta property="og:site_name"       content="mochii.live" />
+  <meta property="og:locale"          content="en_US" />
+  <meta property="og:title"           content="Now Playing – mochii.live" />
+  <meta property="og:description"     content="See what mochii is listening to right now — and jump in with a Spotify Jam." />
+  <meta property="og:url"             content="https://mochii.live/spotify" />
+  <meta property="og:image"           content="https://mochii.live/api/spotify/og-image" />
+  <meta property="og:image:width"     content="1200" />
+  <meta property="og:image:height"    content="630" />
+  <meta property="og:image:type"      content="image/png" />
+  <link rel="canonical"               href="https://mochii.live/spotify" />
+  <meta name="twitter:card"           content="summary_large_image" />
+  <meta name="twitter:title"          content="Now Playing – mochii.live" />
+  <meta name="twitter:description"    content="See what mochii is listening to right now — and jump in with a Spotify Jam." />
+  <meta name="twitter:image"          content="https://mochii.live/api/spotify/og-image" />
+  <title>Now Playing – mochii.live</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -24,7 +40,7 @@
     }
 
     html, body {
-      width: 100%; height: 100%;
+      width: 100%;
     }
 
     body {
@@ -89,32 +105,6 @@
       object-fit: cover;
       display: block;
       transition: opacity .4s ease;
-    }
-
-    /* Spinning vinyl overlay when playing */
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
-
-    .vinyl-ring {
-      position: absolute;
-      inset: 0;
-      border-radius: 14px;
-      background:
-        radial-gradient(circle at 50% 50%, transparent 28%, rgba(0,0,0,0.35) 28%);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity .4s;
-    }
-
-    .card[data-playing="true"] .vinyl-ring {
-      opacity: 1;
-      animation: spin 8s linear infinite;
-    }
-
-    .card[data-playing="true"] .art-wrap img {
-      animation: spin 8s linear infinite;
     }
 
     /* Idle art placeholder */
@@ -273,16 +263,226 @@
     }
     .fade-section.fading { opacity: 0; }
 
+    /* ── Jam button ───────────────────────────────────────── */
+    .jam-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      background: #1db954;
+      color: #000;
+      font-weight: 700;
+      font-size: .85rem;
+      border-radius: 2rem;
+      padding: .45rem 1.1rem;
+      text-decoration: none;
+      transition: background .2s, transform .1s;
+      align-self: center;
+      margin-top: .25rem;
+    }
+    .jam-btn:hover { background: #1ed760; transform: scale(1.03); }
+    #jam-banner { display: none; }
+    #jam-banner.visible { display: flex; justify-content: center; }
+
+    /* ── Queue section ────────────────────────────────────── */
+    .queue-card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1.75rem 2rem;
+      box-shadow:
+        0 0 0 1px rgba(232, 174, 183, 0.08),
+        0 32px 64px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .queue-header {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+    }
+
+    .queue-header-label {
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .queue-search-row {
+      display: flex;
+      gap: .6rem;
+    }
+
+    .queue-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid rgba(232, 174, 183, 0.12);
+      border-radius: 10px;
+      padding: .6rem .9rem;
+      font-family: inherit;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text);
+      outline: none;
+      transition: border-color .2s;
+    }
+    .queue-input::placeholder { color: var(--text-muted); }
+    .queue-input:focus { border-color: rgba(232, 174, 183, 0.4); }
+
+    .queue-search-btn {
+      background: var(--green);
+      border: none;
+      border-radius: 10px;
+      padding: .6rem 1rem;
+      font-family: inherit;
+      font-size: .85rem;
+      font-weight: 700;
+      color: #000;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      white-space: nowrap;
+    }
+    .queue-search-btn:hover { background: #1ed760; }
+    .queue-search-btn:active { transform: scale(.97); }
+    .queue-search-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .queue-results {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    .queue-result-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: .55rem .75rem;
+      transition: background .2s;
+    }
+    .queue-result-row:hover { background: #2a2a40; }
+
+    .queue-result-thumb {
+      width: 42px; height: 42px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #333;
+    }
+
+    .queue-result-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .queue-result-name {
+      font-size: .88rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .queue-result-artists {
+      font-size: .75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-add-btn {
+      background: transparent;
+      border: 1px solid rgba(232, 174, 183, 0.25);
+      border-radius: 8px;
+      padding: .35rem .7rem;
+      font-family: inherit;
+      font-size: .78rem;
+      font-weight: 700;
+      color: var(--accent);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .2s, border-color .2s, transform .1s;
+      flex-shrink: 0;
+    }
+    .queue-add-btn:hover { background: rgba(232, 174, 183, 0.1); border-color: var(--accent); }
+    .queue-add-btn:active { transform: scale(.96); }
+    .queue-add-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .queue-add-btn.queued { color: var(--green); border-color: var(--green); background: rgba(29, 185, 84, 0.1); }
+
+    .queue-empty {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: center;
+      padding: .5rem 0;
+    }
+
+    .queue-auth-note {
+      font-size: .82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+    .queue-auth-note a { color: var(--accent); text-decoration: none; }
+    .queue-auth-note a:hover { text-decoration: underline; }
+
+    /* ── Toast ────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface2);
+      border: 1px solid rgba(232, 174, 183, 0.15);
+      border-radius: 12px;
+      padding: .75rem 1.25rem;
+      font-size: .85rem;
+      font-weight: 700;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      transition: transform .3s ease, opacity .3s ease;
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 9999;
+    }
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    #toast.success { border-color: rgba(29, 185, 84, 0.4); color: #1ed760; }
+    #toast.error   { border-color: rgba(255, 80, 80, 0.4); color: #ff6b6b; }
+
+    /* ── Page wrapper ─────────────────────────────────────── */
+    .page-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      width: 100%;
+      max-width: 480px;
+    }
+
     /* ── Responsive tweaks ────────────────────────────────── */
     @media (max-width: 380px) {
       .card { padding: 1.75rem 1.25rem 1.5rem; }
       .track-name { font-size: 1.2rem; }
+      .queue-card { padding: 1.5rem 1.25rem; }
     }
   </style>
 </head>
 <body>
 
-<div class="card" id="card" data-state="idle" data-playing="false">
+<div class="page-wrap">
+
+<div class="card" id="card" data-state="idle">
 
   <!-- Header -->
   <div class="header">
@@ -300,7 +500,6 @@
     <!-- Album art -->
     <div class="art-wrap fade-section" id="art-wrap">
       <img id="album-art" src="" alt="Album art" />
-      <div class="vinyl-ring" aria-hidden="true"></div>
     </div>
 
     <!-- Track info -->
@@ -329,6 +528,13 @@
       <span id="status-label">Loading…</span>
     </div>
 
+    <!-- Jam banner (shown only when a Jam URL is active) -->
+    <div id="jam-banner">
+      <a id="jam-link" class="jam-btn" href="#" target="_blank" rel="noopener noreferrer">
+        🎧 Join the Jam
+      </a>
+    </div>
+
   </div><!-- /playing-view -->
 
   <!-- Idle state -->
@@ -340,9 +546,52 @@
 
 </div><!-- /card -->
 
+<!-- Queue / request a song -->
+<div class="queue-card" id="queue-card">
+
+  <div class="queue-header">
+    <!-- Music note icon -->
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 18V5l12-2v13" stroke="#9e8e90" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="6" cy="18" r="3" stroke="#9e8e90" stroke-width="2"/>
+      <circle cx="18" cy="16" r="3" stroke="#9e8e90" stroke-width="2"/>
+    </svg>
+    <span class="queue-header-label">Request a Song</span>
+  </div>
+
+  <!-- Shown when not logged in -->
+  <div id="queue-auth" style="display:none">
+    <p class="queue-auth-note">
+      <a href="/">Sign in</a> as a member to add songs to the queue.
+    </p>
+  </div>
+
+  <!-- Shown when logged in -->
+  <div id="queue-ui" style="display:none">
+    <div class="queue-search-row">
+      <input
+        id="queue-search-input"
+        class="queue-input"
+        type="search"
+        placeholder="Search for a song…"
+        maxlength="200"
+        autocomplete="off"
+      />
+      <button class="queue-search-btn" id="queue-search-btn">Search</button>
+    </div>
+    <div class="queue-results" id="queue-results"></div>
+  </div>
+
+</div><!-- /queue-card -->
+
+</div><!-- /page-wrap -->
+
+<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
   const POLL_MS   = 3000;
   const FAST_TICK = 500; // progress bar interpolation
+  const TOKEN_KEY = 'mochii_token';
 
   const card         = document.getElementById('card');
   const artEl        = document.getElementById('album-art');
@@ -355,6 +604,8 @@
   const progressTot  = document.getElementById('progress-total');
   const statusDot    = document.getElementById('status-dot');
   const statusLabel  = document.getElementById('status-label');
+  const jamBanner    = document.getElementById('jam-banner');
+  const jamLink      = document.getElementById('jam-link');
   const idleIcon     = document.getElementById('idle-icon');
   const idleTitle    = document.getElementById('idle-title');
   const idleSub      = document.getElementById('idle-sub');
@@ -420,12 +671,19 @@
       return;
     }
 
-    const { is_playing, configured, track } = data;
+    const { is_playing, configured, track, jam_url } = data;
+
+    // Update Jam banner on every poll regardless of playing state
+    if (jam_url) {
+      jamLink.href = jam_url;
+      jamBanner.classList.add('visible');
+    } else {
+      jamBanner.classList.remove('visible');
+    }
 
     if (!configured) {
       stopTicker();
       card.dataset.state   = 'idle';
-      card.dataset.playing = 'false';
       idleIcon.textContent  = '🔇';
       idleTitle.textContent = 'Spotify not connected';
       idleSub.textContent   = '';
@@ -435,7 +693,6 @@
     if (!track) {
       stopTicker();
       card.dataset.state   = 'idle';
-      card.dataset.playing = 'false';
       idleIcon.textContent  = '🎧';
       idleTitle.textContent = 'Nothing playing right now';
       idleSub.textContent   = 'Check back when the stream is live!';
@@ -446,8 +703,7 @@
     const trackId = track.uri;
     const newTrack = trackId !== _lastTrackId;
 
-    card.dataset.state   = 'playing';
-    card.dataset.playing = is_playing ? 'true' : 'false';
+    card.dataset.state = 'playing';
 
     // Update progress interpolation state from server data
     _progressMs = track.progress_ms || 0;
@@ -500,6 +756,163 @@
   // Kick off
   poll();
   setInterval(poll, POLL_MS);
+
+  // ── Queue / Song Request ─────────────────────────────────────────────────
+
+  const queueAuth    = document.getElementById('queue-auth');
+  const queueUi      = document.getElementById('queue-ui');
+  const searchInput  = document.getElementById('queue-search-input');
+  const searchBtn    = document.getElementById('queue-search-btn');
+  const resultsEl    = document.getElementById('queue-results');
+  const toastEl      = document.getElementById('toast');
+
+  let _toastTimer = null;
+
+  function showToast(msg, type = '') {
+    toastEl.textContent = msg;
+    toastEl.className = 'show' + (type ? ' ' + type : '');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { toastEl.className = ''; }, 3200);
+  }
+
+  function getToken() {
+    return sessionStorage.getItem(TOKEN_KEY);
+  }
+
+  function authHeaders() {
+    const t = getToken();
+    return t ? { 'Authorization': `Bearer ${t}` } : {};
+  }
+
+  function initQueueUi() {
+    if (getToken()) {
+      queueAuth.style.display = 'none';
+      queueUi.style.display   = 'block';
+    } else {
+      queueAuth.style.display = 'block';
+      queueUi.style.display   = 'none';
+    }
+  }
+
+  async function doSearch() {
+    const q = searchInput.value.trim();
+    if (!q) return;
+
+    if (!getToken()) {
+      queueAuth.style.display = 'block';
+      queueUi.style.display   = 'none';
+      return;
+    }
+
+    searchBtn.disabled = true;
+    resultsEl.innerHTML = '<p class="queue-empty">Searching…</p>';
+
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`, {
+        headers: authHeaders(),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        queueAuth.style.display = 'block';
+        queueUi.style.display   = 'none';
+        resultsEl.innerHTML = '';
+        showToast('Session expired – please sign in again.', 'error');
+        return;
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        resultsEl.innerHTML = `<p class="queue-empty">${err.detail || 'Search failed.'}</p>`;
+        return;
+      }
+
+      const { tracks } = await res.json();
+      renderResults(tracks || []);
+    } catch (e) {
+      resultsEl.innerHTML = '<p class="queue-empty">Network error – try again.</p>';
+    } finally {
+      searchBtn.disabled = false;
+    }
+  }
+
+  function renderResults(tracks) {
+    if (!tracks.length) {
+      resultsEl.innerHTML = '<p class="queue-empty">No tracks found.</p>';
+      return;
+    }
+    resultsEl.innerHTML = '';
+    for (const t of tracks) {
+      const row = document.createElement('div');
+      row.className = 'queue-result-row';
+
+      const thumb = document.createElement('img');
+      thumb.className = 'queue-result-thumb';
+      thumb.src = t.album_art || '';
+      thumb.alt = '';
+
+      const info = document.createElement('div');
+      info.className = 'queue-result-info';
+
+      const name = document.createElement('div');
+      name.className = 'queue-result-name';
+      name.textContent = t.name || 'Unknown';
+
+      const artists = document.createElement('div');
+      artists.className = 'queue-result-artists';
+      artists.textContent = (t.artists || []).join(', ') || 'Unknown Artist';
+
+      info.append(name, artists);
+
+      const btn = document.createElement('button');
+      btn.className = 'queue-add-btn';
+      btn.textContent = '+ Queue';
+      btn.addEventListener('click', () => addToQueue(t.uri, t.name, btn));
+
+      row.append(thumb, info, btn);
+      resultsEl.appendChild(row);
+    }
+  }
+
+  async function addToQueue(uri, trackName, btn) {
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+      const res = await fetch('/api/spotify/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ uri }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        queueAuth.style.display = 'block';
+        queueUi.style.display   = 'none';
+        showToast('Session expired – please sign in again.', 'error');
+        return;
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.detail || 'Could not add to queue.', 'error');
+        btn.disabled = false;
+        btn.textContent = '+ Queue';
+        return;
+      }
+
+      btn.textContent = '✓ Queued';
+      btn.classList.add('queued');
+      showToast(`Added "${trackName}" to the queue!`, 'success');
+    } catch (e) {
+      showToast('Network error – try again.', 'error');
+      btn.disabled = false;
+      btn.textContent = '+ Queue';
+    }
+  }
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
+
+  initQueueUi();
 </script>
 </body>
 </html>
