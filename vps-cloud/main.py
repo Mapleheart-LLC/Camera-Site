@@ -16,7 +16,7 @@ from passlib.context import CryptContext
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -835,6 +835,12 @@ def admin_page_redirect(request: Request):
 def drool_page_redirect():
     """Redirect /drool to the static drool.html page (Shame Gallery)."""
     return RedirectResponse(url="/drool.html", status_code=301)
+
+
+@app.get("/spotify", include_in_schema=False)
+def spotify_page():
+    """Serve the Spotify now-playing page at /spotify (no .html needed)."""
+    return FileResponse("static/spotify.html")
 
 
 # ---------------------------------------------------------------------------
