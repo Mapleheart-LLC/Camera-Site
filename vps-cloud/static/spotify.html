@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Now Playing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #121212;
+      --surface:     #1e1e2e;
+      --surface2:    #252538;
+      --accent:      #e8aeb7;
+      --accent-dim:  #a07078;
+      --green:       #1DB954;
+      --green-dim:   #148a3d;
+      --text:        #f0e6e8;
+      --text-muted:  #9e8e90;
+      --radius:      20px;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+    }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    /* ── Main card ────────────────────────────────────────── */
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2.5rem 2rem 2rem;
+      box-shadow:
+        0 0 0 1px rgba(232, 174, 183, 0.08),
+        0 32px 64px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    /* ── Header row ──────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+    }
+
+    .spotify-logo {
+      width: 22px; height: 22px;
+      flex-shrink: 0;
+    }
+
+    .header-label {
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ── Album art ───────────────────────────────────────── */
+    .art-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .art-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity .4s ease;
+    }
+
+    /* Spinning vinyl overlay when playing */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .vinyl-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 50% 50%, transparent 28%, rgba(0,0,0,0.35) 28%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .4s;
+    }
+
+    .card[data-playing="true"] .vinyl-ring {
+      opacity: 1;
+      animation: spin 8s linear infinite;
+    }
+
+    .card[data-playing="true"] .art-wrap img {
+      animation: spin 8s linear infinite;
+    }
+
+    /* Idle art placeholder */
+    .art-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .75rem;
+      color: var(--text-muted);
+    }
+
+    .art-placeholder svg { opacity: .4; }
+    .art-placeholder span { font-size: .85rem; font-weight: 600; }
+
+    /* ── Track info ──────────────────────────────────────── */
+    .track-info {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+      min-height: 3.5rem;
+    }
+
+    .track-name {
+      font-size: 1.45rem;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-name a {
+      color: inherit;
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .track-name a:hover { color: var(--accent); }
+
+    .track-artists {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .track-album {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--accent-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Progress bar ─────────────────────────────────────── */
+    .progress-section {
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    .progress-bar-track {
+      width: 100%;
+      height: 5px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+      cursor: default;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 999px;
+      width: 0%;
+      transition: width .8s linear;
+    }
+
+    .progress-times {
+      display: flex;
+      justify-content: space-between;
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Status badge ─────────────────────────────────────── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .badge-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .badge-dot.playing {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse-dot 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 6px var(--green); }
+      50%       { box-shadow: 0 0 14px var(--green), 0 0 4px var(--green-dim); }
+    }
+
+    /* ── Idle / not-configured states ─────────────────────── */
+    #idle-view {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 1rem;
+      padding: 1rem 0 .5rem;
+    }
+
+    #idle-view .idle-icon { font-size: 3.5rem; }
+    #idle-view .idle-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--text-muted);
+    }
+    #idle-view .idle-sub {
+      font-size: .85rem;
+      color: var(--accent-dim);
+      max-width: 26ch;
+      line-height: 1.5;
+    }
+
+    #playing-view { display: none; flex-direction: column; gap: 1.75rem; }
+
+    /* Show correct view */
+    .card[data-state="playing"] #playing-view { display: flex; }
+    .card[data-state="idle"]    #idle-view    { display: flex; }
+    .card[data-state="idle"]    #playing-view { display: none; }
+
+    /* ── Transition fade ──────────────────────────────────── */
+    .fade-section {
+      transition: opacity .35s ease;
+    }
+    .fade-section.fading { opacity: 0; }
+
+    /* ── Responsive tweaks ────────────────────────────────── */
+    @media (max-width: 380px) {
+      .card { padding: 1.75rem 1.25rem 1.5rem; }
+      .track-name { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="card" id="card" data-state="idle" data-playing="false">
+
+  <!-- Header -->
+  <div class="header">
+    <!-- Spotify wordmark-style SVG -->
+    <svg class="spotify-logo" viewBox="0 0 168 168" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="84" cy="84" r="84" fill="#1DB954"/>
+      <path d="M119.4 121.4c-1.6 0-2.6-.5-3.9-1.3-24.1-14.4-53-16-82.9-9.3-2.3.5-4.3-.8-4.8-3.1-.5-2.3.8-4.3 3.1-4.8 32.9-7.2 65-5.2 91.7 10.4 2 1.2 2.8 3.6 1.7 5.6-.7 1.6-2 2.5-4.9 2.5zm11.7-24.7c-1.9 0-3.2-.8-4.4-1.5-27.6-16.5-64.4-20.8-97.3-11.8-2.8.8-5.5-.9-6.3-3.7s.9-5.5 3.7-6.3c35.7-9.8 76-5 107 13.3 2.4 1.4 3.4 4.4 1.9 6.8-.9 1.7-2.6 3.2-4.6 3.2zm1.3-25.6c-1.7 0-2.8-.5-4-1.2-31.5-18.8-79.6-20.5-110.3-11.9-3.3.9-6.5-1-7.5-4.3-.9-3.3 1-6.5 4.3-7.5 34.3-9.7 87.2-7.8 122.8 14 2.9 1.7 3.9 5.4 2.2 8.3-1.1 2.1-3.2 2.6-7.5 2.6z" fill="white"/>
+    </svg>
+    <span class="header-label">Now Playing</span>
+  </div>
+
+  <!-- Playing state -->
+  <div id="playing-view">
+
+    <!-- Album art -->
+    <div class="art-wrap fade-section" id="art-wrap">
+      <img id="album-art" src="" alt="Album art" />
+      <div class="vinyl-ring" aria-hidden="true"></div>
+    </div>
+
+    <!-- Track info -->
+    <div class="track-info fade-section" id="track-info">
+      <div class="track-name" id="track-name-wrap">
+        <a id="track-link" href="#" target="_blank" rel="noopener noreferrer" id="track-name">—</a>
+      </div>
+      <div class="track-artists" id="track-artists">—</div>
+      <div class="track-album" id="track-album">—</div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-section">
+      <div class="progress-bar-track" role="progressbar" aria-label="Playback progress">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-times">
+        <span id="progress-current">0:00</span>
+        <span id="progress-total">0:00</span>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-badge" aria-live="polite">
+      <div class="badge-dot" id="status-dot"></div>
+      <span id="status-label">Loading…</span>
+    </div>
+
+  </div><!-- /playing-view -->
+
+  <!-- Idle state -->
+  <div id="idle-view" aria-live="polite">
+    <div class="idle-icon" id="idle-icon">🎧</div>
+    <div class="idle-title" id="idle-title">Nothing playing right now</div>
+    <div class="idle-sub" id="idle-sub">Check back when the stream is live!</div>
+  </div>
+
+</div><!-- /card -->
+
+<script>
+  const POLL_MS   = 3000;
+  const FAST_TICK = 500; // progress bar interpolation
+
+  const card         = document.getElementById('card');
+  const artEl        = document.getElementById('album-art');
+  const artWrap      = document.getElementById('art-wrap');
+  const trackLink    = document.getElementById('track-link');
+  const trackArtists = document.getElementById('track-artists');
+  const trackAlbum   = document.getElementById('track-album');
+  const progressFill = document.getElementById('progress-fill');
+  const progressCur  = document.getElementById('progress-current');
+  const progressTot  = document.getElementById('progress-total');
+  const statusDot    = document.getElementById('status-dot');
+  const statusLabel  = document.getElementById('status-label');
+  const idleIcon     = document.getElementById('idle-icon');
+  const idleTitle    = document.getElementById('idle-title');
+  const idleSub      = document.getElementById('idle-sub');
+
+  // Local progress interpolation state
+  let _progressMs    = 0;
+  let _durationMs    = 0;
+  let _isPlaying     = false;
+  let _lastTick      = 0;
+  let _tickTimer     = null;
+  let _lastTrackId   = null;
+  let _preloadImage  = null; // track pending image preload so we can abort it
+
+  function formatMs(ms) {
+    const totalSeconds    = Math.floor(ms / 1000);
+    const minutes         = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  function renderProgress() {
+    if (_durationMs <= 0) return;
+    const pct = Math.min(100, (_progressMs / _durationMs) * 100);
+    progressFill.style.width = pct + '%';
+    progressCur.textContent  = formatMs(_progressMs);
+    progressTot.textContent  = formatMs(_durationMs);
+  }
+
+  function tick() {
+    if (_isPlaying && _lastTick > 0) {
+      const now   = performance.now();
+      const delta = now - _lastTick;
+      _lastTick   = now;
+      _progressMs = Math.min(_progressMs + delta, _durationMs);
+    } else {
+      _lastTick = performance.now();
+    }
+    renderProgress();
+  }
+
+  function startTicker() {
+    if (_tickTimer) return;
+    _lastTick  = performance.now();
+    _tickTimer = setInterval(tick, FAST_TICK);
+  }
+
+  function stopTicker() {
+    if (_tickTimer) { clearInterval(_tickTimer); _tickTimer = null; }
+  }
+
+  function fadeEl(el, fn) {
+    el.classList.add('fading');
+    setTimeout(() => { fn(); el.classList.remove('fading'); }, 350);
+  }
+
+  async function poll() {
+    let data;
+    try {
+      const res = await fetch('/api/spotify/now-playing');
+      data = await res.json();
+    } catch (e) {
+      // Network error – keep existing state, try again
+      return;
+    }
+
+    const { is_playing, configured, track } = data;
+
+    if (!configured) {
+      stopTicker();
+      card.dataset.state   = 'idle';
+      card.dataset.playing = 'false';
+      idleIcon.textContent  = '🔇';
+      idleTitle.textContent = 'Spotify not connected';
+      idleSub.textContent   = '';
+      return;
+    }
+
+    if (!track) {
+      stopTicker();
+      card.dataset.state   = 'idle';
+      card.dataset.playing = 'false';
+      idleIcon.textContent  = '🎧';
+      idleTitle.textContent = 'Nothing playing right now';
+      idleSub.textContent   = 'Check back when the stream is live!';
+      return;
+    }
+
+    // We have track data
+    const trackId = track.uri;
+    const newTrack = trackId !== _lastTrackId;
+
+    card.dataset.state   = 'playing';
+    card.dataset.playing = is_playing ? 'true' : 'false';
+
+    // Update progress interpolation state from server data
+    _progressMs = track.progress_ms || 0;
+    _durationMs = track.duration_ms || 0;
+    _isPlaying  = !!is_playing;
+    _lastTick   = performance.now();
+
+    if (is_playing) { startTicker(); } else { stopTicker(); renderProgress(); }
+
+    statusDot.classList.toggle('playing', !!is_playing);
+    statusLabel.textContent = is_playing ? 'Playing' : 'Paused';
+
+    if (newTrack) {
+      _lastTrackId = trackId;
+
+      // Fade and swap art — abort any in-flight preload first
+      if (_preloadImage) {
+        _preloadImage.onload  = null;
+        _preloadImage.onerror = null;
+        _preloadImage = null;
+      }
+      if (track.album_art) {
+        const preloadImage = new Image();
+        _preloadImage = preloadImage;
+        preloadImage.onload = () => {
+          if (_preloadImage !== preloadImage) return; // superseded
+          _preloadImage = null;
+          fadeEl(artWrap, () => { artEl.src = track.album_art; });
+        };
+        preloadImage.onerror = () => {
+          if (_preloadImage === preloadImage) _preloadImage = null;
+          artEl.src = '';
+        };
+        preloadImage.src = track.album_art;
+      } else {
+        artEl.src = '';
+      }
+
+      // Fade and swap text
+      const nameEl = trackLink;
+      fadeEl(document.getElementById('track-info'), () => {
+        nameEl.textContent = track.name || 'Unknown';
+        nameEl.href        = track.external_url || '#';
+        trackArtists.textContent = (track.artists || []).join(', ') || 'Unknown Artist';
+        trackAlbum.textContent   = track.album || '';
+      });
+    }
+  }
+
+  // Kick off
+  poll();
+  setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
