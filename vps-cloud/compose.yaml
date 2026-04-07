@@ -150,6 +150,9 @@ services:
       - IDSWYFT_API_URL=http://idswyft-api:3001
       - IDSWYFT_API_KEY=${IDSWYFT_API_KEY:-}
       - IDSWYFT_WEBHOOK_SECRET=${IDSWYFT_WEBHOOK_SECRET:-}
+      # Set SECURE_COOKIES=false when running over plain HTTP (local dev without TLS).
+      # Leave unset or set to true in production behind HTTPS.
+      - SECURE_COOKIES=${SECURE_COOKIES:-true}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data

@@ -48,6 +48,9 @@ IDSWYFT_API_URL: str = os.environ.get("IDSWYFT_API_URL", "http://idswyft-api:300
 IDSWYFT_API_KEY: str = os.environ.get("IDSWYFT_API_KEY", "")
 IDSWYFT_WEBHOOK_SECRET: str = os.environ.get("IDSWYFT_WEBHOOK_SECRET", "")
 AGE_GATE_ENABLED: bool = os.environ.get("AGE_GATE_ENABLED", "true").lower() == "true"
+# Transmit the age_verified cookie over HTTPS only.  Defaults to True (secure).
+# Set SECURE_COOKIES=false only for local HTTP development.
+_SECURE_COOKIES: bool = os.environ.get("SECURE_COOKIES", "true").lower() != "false"
 
 _IDSWYFT_HEADERS = {"X-API-Key": IDSWYFT_API_KEY, "Content-Type": "application/json"}
 
@@ -219,7 +222,7 @@ async def age_gate_webhook(request: Request, db: sqlite3.Connection = Depends(ge
     # Optional shared-secret validation
     if IDSWYFT_WEBHOOK_SECRET:
         provided = request.headers.get("X-Webhook-Secret", "")
-        import hmac as _hmac, hashlib as _hashlib
+        import hmac as _hmac
         if not _hmac.compare_digest(provided, IDSWYFT_WEBHOOK_SECRET):
             raise HTTPException(status_code=403, detail="Invalid webhook secret.")
 
@@ -281,7 +284,7 @@ async def age_gate_confirm(body: _ConfirmRequest, response: Response, db: sqlite
         max_age=_COOKIE_MAX_AGE,
         httponly=True,
         samesite="strict",
-        secure=False,  # set to True in production behind HTTPS
+        secure=_SECURE_COOKIES,
     )
     logger.info("Age verification confirmed; cookie issued.")
     return {"ok": True}

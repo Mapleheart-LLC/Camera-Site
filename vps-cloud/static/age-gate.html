@@ -459,10 +459,11 @@
           ✅ <strong>Age verified!</strong><br>
           You've been confirmed as 18+. Redirecting you now…
         </div>
-        <button class="btn btn-primary" onclick="window.location.href='${nextUrl}'">
+        <button class="btn btn-primary" id="btn-enter">
           Enter Site →
         </button>
       `;
+      $('btn-enter').addEventListener('click', () => { window.location.href = nextUrl; });
       setTimeout(() => { window.location.href = nextUrl; }, 2000);
 
     } else if (status === 'manual_review') {
@@ -472,8 +473,9 @@
           Your ID has been flagged for manual review. Access will be granted once approved.
           Please check back later.
         </div>
-        <button class="btn btn-secondary" onclick="window.location.reload()">Try Again</button>
+        <button class="btn btn-secondary" id="btn-retry-review">Try Again</button>
       `;
+      $('btn-retry-review').addEventListener('click', () => { window.location.reload(); });
 
     } else {
       el.innerHTML = `
@@ -482,8 +484,9 @@
           We could not confirm your age from the provided document. Please ensure the image
           is clear, well-lit, and unobscured, then try again.
         </div>
-        <button class="btn btn-primary" onclick="window.location.reload()">Try Again</button>
+        <button class="btn btn-primary" id="btn-retry-fail">Try Again</button>
       `;
+      $('btn-retry-fail').addEventListener('click', () => { window.location.reload(); });
     }
   }
 
