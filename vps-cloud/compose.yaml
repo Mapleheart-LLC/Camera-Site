@@ -253,6 +253,9 @@ services:
 
   idswyft-engine:
     profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: engine/Dockerfile
     image: ghcr.io/team-idswyft/engine:latest
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
@@ -264,6 +267,9 @@ services:
 
   idswyft-api:
     profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git
+      dockerfile: backend/Dockerfile
     image: ghcr.io/team-idswyft/api:latest
     environment:
       - DATABASE_URL=postgresql://idswyft:${IDSWYFT_DB_PASSWORD:-changeme-replace-in-production}@idswyft-db:5432/idswyft
@@ -283,6 +289,11 @@ services:
 
   idswyft-frontend:
     profiles: [age-gate]
+    build:
+      context: https://github.com/team-idswyft/idswyft.git#main:frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_EDITION: community
     image: ghcr.io/team-idswyft/frontend:latest
     # No host port exposed – access via the Cloudflare Tunnel (verify.<domain>)
     environment:
