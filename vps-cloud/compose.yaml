@@ -288,6 +288,13 @@ services:
       - DATABASE_PATH=/app/data/camera_site.db
       # How often to poll go2rtc for live-state changes (seconds, default 30)
       - DISCORD_STREAM_POLL_INTERVAL=${DISCORD_STREAM_POLL_INTERVAL:-30}
+      # Shared JWT secret – used by /token to generate site login links
+      - SECRET_KEY=${SECRET_KEY:-changeme-replace-in-production!!}
+      # Internal backend URL for /poke IoT control calls
+      - BACKEND_URL=http://backend:8000
+      # Admin HTTP-Basic credentials used by /poke to hit the admin control endpoint
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       # Mount the same SQLite volume as the backend (read + write)
       - camera_data:/app/data

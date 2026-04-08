@@ -831,6 +831,26 @@ async def _stream_live_watcher() -> None:
                     await channel.send(content=content, embed=embed)
                     logger.info("Go-live notification sent")
 
+                # DM all opted-in users
+                notify_users = _get_notify_users()
+                if notify_users:
+                    dm_content = (
+                        _get_setting("discord_notify_me_dm_message")
+                        or (
+                            f"🔴 **mochii is LIVE!** Come watch → {stream_url}"
+                            if stream_url
+                            else "🔴 **mochii is LIVE!** Come watch now 🐾"
+                        )
+                    )
+                    for uid in notify_users:
+                        try:
+                            user_obj = bot.get_user(int(uid)) or await bot.fetch_user(int(uid))
+                            await user_obj.send(dm_content)
+                        except Exception as dm_exc:
+                            logger.debug(
+                                "Could not DM notify-me user %s: %s", uid, dm_exc
+                            )
+
             elif not is_live and _stream_was_live:
                 channel = bot.get_channel(int(ch_id))
                 if channel:
