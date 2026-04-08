@@ -179,6 +179,18 @@ services:
       # Set SECURE_COOKIES=false when running over plain HTTP (local dev without TLS).
       # Leave unset or set to true in production behind HTTPS.
       - SECURE_COOKIES=${SECURE_COOKIES:-true}
+      # ── TPE Accountability Partner ────────────────────
+      # Shared secret encoded in the partner QR code shown to the device.
+      # Generate with: openssl rand -hex 32
+      - TPE_PAIRING_TOKEN=${TPE_PAIRING_TOKEN:-}
+      # Bearer token the Android app includes in webhook/task/checkin requests.
+      - TPE_WEBHOOK_SECRET=${TPE_WEBHOOK_SECRET:-}
+      # Directory where audit videos are stored (default: /app/data/tpe_audits)
+      - TPE_AUDIT_PATH=${TPE_AUDIT_PATH:-/app/data/tpe_audits}
+      # Path to a Firebase service-account JSON file for FCM push delivery.
+      # Alternatively, store the JSON content in the tpe_fcm_service_account_json
+      # settings key via the admin panel.
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
     volumes:
       # Persist the SQLite database across container restarts
       - camera_data:/app/data
