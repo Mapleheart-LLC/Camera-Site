@@ -7,13 +7,17 @@ Features
   /link     – Ephemeral message with instructions to link a site account
   /ask      – Open a modal to submit an anonymous question to the Puppy Pouch
   /tier     – Show the caller's current subscriber tier (ephemeral)
+  /notify   – Toggle DM opt-in for stream go-live notifications
+  /poke     – Trigger a connected IoT device (access_level ≥ 1 required)
+  /token    – Get a one-time 5-minute login link for the site
 
   Reply button on question messages → modal → saves answer & publishes it
 
   on_member_join – optional welcome DM + admin channel notification
 
   Stream watcher – background task that polls go2rtc every 30 s and posts
-  a go-live / stream-ended notification when live state changes
+  a go-live / stream-ended notification when live state changes, and DMs
+  opted-in members via the notify-me list.
 
 All runtime toggles and message templates are stored in the shared SQLite
 ``settings`` table so the admin dash can update them without a restart.
@@ -30,16 +34,21 @@ GO2RTC_HOST                  go2rtc host (default: go2rtc)
 GO2RTC_PORT                  go2rtc port (default: 1984)
 BASE_URL                     Public site root URL (e.g. https://mochii.live)
 DATABASE_PATH                Shared SQLite database (default: /app/data/camera_site.db)
+SECRET_KEY                   Shared JWT secret (same as backend SECRET_KEY) – used by /token
+BACKEND_URL                  Internal backend URL (default: http://backend:8000)
+ADMIN_USERNAME               HTTP Basic admin username – used by /poke
+ADMIN_PASSWORD               HTTP Basic admin password – used by /poke
 """
 
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 import os
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import discord
@@ -54,12 +63,16 @@ logger = logging.getLogger("mochii-bot")
 
 # ── Environment variables ────────────────────────────────────────────────────
 
-BOT_TOKEN    = os.environ.get("DISCORD_BOT_TOKEN", "")
-GUILD_ID     = os.environ.get("DISCORD_GUILD_ID", "")
-GO2RTC_HOST  = os.environ.get("GO2RTC_HOST", "go2rtc")
-GO2RTC_PORT  = os.environ.get("GO2RTC_PORT", "1984")
-BASE_URL     = os.environ.get("BASE_URL", "").rstrip("/")
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "/app/data/camera_site.db")
+BOT_TOKEN      = os.environ.get("DISCORD_BOT_TOKEN", "")
+GUILD_ID       = os.environ.get("DISCORD_GUILD_ID", "")
+GO2RTC_HOST    = os.environ.get("GO2RTC_HOST", "go2rtc")
+GO2RTC_PORT    = os.environ.get("GO2RTC_PORT", "1984")
+BASE_URL       = os.environ.get("BASE_URL", "").rstrip("/")
+DATABASE_PATH  = os.environ.get("DATABASE_PATH", "/app/data/camera_site.db")
+SECRET_KEY     = os.environ.get("SECRET_KEY", "")
+BACKEND_URL    = os.environ.get("BACKEND_URL", "http://backend:8000").rstrip("/")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 # How often (seconds) to poll go2rtc for live-state changes; override via env var.
 STREAM_POLL_INTERVAL = int(os.environ.get("DISCORD_STREAM_POLL_INTERVAL", "30"))
 
@@ -102,6 +115,40 @@ def _is_enabled(setting_key: str, default: bool = True) -> bool:
 def _channel(setting_key: str, env_fallback: str) -> str:
     """Return the effective Discord channel ID: settings table > env var."""
     return (_get_setting(setting_key) or env_fallback).strip()
+
+
+# ── Notify-me helpers ────────────────────────────────────────────────────────
+
+
+def _get_notify_users() -> list[str]:
+    """Return the list of Discord IDs opted-in to go-live DM notifications."""
+    raw = _get_setting("discord_notify_me_users", "[]")
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return []
+
+
+def _set_notify_users(users: list[str]) -> None:
+    """Persist the notify-me Discord ID list to the settings table."""
+    try:
+        conn = _db()
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            ("discord_notify_me_users", _json.dumps(users)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        logger.warning("Failed to save notify-me list: %s", exc)
+
+
+# ── Poke cooldowns (in-memory) ───────────────────────────────────────────────
+# key: (discord_id, device)  value: monotonic timestamp when cooldown expires
+_poke_cooldowns: dict[tuple[str, str], float] = {}
+_POKE_COOLDOWN_TIER12 = 3600   # 1 hour  for access_level 1–2
+_POKE_COOLDOWN_TIER3  = 300    # 5 minutes for access_level 3+
 
 
 # ── Bot client ───────────────────────────────────────────────────────────────
@@ -291,6 +338,222 @@ async def cmd_tier(interaction: discord.Interaction) -> None:
         color=_MOCHII_PINK,
     )
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(
+    name="notify",
+    description="Toggle DM notifications for when the stream goes live 🔔",
+)
+async def cmd_notify(interaction: discord.Interaction) -> None:
+    discord_id = str(interaction.user.id)
+    users = _get_notify_users()
+
+    if discord_id in users:
+        users.remove(discord_id)
+        _set_notify_users(users)
+        await interaction.response.send_message(
+            "🔕 You've been removed from go-live DM alerts. "
+            "Run `/notify` again to re-enable. 🐾",
+            ephemeral=True,
+        )
+    else:
+        users.append(discord_id)
+        _set_notify_users(users)
+        await interaction.response.send_message(
+            "🔔 Done! You'll receive a DM the next time the stream goes live. "
+            "Run `/notify` again to unsubscribe. 🐾",
+            ephemeral=True,
+        )
+
+
+@bot.tree.command(
+    name="poke",
+    description="Activate the creator's connected toy 🐾 (active subscription required)",
+)
+@app_commands.describe(device="Which device to poke")
+@app_commands.choices(device=[
+    app_commands.Choice(name="PiShock ⚡", value="pishock"),
+    app_commands.Choice(name="Lovense 💜", value="lovense"),
+])
+async def cmd_poke(
+    interaction: discord.Interaction,
+    device: app_commands.Choice[str],
+) -> None:
+    if not _is_enabled("discord_poke_enabled", default=False):
+        await interaction.response.send_message(
+            "⚠️ `/poke` isn't enabled right now – check back later! 🐾",
+            ephemeral=True,
+        )
+        return
+
+    discord_id = str(interaction.user.id)
+    access_level: Optional[int] = None
+
+    try:
+        conn = _db()
+        row = conn.execute(
+            """
+            SELECT u.access_level
+            FROM   discord_accounts da
+            JOIN   users u ON u.id = da.user_id
+            WHERE  da.discord_id = ?
+            """,
+            (discord_id,),
+        ).fetchone()
+        conn.close()
+        if row:
+            access_level = int(row["access_level"])
+    except Exception as exc:
+        logger.warning("DB error in /poke for discord_id=%s: %s", discord_id, exc)
+
+    if access_level is None:
+        link_text = (
+            f"Log in at {BASE_URL}/member and link your Discord account first."
+            if BASE_URL
+            else "Link your Discord account to your site account first."
+        )
+        await interaction.response.send_message(
+            f"🔗 Your Discord account isn't linked to a site account yet.\n{link_text}",
+            ephemeral=True,
+        )
+        return
+
+    if access_level < 1:
+        await interaction.response.send_message(
+            "🔒 An active subscription is required to use `/poke`. 🐾",
+            ephemeral=True,
+        )
+        return
+
+    # Check per-user, per-device cooldown
+    device_name = device.value
+    ck = (discord_id, device_name)
+    now = asyncio.get_event_loop().time()
+    unblock_at = _poke_cooldowns.get(ck, 0.0)
+    if now < unblock_at:
+        remaining = int(unblock_at - now)
+        mins, secs = divmod(remaining, 60)
+        wait_str = f"{mins}m {secs}s" if mins else f"{secs}s"
+        await interaction.response.send_message(
+            f"⏳ Cooldown active – try again in **{wait_str}**. 🐾",
+            ephemeral=True,
+        )
+        return
+
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+        await interaction.response.send_message(
+            "⚠️ Device control is not configured on this server. Ask an admin.", ephemeral=True
+        )
+        return
+
+    # Call the backend admin control endpoint
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BACKEND_URL}/api/admin/control/{device_name}",
+                auth=(ADMIN_USERNAME, ADMIN_PASSWORD),
+            )
+    except Exception as exc:
+        logger.warning("Poke request to backend failed: %s", exc)
+        await interaction.response.send_message(
+            "⚠️ Couldn't reach the device controller – try again in a moment. 🐾",
+            ephemeral=True,
+        )
+        return
+
+    if resp.status_code != 200:
+        await interaction.response.send_message(
+            f"⚠️ Device controller returned an error (HTTP {resp.status_code}). 🐾",
+            ephemeral=True,
+        )
+        return
+
+    # Set cooldown after a successful trigger
+    cooldown = _POKE_COOLDOWN_TIER3 if access_level >= 3 else _POKE_COOLDOWN_TIER12
+    _poke_cooldowns[ck] = now + cooldown
+    cooldown_str = "5 minutes" if access_level >= 3 else "1 hour"
+
+    device_labels = {"pishock": "⚡ PiShock", "lovense": "💜 Lovense"}
+    label = device_labels.get(device_name, device_name)
+
+    embed = discord.Embed(
+        title=f"{label} activated! 🐾",
+        description="Command sent to the creator's device.",
+        color=_MOCHII_PINK,
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_footer(text=f"Next poke available in {cooldown_str}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(
+    name="token",
+    description="Get a one-time 5-minute link to log in to the site without a password 🔑",
+)
+async def cmd_token(interaction: discord.Interaction) -> None:
+    if not BASE_URL:
+        await interaction.response.send_message(
+            "⚠️ The site URL hasn't been configured yet – ask an admin.", ephemeral=True
+        )
+        return
+
+    if not SECRET_KEY:
+        await interaction.response.send_message(
+            "⚠️ Token generation isn't configured on this server – ask an admin.", ephemeral=True
+        )
+        return
+
+    discord_id = str(interaction.user.id)
+    user_id: Optional[str] = None
+    access_level: int = 0
+
+    try:
+        conn = _db()
+        row = conn.execute(
+            """
+            SELECT u.id, u.access_level
+            FROM   discord_accounts da
+            JOIN   users u ON u.id = da.user_id
+            WHERE  da.discord_id = ?
+            """,
+            (discord_id,),
+        ).fetchone()
+        conn.close()
+        if row:
+            user_id = str(row["id"])
+            access_level = int(row["access_level"])
+    except Exception as exc:
+        logger.warning("DB error in /token for discord_id=%s: %s", discord_id, exc)
+
+    if user_id is None:
+        link_text = (
+            f"Log in at {BASE_URL}/member and link your Discord account first."
+            if BASE_URL
+            else "Link your Discord account to your site account first."
+        )
+        await interaction.response.send_message(
+            f"🔗 Your Discord account isn't linked to a site account yet.\n{link_text}",
+            ephemeral=True,
+        )
+        return
+
+    import jwt as _pyjwt
+
+    payload = {
+        "sub": user_id,
+        "access_level": access_level,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        "one_time": True,
+    }
+    token = _pyjwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    login_url = f"{BASE_URL}/member?token={token}"
+
+    await interaction.response.send_message(
+        f"🔑 **One-time login link** – expires in **5 minutes**:\n"
+        f"{login_url}\n\n"
+        "⚠️ Keep this private – it logs directly into your account!",
+        ephemeral=True,
+    )
 
 
 class AskModal(discord.ui.Modal, title="Ask a Question 🐾"):
