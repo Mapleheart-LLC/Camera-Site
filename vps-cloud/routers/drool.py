@@ -342,6 +342,26 @@ async def post_reaction(
     return {"message": f"Reacted with '{payload.reaction_type}' 🐾", "pack_member_id": pack_id}
 
 
+@router.delete("/{item_id}/react", status_code=status.HTTP_200_OK)
+@limiter.limit("20/hour")
+async def delete_reaction(
+    item_id: int,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Remove the current visitor's reaction from a drool item. Rate-limited to 20/hour per IP."""
+    _get_item_or_404(item_id, db)
+
+    pack_id = get_pack_identity(request)
+    db.execute(
+        "DELETE FROM drool_reactions WHERE drool_id = ? AND pack_member_id = ?",
+        (item_id, pack_id),
+    )
+    db.commit()
+
+    return {"message": "Reaction removed 🐾", "pack_member_id": pack_id}
+
+
 # ---------------------------------------------------------------------------
 # IFTTT webhook receiver – Reddit
 # ---------------------------------------------------------------------------

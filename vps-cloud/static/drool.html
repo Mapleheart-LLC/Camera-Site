@@ -760,26 +760,46 @@
       `);
 
       // ── Reaction button handlers ──────────────────────
+      // Restore active state from localStorage
+      const savedRxn = localStorage.getItem(`dr_rxn_${item.id}`);
+      if (savedRxn) {
+        card.querySelectorAll('.bark-btn').forEach(b => {
+          if (b.dataset.reaction === savedRxn) b.classList.add('active');
+        });
+      }
+
+      // Prevent reaction-count area clicks from navigating the card
+      const rxCountsEl = card.querySelector('.reaction-counts');
+      if (rxCountsEl) rxCountsEl.addEventListener('click', e => e.stopPropagation());
+
       card.querySelectorAll('.bark-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
           const reaction = btn.dataset.reaction;
+          const isActive = btn.classList.contains('active');
           btn.classList.add('barking');
           btn.addEventListener('animationend', () => btn.classList.remove('barking'), { once: true });
 
-          const res = await apiFetch(`/api/drool/${item.id}/react`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reaction_type: reaction }),
-          });
-
-          if (res && res.ok) {
-            // Mark active
-            card.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Refresh reaction counts
-            const data = await res.json().catch(() => null);
-            if (data) {
+          if (isActive) {
+            // Toggle off – remove existing reaction
+            const res = await apiFetch(`/api/drool/${item.id}/react`, { method: 'DELETE' });
+            if (res && res.ok) {
+              card.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+              localStorage.removeItem(`dr_rxn_${item.id}`);
+              refreshReactionCounts(card, item.id);
+            }
+          } else {
+            // Set or change reaction
+            const res = await apiFetch(`/api/drool/${item.id}/react`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reaction_type: reaction }),
+            });
+            if (res && res.ok) {
+              card.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              localStorage.setItem(`dr_rxn_${item.id}`, reaction);
+              await res.json().catch(() => null);
               refreshReactionCounts(card, item.id);
             }
           }
@@ -924,19 +944,43 @@
         `<button class="bark-btn" data-reaction="${escHtml(r)}" aria-label="React: ${escHtml(REACTION_LABELS[r])}" style="font-size:.82rem;">${escHtml(REACTION_LABELS[r])}</button>`
       ).join('');
 
+      // Restore active state from localStorage
+      const savedRxnW = localStorage.getItem(`dr_rxn_${item.id}`);
+      if (savedRxnW) {
+        barkRow.querySelectorAll('.bark-btn').forEach(b => {
+          if (b.dataset.reaction === savedRxnW) b.classList.add('active');
+        });
+      }
+
+      // Prevent reaction-count area clicks from navigating
+      rxWrap.addEventListener('click', e => e.stopPropagation());
+
       barkRow.querySelectorAll('.bark-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const isActive = btn.classList.contains('active');
           btn.classList.add('barking');
           btn.addEventListener('animationend', () => btn.classList.remove('barking'), { once: true });
-          const res = await apiFetch(`/api/drool/${item.id}/react`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reaction_type: btn.dataset.reaction }),
-          });
-          if (res && res.ok) {
-            barkRow.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            refreshReactionCounts(wrapper, item.id);
+
+          if (isActive) {
+            const res = await apiFetch(`/api/drool/${item.id}/react`, { method: 'DELETE' });
+            if (res && res.ok) {
+              barkRow.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+              localStorage.removeItem(`dr_rxn_${item.id}`);
+              refreshReactionCounts(wrapper, item.id);
+            }
+          } else {
+            const res = await apiFetch(`/api/drool/${item.id}/react`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reaction_type: btn.dataset.reaction }),
+            });
+            if (res && res.ok) {
+              barkRow.querySelectorAll('.bark-btn').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              localStorage.setItem(`dr_rxn_${item.id}`, btn.dataset.reaction);
+              refreshReactionCounts(wrapper, item.id);
+            }
           }
         });
       });
