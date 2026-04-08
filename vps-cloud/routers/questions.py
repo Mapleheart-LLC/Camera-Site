@@ -6,6 +6,7 @@ Public endpoints (no authentication required):
   GET  /api/questions/public         – list all answered, public questions
 """
 
+import logging
 import os
 import sqlite3
 import uuid
@@ -16,6 +17,9 @@ from pydantic import BaseModel, Field
 
 from db import get_db
 from discord_webhook import send_discord_notification
+from routers.tpe import _send_fcm_to_all
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
@@ -59,6 +63,17 @@ async def submit_question(
         (question_id, payload.text, created_at),
     )
     db.commit()
+
+    try:
+        preview = payload.text[:120] + ("…" if len(payload.text) > 120 else "")
+        _send_fcm_to_all(db, {
+            "action":           "NEW_QUESTION",
+            "question_id":      question_id,
+            "question_preview": preview,
+        })
+    except Exception as exc:
+        logger.warning("NEW_QUESTION FCM push failed: %s", exc)
+        # Question already saved — don't fail the response
 
     # Notify via Discord webhook.  Failures are silently logged; the question
     # has already been persisted so the user always receives a success response.
