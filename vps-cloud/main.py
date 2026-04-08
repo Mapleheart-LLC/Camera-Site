@@ -39,6 +39,11 @@ from routers.discord_oauth import register_metadata_schema, router as discord_oa
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
 from routers.age_gate import router as age_gate_router
+from routers.tpe import (
+    device_router as tpe_device_router,
+    admin_router as tpe_admin_router,
+    migrate_tpe,
+)
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -711,6 +716,7 @@ async def lifespan(app: FastAPI):
             "automatic role-based tier assignment."
         )
     init_db()
+    migrate_tpe(get_db_connection())
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
@@ -957,6 +963,8 @@ app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
 app.include_router(age_gate_router)
+app.include_router(tpe_device_router)
+app.include_router(tpe_admin_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.

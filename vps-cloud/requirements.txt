@@ -12,3 +12,4 @@ apscheduler>=3.10.4
 atproto>=0.0.59
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.9
+firebase-admin>=6.5.0
