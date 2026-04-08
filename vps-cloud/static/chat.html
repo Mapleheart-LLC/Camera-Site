@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mochii.live — Chat Overlay</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent;
+      font-family: 'Nunito', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+
+    #messages {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      max-height: 100vh;
+      overflow: hidden;
+    }
+
+    .msg {
+      animation: fadeIn 0.3s ease;
+      line-height: 1.4;
+      word-break: break-word;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.8);
+    }
+
+    .msg .username {
+      color: #e8aeb7;
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .msg .text {
+      color: #f5f5f5;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #no-token {
+      color: #e8aeb7;
+      padding: 12px;
+      font-size: 13px;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.9);
+    }
+  </style>
+</head>
+<body>
+  <div id="no-token" style="display:none">Provide <code>?token=</code> in the URL to connect.</div>
+  <div id="messages"></div>
+
+  <script>
+    const MAX_VISIBLE = 15;
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token') || '';
+
+    if (!token) {
+      document.getElementById('no-token').style.display = 'block';
+    } else {
+      connect();
+    }
+
+    function connect() {
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${wsProto}//${location.host}/ws/chat?token=${encodeURIComponent(token)}`);
+
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'history') {
+          data.messages.forEach(appendMessage);
+        } else if (data.type === 'message') {
+          appendMessage(data);
+        }
+        trim();
+      };
+
+      ws.onclose = (e) => {
+        // Reconnect after 5 s unless it was a bad token (4001)
+        if (e.code !== 4001) {
+          setTimeout(connect, 5000);
+        }
+      };
+    }
+
+    function appendMessage(msg) {
+      const el = document.createElement('div');
+      el.className = 'msg';
+      el.innerHTML =
+        `<span class="username">${esc(msg.username)}:</span>` +
+        `<span class="text">${esc(msg.message)}</span>`;
+      document.getElementById('messages').appendChild(el);
+    }
+
+    function trim() {
+      const container = document.getElementById('messages');
+      while (container.children.length > MAX_VISIBLE) {
+        container.removeChild(container.firstChild);
+      }
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

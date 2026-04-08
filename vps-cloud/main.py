@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse, quote as _url_quote
 
 import httpx
@@ -14,13 +14,13 @@ import html as _html_lib
 from passlib.context import CryptContext
 
 from PIL import Image, ImageDraw, ImageFont
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from db import DATABASE_PATH, get_db, get_db_connection, get_setting
+from db import DATABASE_PATH, get_db, get_db_connection, get_setting, set_setting
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
@@ -39,6 +39,11 @@ from routers.discord_oauth import register_metadata_schema, router as discord_oa
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
 from routers.age_gate import router as age_gate_router
+from routers.tpe import (
+    device_router as tpe_device_router,
+    admin_router as tpe_admin_router,
+    migrate_tpe,
+)
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -113,6 +118,7 @@ AGE_GATE_ENABLED: bool = _age_gate_raw.lower() == "true"
 # Anything starting with one of these prefixes is exempt.
 _AGE_GATE_EXEMPT_PREFIXES = (
     "/api/",
+    "/ws/",
     "/age-gate",
     "/static/",
     "/favicon.ico",
@@ -460,6 +466,60 @@ def init_db() -> None:
         conn.execute("ALTER TABLE age_verifications ADD COLUMN provider TEXT NOT NULL DEFAULT 'idswyft'")
     except sqlite3.OperationalError:
         pass  # column already exists
+    # Idempotent migration: add rtmp_key column for OBS/RTMP streaming.
+    try:
+        conn.execute("ALTER TABLE cameras ADD COLUMN rtmp_key TEXT")
+    except Exception:
+        pass  # column already exists
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cameras_rtmp_key ON cameras(rtmp_key) WHERE rtmp_key IS NOT NULL"
+    )
+    # ── Chat messages table ───────────────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    TEXT    NOT NULL,
+            username   TEXT    NOT NULL,
+            message    TEXT    NOT NULL,
+            created_at TEXT    NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at)"
+    )
+    # ── Content drops (file vault) table ─────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS content_drops (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            title                TEXT    NOT NULL,
+            description          TEXT,
+            file_url             TEXT    NOT NULL,
+            minimum_access_level INTEGER NOT NULL DEFAULT 1,
+            sort_order           INTEGER NOT NULL DEFAULT 0,
+            is_active            INTEGER NOT NULL DEFAULT 1,
+            created_at           TEXT    NOT NULL
+        )
+        """
+    )
+    # ── VODs table ────────────────────────────────────────────────────────
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vods (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            title                TEXT    NOT NULL,
+            description          TEXT,
+            file_url             TEXT    NOT NULL,
+            thumbnail_url        TEXT,
+            minimum_access_level INTEGER NOT NULL DEFAULT 1,
+            duration_seconds     INTEGER,
+            is_active            INTEGER NOT NULL DEFAULT 1,
+            created_at           TEXT    NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -475,7 +535,7 @@ async def _sync_cameras_to_go2rtc() -> None:
     conn = get_db_connection()
     try:
         rows = conn.execute(
-            "SELECT stream_slug, rtsp_url, tapo_ip, tapo_username, tapo_password FROM cameras"
+            "SELECT stream_slug, rtsp_url, tapo_ip, tapo_username, tapo_password, rtmp_key FROM cameras"
         ).fetchall()
     finally:
         conn.close()
@@ -486,10 +546,13 @@ async def _sync_cameras_to_go2rtc() -> None:
     async with httpx.AsyncClient(timeout=5.0) as client:
         for row in rows:
             tapo_ip = row["tapo_ip"]
+            rtmp_key = row["rtmp_key"]
             if tapo_ip:
                 user = _url_quote(row["tapo_username"] or "", safe="")
                 pwd  = _url_quote(row["tapo_password"]  or "", safe="")
                 effective_url = f"rtsp://{user}:{pwd}@{tapo_ip}/stream1"
+            elif rtmp_key:
+                effective_url = f"rtmp://localhost:1935/{rtmp_key}"
             else:
                 effective_url = row["rtsp_url"]
 
@@ -653,6 +716,7 @@ async def lifespan(app: FastAPI):
             "automatic role-based tier assignment."
         )
     init_db()
+    migrate_tpe(get_db_connection())
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
@@ -899,6 +963,8 @@ app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
 app.include_router(age_gate_router)
+app.include_router(tpe_device_router)
+app.include_router(tpe_admin_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
@@ -2035,6 +2101,249 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Stream status (viewer counts)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/stream-status")
+async def get_stream_status():
+    """Return live status and viewer counts for all cameras by querying go2rtc."""
+    go2rtc_base = f"http://{GO2RTC_HOST}:{GO2RTC_PORT}"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{go2rtc_base}/api/streams")
+        if not resp.is_success:
+            return JSONResponse({"streams": {}})
+        data = resp.json()
+    except Exception:
+        return JSONResponse({"streams": {}})
+
+    result = {}
+    for stream_name, info in data.items():
+        producers = info.get("producers", [])
+        consumers = info.get("consumers", [])
+        is_live = any(p.get("state") == "running" for p in producers)
+        viewer_count = len(consumers)
+        result[stream_name] = {"is_live": is_live, "viewer_count": viewer_count}
+    return JSONResponse({"streams": result})
+
+
+# ---------------------------------------------------------------------------
+# SEO – robots.txt + sitemap.xml
+# ---------------------------------------------------------------------------
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots_txt():
+    base = BASE_URL.rstrip("/") if BASE_URL else ""
+    sitemap_line = f"\nSitemap: {base}/sitemap.xml" if base else ""
+    content = f"User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/{sitemap_line}"
+    return Response(content=content, media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap_xml(db: sqlite3.Connection = Depends(get_db)):
+    base = (BASE_URL or "").rstrip("/")
+    urls = [base + "/", base + "/links"]
+    rows = db.execute(
+        "SELECT id, created_at FROM questions WHERE is_public = 1 ORDER BY created_at DESC LIMIT 200"
+    ).fetchall()
+    url_entries = ""
+    for u in urls:
+        url_entries += f"  <url><loc>{_html_escape(u)}</loc></url>\n"
+    for row in rows:
+        loc = _html_escape(f"{base}/q/{row['id']}")
+        lastmod = row["created_at"][:10] if row["created_at"] else ""
+        url_entries += f"  <url><loc>{loc}</loc>"
+        if lastmod:
+            url_entries += f"<lastmod>{lastmod}</lastmod>"
+        url_entries += "</url>\n"
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{url_entries}</urlset>"""
+    return Response(content=xml, media_type="application/xml")
+
+
+# ---------------------------------------------------------------------------
+# Stream goal
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/stream/goal")
+def get_stream_goal(db: sqlite3.Connection = Depends(get_db)):
+    enabled = get_setting(db, "tip_goal_enabled", "false") == "true"
+    label = get_setting(db, "tip_goal_label", "Stream Goal")
+    try:
+        target = int(get_setting(db, "tip_goal_target_cents", "0") or "0")
+        current = int(get_setting(db, "tip_goal_current_cents", "0") or "0")
+    except ValueError:
+        target, current = 0, 0
+    return JSONResponse({"enabled": enabled, "label": label, "target_cents": target, "current_cents": current})
+
+
+# ---------------------------------------------------------------------------
+# Stream schedule
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/schedule")
+def get_schedule(db: sqlite3.Connection = Depends(get_db)):
+    import json as _json
+    raw = get_setting(db, "stream_schedule", None)
+    if raw:
+        try:
+            return JSONResponse({"schedule": _json.loads(raw)})
+        except Exception:
+            pass
+    return JSONResponse({"schedule": []})
+
+
+# ---------------------------------------------------------------------------
+# File vault
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/vault")
+def get_vault(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    access_level = current_user["access_level"]
+    rows = db.execute(
+        """SELECT id, title, description, file_url, minimum_access_level, sort_order, created_at
+           FROM content_drops
+           WHERE is_active = 1 AND minimum_access_level <= ?
+           ORDER BY sort_order, id DESC""",
+        (access_level,),
+    ).fetchall()
+    return JSONResponse([dict(r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# VOD gallery
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/vods")
+def get_vods(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    access_level = current_user["access_level"]
+    rows = db.execute(
+        """SELECT id, title, description, file_url, thumbnail_url, minimum_access_level, duration_seconds, created_at
+           FROM vods WHERE is_active = 1 AND minimum_access_level <= ?
+           ORDER BY id DESC""",
+        (access_level,),
+    ).fetchall()
+    return JSONResponse([dict(r) for r in rows])
+
+
+# ---------------------------------------------------------------------------
+# Subscriber chat WebSocket
+# ---------------------------------------------------------------------------
+
+
+class _ChatManager:
+    def __init__(self) -> None:
+        self._connections: List[WebSocket] = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._connections.append(ws)
+
+    def disconnect(self, ws: WebSocket) -> None:
+        try:
+            self._connections.remove(ws)
+        except ValueError:
+            pass
+
+    async def broadcast(self, data: dict) -> None:
+        dead: List[WebSocket] = []
+        for ws in list(self._connections):
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+
+_chat_manager = _ChatManager()
+_CHAT_MAX_MESSAGES = 200
+
+
+@app.get("/api/chat/messages")
+def get_chat_messages(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    rows = db.execute(
+        "SELECT id, username, message, created_at FROM chat_messages ORDER BY id DESC LIMIT 50"
+    ).fetchall()
+    return JSONResponse([dict(r) for r in reversed(rows)])
+
+
+@app.websocket("/ws/chat")
+async def chat_ws(websocket: WebSocket, token: str = ""):
+    import jwt as _pyjwt
+    try:
+        payload = _pyjwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        access_level = payload.get("access_level", 0)
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
+    if not user_id or access_level < 1:
+        await websocket.close(code=4001)
+        return
+
+    db = get_db_connection()
+    try:
+        row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            await websocket.close(code=4001)
+            return
+        username = row["username"]
+
+        await _chat_manager.connect(websocket)
+        recent = db.execute(
+            "SELECT id, username, message, created_at FROM chat_messages ORDER BY id DESC LIMIT 50"
+        ).fetchall()
+        await websocket.send_json({"type": "history", "messages": [dict(r) for r in reversed(recent)]})
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                msg_text = data.strip()[:500]
+                if not msg_text:
+                    continue
+                now = datetime.now(timezone.utc).isoformat()
+                cur = db.execute(
+                    "INSERT INTO chat_messages (user_id, username, message, created_at) VALUES (?, ?, ?, ?)",
+                    (user_id, username, msg_text, now),
+                )
+                db.commit()
+                db.execute(
+                    "DELETE FROM chat_messages WHERE id NOT IN (SELECT id FROM chat_messages ORDER BY id DESC LIMIT ?)",
+                    (_CHAT_MAX_MESSAGES,),
+                )
+                db.commit()
+                await _chat_manager.broadcast({
+                    "type": "message",
+                    "id": cur.lastrowid,
+                    "username": username,
+                    "message": msg_text,
+                    "created_at": now,
+                })
+        except WebSocketDisconnect:
+            _chat_manager.disconnect(websocket)
+    finally:
+        db.close()
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

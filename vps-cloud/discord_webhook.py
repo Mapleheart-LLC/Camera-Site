@@ -1,36 +1,38 @@
 """
-discord_webhook.py – Discord notification utility.
+discord_webhook.py – Discord notification utility for the backend service.
 
-Provides async helpers that post notifications to Discord.  Delivery is
-attempted via the Discord Bot API (``POST /channels/{id}/messages``) when
+Provides async helpers that post notifications to Discord channels.  Delivery
+is attempted via the Discord Bot API (``POST /channels/{id}/messages``) when
 both ``DISCORD_BOT_TOKEN`` and a channel ID are available, and falls back to
 the legacy ``DISCORD_WEBHOOK_URL`` approach otherwise.  All failures are
 logged as warnings so that a Discord outage never crashes the application or
 fails a user's request (fire-and-forget semantics).
 
+Channel IDs can be overridden at runtime via the admin dashboard (stored in
+the ``settings`` table) without requiring a container restart.
+
 Configuration
 -------------
 ``DISCORD_BOT_TOKEN``
-    Bot token from the Discord Developer Portal.  Required for channel-ID
-    based delivery.
+    Bot token from the Discord Developer Portal.
 
 ``DISCORD_QUESTION_CHANNEL_ID``
     Channel where new anonymous questions are posted (with a Reply button).
 
 ``DISCORD_NOTIFICATION_CHANNEL_ID``
-    Channel where general site notifications are posted (e.g. a question has
-    been answered and published).
+    Channel where general site notifications are posted (e.g. answer published).
 
 ``DISCORD_ADMIN_CHANNEL_ID``
-    Private channel for admin-facing operational alerts (e.g. new store
-    purchases, system events).
+    Private channel for admin-facing operational alerts.
+
+``DISCORD_STREAM_CHANNEL_ID``
+    Channel for go-live / stream-ended announcements.
 
 ``DISCORD_WEBHOOK_URL``  *(legacy fallback)*
     Incoming Webhook URL.  Used only when the bot-token path is unavailable.
 
 ``BASE_URL``
-    Public root of the site (e.g. ``https://mochii.live``).  Used to build
-    deep-link URLs inside embeds.
+    Public root of the site (e.g. ``https://mochii.live``).
 """
 
 import logging
@@ -42,10 +44,40 @@ import httpx
 
 _DISCORD_API = "https://discord.com/api/v10"
 
-# Discord color for mochii.live muted pink (0xE8AEB7 → decimal).
+# Discord colour for mochii.live muted pink.
 _MOCHII_PINK: int = 0xE8AEB7
 
 logger = logging.getLogger(__name__)
+
+
+# ── Settings-table helpers ───────────────────────────────────────────────────
+# These read from the shared SQLite settings table so that admin-dash changes
+# take effect immediately without a container restart.
+
+
+def _get_setting(key: str) -> Optional[str]:
+    """Return a value from the settings table, or None if absent / on error."""
+    try:
+        from db import get_db_connection  # local import avoids circular import
+        conn = get_db_connection()
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        conn.close()
+        return row["value"] if row else None
+    except Exception:
+        return None
+
+
+def _is_feature_enabled(setting_key: str, default: bool = True) -> bool:
+    """Return True if the feature flag in the settings table is enabled."""
+    val = _get_setting(setting_key)
+    if val is None:
+        return default
+    return val.strip().lower() == "true"
+
+
+def _effective_channel_id(setting_key: str, env_var: str) -> str:
+    """Return channel ID: settings table value takes precedence over env var."""
+    return (_get_setting(setting_key) or os.environ.get(env_var, "")).strip()
 
 
 async def _post_to_channel(channel_id: str, payload: dict) -> None:
@@ -95,32 +127,12 @@ async def send_discord_notification(
 ) -> None:
     """Post a notification to Discord.
 
-    Parameters
-    ----------
-    content:
-        Plain-text message shown above the embed (or as the only message
-        if *is_embed* is ``False``).
-    question_text:
-        The question text used to populate the embed description.  Only
-        relevant when *is_embed* is ``True``.
-    is_embed:
-        When ``True`` (default), attach a rich Discord embed with a
-        truncated preview of *question_text*.
-    question_id:
-        Optional UUID of the question.  When provided (and ``BASE_URL`` is
-        set), the embed title becomes a clickable deep-link to the admin
-        reply modal.
-    channel_id:
-        Discord channel ID to post to via the Bot API.  When ``None``, the
-        function falls back to ``DISCORD_WEBHOOK_URL``.
-
-    The function swallows all exceptions and logs a warning on failure so
-    that a Discord outage can never crash the application or fail a user's
-    request.
+    Respects the ``discord_notify_questions`` feature flag.  Channel ID is
+    resolved from: explicit argument → settings table → env var → webhook URL.
     """
-    # Read env vars at call time so values injected by Docker / Komodo at
-    # container startup are always picked up (module-level reads would capture
-    # an empty string if the module is imported before the vars are set).
+    if not _is_feature_enabled("discord_notify_questions", default=True):
+        return
+
     base_url: str = os.environ.get("BASE_URL", "").rstrip("/")
 
     payload: dict = {"content": content}
@@ -135,15 +147,11 @@ async def send_discord_notification(
         }
 
         if question_id and base_url:
-            # /admin?q={id} deep-links directly into the admin panel and opens
-            # the reply modal for this question.
             reply_url = f"{base_url}/admin?q={question_id}"
             embed["url"] = reply_url
 
         payload["embeds"] = [embed]
 
-        # Button component so the admin can reply directly from Discord.
-        # Clicking it triggers a modal via the /discord/interactions endpoint.
         if question_id:
             payload["components"] = [
                 {
@@ -159,10 +167,13 @@ async def send_discord_notification(
                 }
             ]
 
-    # Prefer bot-token + channel-ID delivery; fall back to webhook URL.
+    # Resolve channel: explicit arg → settings table → env var → webhook URL.
     bot_token: str = os.environ.get("DISCORD_BOT_TOKEN", "")
-    if channel_id and bot_token:
-        await _post_to_channel(channel_id, payload)
+    resolved_channel = channel_id or _effective_channel_id(
+        "discord_question_channel_id", "DISCORD_QUESTION_CHANNEL_ID"
+    )
+    if resolved_channel and bot_token:
+        await _post_to_channel(resolved_channel, payload)
     else:
         webhook_url: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
         if webhook_url:
@@ -172,11 +183,14 @@ async def send_discord_notification(
 async def send_answer_notification(share_url: str = "") -> None:
     """Post an answer-published notification to the notification channel.
 
-    Called after a question is answered so that the notification channel
-    receives a public share link.  No-ops if ``DISCORD_NOTIFICATION_CHANNEL_ID``
-    is not set.
+    Respects the ``discord_notify_answers`` feature flag.
     """
-    notification_channel_id: str = os.environ.get("DISCORD_NOTIFICATION_CHANNEL_ID", "")
+    if not _is_feature_enabled("discord_notify_answers", default=True):
+        return
+
+    notification_channel_id = _effective_channel_id(
+        "discord_notification_channel_id", "DISCORD_NOTIFICATION_CHANNEL_ID"
+    )
     if not notification_channel_id:
         return
 
@@ -184,18 +198,152 @@ async def send_answer_notification(share_url: str = "") -> None:
     if share_url:
         lines.append(f"Share it: {share_url}")
 
-    payload: dict = {"content": "\n".join(lines)}
-    await _post_to_channel(notification_channel_id, payload)
+    await _post_to_channel(notification_channel_id, {"content": "\n".join(lines)})
 
 
 async def send_admin_notification(content: str) -> None:
     """Post an admin-facing operational alert to the admin channel.
 
-    Used for internal events that only admins need to see, such as new store
-    purchases.  No-ops if ``DISCORD_ADMIN_CHANNEL_ID`` is not set.
+    Respects the ``discord_notify_purchases`` feature flag (used for store
+    events; other admin alerts always fire).
     """
-    admin_channel_id: str = os.environ.get("DISCORD_ADMIN_CHANNEL_ID", "")
+    admin_channel_id = _effective_channel_id(
+        "discord_admin_channel_id", "DISCORD_ADMIN_CHANNEL_ID"
+    )
     if not admin_channel_id:
         return
 
     await _post_to_channel(admin_channel_id, {"content": content})
+
+
+async def send_stream_live_notification(stream_title: str = "", stream_url: str = "") -> None:
+    """Post a go-live announcement to the stream channel.
+
+    Only fires when ``discord_stream_notifications_enabled`` is ``true`` in the
+    settings table.  The message text uses the ``discord_stream_live_message``
+    template (vars: ``{title}``, ``{url}``) if set.
+    """
+    if not _is_feature_enabled("discord_stream_notifications_enabled", default=False):
+        return
+
+    channel_id = _effective_channel_id("discord_stream_channel_id", "DISCORD_STREAM_CHANNEL_ID")
+    if not channel_id:
+        return
+
+    template = (
+        _get_setting("discord_stream_live_message")
+        or "@here 🔴 **{title}** is now LIVE! {url}"
+    )
+    content = template.format(
+        title=stream_title or "mochii.live",
+        url=stream_url or "",
+    ).strip()
+
+    embed: dict = {
+        "title": "🔴 Stream is LIVE!",
+        "description": stream_title or "The stream is live now!",
+        "color": 0xFF5C5C,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "footer": {"text": "mochii.live"},
+    }
+    if stream_url:
+        embed["url"] = stream_url
+
+    await _post_to_channel(channel_id, {"content": content, "embeds": [embed]})
+
+
+async def send_stream_offline_notification() -> None:
+    """Post a stream-ended notice to the stream channel."""
+    if not _is_feature_enabled("discord_stream_notifications_enabled", default=False):
+        return
+
+    channel_id = _effective_channel_id("discord_stream_channel_id", "DISCORD_STREAM_CHANNEL_ID")
+    if not channel_id:
+        return
+
+    await _post_to_channel(
+        channel_id, {"content": "⚫ The stream has ended. Thanks for watching! 🐾"}
+    )
+
+
+async def send_discord_dm(discord_id: str, content: str) -> bool:
+    """Open a DM channel with a Discord user and send *content*.
+
+    Returns ``True`` on success, ``False`` on any failure.
+    """
+    bot_token: str = os.environ.get("DISCORD_BOT_TOKEN", "")
+    if not bot_token:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            # Create (or fetch existing) DM channel
+            dm_resp = await client.post(
+                f"{_DISCORD_API}/users/@me/channels",
+                json={"recipient_id": discord_id},
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            if dm_resp.status_code not in (200, 201):
+                logger.warning(
+                    "Could not open DM channel for discord_id=%s: %s",
+                    discord_id,
+                    dm_resp.status_code,
+                )
+                return False
+            channel_id = dm_resp.json().get("id")
+            if not channel_id:
+                return False
+            msg_resp = await client.post(
+                f"{_DISCORD_API}/channels/{channel_id}/messages",
+                json={"content": content},
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            return msg_resp.status_code in (200, 201)
+    except Exception as exc:
+        logger.warning("Failed to send DM to discord_id=%s: %s", discord_id, exc)
+        return False
+
+
+async def get_bot_status() -> dict:
+    """Return a status dict describing the bot's current connectivity.
+
+    Checks the bot token validity and, when ``DISCORD_GUILD_ID`` is set,
+    fetches basic guild info (name, approximate member count).
+    """
+    bot_token: str = os.environ.get("DISCORD_BOT_TOKEN", "")
+    guild_id: str  = os.environ.get("DISCORD_GUILD_ID", "")
+
+    result: dict = {
+        "bot_token_set":    bool(bot_token),
+        "guild_id_set":     bool(guild_id),
+        "bot_valid":        False,
+        "bot_username":     None,
+        "guild_name":       None,
+        "guild_member_count": None,
+    }
+
+    if not bot_token:
+        return result
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            me_resp = await client.get(
+                f"{_DISCORD_API}/users/@me",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            if me_resp.status_code == 200:
+                result["bot_valid"]    = True
+                result["bot_username"] = me_resp.json().get("username")
+
+            if guild_id and result["bot_valid"]:
+                g_resp = await client.get(
+                    f"{_DISCORD_API}/guilds/{guild_id}?with_counts=true",
+                    headers={"Authorization": f"Bot {bot_token}"},
+                )
+                if g_resp.status_code == 200:
+                    g = g_resp.json()
+                    result["guild_name"]         = g.get("name")
+                    result["guild_member_count"] = g.get("approximate_member_count")
+    except Exception as exc:
+        logger.warning("Error fetching Discord bot status: %s", exc)
+
+    return result
