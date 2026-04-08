@@ -729,7 +729,7 @@
           </div>
           ${snippet ? `<p class="card-text">"${escHtml(snippet)}"</p>` : ''}
           <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer">${escHtml(item.original_url)}</a>
-          ${rxHtml ? `<div class="reaction-counts">${rxHtml}</div>` : ''}
+          <div class="reaction-counts">${rxHtml}</div>
 
           <!-- Quick Bark buttons -->
           <div class="bark-row" aria-label="Quick Bark reactions">
