@@ -43,12 +43,13 @@ from pydantic import BaseModel, Field
 
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
+from routers.tpe import _send_fcm_to_all
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_VALID_DEVICES = {"pishock", "lovense"}
+_VALID_DEVICES = {"pishock", "lovense", "pavlok"}
 
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
@@ -370,6 +371,9 @@ def admin_control_device(
     """
     Manually trigger an IoT device without rate limiting or an auth JWT.
 
+    Lovense and Pavlok commands are forwarded to the paired TPE app via FCM.
+    PiShock uses a direct connection (not relayed through the app).
+
     Logs the activation to the ``activations`` table with the admin username
     as the actor so it appears in the stats history.
     """
@@ -383,10 +387,29 @@ def admin_control_device(
         (device, f"admin:{admin_user}", datetime.now(timezone.utc).isoformat()),
     )
     db.commit()
+
+    if device == "lovense":
+        _send_fcm_to_all(db, {
+            "action":      "LOVENSE_COMMAND",
+            "toy_command": "vibrate",
+            "toy_level":   "10",
+        })
+        message = "Command forwarded to app."
+    elif device == "pavlok":
+        _send_fcm_to_all(db, {
+            "action":             "PAVLOK_COMMAND",
+            "pavlok_cmd":         "vibrate",
+            "pavlok_intensity":   "100",
+            "pavlok_duration_ms": "5000",
+        })
+        message = "Command forwarded to app."
+    else:
+        message = "Admin command accepted (mock response)."
+
     return {
         "status": "ok",
         "device": device,
-        "message": "Admin command accepted (mock response).",
+        "message": message,
         "triggered_by": admin_user,
     }
 
