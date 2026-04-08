@@ -1,9 +1,10 @@
 """
 routers/interactive.py – IoT device control endpoints.
 
-Provides two POST endpoints for authenticated subscribers (access_level >= 1):
-  - POST /api/control/pishock   – trigger a PiShock device
-  - POST /api/control/lovense   – trigger a Lovense device
+Provides POST endpoints for authenticated subscribers (access_level >= 1):
+  - POST /api/control/pishock   – trigger a PiShock device (direct/VPN)
+  - POST /api/control/lovense   – trigger a Lovense device via the TPE app
+  - POST /api/control/pavlok    – trigger a Pavlok device via the TPE app
 
 Access rules
 ------------
@@ -14,7 +15,11 @@ Access rules
                        429 Too Many Requests with a ``Retry-After`` header.
   level 3 (Premium)  – No rate limit.
 
-Both endpoints require a valid Fanvue JWT (Bearer token).
+Lovense and Pavlok commands are routed through the paired TPE app via FCM
+(``LOVENSE_COMMAND`` / ``PAVLOK_COMMAND`` data messages).  PiShock continues
+to use a direct connection and is not relayed through the app.
+
+Both endpoints require a valid JWT (Bearer token).
 Each successful activation is logged to the ``activations`` SQLite table.
 """
 
@@ -28,6 +33,7 @@ from redis.asyncio import Redis
 from db import get_db
 from dependencies import get_current_user
 from redis_client import get_redis
+from routers.tpe import _send_fcm_to_all
 
 router = APIRouter(prefix="/api/control", tags=["interactive"])
 
@@ -144,16 +150,62 @@ async def control_lovense(
     Premium users (level 3+) receive an unlimited activation.  Teaser users
     (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
 
-    Currently returns a mock success response; the real implementation will
-    forward the command to the local-edge agent over the Tailscale VPN.
+    The command is forwarded to the paired TPE app via an FCM ``LOVENSE_COMMAND``
+    data message; the app then relays it to the connected Lovense toy.
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
     _log_activation(db, "lovense", current_user["fanvue_id"])
+
+    toy_level = "5" if is_teaser else "10"
+    _send_fcm_to_all(db, {
+        "action":    "LOVENSE_COMMAND",
+        "toy_command": "vibrate",
+        "toy_level": toy_level,
+    })
+
     response: dict = {
         "status": "ok",
         "device": "lovense",
-        "message": "Command accepted (mock response).",
+        "message": "Command forwarded to app.",
+        "user": current_user["fanvue_id"],
+    }
+    if is_teaser:
+        response["activation_seconds"] = _TEASER_DURATION_SECONDS
+        response["cooldown_seconds"] = _COOLDOWN_SECONDS
+    return response
+
+
+@router.post("/pavlok")
+async def control_pavlok(
+    current_user: dict = Depends(_make_teaser_dependency("pavlok")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Trigger a Pavlok device for the authenticated subscriber.
+
+    Premium users (level 3+) receive an unlimited activation.  Teaser users
+    (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
+
+    The command is forwarded to the paired TPE app via an FCM ``PAVLOK_COMMAND``
+    data message; the app then relays it to the connected Pavlok device.
+    """
+    access_level: int = current_user.get("access_level", 0)
+    is_teaser = access_level < _PREMIUM_LEVEL
+    _log_activation(db, "pavlok", current_user["fanvue_id"])
+
+    intensity = "50" if is_teaser else "100"
+    _send_fcm_to_all(db, {
+        "action":             "PAVLOK_COMMAND",
+        "pavlok_cmd":         "vibrate",
+        "pavlok_intensity":   intensity,
+        "pavlok_duration_ms": str(_TEASER_DURATION_SECONDS * 1000),
+    })
+
+    response: dict = {
+        "status": "ok",
+        "device": "pavlok",
+        "message": "Command forwarded to app.",
         "user": current_user["fanvue_id"],
     }
     if is_teaser:
