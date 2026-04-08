@@ -10,15 +10,34 @@ Device-facing endpoints (URL paths match what the app hardcodes):
   POST /api/pair              – Register device FCM token (QR code pairing)
   POST /api/audit/upload      – Upload adherence audit video + ML scores
   POST /api/tpe/webhook       – Receive punishment/reward consequence events
+  POST /api/tpe/task/status   – Report task completion / failure from device
+  POST /api/tpe/checkin       – Daily mood/compliance check-in from device
 
 Admin endpoints (HTTP Basic auth):
-  GET    /api/admin/tpe/devices          – List paired devices
-  DELETE /api/admin/tpe/devices/{token}  – Unpair a device
-  GET    /api/admin/tpe/settings         – Get current filter/remote-control settings
-  PATCH  /api/admin/tpe/settings         – Update settings
-  POST   /api/admin/tpe/push             – Push an FCM message to all paired devices
-  GET    /api/admin/tpe/events           – List consequence events (punishment / reward log)
-  GET    /api/admin/tpe/audits           – List audit upload records
+  GET    /api/admin/tpe/devices              – List paired devices
+  DELETE /api/admin/tpe/devices/{token}      – Unpair a device
+  GET    /api/admin/tpe/settings             – Get current filter/remote-control settings
+  PATCH  /api/admin/tpe/settings             – Update settings
+  POST   /api/admin/tpe/push                 – Push a raw FCM message to all paired devices
+  GET    /api/admin/tpe/events               – List consequence events (punishment / reward log)
+  GET    /api/admin/tpe/audits               – List audit upload records
+
+  Task Assignment & Verification (mirrors TPE app's Task system):
+  POST   /api/admin/tpe/tasks                – Create a task and push TASK_ASSIGNED FCM
+  GET    /api/admin/tpe/tasks                – List all tasks
+  GET    /api/admin/tpe/tasks/{task_id}      – Get a single task
+  PATCH  /api/admin/tpe/tasks/{task_id}      – Update task status manually
+  DELETE /api/admin/tpe/tasks/{task_id}      – Delete a task
+
+  Daily Check-ins:
+  GET    /api/admin/tpe/checkins             – List check-in history
+  POST   /api/admin/tpe/checkins/request     – Push REQUEST_CHECKIN FCM to prompt a check-in
+
+  Rule Reminders:
+  POST   /api/admin/tpe/rules                – Create a rule
+  GET    /api/admin/tpe/rules                – List all active rules
+  DELETE /api/admin/tpe/rules/{rule_id}      – Delete a rule
+  POST   /api/admin/tpe/rules/{rule_id}/remind – Push a RULE_REMINDER FCM immediately
 
 FCM delivery
 ------------
@@ -227,6 +246,40 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
             session_ts       INTEGER,
             video_filename   TEXT,
             received_at      TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_tasks (
+            id           TEXT PRIMARY KEY,
+            title        TEXT NOT NULL,
+            description  TEXT NOT NULL DEFAULT '',
+            deadline_ms  INTEGER NOT NULL,
+            status       TEXT NOT NULL DEFAULT 'pending',
+            proof_note   TEXT,
+            created_at   TEXT NOT NULL,
+            completed_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_checkins (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            mood_score    INTEGER,
+            note          TEXT,
+            checked_in_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_rules (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_text  TEXT NOT NULL,
+            active     INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
         )
         """
     )
