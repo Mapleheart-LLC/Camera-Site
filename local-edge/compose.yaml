@@ -2,7 +2,7 @@ version: "3.8"
 services:
   local-edge:
     build:
-      context: ./local-edge
+      context: .
     container_name: local-edge
     environment:
       EDGE_SECRET: "mapleheart"
