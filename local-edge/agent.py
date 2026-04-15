@@ -326,5 +326,33 @@ if __name__ == "__main__":
         "Edge agent starting – HTTP server on port %s (Tapo camera bridge mode)",
         AGENT_PORT,
     )
-
+    # Start auto-discovery in a background thread
+    threading.Thread(target=auto_discover_and_register, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=AGENT_PORT, log_level="info")
+
+# --- Auto-discovery and registration background task ---
+def auto_discover_and_register():
+    import time
+    while True:
+        logger.info("[Auto] Discovering cameras on subnet...")
+        subnet = os.environ.get("DISCOVERY_SUBNET", "192.168.1.")
+        start = int(os.environ.get("DISCOVERY_START", 1))
+        end = int(os.environ.get("DISCOVERY_END", 20))
+        tapo_username = TAPO_EMAIL
+        tapo_password = TAPO_PASSWORD
+        discovered = []
+        for i in range(start, end + 1):
+            ip = f"{subnet}{i}"
+            if _ping_host(ip):
+                # Build RTSP URL
+                rtsp_url = f"rtsp://{tapo_username}:{tapo_password}@{ip}:554/stream1"
+                discovered.append({
+                    "name": f"Tapo-{ip}",
+                    "ip": ip,
+                    "rtsp_url": rtsp_url
+                })
+        global CAMERA_REGISTRY
+        CAMERA_REGISTRY = discovered
+        logger.info(f"[Auto] Registered {len(discovered)} cameras.")
+        # Sleep for 24 hours (86400 seconds)
+        time.sleep(86400)
