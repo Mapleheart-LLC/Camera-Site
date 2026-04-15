@@ -119,6 +119,7 @@ class CameraCreate(BaseModel):
     tapo_username: Optional[str] = None
     tapo_password: Optional[str] = None
     rtmp_key: Optional[str] = None
+    source_type: Optional[str] = None  # 'tapo', 'rtsp', or 'obs'
 
 
 class CameraUpdate(BaseModel):
@@ -186,8 +187,15 @@ def admin_add_camera(
             detail=f"Could not add camera: {exc}",
         ) from exc
 
+    # If OBS, auto-generate RTMP key
     rtmp_key = payload.rtmp_key or None
-    if rtmp_key:
+    if getattr(payload, 'source_type', None) == 'obs':
+        import secrets
+        rtmp_key = secrets.token_hex(16)
+        db.execute("UPDATE cameras SET rtmp_key = ? WHERE id = ?", (rtmp_key, cursor.lastrowid))
+        db.commit()
+        effective_url = f"rtmp://localhost:1935/{rtmp_key}"
+    elif rtmp_key:
         effective_url = f"rtmp://localhost:1935/{rtmp_key}"
     else:
         effective_url = _effective_rtsp_url(

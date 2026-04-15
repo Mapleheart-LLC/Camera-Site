@@ -573,6 +573,7 @@
                   <span style="font-size:.8rem;font-weight:700;color:#c49ea5">Stream Source</span>
                   <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-tapo" value="tapo" checked /> 🔌 Tapo Camera</label>
                   <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-rtsp" value="rtsp" /> 🎥 Custom RTSP URL</label>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-obs" value="obs" /> 🖥️ OBS (Laptop/Desktop)</label>
                 </div>
                 <div id="tapo-fields" class="form-row">
                   <div class="form-field"><label for="f-tapo-ip">Tapo IP Address</label><input id="f-tapo-ip" type="text" placeholder="e.g. 192.168.1.100" /></div>
@@ -1662,13 +1663,20 @@
     });
     document.getElementById('f-slug').addEventListener('input', () => { _slugManuallyEdited = true; });
 
-    document.querySelectorAll('input[name="source-type"]').forEach(radio => {
-      radio.addEventListener('change', () => {
-        const isTapo = document.getElementById('src-tapo').checked;
-        document.getElementById('tapo-fields').style.display = isTapo ? '' : 'none';
-        document.getElementById('rtsp-fields').style.display  = isTapo ? 'none' : '';
+      document.querySelectorAll('input[name="source-type"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          const isTapo = document.getElementById('src-tapo').checked;
+          const isRtsp = document.getElementById('src-rtsp').checked;
+          const isObs = document.getElementById('src-obs').checked;
+          document.getElementById('tapo-fields').style.display = isTapo ? '' : 'none';
+          document.getElementById('rtsp-fields').style.display  = isRtsp ? '' : 'none';
+          // Hide all for OBS
+          if (isObs) {
+            document.getElementById('tapo-fields').style.display = 'none';
+            document.getElementById('rtsp-fields').style.display = 'none';
+          }
+        });
       });
-    });
 
     function openForm(title, cam = {}) {
       document.getElementById('form-title').textContent = title;
@@ -1709,17 +1717,21 @@
       const errEl = document.getElementById('form-error');
       if (!name || !slug) { errEl.textContent = 'Name and slug are required.'; return; }
       const isTapo        = document.getElementById('src-tapo').checked;
+      const isRtsp        = document.getElementById('src-rtsp').checked;
+      const isObs         = document.getElementById('src-obs').checked;
       const tapo_ip       = document.getElementById('f-tapo-ip').value.trim()   || null;
       const tapo_username = document.getElementById('f-tapo-user').value.trim() || null;
       const tapo_password = document.getElementById('f-tapo-pass').value        || null;
       const rtsp_url      = document.getElementById('f-rtsp-url').value.trim()  || null;
       if (isTapo && !tapo_ip)   { errEl.textContent = 'Tapo IP address is required.'; return; }
-      if (!isTapo && !rtsp_url) { errEl.textContent = 'RTSP URL is required.'; return; }
+      if (isRtsp && !rtsp_url)  { errEl.textContent = 'RTSP URL is required.'; return; }
+      // OBS: skip all validation
       errEl.textContent = '';
       const body = {
         display_name: name, stream_slug: slug, minimum_access_level: level,
         tapo_ip: isTapo ? tapo_ip : null, tapo_username: isTapo ? tapo_username : null,
-        tapo_password: isTapo ? tapo_password : null, rtsp_url: isTapo ? null : rtsp_url,
+        tapo_password: isTapo ? tapo_password : null, rtsp_url: isRtsp ? rtsp_url : null,
+        source_type: isObs ? 'obs' : (isTapo ? 'tapo' : 'rtsp'),
       };
       try {
         const resp = _editingId !== null
@@ -3152,12 +3164,34 @@
         const el = document.getElementById('rtmp-camera-list');
         if (!cams.length) { el.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No cameras configured.</p>'; }
         else {
-          el.innerHTML = cams.map(c => `
-            <div style="display:flex;align-items:center;gap:.75rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
-              <span style="flex:1;font-size:.85rem;color:#e8ddd5">${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
-              <code style="font-size:.78rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
-              <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Generate Key</button>
-            </div>`).join('');
+          el.innerHTML = cams.map(c => {
+            if (c.source_type === 'obs') {
+              const url = `rtmp://your-server:1935/${c.rtmp_key || ''}`;
+              return `
+                <div style="display:flex;flex-direction:column;gap:.3rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
+                  <span style="font-size:.95rem;color:#e8ddd5;font-weight:700">🖥️ OBS: ${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
+                  <div style="display:flex;align-items:center;gap:.5rem">
+                    <span style="font-size:.85rem;color:#e8ddd5">RTMP URL:</span>
+                    <code style="font-size:.85rem;color:#9e7e82">${url}</code>
+                    <button class="btn-sm btn-edit" onclick="navigator.clipboard.writeText('${url}')">Copy</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:.5rem">
+                    <span style="font-size:.85rem;color:#e8ddd5">Stream Key:</span>
+                    <code style="font-size:.85rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
+                    <button class="btn-sm btn-edit" onclick="navigator.clipboard.writeText('${c.rtmp_key || ''}')">Copy</button>
+                    <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Regenerate</button>
+                  </div>
+                </div>
+              `;
+            } else {
+              return `
+                <div style="display:flex;align-items:center;gap:.75rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
+                  <span style="flex:1;font-size:.85rem;color:#e8ddd5">${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
+                  <code style="font-size:.78rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
+                  <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Generate Key</button>
+                </div>`;
+            }
+          }).join('');
         }
       } catch(e) { console.error(e); }
 
