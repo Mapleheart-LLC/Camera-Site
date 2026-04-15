@@ -599,6 +599,15 @@
                   </tbody>
                 </table>
               </div>
+              <div class="card" style="margin-top:1.5rem">
+                <div class="card-header" style="display:flex;align-items:center;gap:1rem">
+                  <h2 style="margin:0">Discovered Edge Cameras</h2>
+                  <button class="btn-sm btn-edit" onclick="loadEdgeCameras()">🔍 Discover Edge Cameras</button>
+                </div>
+                <div class="card-body" id="edge-camera-list">
+                  <p style="color:#5a3a3e;font-size:.85rem">Click 'Discover Edge Cameras' to load from your edge agent.</p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -1532,12 +1541,69 @@
     // ── Cameras ────────────────────────────────────────
     let _editingId = null;
 
+
+    // Load cameras from backend
     async function loadCameras() {
       try {
         const cameras = await apiGet('/api/admin/cameras');
         renderCameras(cameras);
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load cameras.');
+      }
+    }
+
+    // Load edge agent cameras (discovered/active on local network)
+    async function loadEdgeCameras() {
+      const edgeUrl = prompt('Enter edge agent URL (e.g. http://192.168.1.50:8080)');
+      if (!edgeUrl) return;
+      const secret = prompt('Enter edge agent secret (X-Edge-Secret header)');
+      if (!secret) return;
+      const listDiv = document.getElementById('edge-camera-list');
+      listDiv.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">Loading edge cameras…</p>';
+      try {
+        const resp = await fetch(edgeUrl + '/cameras', { headers: { 'X-Edge-Secret': secret } });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.cameras || !data.cameras.length) {
+          listDiv.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No edge cameras found.</p>';
+          return;
+        }
+        listDiv.innerHTML = `<table class="admin-table" aria-label="Edge Cameras">
+          <thead><tr><th>Name</th><th>RTSP URL</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${data.cameras.map(cam => `
+              <tr>
+                <td>${escHtml(cam.display_name || cam.name || '-') }</td>
+                <td><code>${escHtml(cam.rtsp_url || '-') }</code></td>
+                <td>${cam.status ? escHtml(cam.status) : '—'}</td>
+                <td><button class="btn-sm btn-edit" onclick="registerEdgeCamera('${cam.rtsp_url}', '${cam.display_name || cam.name || ''}')">Register</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
+      } catch (err) {
+        listDiv.innerHTML = '<p style="color:#f87171">Failed to load edge cameras.</p>';
+      }
+    }
+
+    // Register edge camera to backend
+    window.registerEdgeCamera = async function(rtsp_url, display_name) {
+      if (!rtsp_url) return alert('No RTSP URL provided.');
+      const name = prompt('Camera display name:', display_name || '');
+      if (!name) return;
+      const slug = 'cam_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      const body = { display_name: name, stream_slug: slug, minimum_access_level: 1, tapo_ip: null, tapo_username: null, tapo_password: null, rtsp_url };
+      try {
+        const resp = await apiPost('/api/admin/cameras', body);
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          alert(data.detail || `Error ${resp.status}`);
+          return;
+        }
+        showToast('🐾 Edge camera registered!');
+        await loadCameras();
+      } catch (err) {
+        alert('Failed to register camera.');
       }
     }
 

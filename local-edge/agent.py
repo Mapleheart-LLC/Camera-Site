@@ -1,36 +1,211 @@
+# ---------------------------------------------------------------------------
+# Camera list/status API for admin panel dropdowns
+# ---------------------------------------------------------------------------
+from typing import List
+
+# In-memory camera registry (could be replaced with persistent storage)
+CAMERA_REGISTRY = []
+
+@app.get("/cameras")
+def list_cameras(x_edge_secret: str = Header(alias="X-Edge-Secret"), request: 'Request' = None):
+    """
+    Return the list of known cameras and their status for admin panel dropdowns.
+    """
+    if x_edge_secret != EDGE_SECRET:
+        logger.warning("Rejected /cameras with invalid X-Edge-Secret header.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid edge secret.")
+
+    allowlist = os.environ.get("ALLOWLIST", "").split(",") if os.environ.get("ALLOWLIST") else []
+    if allowlist and request:
+        client_ip = request.client.host
+        if client_ip not in allowlist:
+            logger.warning(f"Rejected /cameras from non-allowlisted IP: {client_ip}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed.")
+
+    # For now, just return the in-memory registry (could be enhanced to auto-discover or persist)
+    return {"cameras": CAMERA_REGISTRY}
+# ---------------------------------------------------------------------------
+# Transcoding/format conversion API (ffmpeg-based)
+# ---------------------------------------------------------------------------
+import subprocess
+
+class TranscodeRequest(BaseModel):
+    source_url: str
+    output_url: str
+    video_codec: str = "libx264"
+    audio_codec: str = "aac"
+    extra_args: Optional[str] = None
+
+@app.post("/transcode-stream")
+def transcode_stream(
+    req: TranscodeRequest,
+    x_edge_secret: str = Header(alias="X-Edge-Secret"),
+    request: 'Request' = None
+):
+    """
+    Start a transcoding process from source_url to output_url using ffmpeg.
+    Returns process info or error.
+    """
+    if x_edge_secret != EDGE_SECRET:
+        logger.warning("Rejected /transcode-stream with invalid X-Edge-Secret header.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid edge secret.")
+
+    allowlist = os.environ.get("ALLOWLIST", "").split(",") if os.environ.get("ALLOWLIST") else []
+    if allowlist and request:
+        client_ip = request.client.host
+        if client_ip not in allowlist:
+            logger.warning(f"Rejected /transcode-stream from non-allowlisted IP: {client_ip}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed.")
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y", "-i", req.source_url,
+        "-c:v", req.video_codec,
+        "-c:a", req.audio_codec,
+        "-f", "rtsp", req.output_url
+    ]
+    if req.extra_args:
+        ffmpeg_cmd.extend(req.extra_args.split())
+
+    try:
+        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logger.info(f"Started ffmpeg transcoding: {' '.join(ffmpeg_cmd)} (pid={proc.pid})")
+        return {"status": "started", "pid": proc.pid, "cmd": ffmpeg_cmd}
+    except Exception as exc:
+        logger.error(f"Failed to start ffmpeg: {exc}")
+        return {"error": str(exc)}
+# ---------------------------------------------------------------------------
+# Camera discovery and health monitoring API
+# ---------------------------------------------------------------------------
+import socket
+import time
+
+from fastapi.responses import JSONResponse
+
+def _ping_host(ip: str, port: int = 554, timeout: float = 1.0) -> bool:
+    """Try to open a socket to the given IP/port (RTSP default 554)."""
+    try:
+        with socket.create_connection((ip, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+@app.get("/discover-cameras")
+def discover_cameras(
+    subnet: str = "192.168.1.", start: int = 1, end: int = 20,
+    x_edge_secret: str = Header(alias="X-Edge-Secret"),
+    request: 'Request' = None
+):
+    """
+    Scan a subnet for Tapo cameras (by attempting RTSP connection).
+    Returns a list of IPs and their RTSP port status.
+    """
+    # Secure: require shared secret
+    if x_edge_secret != EDGE_SECRET:
+        logger.warning("Rejected /discover-cameras with invalid X-Edge-Secret header.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid edge secret.")
+
+    # Optional: IP allowlist (set ALLOWLIST env var as comma-separated IPs)
+    allowlist = os.environ.get("ALLOWLIST", "").split(",") if os.environ.get("ALLOWLIST") else []
+    if allowlist and request:
+        client_ip = request.client.host
+        if client_ip not in allowlist:
+            logger.warning(f"Rejected /discover-cameras from non-allowlisted IP: {client_ip}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed.")
+
+    results = []
+    for i in range(start, end + 1):
+        ip = f"{subnet}{i}"
+        is_up = _ping_host(ip)
+        results.append({"ip": ip, "rtsp_open": is_up})
+    return JSONResponse({"cameras": results, "scanned": f"{subnet}{start}-{end}"})
+
+@app.get("/camera-health")
+def camera_health(ip: str, x_edge_secret: str = Header(alias="X-Edge-Secret"), request: 'Request' = None):
+    """
+    Check health/status of a specific camera IP (RTSP port check).
+    """
+    # Secure: require shared secret
+    if x_edge_secret != EDGE_SECRET:
+        logger.warning("Rejected /camera-health with invalid X-Edge-Secret header.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid edge secret.")
+
+    # Optional: IP allowlist
+    allowlist = os.environ.get("ALLOWLIST", "").split(",") if os.environ.get("ALLOWLIST") else []
+    if allowlist and request:
+        client_ip = request.client.host
+        if client_ip not in allowlist:
+            logger.warning(f"Rejected /camera-health from non-allowlisted IP: {client_ip}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="IP not allowed.")
+
+    is_up = _ping_host(ip)
+    return {"ip": ip, "rtsp_open": is_up}
+# ---------------------------------------------------------------------------
+# On-demand stream registration API
+# ---------------------------------------------------------------------------
+
+from typing import Optional
+
+class RegisterStreamRequest(BaseModel):
+    name: str
+    tapo_ip: Optional[str] = None
+    tapo_username: Optional[str] = None
+    tapo_password: Optional[str] = None
+    rtsp_url: Optional[str] = None
+
+@app.post("/register-stream")
+async def register_stream(
+    req: RegisterStreamRequest,
+    _: None = Depends(_verify_edge_secret),
+):
+    """
+    Register (or relay) a Tapo or RTSP camera stream on demand.
+    - If tapo_ip is provided, build RTSP URL from Tapo credentials.
+    - If rtsp_url is provided, use it directly.
+    Returns the RTSP URL being relayed.
+    """
+    if req.tapo_ip:
+        # Use provided credentials or fallback to agent defaults
+        username = req.tapo_username or TAPO_EMAIL
+        password = req.tapo_password or TAPO_PASSWORD
+        if not username or not password:
+            return {"error": "Missing Tapo credentials"}
+        # Standard Tapo RTSP path (may need adjustment per model)
+        rtsp_url = f"rtsp://{username}:{password}@{req.tapo_ip}:554/stream1"
+    elif req.rtsp_url:
+        rtsp_url = req.rtsp_url
+    else:
+        return {"error": "No camera IP or RTSP URL provided"}
+
+    # Here you would start/relay the stream (e.g., via go2rtc, ffmpeg, or a proxy)
+    # For now, just return the RTSP URL for confirmation
+    # TODO: Integrate with go2rtc or relay process if needed
+    logger.info(f"Registered stream '{req.name}' → {rtsp_url}")
+    return {"status": "ok", "name": req.name, "rtsp_url": rtsp_url}
+
 """
 agent.py – Local-edge agent for the Camera Site.
 
-Runs two concurrent tasks:
-  1. A FastAPI HTTP server that accepts commands forwarded by the VPS relay
-     via POST /execute.
-  2. A polling loop that periodically fetches queued commands from the VPS.
-
-The VPS communicates with this agent over a Tailscale site-to-site VPN so
-that no edge ports need to be exposed to the public internet.
-
-Hardware currently supported
------------------------------
-  device_type == "switch"
-      Uses the plugp100 library to control a Tapo P100/P110 smart plug:
-      turn on → wait for the requested duration → turn off.
+This agent is now focused on bridging Tapo cameras to the site.
+It is responsible for:
+    - Managing Tapo camera credentials and RTSP streaming.
+    - Routing/relaying camera streams to the VPS or go2rtc as needed.
 
 Required environment variables
---------------------------------
-  EDGE_SECRET    Shared secret for authenticating requests from the VPS.
-  TAPO_EMAIL     Tapo cloud account e-mail address.
-  TAPO_PASSWORD  Tapo cloud account password.
+-----------------------------
+    EDGE_SECRET    Shared secret for authenticating requests from the VPS.
+    TAPO_EMAIL     Tapo cloud account e-mail address.
+    TAPO_PASSWORD  Tapo cloud account password.
 
 Optional environment variables
---------------------------------
-  VPS_COMMAND_URL  Full URL of the VPS polling endpoint.
-  POLL_INTERVAL    Polling cadence in seconds (default: 5).
-  AGENT_PORT       Port this FastAPI server listens on (default: 8080).
-  TAPO_PORT        LAN port used to reach Tapo devices (default: 80).
+------------------------------
+    VPS_COMMAND_URL  Full URL of the VPS polling endpoint.
+    POLL_INTERVAL    Polling cadence in seconds (default: 5).
+    AGENT_PORT       Port this FastAPI server listens on (default: 8080).
+    TAPO_PORT        LAN port used to reach Tapo devices (default: 80).
 
 Run:
-    pip install -r requirements.txt
-    python agent.py
+        pip install -r requirements.txt
+        python agent.py
 """
 
 import asyncio
@@ -40,9 +215,7 @@ import os
 import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, status
-from plugp100.common.credentials import AuthCredential
-from plugp100.new.tapo.p100plug import P100Plug
-from plugp100.new.tapo_client import TapoClient
+
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -73,11 +246,11 @@ POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "5"))
 # Port this FastAPI server listens on.
 AGENT_PORT: int = int(os.environ.get("AGENT_PORT", "8080"))
 
-# LAN port used to reach Tapo devices (almost always 80, but configurable).
+
+# LAN port used to reach Tapo cameras (default 80, configurable).
 TAPO_PORT: int = int(os.environ.get("TAPO_PORT", "80"))
 
-# Tapo smart-plug credentials (loaded lazily so missing values are caught at
-# runtime rather than at import time).
+# Tapo camera credentials (loaded lazily so missing values are caught at runtime).
 TAPO_EMAIL: str = os.environ.get("TAPO_EMAIL", "")
 TAPO_PASSWORD: str = os.environ.get("TAPO_PASSWORD", "")
 
@@ -93,12 +266,6 @@ app = FastAPI(title="Camera Site – Edge Agent")
 # ---------------------------------------------------------------------------
 
 
-class ExecuteCommand(BaseModel):
-    """Command payload forwarded from the VPS relay."""
-
-    device_type: str
-    device_ip: str
-    duration: float = 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -116,162 +283,36 @@ def _verify_edge_secret(x_edge_secret: str = Header(alias="X-Edge-Secret")) -> N
         )
 
 
-# ---------------------------------------------------------------------------
-# /execute endpoint
-# ---------------------------------------------------------------------------
-
-
-@app.post("/execute")
-async def execute_command(
-    cmd: ExecuteCommand,
-    _: None = Depends(_verify_edge_secret),
-) -> dict:
-    """
-    Receive a command from the VPS relay and execute it on local hardware.
-
-    Currently supported device types
-    ----------------------------------
-    ``switch``
-        Connects to the Tapo smart plug at ``device_ip``, turns it on,
-        waits ``duration`` seconds, then turns it off.
-    """
-    logger.info(
-        "Received /execute command: device_type=%s device_ip=%s duration=%.1fs",
-        cmd.device_type,
-        cmd.device_ip,
-        cmd.duration,
-    )
-
-    if cmd.device_type == "switch":
-        await _tapo_switch_cycle(cmd.device_ip, cmd.duration)
-        logger.info(
-            "Switch command completed successfully: device_ip=%s duration=%.1fs",
-            cmd.device_ip,
-            cmd.duration,
-        )
-        return {"status": "ok", "device_ip": cmd.device_ip, "duration": cmd.duration}
-
-    logger.warning("Unsupported device_type received: %s", cmd.device_type)
-    raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail=f"Unsupported device_type: '{cmd.device_type}'. Supported types: switch",
-    )
-
 
 # ---------------------------------------------------------------------------
-# Tapo helpers
+# Camera bridge endpoints (to be implemented)
 # ---------------------------------------------------------------------------
+
+# Example stub endpoint for future camera bridge/relay logic
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "role": "tapo-camera-bridge"}
 
 
 def _tapo_credentials() -> AuthCredential:
     """
     Build Tapo credentials from environment variables.
-
-    Raises ``RuntimeError`` if TAPO_EMAIL or TAPO_PASSWORD are not set,
-    so the error surfaces at the moment a command is dispatched rather than
-    silently failing at startup.
+    Raises RuntimeError if TAPO_EMAIL or TAPO_PASSWORD are not set.
     """
     if not TAPO_EMAIL.strip() or not TAPO_PASSWORD.strip():
         raise RuntimeError(
             "TAPO_EMAIL and TAPO_PASSWORD environment variables must be set "
-            "to control Tapo smart switches."
+            "to access Tapo cameras."
         )
-    return AuthCredential(username=TAPO_EMAIL, password=TAPO_PASSWORD)
+    # Return as a tuple for now; update as needed for camera RTSP auth
+    return (TAPO_EMAIL, TAPO_PASSWORD)
 
 
-async def _tapo_switch_cycle(device_ip: str, duration: float) -> None:
-    """
-    Authenticate with the Tapo switch at *device_ip*, turn it on, wait
-    *duration* seconds, then turn it off.
 
-    The client session is always closed in the ``finally`` block to avoid
-    leaking TCP connections across repeated calls.
-    """
-    credentials = _tapo_credentials()
-    client = TapoClient(credentials, (device_ip, TAPO_PORT))
-    try:
-        await client.login()
-        plug = P100Plug(client)
-
-        logger.info("Turning ON Tapo switch at %s", device_ip)
-        await plug.turn_on()
-
-        await asyncio.sleep(duration)
-
-        logger.info("Turning OFF Tapo switch at %s (after %.1fs)", device_ip, duration)
-        await plug.turn_off()
-    finally:
-        await client.close()
-
-
-# ---------------------------------------------------------------------------
-# VPS polling loop
-# ---------------------------------------------------------------------------
-
-
-async def poll_commands() -> None:
-    """Fetch and dispatch commands from the VPS in a steady polling loop."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        while True:
-            try:
-                resp = await client.get(
-                    VPS_COMMAND_URL,
-                    headers={"X-Edge-Secret": EDGE_SECRET},
-                )
-                if resp.status_code == 200:
-                    commands = resp.json()
-                    for cmd in commands:
-                        await dispatch(cmd)
-                else:
-                    logger.warning("VPS returned status %s", resp.status_code)
-            except httpx.RequestError as exc:
-                logger.error("Could not reach VPS: %s", exc)
-
-            await asyncio.sleep(POLL_INTERVAL)
-
-
-async def dispatch(command: dict) -> None:
-    """Route an incoming polled command to the appropriate handler."""
-    action = command.get("action", "")
-    logger.info("Dispatching polled command: %s", command)
-
-    if action == "tapo_switch":
-        await handle_tapo_switch(command)
-    elif action == "camera_route":
-        await handle_camera_route(command)
-    else:
-        logger.warning("Unknown command action: '%s'", action)
-
-
-async def handle_tapo_switch(command: dict) -> None:
-    """Handle a polled tapo_switch command."""
-    device_ip = command.get("device_ip", "")
-    duration = float(command.get("duration", 5.0))
-    if not device_ip:
-        logger.error("tapo_switch command missing 'device_ip': %s", command)
-        return
-    try:
-        await _tapo_switch_cycle(device_ip, duration)
-        logger.info("Polled switch command executed successfully for %s", device_ip)
-    except RuntimeError as exc:
-        logger.error(
-            "Configuration error for Tapo switch at %s (duration=%.1fs): %s",
-            device_ip, duration, exc,
-        )
-    except ConnectionError as exc:
-        logger.error(
-            "Connection failure for Tapo switch at %s (duration=%.1fs): %s",
-            device_ip, duration, exc,
-        )
-    except Exception as exc:
-        logger.error(
-            "Unexpected error executing Tapo switch at %s (duration=%.1fs): %s",
-            device_ip, duration, exc,
-        )
 
 
 async def handle_camera_route(command: dict) -> None:
-    """Stub: Update AI camera routing."""
+    """Stub: Update AI camera routing or relay logic."""
     target = command.get("target", "")
     logger.info("TODO: reroute camera stream to %s", target)
 
@@ -282,15 +323,8 @@ async def handle_camera_route(command: dict) -> None:
 
 if __name__ == "__main__":
     logger.info(
-        "Edge agent starting – HTTP server on port %s, polling VPS at %s",
+        "Edge agent starting – HTTP server on port %s (Tapo camera bridge mode)",
         AGENT_PORT,
-        VPS_COMMAND_URL,
     )
 
-    async def _main() -> None:
-        server = uvicorn.Server(
-            uvicorn.Config(app, host="0.0.0.0", port=AGENT_PORT, log_level="info")
-        )
-        await asyncio.gather(server.serve(), poll_commands())
-
-    asyncio.run(_main())
+    uvicorn.run(app, host="0.0.0.0", port=AGENT_PORT, log_level="info")
