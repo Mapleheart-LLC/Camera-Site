@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  local-edge:
+    build:
+      context: ./local-edge
+    container_name: local-edge
+    environment:
+      EDGE_SECRET: "mapleheart"
+      TAPO_EMAIL: "estrine@protonmail.com"
+      TAPO_PASSWORD: "pkMx12$?"
+      VPS_COMMAND_URL: "http://vps-cloud:8000/api/edge/commands"  # adjust if needed
+      POLL_INTERVAL: "5"
+      AGENT_PORT: "8080"
+      TAPO_PORT: "80"
+      # ALLOWLIST: "192.168.1.100,192.168.1.101"  # optional
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on: []
+    # Uncomment if you need host networking (not recommended for all platforms)
+    # network_mode: "host"
