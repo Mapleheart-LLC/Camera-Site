@@ -2108,9 +2108,11 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 
+
 @app.get("/api/stream-status")
-async def get_stream_status():
-    """Return live status and viewer counts for all cameras by querying go2rtc."""
+async def get_stream_status(db: sqlite3.Connection = Depends(get_db)):
+    """Return live status and viewer counts for all cameras by querying go2rtc.
+    Also auto-creates a free-tier camera record for any new RTMP stream detected in go2rtc."""
     go2rtc_base = f"http://{GO2RTC_HOST}:{GO2RTC_PORT}"
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -2121,6 +2123,11 @@ async def get_stream_status():
     except Exception:
         return JSONResponse({"streams": {}})
 
+    # Fetch all known rtmp_keys from the cameras table
+    rows = db.execute("SELECT stream_slug, rtmp_key FROM cameras").fetchall()
+    known_rtmp_keys = {row["rtmp_key"]: row["stream_slug"] for row in rows if row["rtmp_key"]}
+    known_slugs = {row["stream_slug"] for row in rows}
+
     result = {}
     for stream_name, info in data.items():
         producers = info.get("producers", [])
@@ -2128,6 +2135,28 @@ async def get_stream_status():
         is_live = any(p.get("state") == "running" for p in producers)
         viewer_count = len(consumers)
         result[stream_name] = {"is_live": is_live, "viewer_count": viewer_count}
+
+        # If this stream_name is not a known slug or rtmp_key, auto-create a free camera record
+        if stream_name not in known_slugs and stream_name not in known_rtmp_keys:
+            # Insert a new camera record with minimum_access_level=1 (free tier)
+            db.execute(
+                """
+                INSERT INTO cameras (display_name, stream_slug, minimum_access_level, rtmp_key)
+                VALUES (?, ?, 1, ?)
+                """,
+                (f"OBS Stream {stream_name}", stream_name, stream_name)
+            )
+            db.commit()
+            # Optionally, register with go2rtc (should already be present, but for consistency)
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.put(
+                        f"{go2rtc_base}/api/streams",
+                        params={"name": stream_name, "src": f"rtmp://localhost:1935/{stream_name}"},
+                    )
+            except Exception:
+                pass
+
     return JSONResponse({"streams": result})
 
 
