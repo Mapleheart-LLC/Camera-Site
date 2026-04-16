@@ -130,32 +130,6 @@ scheduler = AsyncIOScheduler()
 # ---------------------------------------------------------------------------
 
 
-async def _ping_discord_new_item(platform: str, url: str, text: str) -> None:
-    """Send a Discord ping for a newly archived item."""
-    from discord_webhook import send_discord_notification  # local import avoids circular
-
-    snippet = (text or url)[:200]
-    await send_discord_notification(
-        content=f"🐾 A new {platform} secret has been logged in the Drool Archive! {snippet}",
-        is_embed=False,
-    )
-
-
-def _notify_new_items(new_items: list[tuple]) -> None:
-    """Fire Discord pings for each newly inserted item (best-effort, sync wrapper)."""
-    for item in new_items:
-        platform, orig_url, _media, text_content, _ts = item[:5]
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(_ping_discord_new_item(platform, orig_url, text_content or ""))
-            else:
-                loop.run_until_complete(
-                    _ping_discord_new_item(platform, orig_url, text_content or "")
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Discord ping for new drool item failed: %s", exc)
-
 
 # ---------------------------------------------------------------------------
 # Reddit scraper
