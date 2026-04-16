@@ -595,6 +595,71 @@ def admin_answer_question(
         "message": "Answer saved and question is now public 🐾",
         "tweeted": tweeted,
     }
+  
+  def _post_answer_bluesky(question_id: str, answer_text: str) -> bool:
+    """Post the answer to Bluesky using app password."""
+    def _load(db_key: str, env_key: str = "") -> str:
+        try:
+            conn = get_db_connection()
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (db_key,)).fetchone()
+            conn.close()
+            if row and row[0]: return row[0]
+        except Exception: pass
+        return os.environ.get(env_key, "") if env_key else ""
+
+    handle = _load("drool_bsky_handle", "BSKY_HANDLE")
+    app_password = _load("drool_bsky_app_password", "BSKY_APP_PASSWORD")
+
+    if not handle or not app_password:
+        logger.debug("Bluesky post: no handle or app password configured.")
+        return False
+
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+    if not base_url:
+        logger.warning("Bluesky post: BASE_URL not set – cannot build an absolute share URL; skipping post.")
+        return False
+        
+    share_url = f"{base_url}/q/{question_id}"
+    
+    # Bluesky limit is 300. Reserve space for URL and newlines.
+    max_text = 250
+    truncated = answer_text[:max_text] + "..." if len(answer_text) > max_text else answer_text
+    post_text = f"{truncated}\n\n{share_url}"
+
+    try:
+        import httpx
+        from datetime import datetime, timezone
+        
+        # 1. Authenticate to create a session
+        r_auth = httpx.post(
+            "https://bsky.social/xrpc/com.atproto.server.createSession",
+            json={"identifier": handle, "password": app_password},
+            timeout=10.0
+        )
+        r_auth.raise_for_status()
+        session = r_auth.json()
+        
+        # 2. Build the record (calculating byte offsets for the clickable link)
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        text_bytes = post_text.encode('utf-8')
+        url_bytes = share_url.encode('utf-8')
+        byte_start = text_bytes.find(url_bytes)
+        byte_end = byte_start + len(url_bytes)
+
+        record = {
+            "$type": "app.bsky.feed.post",
+            "text": post_text,
+            "createdAt": now,
+            "facets": [{
+                "index": {"byteStart": byte_start, "byteEnd": byte_end},
+                "features": [{"$type": "app.bsky.richtext.facet#link", "uri": share_url}]
+            }]
+        }
+
+        # 3. Post the record
+        r_post = httpx.post(
+            "
+          
 
 
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
