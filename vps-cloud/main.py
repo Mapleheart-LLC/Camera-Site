@@ -46,6 +46,7 @@ from routers.tpe import (
     migrate_tpe,
 )
 from routers.handler import router as handler_router, migrate_handler
+from routers.vitals import router as vitals_router, migrate_vitals
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -737,6 +738,7 @@ async def lifespan(app: FastAPI):
     init_db()
     migrate_tpe(get_db_connection())
     migrate_handler(get_db_connection())
+    migrate_vitals(get_db_connection())
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
@@ -989,6 +991,7 @@ app.include_router(age_gate_router)
 app.include_router(tpe_device_router)
 app.include_router(tpe_admin_router)
 app.include_router(handler_router)
+app.include_router(vitals_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.

@@ -436,6 +436,7 @@
 
           <div class="sidebar-section-label">Navigation</div>
           <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
+          <button class="nav-item" data-target="sec-vitals">💓 Vitals</button>
           <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
           <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
           <button class="nav-item" data-target="sec-logs">📜 Logs</button>
@@ -492,6 +493,55 @@
                     <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ VITALS ═══════════════ -->
+          <section id="sec-vitals" class="handler-section">
+            <h2 class="section-heading">💓 Vitals</h2>
+
+            <!-- Alert status indicator -->
+            <div id="vitals-alert-banner" role="alert" style="
+              display:none; align-items:center; gap:.6rem;
+              background:rgba(248,113,113,.12); border:1px solid #f87171;
+              border-radius:10px; padding:.75rem 1rem; margin-bottom:1rem;
+              font-weight:700; font-size:.95rem; color:#f87171;
+            ">
+              <span id="vitals-alert-icon">⚠️</span>
+              <span id="vitals-alert-text">Alert active</span>
+            </div>
+
+            <!-- Live stats row -->
+            <div class="stats-row" style="margin-bottom:1rem">
+              <div class="stat-tile">
+                <div class="stat-icon">💓</div>
+                <div class="stat-value" id="vit-bpm">—</div>
+                <div class="stat-label">Current BPM</div>
+              </div>
+              <div class="stat-tile">
+                <div class="stat-icon">📉</div>
+                <div class="stat-value" id="vit-baseline">—</div>
+                <div class="stat-label">Resting Baseline</div>
+              </div>
+              <div class="stat-tile">
+                <div class="stat-icon">🚶</div>
+                <div class="stat-value" id="vit-status">—</div>
+                <div class="stat-label">Alert Status</div>
+              </div>
+            </div>
+
+            <!-- BPM chart -->
+            <div class="card">
+              <div class="card-header">
+                <h2>Heart Rate — Last 60 Minutes</h2>
+                <button class="btn-action" id="vitals-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+              </div>
+              <div class="card-body">
+                <div id="vitals-chart-placeholder" style="color:#9e7e82;font-size:.85rem;padding:.5rem 0">
+                  No readings yet for this device.
+                </div>
+                <canvas id="vitals-chart" style="display:none;max-height:300px"></canvas>
               </div>
             </div>
           </section>
@@ -590,6 +640,8 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
   <script>
     // ═══════════════════════════════════════════════════════════
@@ -773,6 +825,7 @@
         btn.classList.add('active');
         if (btn.dataset.target === 'sec-map') initDetailMap();
         if (btn.dataset.target === 'sec-logs') loadLogs();
+        if (btn.dataset.target === 'sec-vitals') loadVitalsHistory();
       });
     });
 
@@ -1008,8 +1061,18 @@
           }
           if (msg.device_id === viewingDeviceId) {
             showToast('🔒 Lock command confirmed by server.');
-            setText('sb-lock', '�� Locked');
+            setText('sb-lock', '🔒 Locked');
           }
+        }
+
+        // ── Vitals update: biometric data broadcast ───────────────────
+        if (msg.type === 'vitals_update' && msg.device_id === viewingDeviceId) {
+          var bpm = msg.current_bpm;
+          _vitalsBaseline = msg.baseline !== undefined ? msg.baseline : _vitalsBaseline;
+          setText('vit-bpm',      bpm !== undefined ? bpm : '—');
+          setText('vit-baseline', _vitalsBaseline !== null && _vitalsBaseline !== undefined ? _vitalsBaseline : '—');
+          renderVitalsAlert(msg.alert_status || null);
+          pushVitalsPoint(bpm, _vitalsBaseline, new Date().toISOString());
         }
       });
     }
@@ -1192,6 +1255,180 @@
     }
 
     document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
+
+    // ═══════════════════════════════════════════════════════════
+    // VITALS CHART
+    // ═══════════════════════════════════════════════════════════
+
+    var _vitalsChart     = null;   // Chart.js instance
+    var _vitalsBaseline  = null;   // current resting baseline (number or null)
+    var _vitalsAlertStatus = null; // string or null
+    var _vitalsFlashTimer = null;
+
+    /**
+     * Show or hide the alert banner and flash effect.
+     * alertStatus – null, 'Physical Activity', 'Excitement/Stress', or 'Activity Alert'
+     */
+    function renderVitalsAlert(alertStatus) {
+      _vitalsAlertStatus = alertStatus;
+      var banner = document.getElementById('vitals-alert-banner');
+      var statusEl = document.getElementById('vit-status');
+
+      if (_vitalsFlashTimer) { clearInterval(_vitalsFlashTimer); _vitalsFlashTimer = null; }
+
+      if (!alertStatus) {
+        banner.style.display = 'none';
+        if (statusEl) statusEl.textContent = '✅ Normal';
+        return;
+      }
+
+      // Determine icon and label
+      var icon = alertStatus === 'Physical Activity' ? '🏃' : '😰';
+      document.getElementById('vitals-alert-icon').textContent = icon;
+      document.getElementById('vitals-alert-text').textContent = alertStatus;
+      if (statusEl) statusEl.textContent = '⚠️ ' + alertStatus;
+
+      // Flash the banner
+      banner.style.display = 'flex';
+      var visible = true;
+      _vitalsFlashTimer = setInterval(function() {
+        visible = !visible;
+        banner.style.opacity = visible ? '1' : '0.3';
+      }, 600);
+    }
+
+    /**
+     * (Re-)draw the Chart.js BPM graph with the given readings array and baseline.
+     * readings – [{timestamp, heart_rate}, ...]
+     * baseline – number or null
+     */
+    function renderVitalsChart(readings, baseline) {
+      var placeholder = document.getElementById('vitals-chart-placeholder');
+      var canvas      = document.getElementById('vitals-chart');
+
+      if (!readings || !readings.length) {
+        placeholder.style.display = 'block';
+        canvas.style.display      = 'none';
+        if (_vitalsChart) { _vitalsChart.destroy(); _vitalsChart = null; }
+        return;
+      }
+
+      placeholder.style.display = 'none';
+      canvas.style.display      = 'block';
+
+      var labels   = readings.map(function(r) {
+        try { return new Date(r.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+        catch(e) { return r.timestamp; }
+      });
+      var bpmData  = readings.map(function(r) { return r.heart_rate; });
+      var baseData = readings.map(function() { return baseline !== null ? baseline : null; });
+
+      var datasets = [
+        {
+          label: 'BPM',
+          data: bpmData,
+          borderColor: '#e8aeb7',
+          backgroundColor: 'rgba(232,174,183,.08)',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          fill: true,
+        },
+      ];
+
+      if (baseline !== null) {
+        datasets.push({
+          label: 'Resting Baseline',
+          data: baseData,
+          borderColor: '#9e7e82',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+        });
+      }
+
+      if (_vitalsChart) {
+        _vitalsChart.data.labels   = labels;
+        _vitalsChart.data.datasets = datasets;
+        _vitalsChart.update('none');
+      } else {
+        _vitalsChart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: { labels: labels, datasets: datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                labels: { color: '#f0e6e8', font: { family: 'Nunito' } },
+              },
+            },
+            scales: {
+              x: {
+                ticks: { color: '#9e7e82', maxTicksLimit: 10, font: { size: 10 } },
+                grid:  { color: 'rgba(255,255,255,.06)' },
+              },
+              y: {
+                ticks: { color: '#9e7e82', font: { size: 10 } },
+                grid:  { color: 'rgba(255,255,255,.06)' },
+                title: { display: true, text: 'BPM', color: '#9e7e82' },
+              },
+            },
+          },
+        });
+      }
+    }
+
+    /**
+     * Fetch historical BPM data from the server and render the chart.
+     */
+    async function loadVitalsHistory() {
+      if (!viewingDeviceId) return;
+      try {
+        var data = await apiGet(
+          '/api/vitals/history?device_id=' + encodeURIComponent(viewingDeviceId) + '&minutes=60'
+        );
+        _vitalsBaseline = data.baseline;
+        setText('vit-bpm',      data.readings.length ? data.readings[data.readings.length - 1].heart_rate : '—');
+        setText('vit-baseline', data.baseline !== null ? data.baseline : '—');
+        renderVitalsAlert(data.alert_status);
+        renderVitalsChart(data.readings, data.baseline);
+      } catch(e) {
+        // silent – WS will deliver live updates
+      }
+    }
+
+    /**
+     * Push a new BPM data point onto the existing chart without a full reload.
+     */
+    function pushVitalsPoint(bpm, baseline, timestamp) {
+      if (!_vitalsChart) return;
+      var label;
+      try { label = new Date(timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+      catch(e) { label = ''; }
+
+      // Keep at most 60 minutes of chart points.
+      // Assuming the worst-case push rate of 1 reading every 5 seconds that gives
+      // MAX_CHART_POINTS = 60 * 60 / 5 = 720 data points.
+      var MAX_CHART_POINTS = 720;
+      if (_vitalsChart.data.labels.length > MAX_CHART_POINTS) {
+        _vitalsChart.data.labels.shift();
+        _vitalsChart.data.datasets.forEach(function(ds) { ds.data.shift(); });
+      }
+
+      _vitalsChart.data.labels.push(label);
+      // BPM dataset is always index 0
+      _vitalsChart.data.datasets[0].data.push(bpm);
+      // Baseline dataset (index 1, if present) – update all points to new value
+      if (_vitalsChart.data.datasets[1] && baseline !== null) {
+        _vitalsChart.data.datasets[1].data.push(baseline);
+      }
+      _vitalsChart.update('none');
+    }
+
+    document.getElementById('vitals-refresh-btn').addEventListener('click', loadVitalsHistory);
 
     // ═══════════════════════════════════════════════════════════
     // INITIALISATION
