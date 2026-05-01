@@ -621,7 +621,7 @@
 
     // ── Toast ──────────────────────────────────────────
     let _toastTimer = null;
-    function showToast(msg, isError) {
+    function showToast(msg, isError = false) {
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.style.borderColor = isError ? '#f87171' : '#e8aeb7';
@@ -934,7 +934,7 @@
     function updateBatteryBar(pct) {
       var bar = document.getElementById('sb-bar');
       if (!bar) return;
-      var p = Math.max(0, Math.min(100, pct || 0));
+      var p = Math.max(0, Math.min(100, pct ?? 0));
       bar.style.width = p + '%';
       bar.className = 'battery-bar';
       if (p < 20)      bar.classList.add('crit');
