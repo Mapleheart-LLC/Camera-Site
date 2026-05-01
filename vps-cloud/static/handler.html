@@ -238,6 +238,27 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
+    /* ── Device selector ─────────────────────────────── */
+    .device-selector-wrap {
+      margin: .75rem 1.25rem .25rem;
+    }
+    .device-selector-wrap label {
+      display: block; font-size: .63rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: #5a3a3e; margin-bottom: .4rem;
+    }
+    .device-selector-wrap select {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 8px;
+      color: #f0e6e8; font-family: inherit; font-size: .82rem; padding: .45rem .65rem;
+      outline: none; cursor: pointer; transition: border-color .2s;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239e7e82' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right .6rem center;
+      padding-right: 1.8rem;
+    }
+    .device-selector-wrap select:focus { border-color: #e8aeb7; }
+    .device-selector-wrap select option { background: #242424; }
+
     /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
       .sidebar { display: none; }
@@ -284,6 +305,15 @@
 
       <!-- ── Sidebar ── -->
       <aside class="sidebar" id="sidebar">
+
+        <!-- Device selector -->
+        <div class="device-selector-wrap">
+          <label for="device-select">📱 Device</label>
+          <select id="device-select">
+            <option value="">— select device —</option>
+          </select>
+        </div>
+
         <!-- Device quick-status -->
         <div class="sidebar-status">
           <div class="ss-row">
@@ -507,6 +537,18 @@
       return c ? { 'Authorization': `Basic ${c}` } : {};
     }
 
+    // ── Selected device ────────────────────────────────
+    let selectedDeviceId = null;
+
+    function setSelectedDevice(deviceId) {
+      selectedDeviceId = deviceId || null;
+      const sel = document.getElementById('device-select');
+      if (sel && sel.value !== (deviceId ?? '')) sel.value = deviceId ?? '';
+      // Clear displayed status when switching devices
+      renderStatus({});
+      if (selectedDeviceId) fetchAndRenderStatus();
+    }
+
     // ── Toast ──────────────────────────────────────────
     let _toastTimer = null;
     function showToast(msg, isError = false) {
@@ -551,12 +593,36 @@
       if (msg) document.getElementById('login-error').textContent = msg;
       clearCreds();
       disconnectWS();
+      selectedDeviceId = null;
     }
 
     function showHandlerPanel() {
       document.getElementById('login-panel').style.display   = 'none';
       document.getElementById('handler-panel').style.display = 'block';
       initPanel();
+    }
+
+    async function loadDeviceList() {
+      try {
+        const devices = await apiGet('/api/handler/devices');
+        const sel = document.getElementById('device-select');
+        // Preserve current selection
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— select device —</option>';
+        devices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value       = d.device_id;
+          opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
+          sel.appendChild(opt);
+        });
+        // Restore or auto-select first device
+        if (prev && devices.some(d => d.device_id === prev)) {
+          sel.value = prev;
+        } else if (devices.length === 1) {
+          sel.value = devices[0].device_id;
+          setSelectedDevice(devices[0].device_id);
+        }
+      } catch { /* non-critical */ }
     }
 
     // ── Login ──────────────────────────────────────────
@@ -590,6 +656,11 @@
     // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => showLoginPanel(''));
 
+    // ── Device selector ────────────────────────────────
+    document.getElementById('device-select').addEventListener('change', function () {
+      setSelectedDevice(this.value || null);
+    });
+
     // ── Sidebar navigation ─────────────────────────────
     document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -605,8 +676,16 @@
 
     // ═══════════════ STATUS RENDERING ═══════════════
     function renderStatus(s) {
-      if (!s || !s.updated_at) return;
-
+      if (!s || !s.updated_at) {
+        // Clear displayed values when no data (e.g. device switched)
+        ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
+         'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
+         'ov-online','ov-online-sub','sb-online','sb-lock','det-last-seen'].forEach(id => setText(id, '—'));
+        updateBatteryBar(0);
+        document.getElementById('ai-alert-banner').classList.remove('visible');
+        document.getElementById('det-lock').textContent = '—';
+        return;
+      }
       // Battery
       const batt = s.battery_pct;
       const battStr = batt !== null && batt !== undefined ? `${batt}%` : '—';
@@ -712,12 +791,47 @@
         let msg;
         try { msg = JSON.parse(evt.data); } catch { return; }
         if (msg.type === 'ping') return;
-        if (msg.type === 'snapshot' || msg.type === 'status_update') renderStatus(msg);
+
+        if (msg.type === 'snapshot') {
+          // New format: { type: 'snapshot', devices: [...] }
+          // Refresh the device dropdown and render selected device's status
+          if (Array.isArray(msg.devices)) _refreshDropdownFromWS(msg.devices);
+          return;
+        }
+
+        // status_update and lock events are per-device — filter by selection
+        if (msg.type === 'status_update') {
+          if (selectedDeviceId && msg.device_id === selectedDeviceId) renderStatus(msg);
+          return;
+        }
         if (msg.type === 'lock') {
-          showToast('🔒 Lock command confirmed by server.');
-          setText('sb-lock', '🔒 Locked');
+          if (!selectedDeviceId || msg.device_id === selectedDeviceId) {
+            showToast('🔒 Lock command confirmed by server.');
+            setText('sb-lock', '🔒 Locked');
+          }
         }
       });
+    }
+
+    function _refreshDropdownFromWS(devices) {
+      const sel = document.getElementById('device-select');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">— select device —</option>';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value       = d.device_id;
+        opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
+        sel.appendChild(opt);
+      });
+      if (prev && devices.some(d => d.device_id === prev)) {
+        sel.value = prev;
+        // Re-render status for the selected device from snapshot data
+        const devData = devices.find(d => d.device_id === prev);
+        if (devData) renderStatus(devData);
+      } else if (devices.length === 1 && !selectedDeviceId) {
+        sel.value = devices[0].device_id;
+        setSelectedDevice(devices[0].device_id);
+      }
     }
 
     function disconnectWS() {
@@ -775,16 +889,25 @@
 
     // ═══════════════ QUICK ACTIONS ═══════════════
 
+    function _requireDevice(resEl) {
+      if (!selectedDeviceId) {
+        resEl.textContent = '⚠️ Select a device first.';
+        return false;
+      }
+      return true;
+    }
+
     /**
      * Send the LOCK_DEVICE FCM command via POST /api/handler/lock.
      */
     async function sendLock() {
       const btn = document.getElementById('btn-lock');
       const res = document.getElementById('res-lock');
+      if (!_requireDevice(res)) return;
       btn.disabled = true;
       res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/handler/lock');
+        const r = await apiPost('/api/handler/lock', { device_id: selectedDeviceId });
         if (r.ok) {
           res.textContent = '✅ Lock sent.';
           showToast('🔒 Lock command sent.');
@@ -805,10 +928,12 @@
     async function sendVibrateLovense() {
       const btn = document.getElementById('btn-lovense');
       const res = document.getElementById('res-lovense');
+      if (!_requireDevice(res)) return;
       btn.disabled = true;
       res.textContent = 'Sending…';
       try {
         const r = await apiPost('/api/admin/tpe/push', {
+          device_id:   selectedDeviceId,
           action:      'LOVENSE_COMMAND',
           toy_command: 'vibrate',
           toy_level:   '10',
@@ -834,6 +959,7 @@
     async function sendShockPiShock() {
       const btn = document.getElementById('btn-pishock');
       const res = document.getElementById('res-pishock');
+      if (!_requireDevice(res)) return;
       btn.disabled = true;
       res.textContent = 'Sending…';
       try {
@@ -841,6 +967,7 @@
         // with intensity set to max as a proxy until a dedicated PiShock FCM action
         // is available.  Replace with the correct action string when added.
         const r = await apiPost('/api/admin/tpe/push', {
+          device_id:           selectedDeviceId,
           action:              'PAVLOK_COMMAND',
           pavlok_cmd:          'shock',
           pavlok_intensity:    '50',
@@ -866,10 +993,12 @@
     async function sendVibratePavlok() {
       const btn = document.getElementById('btn-pavlok');
       const res = document.getElementById('res-pavlok');
+      if (!_requireDevice(res)) return;
       btn.disabled = true;
       res.textContent = 'Sending…';
       try {
         const r = await apiPost('/api/admin/tpe/push', {
+          device_id:           selectedDeviceId,
           action:              'PAVLOK_COMMAND',
           pavlok_cmd:          'vibrate',
           pavlok_intensity:    '100',
@@ -895,10 +1024,11 @@
     async function requestCheckin() {
       const btn = document.getElementById('btn-checkin');
       const res = document.getElementById('res-checkin');
+      if (!_requireDevice(res)) return;
       btn.disabled = true;
       res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/admin/tpe/checkins/request');
+        const r = await apiPost('/api/admin/tpe/checkins/request', { device_id: selectedDeviceId });
         if (r.ok) {
           res.textContent = '✅ Check-in requested.';
           showToast('📋 Check-in request sent.');
@@ -972,15 +1102,16 @@
     // ═══════════════ INITIALISATION ═══════════════
 
     async function fetchAndRenderStatus() {
+      if (!selectedDeviceId) return;
       try {
-        const s = await apiGet('/api/handler/status');
+        const s = await apiGet(`/api/handler/status?device_id=${encodeURIComponent(selectedDeviceId)}`);
         renderStatus(s);
       } catch { /* WS will deliver updates anyway */ }
     }
 
     function initPanel() {
       connectWS();
-      fetchAndRenderStatus();
+      loadDeviceList();
     }
   </script>
 </body>

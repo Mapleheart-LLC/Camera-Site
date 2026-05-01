@@ -176,6 +176,32 @@ def _send_fcm_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, 
     return {"sent": sent, "failed": failed}
 
 
+def _send_fcm_to_token(db: sqlite3.Connection, fcm_token: str, data: dict[str, str]) -> dict[str, int]:
+    """Send a data-only FCM message to a single specific device by its FCM token.
+
+    Returns ``{"sent": n, "failed": n}``.
+    """
+    app = _get_firebase_app(db)
+    if app is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "FCM is not configured. "
+                "Set GOOGLE_APPLICATION_CREDENTIALS or tpe_fcm_service_account_json."
+            ),
+        )
+
+    from firebase_admin import messaging
+
+    try:
+        messaging.send(messaging.Message(token=fcm_token, data=data))
+        logger.info("TPE FCM targeted push: sent=1 token=%s…", fcm_token[:16])
+        return {"sent": 1, "failed": 0}
+    except Exception as exc:
+        logger.warning("TPE FCM targeted push failed for token %s: %s", fcm_token[:16], exc)
+        return {"sent": 0, "failed": 1}
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -578,9 +604,14 @@ class TpePushRequest(BaseModel):
       REQUEST_CHECKIN               (no additional fields)
       RULE_REMINDER                 rule_id (str), rule_text
       START_REVIEW                  session_id, signaling_url
+
+    Pass ``device_id`` to send the FCM to a specific device only (its FCM token is
+    looked up from the handler_device_status table).  Omit to broadcast to all
+    paired devices.
     """
 
     action: str
+    device_id: Optional[str] = None  # target a specific device; omit to broadcast
     # UPDATE_SETTINGS
     threshold: Optional[str] = None
     strict: Optional[str] = None
@@ -633,7 +664,8 @@ def tpe_push_settings(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Push an FCM data message to all paired TPE devices.
+    Push an FCM data message to all paired TPE devices, or to a specific device
+    when ``device_id`` is provided.
 
     The ``action`` field must be one of the actions understood by
     ``PartnerFcmService`` in the TPE Android app.
@@ -671,6 +703,18 @@ def tpe_push_settings(
     for field, val in field_map.items():
         if val is not None:
             data[field] = val
+
+    if body.device_id:
+        row = db.execute(
+            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
+            (body.device_id,),
+        ).fetchone()
+        if not row or not row["fcm_token"]:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No FCM token found for device_id '{body.device_id}'.",
+            )
+        return _send_fcm_to_token(db, row["fcm_token"], data)
 
     return _send_fcm_to_all(db, data)
 
@@ -925,12 +969,29 @@ def tpe_list_checkins(
     return [dict(r) for r in rows]
 
 
+class TpeCheckinRequestBody(BaseModel):
+    device_id: Optional[str] = None
+
+
 @admin_router.post("/checkins/request")
 def tpe_request_checkin(
+    body: TpeCheckinRequestBody = TpeCheckinRequestBody(),
     _admin: str = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Push a ``REQUEST_CHECKIN`` FCM to all paired devices, prompting an immediate check-in."""
+    """Push a ``REQUEST_CHECKIN`` FCM to a specific device (when ``device_id`` is
+    given) or to all paired devices."""
+    if body.device_id:
+        row = db.execute(
+            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
+            (body.device_id,),
+        ).fetchone()
+        if not row or not row["fcm_token"]:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No FCM token found for device_id '{body.device_id}'.",
+            )
+        return _send_fcm_to_token(db, row["fcm_token"], {"action": "REQUEST_CHECKIN"})
     return _send_fcm_to_all(db, {"action": "REQUEST_CHECKIN"})
 
 
