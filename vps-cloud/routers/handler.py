@@ -27,6 +27,7 @@ Device audio relay (webhook secret via query parameter):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import sqlite3
@@ -480,9 +481,26 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
         try:
             while True:
                 msg = await websocket.receive()
-                # Ignore any client-sent frames (text or binary).
-                if msg.get("type") == "websocket.disconnect":
+                msg_type = msg.get("type")
+                if msg_type == "websocket.disconnect":
                     break
+                # Handle mic-control commands sent from the handler panel.
+                # The panel sends:
+                #   {"action": "mic_start", "device_id": "..."}
+                #   {"action": "mic_stop",  "device_id": "..."}  (omit device_id to broadcast)
+                if msg_type == "websocket.receive":
+                    text = msg.get("text")
+                    if text:
+                        try:
+                            cmd = json.loads(text)
+                            action = cmd.get("action", "")
+                            target_device = cmd.get("device_id") or None
+                            if action == "mic_start":
+                                await _handler_ws.send_mic_command("START_HOT_MIC", device_id=target_device)
+                            elif action == "mic_stop":
+                                await _handler_ws.send_mic_command("STOP_HOT_MIC", device_id=target_device)
+                        except Exception:
+                            pass  # Ignore malformed frames.
         finally:
             ping_task.cancel()
     except WebSocketDisconnect:

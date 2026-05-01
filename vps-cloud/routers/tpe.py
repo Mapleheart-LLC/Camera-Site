@@ -61,19 +61,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from db import get_db
+from db import get_db, get_db_connection
 from dependencies import get_admin_user
+from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +86,11 @@ logger = logging.getLogger(__name__)
 _TPE_PAIRING_TOKEN  = os.environ.get("TPE_PAIRING_TOKEN", "")
 _TPE_WEBHOOK_SECRET = os.environ.get("TPE_WEBHOOK_SECRET", "")
 _TPE_AUDIT_PATH     = Path(os.environ.get("TPE_AUDIT_PATH", "/app/data/tpe_audits"))
+_TPE_UPLOAD_PATH    = Path(os.environ.get("TPE_UPLOAD_PATH", "/app/data/tpe_uploads"))
 
-_MAX_AUDIT_VIDEO_BYTES = 200 * 1024 * 1024  # 200 MB
+_MAX_AUDIT_VIDEO_BYTES  = 200 * 1024 * 1024  # 200 MB
+_MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short recordings
+_CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
 
 # ---------------------------------------------------------------------------
 # Firebase / FCM (lazy initialisation)
@@ -210,6 +215,37 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _safe_filename_part(value: str, max_len: int = 64) -> str:
+    """Strip any characters that could cause path traversal or filesystem issues.
+
+    Allows only ASCII alphanumeric characters, hyphens, and underscores.
+    This is used to sanitize user-supplied values (e.g. task_id, file extension)
+    before embedding them into filesystem paths.
+    """
+    sanitised = re.sub(r"[^A-Za-z0-9_\-]", "_", value)
+    return sanitised[:max_len]
+
+
+def _ext_from_content_type(content_type: str, fallback: str = ".bin") -> str:
+    """Return a safe file extension derived solely from a MIME content-type string.
+
+    Only inspects the MIME type portion — no user-supplied filename is used —
+    so the result is always a fixed known extension, never attacker-controlled.
+    """
+    mime = content_type.lower().split(";")[0].strip()
+    _MAP = {
+        "image/jpeg":       ".jpg",
+        "image/jpg":        ".jpg",
+        "image/png":        ".png",
+        "image/gif":        ".gif",
+        "image/webp":       ".webp",
+        "video/mp4":        ".mp4",
+        "video/webm":       ".webm",
+        "application/octet-stream": fallback,
+    }
+    return _MAP.get(mime, fallback)
+
+
 def _effective_pairing_token(db: sqlite3.Connection) -> str:
     """Return the active pairing token: settings table > env var."""
     row = db.execute(
@@ -258,10 +294,16 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
             event       TEXT NOT NULL,
             reason      TEXT,
             session_ts  INTEGER,
+            payload_json TEXT,
             received_at TEXT NOT NULL
         )
         """
     )
+    # Add payload_json column to existing installations that predate it.
+    try:
+        conn.execute("ALTER TABLE tpe_events ADD COLUMN payload_json TEXT")
+    except Exception:
+        pass  # Column already exists – safe to ignore.
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS tpe_audit_logs (
@@ -284,11 +326,17 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
             deadline_ms  INTEGER NOT NULL,
             status       TEXT NOT NULL DEFAULT 'pending',
             proof_note   TEXT,
+            proof_photo  TEXT,
             created_at   TEXT NOT NULL,
             completed_at TEXT
         )
         """
     )
+    # Add proof_photo column to existing installations.
+    try:
+        conn.execute("ALTER TABLE tpe_tasks ADD COLUMN proof_photo TEXT")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS tpe_checkins (
@@ -316,6 +364,17 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
             created_at       TEXT NOT NULL,
             ended_at         TEXT,
             device_fcm_token TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_uploads (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename     TEXT NOT NULL,
+            content_type TEXT,
+            size_bytes   INTEGER,
+            received_at  TEXT NOT NULL
         )
         """
     )
@@ -477,14 +536,22 @@ async def tpe_webhook(
     reason = body.get("reason", "")
     session_ts = body.get("timestamp")
 
-    if event not in ("punishment", "reward"):
+    if not event or not isinstance(event, str):
         raise HTTPException(
-            status_code=400, detail="event must be 'punishment' or 'reward'"
+            status_code=400, detail="event must be a non-empty string"
         )
 
+    # Capture the full payload for richer event types (e.g. device_location,
+    # app_inventory, app_installed / app_uninstalled, override_used).
+    payload_json: Optional[str] = None
+    try:
+        payload_json = json.dumps(body)
+    except Exception:
+        pass
+
     db.execute(
-        "INSERT INTO tpe_events (event, reason, session_ts, received_at) VALUES (?, ?, ?, ?)",
-        (event, reason, session_ts, _now_iso()),
+        "INSERT INTO tpe_events (event, reason, session_ts, payload_json, received_at) VALUES (?, ?, ?, ?, ?)",
+        (event, reason, session_ts, payload_json, _now_iso()),
     )
     db.commit()
     logger.info("TPE webhook: event=%s reason=%r", event, reason)
@@ -725,9 +792,9 @@ def tpe_list_events(
     _admin: str = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """List the most recent TPE consequence events (punishment / reward)."""
+    """List the most recent TPE device events (all event types)."""
     rows = db.execute(
-        "SELECT id, event, reason, session_ts, received_at "
+        "SELECT id, event, reason, session_ts, payload_json, received_at "
         "FROM tpe_events ORDER BY id DESC LIMIT ?",
         (min(limit, 500),),
     ).fetchall()
@@ -749,10 +816,24 @@ def tpe_list_audits(
     return [dict(r) for r in rows]
 
 
+@admin_router.get("/uploads")
+def tpe_list_uploads(
+    limit: int = 50,
+    _admin: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """List the most recent device screenshot / recording uploads."""
+    rows = db.execute(
+        "SELECT id, filename, content_type, size_bytes, received_at "
+        "FROM tpe_uploads ORDER BY id DESC LIMIT ?",
+        (min(limit, 200),),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ===========================================================================
 # Task Assignment & Verification
 # ===========================================================================
-
 
 class TpeTaskCreate(BaseModel):
     title: str
@@ -762,13 +843,6 @@ class TpeTaskCreate(BaseModel):
 
 class TpeTaskPatch(BaseModel):
     status: str  # pending | completed | failed | overdue
-
-
-class TpeTaskStatusReport(BaseModel):
-    """Sent by the device when a task is completed or failed."""
-    task_id: str
-    status: str       # "completed" or "failed"
-    proof_note: Optional[str] = None
 
 
 @admin_router.post("/tasks", status_code=201)
@@ -816,7 +890,7 @@ def tpe_list_tasks(
 ):
     """List all tasks."""
     rows = db.execute(
-        "SELECT id, title, description, deadline_ms, status, proof_note, created_at, completed_at "
+        "SELECT id, title, description, deadline_ms, status, proof_note, proof_photo, created_at, completed_at "
         "FROM tpe_tasks ORDER BY created_at DESC"
     ).fetchall()
     return [dict(r) for r in rows]
@@ -830,7 +904,7 @@ def tpe_get_task(
 ):
     """Get a single task."""
     row = db.execute(
-        "SELECT id, title, description, deadline_ms, status, proof_note, created_at, completed_at "
+        "SELECT id, title, description, deadline_ms, status, proof_note, proof_photo, created_at, completed_at "
         "FROM tpe_tasks WHERE id = ?",
         (task_id,),
     ).fetchone()
@@ -877,15 +951,24 @@ def tpe_delete_task(
 
 @device_router.post("/api/tpe/task/status")
 async def tpe_task_status(
-    body: TpeTaskStatusReport,
+    request: Request,
     authorization: Optional[str] = Header(default=None),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
     Receive a task completion or failure report from the Android app.
 
-    The app calls this after the user marks a task complete/failed,
-    optionally including a short ``proof_note``.
+    Accepts **either** a JSON body or multipart form data (when the device
+    includes photo proof).
+
+    JSON body:
+      ``{"task_id": "...", "status": "completed"|"failed", "proof_note": "..."}``
+
+    Multipart fields:
+      ``task_id``   — (text field)
+      ``status``    — ``"COMPLETED"`` or ``"FAILED"`` (text field)
+      ``proof_note``— optional note (text field)
+      ``photo``     — optional image file
     """
     expected = _effective_webhook_secret(db)
     if expected:
@@ -895,21 +978,243 @@ async def tpe_task_status(
         if not secrets.compare_digest(provided, expected):
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-    valid = {"completed", "failed"}
-    if body.status not in valid:
-        raise HTTPException(status_code=400, detail="status must be 'completed' or 'failed'")
+    ct = request.headers.get("content-type", "")
+    task_id: str = ""
+    status_val: str = ""
+    proof_note: Optional[str] = None
+    proof_photo: Optional[str] = None
 
-    row = db.execute("SELECT id FROM tpe_tasks WHERE id = ?", (body.task_id,)).fetchone()
+    if "multipart/form-data" in ct:
+        form = await request.form()
+        task_id = (form.get("task_id") or "").strip()
+        status_val = (form.get("status") or "").strip().lower()
+        proof_note = form.get("proof_note") or None
+        photo_file = form.get("photo")
+
+        if photo_file is not None and hasattr(photo_file, "read"):
+            _TPE_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+            # Derive extension from content-type only — never from the client filename —
+            # so the resulting path contains no user-controlled data.
+            file_ct_str = getattr(photo_file, "content_type", None) or "image/jpeg"
+            ext = _ext_from_content_type(file_ct_str, fallback=".jpg")
+            # Use a timestamp+UUID for the filename — zero user-controlled data in the path.
+            photo_name = f"task_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
+            dest = _TPE_UPLOAD_PATH / photo_name
+            try:
+                total = 0
+                with open(dest, "wb") as fh:
+                    while chunk := await photo_file.read(_CHUNK_SIZE_BYTES):
+                        total += len(chunk)
+                        if total > _MAX_UPLOAD_BYTES:
+                            fh.close()
+                            dest.unlink(missing_ok=True)
+                            raise HTTPException(status_code=413, detail="Photo exceeds 50 MB limit.")
+                        fh.write(chunk)
+                proof_photo = photo_name
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.error("TPE task photo save failed: %s", exc)
+    else:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+        task_id = (body.get("task_id") or "").strip()
+        status_val = (body.get("status") or "").strip().lower()
+        proof_note = body.get("proof_note")
+
+    valid = {"completed", "failed"}
+    if status_val not in valid:
+        raise HTTPException(status_code=400, detail="status must be 'completed' or 'failed'")
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+
+    row = db.execute("SELECT id FROM tpe_tasks WHERE id = ?", (task_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Task not found")
 
     db.execute(
-        "UPDATE tpe_tasks SET status = ?, proof_note = ?, completed_at = ? WHERE id = ?",
-        (body.status, body.proof_note, _now_iso(), body.task_id),
+        "UPDATE tpe_tasks SET status = ?, proof_note = ?, proof_photo = ?, completed_at = ? WHERE id = ?",
+        (status_val, proof_note, proof_photo, _now_iso(), task_id),
     )
     db.commit()
-    logger.info("TPE task %s → %s", body.task_id, body.status)
+    logger.info("TPE task %s → %s (photo=%s)", task_id, status_val, proof_photo)
     return {"status": "received"}
+
+
+@device_router.post("/api/tpe/upload")
+async def tpe_upload(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Receive a screenshot or screen recording uploaded by the Android app's
+    ``DeviceCommandManager`` (``TAKE_SCREENSHOT`` / ``RECORD_SCREEN`` FCM
+    commands).
+
+    The file may be sent as:
+      - a multipart upload with a ``file`` or ``image`` field, OR
+      - a raw binary body (``Content-Type: image/*`` or ``video/*``).
+
+    Auth: ``Authorization: Bearer <webhook_secret>`` (optional when secret
+    is unconfigured, matching the tpeapp behaviour).
+    """
+    expected = _effective_webhook_secret(db)
+    if expected:
+        provided = ""
+        if authorization and authorization.startswith("Bearer "):
+            provided = authorization[len("Bearer "):].strip()
+        if not secrets.compare_digest(provided, expected):
+            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+    _TPE_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
+
+    ct = request.headers.get("content-type", "")
+    filename: str = ""
+    size_bytes: int = 0
+    file_ct: str = ct
+
+    if "multipart/form-data" in ct:
+        form = await request.form()
+        upload_file = form.get("file") or form.get("image")
+        if upload_file is None:
+            raise HTTPException(status_code=400, detail="Missing file or image field")
+        # Derive extension from content-type, not the client filename, to avoid path injection.
+        file_ct = getattr(upload_file, "content_type", None) or ct or "application/octet-stream"
+        ext = _ext_from_content_type(file_ct, fallback=".bin")
+        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
+        dest = _TPE_UPLOAD_PATH / filename
+        try:
+            with open(dest, "wb") as fh:
+                while chunk := await upload_file.read(_CHUNK_SIZE_BYTES):
+                    size_bytes += len(chunk)
+                    if size_bytes > _MAX_UPLOAD_BYTES:
+                        fh.close()
+                        dest.unlink(missing_ok=True)
+                        raise HTTPException(status_code=413, detail="Upload exceeds 50 MB limit.")
+                    fh.write(chunk)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("TPE upload save failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to save upload.")
+    else:
+        # Raw binary body — extension comes entirely from Content-Type (no user input).
+        ext = _ext_from_content_type(ct, fallback=".bin")
+        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
+        dest = _TPE_UPLOAD_PATH / filename
+        try:
+            with open(dest, "wb") as fh:
+                async for chunk in request.stream():
+                    size_bytes += len(chunk)
+                    if size_bytes > _MAX_UPLOAD_BYTES:
+                        fh.close()
+                        dest.unlink(missing_ok=True)
+                        raise HTTPException(status_code=413, detail="Upload exceeds 50 MB limit.")
+                    fh.write(chunk)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("TPE raw upload save failed: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to save upload.")
+
+    db.execute(
+        "INSERT INTO tpe_uploads (filename, content_type, size_bytes, received_at) VALUES (?, ?, ?, ?)",
+        (filename, file_ct, size_bytes, _now_iso()),
+    )
+    db.commit()
+    logger.info("TPE upload received: file=%s size=%d ct=%s", filename, size_bytes, file_ct)
+    return {"status": "received", "file": filename, "size_bytes": size_bytes}
+
+
+# ===========================================================================
+# Hot-mic WebSocket  (/ws)
+# ===========================================================================
+#
+# The tpeapp's WebSocketService (flutter_app/lib/services/websocket_service.dart)
+# connects to ``{endpoint}/ws`` and:
+#   • Receives JSON text frames: ``{"command": "START_HOT_MIC"}`` /
+#     ``{"command": "STOP_HOT_MIC"}`` — triggers the device mic.
+#   • Sends binary frames: raw 16 kHz mono 16-bit PCM audio chunks.
+#
+# This endpoint relays those audio chunks to all connected Handler Panel
+# WebSockets and allows the Handler Panel to push START/STOP commands via
+# ``handler_ws.send_mic_command()``.
+# ===========================================================================
+
+
+@device_router.websocket("/ws")
+async def tpe_hot_mic_ws(
+    websocket: WebSocket,
+    secret: str = "",
+    device_id: str = "",
+) -> None:
+    """
+    Hot-mic WebSocket relay for TPE devices.
+
+    The tpeapp's ``WebSocketService`` connects here.  Audio chunks sent as
+    binary frames are broadcast to all connected Handler Panel clients so the
+    partner can listen in real-time.
+
+    Query parameters (all optional):
+      ``secret``    – webhook secret for authentication (omit when unconfigured)
+      ``device_id`` – stable device UUID (used for assignment lookup)
+
+    If ``device_id`` is not provided via query param the endpoint falls back to
+    the ``X-Device-ID`` header sent by the flutter http package, then generates
+    an ephemeral UUID for this session.
+    """
+    db = get_db_connection()
+    try:
+        expected = _effective_webhook_secret(db)
+        if expected and not secrets.compare_digest(secret, expected):
+            await websocket.close(code=4001)
+            return
+
+        # Resolve device_id: query param → X-Device-ID header → ephemeral UUID.
+        effective_device_id = (device_id or "").strip()
+        if not effective_device_id:
+            for hdr_name, hdr_val in websocket.headers.items():
+                if hdr_name.lower() == "x-device-id":
+                    effective_device_id = hdr_val.strip()
+                    break
+        if not effective_device_id:
+            effective_device_id = str(uuid.uuid4())
+
+        await websocket.accept()
+        _handler_ws.connect_device(effective_device_id, websocket)
+        logger.info("TPE hot-mic connected: device=%s", effective_device_id)
+
+        try:
+            while True:
+                msg = await websocket.receive()
+                msg_type = msg.get("type")
+
+                if msg_type == "websocket.disconnect":
+                    break
+
+                if msg_type == "websocket.receive":
+                    chunk = msg.get("bytes")
+                    if chunk:
+                        # Relay binary PCM audio to all handler panel clients.
+                        # Fall back to broadcast since assignment lookup would
+                        # require a handler assignment for this device.
+                        relayed = await _handler_ws.relay_audio(effective_device_id, chunk, db)
+                        if not relayed:
+                            await _handler_ws.relay_audio_broadcast(chunk)
+                    # Text frames (if any) are informational — log but ignore.
+                    text = msg.get("text")
+                    if text:
+                        logger.debug("TPE hot-mic text from device %s: %s", effective_device_id, text[:200])
+        except WebSocketDisconnect:
+            pass
+        finally:
+            _handler_ws.disconnect_device(effective_device_id, websocket)
+            logger.info("TPE hot-mic disconnected: device=%s", effective_device_id)
+    finally:
+        db.close()
 
 
 # ===========================================================================
@@ -1242,11 +1547,19 @@ def tpe_pairing_qr(
     """
     Generate a PNG QR code containing the pairing payload the Android app scans.
 
-    QR content (matches ``PairingActivity.handleQrPayload()``):
-    ``{"endpoint": "<BASE_URL>", "pairing_token": "<token>"}``
+    QR content (matches ``PairingScreen._handleBarcode()`` in the Flutter app):
+    ``{
+        "endpoint": "<BASE_URL>",
+        "pairing_token": "<token>",
+        "webhook_secret": "<secret>",
+        "signaling_url": "<wss://…/api/tpe/signal/<session_id>>"
+      }``
 
-    The partner prints or displays this QR code; the device owner scans it
-    once to complete initial pairing.
+    ``webhook_secret`` is included so the device can authenticate its outbound
+    webhook calls (``POST /api/tpe/webhook``, etc.) without a separate
+    configuration step.  ``signaling_url`` is the WebRTC signaling WebSocket
+    URL and is populated when a live review session exists; it is omitted
+    otherwise.
 
     Returns a PNG image (``Content-Type: image/png``).
     """
@@ -1271,7 +1584,35 @@ def tpe_pairing_qr(
     if row and row["value"]:
         base_url = row["value"].rstrip("/")
 
-    payload = json.dumps({"endpoint": base_url, "pairing_token": pairing_token})
+    # Build WebSocket base URL (wss:// / ws://).
+    if base_url.startswith("https://"):
+        ws_base = "wss://" + base_url[len("https://"):]
+    elif base_url.startswith("http://"):
+        ws_base = "ws://" + base_url[len("http://"):]
+    else:
+        ws_base = base_url
+
+    # Include webhook_secret so the device can authenticate outbound calls.
+    webhook_secret = _effective_webhook_secret(db)
+
+    # If there is an active review session, embed its signaling URL.
+    signaling_url = ""
+    live_session = db.execute(
+        "SELECT id FROM tpe_review_sessions WHERE ended_at IS NULL ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    if live_session and ws_base:
+        signaling_url = f"{ws_base}/api/tpe/signal/{live_session['id']}"
+
+    qr_payload: Dict[str, str] = {
+        "endpoint": base_url,
+        "pairing_token": pairing_token,
+    }
+    if webhook_secret:
+        qr_payload["webhook_secret"] = webhook_secret
+    if signaling_url:
+        qr_payload["signaling_url"] = signaling_url
+
+    payload = json.dumps(qr_payload)
 
     qr = qrcode.QRCode(
         version=None,

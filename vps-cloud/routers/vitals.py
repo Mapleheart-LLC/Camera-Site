@@ -156,8 +156,12 @@ class VitalsRecord(BaseModel):
 
 
 class VitalsBatch(BaseModel):
-    device_id: str
-    readings: List[VitalsRecord]
+    """Internal (Camera-Site) format.  ``device_id`` is required and ``readings``
+    holds pre-normalised heart_rate + steps records."""
+    device_id: Optional[str] = None
+    readings: Optional[List[VitalsRecord]] = None
+    # tpeapp format: list of typed health records keyed by ``vitals``.
+    vitals: Optional[List[dict]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +181,42 @@ def _effective_webhook_secret(db: sqlite3.Connection) -> str:
 _BEARER_PREFIX = "Bearer "
 
 
+def _epoch_ms_to_iso(ms: int) -> str:
+    """Convert Unix epoch milliseconds to an ISO-8601 UTC string."""
+    return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat()
+
+
+def _normalise_tpeapp_vitals(vitals_list: List[dict]) -> List[VitalsRecord]:
+    """Convert the tpeapp ``vitals`` array to a list of ``VitalsRecord``.
+
+    The tpeapp sends one entry per health-data type::
+
+        {"type": "heart_rate", "value": 72.0, "unit": "bpm",
+         "start_ms": 1714555200000, "end_ms": 1714555260000}
+        {"type": "steps",      "value": 120.0, "unit": "count", ...}
+
+    Each entry becomes its own ``VitalsRecord`` (steps = 0 for heart_rate
+    entries and heart_rate = 0 for steps entries).  This preserves full
+    time-series fidelity — the baseline engine only uses heart_rate rows.
+    """
+    records: List[VitalsRecord] = []
+    for item in vitals_list:
+        try:
+            vtype = str(item.get("type", "")).lower()
+            value = float(item.get("value", 0))
+            start_ms = item.get("start_ms")
+            ts = _epoch_ms_to_iso(int(start_ms)) if start_ms else None
+
+            if "heart_rate" in vtype:
+                records.append(VitalsRecord(heart_rate=round(value), steps=0, timestamp=ts))
+            elif "steps" in vtype:
+                records.append(VitalsRecord(heart_rate=0, steps=round(value), timestamp=ts))
+            # Skip unknown types (e.g. sleep, blood_oxygen) silently.
+        except Exception:
+            pass
+    return records
+
+
 # ---------------------------------------------------------------------------
 # Device-facing endpoint
 # ---------------------------------------------------------------------------
@@ -185,11 +225,27 @@ _BEARER_PREFIX = "Bearer "
 @router.post("/api/vitals/sync")
 async def vitals_sync(
     body: VitalsBatch,
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
     authorization: Optional[str] = Header(default=None),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """
     Receive a batch of biometric readings from the mobile app and persist them.
+
+    Accepts **two formats**:
+
+    **Camera-Site format** (existing)::
+
+        {"device_id": "...", "readings": [{"heart_rate": 72, "steps": 0}]}
+
+    **tpeapp format** (``VitalsSyncService``)::
+
+        {"vitals": [{"type": "heart_rate", "value": 72.0, "unit": "bpm",
+                     "start_ms": 1714555200000, "end_ms": 1714555260000}]}
+
+    When using the tpeapp format, ``device_id`` may be omitted from the body
+    and supplied via the ``X-Device-ID`` HTTP header instead (the flutter HTTP
+    client always sends this header).
 
     Protected by the TPE webhook secret (``Authorization: Bearer <secret>``).
     After storing the readings the endpoint computes the current resting baseline
@@ -205,17 +261,28 @@ async def vitals_sync(
         if not secrets.compare_digest(provided, expected):
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-    if not body.device_id.strip():
-        raise HTTPException(status_code=400, detail="device_id must not be empty")
+    # ── Resolve device_id ────────────────────────────────────────────────────
+    # Prefer body.device_id; fall back to X-Device-ID header (sent by the
+    # tpeapp flutter HTTP client).
+    effective_device_id = (body.device_id or "").strip() or (x_device_id or "").strip()
+    if not effective_device_id:
+        raise HTTPException(status_code=400, detail="device_id must not be empty (provide in body or X-Device-ID header)")
 
-    if not body.readings:
+    # ── Normalise readings ───────────────────────────────────────────────────
+    # tpeapp sends {"vitals": [...]}.  Convert to internal VitalsRecord list.
+    if body.vitals is not None:
+        readings = _normalise_tpeapp_vitals(body.vitals)
+    else:
+        readings = body.readings or []
+
+    if not readings:
         return {"stored": 0, "baseline": None, "alert_status": None}
 
     # ── Persist ───────────────────────────────────────────────────────────────
     now = _now_iso()
     rows_to_insert = [
-        (body.device_id, r.heart_rate, r.steps, r.timestamp or now)
-        for r in body.readings
+        (effective_device_id, r.heart_rate, r.steps, r.timestamp or now)
+        for r in readings
     ]
     db.executemany(
         "INSERT INTO device_vitals (device_id, heart_rate, steps, timestamp) VALUES (?, ?, ?, ?)",
@@ -224,15 +291,19 @@ async def vitals_sync(
     db.commit()
 
     # ── Baseline + alert ──────────────────────────────────────────────────────
-    latest_bpm: int = body.readings[-1].heart_rate
-    baseline = _get_baseline(db, body.device_id)
-    alert_status = _classify_alert(db, body.device_id, latest_bpm, baseline)
+    # Use the most recent heart-rate reading for alert classification.
+    # tpeapp may send only steps in the batch — guard against bpm=0.
+    latest_bpm: int = next(
+        (r.heart_rate for r in readings[::-1] if r.heart_rate > 0), 0
+    )
+    baseline = _get_baseline(db, effective_device_id)
+    alert_status = _classify_alert(db, effective_device_id, latest_bpm, baseline) if latest_bpm > 0 else None
 
     # ── Broadcast to Handler Panel WebSocket clients ──────────────────────────
     await _handler_ws.broadcast(
         {
             "type": "vitals_update",
-            "device_id": body.device_id,
+            "device_id": effective_device_id,
             "current_bpm": latest_bpm,
             "baseline": baseline,
             "alert_status": alert_status,
