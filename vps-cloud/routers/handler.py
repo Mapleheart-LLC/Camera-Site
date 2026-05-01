@@ -7,19 +7,23 @@ Handler Panel frontend (static/handler.html).
 Device-facing (protected by TPE webhook secret):
   POST /api/handler/device-status  – Device reports battery, GPS, AI filter hit.
 
-Admin-facing (HTTP Basic Auth):
-  GET  /api/handler/devices        – List all known devices.
+Handler/Admin-facing (JWT Bearer auth – role 'handler' or 'admin'):
+  GET  /api/handler/devices        – List devices (handlers see only assigned ones).
   GET  /api/handler/status         – Latest status snapshot for a specific device.
   POST /api/handler/lock           – Send LOCK_DEVICE FCM to a specific device.
 
-WebSocket (admin Basic credentials via query parameter):
+Admin-only (JWT Bearer auth – role 'admin'):
+  GET  /api/handler/assignments    – List all handler↔device assignments.
+  POST /api/handler/assignments    – Assign a handler to a device.
+  DELETE /api/handler/assignments  – Remove a handler↔device assignment.
+
+WebSocket (JWT via query parameter):
   WS   /ws/handler                 – Real-time device status stream.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
 import logging
 import secrets
 import sqlite3
@@ -29,8 +33,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+import jwt as _jwt
 from db import get_db, get_db_connection
-from dependencies import ADMIN_PASSWORD, ADMIN_USERNAME, get_admin_user
+from dependencies import SECRET_KEY, ALGORITHM, role_required
 from routers.tpe import _effective_webhook_secret, _send_fcm_to_token
 
 logger = logging.getLogger(__name__)
@@ -149,21 +154,23 @@ class _HandlerWSManager:
 _handler_ws = _HandlerWSManager()
 
 
-def _verify_admin_creds(creds_b64: str) -> bool:
-    """Validate a base64-encoded ``user:pass`` string against admin credentials."""
-    if not ADMIN_USERNAME or not ADMIN_PASSWORD:
-        return False
+def _verify_ws_token(token: str) -> Optional[dict]:
+    """Validate a JWT token from a WebSocket query parameter.
+
+    Returns the decoded payload dict on success, or None if the token is
+    missing, expired, or invalid.  Only tokens with role 'admin' or 'handler'
+    are accepted.
+    """
+    if not token:
+        return None
     try:
-        # Recalculate correct padding (btoa() output may omit trailing '=' chars)
-        rem = len(creds_b64) % 4
-        padded = creds_b64 + ("=" * ((4 - rem) % 4))
-        decoded = base64.b64decode(padded, validate=True).decode("utf-8")
-        user, _, pwd = decoded.partition(":")
-    except Exception:
-        return False
-    ok_user = secrets.compare_digest(user.encode("utf-8"), ADMIN_USERNAME.encode("utf-8"))
-    ok_pass = secrets.compare_digest(pwd.encode("utf-8"), ADMIN_PASSWORD.encode("utf-8"))
-    return ok_user and ok_pass
+        payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        role = payload.get("role", "handler")
+        if role not in ("admin", "handler"):
+            return None
+        return payload
+    except (_jwt.ExpiredSignatureError, _jwt.InvalidTokenError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +189,11 @@ class DeviceStatusReport(BaseModel):
 
 
 class LockRequest(BaseModel):
+    device_id: str
+
+
+class AssignmentRequest(BaseModel):
+    handler_id: str
     device_id: str
 
 
@@ -257,32 +269,76 @@ async def handler_device_status(
 
 
 # ---------------------------------------------------------------------------
-# Admin endpoints
+# Handler/Admin panel endpoints  (JWT Bearer, role 'handler' or 'admin')
 # ---------------------------------------------------------------------------
+
+def _handler_allowed_devices(db: sqlite3.Connection, handler_id: str) -> list[str]:
+    """Return the list of device_ids assigned to a handler user."""
+    rows = db.execute(
+        "SELECT device_id FROM handler_device_assignments WHERE handler_id = ?",
+        (handler_id,),
+    ).fetchall()
+    return [r["device_id"] for r in rows]
+
+
+def _fetch_devices_by_ids(
+    db: sqlite3.Connection, device_ids: list[str], full: bool = False
+) -> list[sqlite3.Row]:
+    """Query handler_device_status for the given *device_ids*.
+
+    *full* selects all columns; otherwise only summary columns are returned.
+    Returns an empty list when *device_ids* is empty.
+    """
+    if not device_ids:
+        return []
+    placeholders = ",".join("?" * len(device_ids))
+    cols = "*" if full else "device_id, is_online, is_locked, battery_pct, last_seen"
+    return db.execute(
+        f"SELECT {cols} FROM handler_device_status "
+        f"WHERE device_id IN ({placeholders}) ORDER BY last_seen DESC",
+        device_ids,
+    ).fetchall()
+
 
 @router.get("/api/handler/devices")
 def handler_list_devices(
-    _admin: str = Depends(get_admin_user),
+    current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> list:
-    """Return a list of all known devices with their current status."""
-    rows = db.execute(
-        "SELECT device_id, is_online, is_locked, battery_pct, last_seen "
-        "FROM handler_device_status ORDER BY last_seen DESC"
-    ).fetchall()
+    """Return a list of devices with their current status.
+
+    Admins receive all devices; handlers receive only their assigned ones.
+    """
+    if current_user["role"] == "admin":
+        rows = db.execute(
+            "SELECT device_id, is_online, is_locked, battery_pct, last_seen "
+            "FROM handler_device_status ORDER BY last_seen DESC"
+        ).fetchall()
+    else:
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        rows = _fetch_devices_by_ids(db, assigned)
     return [dict(r) for r in rows]
 
 
 @router.get("/api/handler/status")
 def handler_get_status(
     device_id: Optional[str] = Query(default=None),
-    _admin: str = Depends(get_admin_user),
+    current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
-    """Return the latest status snapshot for a specific device (or an empty dict
-    when no device_id is supplied — useful for credential validation)."""
+    """Return the latest status snapshot for a specific device.
+
+    Returns an empty dict when no device_id is supplied (useful for token
+    validation by the frontend).  Handlers may only query assigned devices.
+    """
     if not device_id:
         return {}
+
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
     row = db.execute(
         "SELECT * FROM handler_device_status WHERE device_id = ?", (device_id,)
     ).fetchone()
@@ -292,13 +348,18 @@ def handler_get_status(
 @router.post("/api/handler/lock")
 async def handler_lock(
     body: LockRequest,
-    _admin: str = Depends(get_admin_user),
+    current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
+    """Send a LOCK_DEVICE FCM to the specified device and record the locked state.
+
+    Handlers may only lock devices they are assigned to.
     """
-    Send a LOCK_DEVICE FCM to the specified device and record the locked state
-    in the status table.
-    """
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if body.device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
     row = db.execute(
         "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
         (body.device_id,),
@@ -329,30 +390,102 @@ async def handler_lock(
 
 
 # ---------------------------------------------------------------------------
+# Admin-only assignment management
+# ---------------------------------------------------------------------------
+
+@router.get("/api/handler/assignments")
+def handler_list_assignments(
+    current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """Return all handler↔device assignments (admin only)."""
+    rows = db.execute(
+        "SELECT handler_id, device_id FROM handler_device_assignments ORDER BY handler_id, device_id"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/handler/assignments", status_code=201)
+def handler_create_assignment(
+    body: AssignmentRequest,
+    current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Assign a handler user to a device (admin only)."""
+    try:
+        db.execute(
+            "INSERT INTO handler_device_assignments (handler_id, device_id) VALUES (?, ?)",
+            (body.handler_id, body.device_id),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Assignment already exists.")
+    return {"handler_id": body.handler_id, "device_id": body.device_id}
+
+
+@router.delete("/api/handler/assignments")
+def handler_delete_assignment(
+    handler_id: str,
+    device_id: str,
+    current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Remove a handler↔device assignment (admin only)."""
+    result = db.execute(
+        "DELETE FROM handler_device_assignments WHERE handler_id = ? AND device_id = ?",
+        (handler_id, device_id),
+    )
+    db.commit()
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Assignment not found.")
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
 # WebSocket
 # ---------------------------------------------------------------------------
 
 @router.websocket("/ws/handler")
-async def handler_ws_endpoint(websocket: WebSocket, creds: str = "") -> None:
+async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
     """
     Real-time handler-panel feed.
 
-    Admin authenticates by passing ``?creds=<base64(user:pass)>`` as a query
-    parameter (browsers cannot set custom headers on WebSocket connections).
+    Authenticate by passing ``?token=<jwt>`` as a query parameter (browsers
+    cannot set custom headers on WebSocket connections).  The token must have
+    role 'admin' or 'handler'.
 
-    On connect: sends a ``snapshot`` message with all known device statuses.
+    On connect: sends a ``snapshot`` message with relevant device statuses.
+    - Admins receive all devices.
+    - Handlers receive only their assigned devices.
+
     While open: the server pushes ``status_update`` and ``lock`` events
     (each including ``device_id``) whenever a device posts new data.  A
     ``ping`` frame is sent every 30 s to keep the connection alive through proxies.
     """
-    if not _verify_admin_creds(creds):
+    payload = _verify_ws_token(token)
+    if payload is None:
         await websocket.close(code=4001)
         return
+
+    role = payload.get("role", "handler")
+    user_id = payload.get("sub")
 
     db = get_db_connection()
     try:
         await _handler_ws.connect(websocket)
-        rows = db.execute("SELECT * FROM handler_device_status").fetchall()
+
+        if role == "admin":
+            rows = db.execute("SELECT * FROM handler_device_status").fetchall()
+        else:
+            assigned = [
+                r["device_id"]
+                for r in db.execute(
+                    "SELECT device_id FROM handler_device_assignments WHERE handler_id = ?",
+                    (user_id,),
+                ).fetchall()
+            ]
+            rows = _fetch_devices_by_ids(db, assigned, full=True)
+
         await websocket.send_json({
             "type": "snapshot",
             "devices": [dict(r) for r in rows],

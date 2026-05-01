@@ -6,13 +6,14 @@ dependency so that both ``main.py`` and sub-routers can import them without
 creating circular imports.
 
 Also provides the ``get_admin_user`` HTTP Basic Auth dependency that guards
-all ``/api/admin`` endpoints.
+all ``/api/admin`` endpoints, and the ``role_required`` factory that protects
+handler-panel endpoints by JWT user role ('admin' or 'handler').
 """
 
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -58,7 +59,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
-    """Decode the site JWT and return ``{"user_id": ..., "access_level": ...}``."""
+    """Decode the site JWT and return ``{"user_id": ..., "access_level": ..., "role": ...}``."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -70,11 +71,34 @@ def get_current_user(
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: Optional[str] = payload.get("sub")
         access_level: int = int(payload.get("access_level", 0))
+        role: str = payload.get("role", "handler")
         if user_id is None:
             raise credentials_exception
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         raise credentials_exception
-    return {"user_id": user_id, "access_level": access_level}
+    return {"user_id": user_id, "access_level": access_level, "role": role}
+
+
+def role_required(*allowed_roles: str) -> Callable:
+    """Return a FastAPI dependency that enforces the caller has one of *allowed_roles*.
+
+    Usage::
+
+        @router.get("/api/handler/devices")
+        def list_devices(current_user: dict = Depends(role_required("admin", "handler"))):
+            ...
+    """
+    def _check_role(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        if current_user.get("role") not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role privileges.",
+            )
+        return current_user
+
+    return _check_role
 
 
 # ---------------------------------------------------------------------------
