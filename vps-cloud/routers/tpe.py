@@ -195,10 +195,10 @@ def _send_fcm_to_token(db: sqlite3.Connection, fcm_token: str, data: dict[str, s
 
     try:
         messaging.send(messaging.Message(token=fcm_token, data=data))
-        logger.info("TPE FCM targeted push: sent=1 token=%s…", fcm_token[:16])
+        logger.info("TPE FCM targeted push: sent=1 token=…%s", fcm_token[-4:])
         return {"sent": 1, "failed": 0}
     except Exception as exc:
-        logger.warning("TPE FCM targeted push failed for token %s: %s", fcm_token[:16], exc)
+        logger.warning("TPE FCM targeted push failed for token …%s: %s", fcm_token[-4:], exc)
         return {"sent": 0, "failed": 1}
 
 

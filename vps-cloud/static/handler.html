@@ -605,24 +605,30 @@
     async function loadDeviceList() {
       try {
         const devices = await apiGet('/api/handler/devices');
-        const sel = document.getElementById('device-select');
-        // Preserve current selection
-        const prev = sel.value;
-        sel.innerHTML = '<option value="">— select device —</option>';
-        devices.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value       = d.device_id;
-          opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
-          sel.appendChild(opt);
-        });
-        // Restore or auto-select first device
-        if (prev && devices.some(d => d.device_id === prev)) {
-          sel.value = prev;
-        } else if (devices.length === 1) {
-          sel.value = devices[0].device_id;
-          setSelectedDevice(devices[0].device_id);
-        }
+        _applyDeviceListToDropdown(devices);
       } catch { /* non-critical */ }
+    }
+
+    /**
+     * Populate (or refresh) the device dropdown from an array of device objects.
+     * Preserves the current selection if still present; auto-selects when only one device.
+     */
+    function _applyDeviceListToDropdown(devices) {
+      const sel = document.getElementById('device-select');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">— select device —</option>';
+      devices.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value       = d.device_id;
+        opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
+        sel.appendChild(opt);
+      });
+      if (prev && devices.some(d => d.device_id === prev)) {
+        sel.value = prev;
+      } else if (devices.length === 1 && !selectedDeviceId) {
+        sel.value = devices[0].device_id;
+        setSelectedDevice(devices[0].device_id);
+      }
     }
 
     // ── Login ──────────────────────────────────────────
@@ -793,9 +799,13 @@
         if (msg.type === 'ping') return;
 
         if (msg.type === 'snapshot') {
-          // New format: { type: 'snapshot', devices: [...] }
+          // Format: { type: 'snapshot', devices: [...] }
           // Refresh the device dropdown and render selected device's status
-          if (Array.isArray(msg.devices)) _refreshDropdownFromWS(msg.devices);
+          if (Array.isArray(msg.devices)) {
+            _refreshDropdownFromWS(msg.devices);
+          } else {
+            logger.warn && logger.warn('WS snapshot missing devices array', msg);
+          }
           return;
         }
 
@@ -814,23 +824,12 @@
     }
 
     function _refreshDropdownFromWS(devices) {
-      const sel = document.getElementById('device-select');
-      const prev = sel.value;
-      sel.innerHTML = '<option value="">— select device —</option>';
-      devices.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value       = d.device_id;
-        opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
-        sel.appendChild(opt);
-      });
-      if (prev && devices.some(d => d.device_id === prev)) {
-        sel.value = prev;
-        // Re-render status for the selected device from snapshot data
-        const devData = devices.find(d => d.device_id === prev);
+      const prevSel = selectedDeviceId;
+      _applyDeviceListToDropdown(devices);
+      // If there was a previously selected device, re-render its status from snapshot
+      if (prevSel) {
+        const devData = devices.find(d => d.device_id === prevSel);
         if (devData) renderStatus(devData);
-      } else if (devices.length === 1 && !selectedDeviceId) {
-        sel.value = devices[0].device_id;
-        setSelectedDevice(devices[0].device_id);
       }
     }
 

@@ -171,8 +171,8 @@ def _verify_admin_creds(creds_b64: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class DeviceStatusReport(BaseModel):
-    device_id: str                      # stable device identifier
-    fcm_token: Optional[str] = None     # FCM registration token (stored for targeted pushes)
+    device_id: str                      # stable device identifier (non-empty; e.g. UUID or Android device ID)
+    fcm_token: Optional[str] = None     # FCM registration token (stored for targeted pushes; append-only)
     battery_pct: Optional[int] = None   # 0–100
     lat: Optional[float] = None
     lon: Optional[float] = None
@@ -211,6 +211,9 @@ async def handler_device_status(
             provided = authorization[len("Bearer "):].strip()
         if not secrets.compare_digest(provided, expected):
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+    if not body.device_id.strip():
+        raise HTTPException(status_code=400, detail="device_id must not be empty")
 
     now = _now_iso()
     db.execute(
