@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>🐾 Handler Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #f0e6e8;
+      min-height: 100vh;
+    }
+
+    /* ── Login panel ──────────────────────────────────── */
+    #login-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #login-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 40px rgba(232,174,183,.12);
+      text-align: center;
+    }
+    #login-card h1 { font-size: 1.6rem; font-weight: 800; color: #e8aeb7; margin-bottom: .5rem; }
+    #login-card p.subtitle { font-size: .85rem; color: #9e7e82; margin-bottom: 1.75rem; }
+    .field-group { text-align: left; margin-bottom: 1rem; }
+    .field-group label {
+      display: block; font-size: .8rem; font-weight: 700; color: #c49a9f;
+      margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .field-group input {
+      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 8px;
+      color: #f0e6e8; font-family: inherit; font-size: 1rem; padding: .6rem .85rem;
+      outline: none; transition: border-color .2s;
+    }
+    .field-group input:focus { border-color: #e8aeb7; }
+    #login-error { font-size: .82rem; color: #f87171; min-height: 1.2em; margin-bottom: .75rem; }
+    .btn-primary {
+      width: 100%; padding: .7rem 1rem; background: #e8aeb7; border: none; border-radius: 10px;
+      color: #1a1a1a; font-family: inherit; font-size: 1rem; font-weight: 800; cursor: pointer;
+      transition: background .2s, box-shadow .2s, transform .1s;
+    }
+    .btn-primary:hover { background: #d8a7b1; box-shadow: 0 4px 18px rgba(232,174,183,.3); }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* ── Handler shell ────────────────────────────────── */
+    #handler-panel { display: none; min-height: 100vh; }
+
+    .handler-topbar {
+      position: sticky; top: 0; z-index: 150;
+      display: flex; align-items: center; gap: .75rem;
+      padding: 0 1.25rem; height: 56px;
+      background: #1c1c1c; border-bottom: 1px solid #3d2a2e;
+      box-shadow: 0 2px 12px rgba(0,0,0,.3);
+    }
+    .topbar-title { font-size: 1.15rem; font-weight: 800; color: #e8aeb7; }
+    .topbar-badge {
+      padding: .15rem .6rem; border-radius: 20px;
+      background: rgba(232,174,183,.1); border: 1px solid #e8aeb7;
+      color: #e8aeb7; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    }
+    #ws-status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #4b3538; transition: background .4s;
+      margin-left: auto;
+    }
+    #ws-status-dot.connected { background: #4ade80; }
+    #ws-status-dot.error { background: #f87171; }
+    #ws-status-label { font-size: .73rem; color: #9e7e82; white-space: nowrap; }
+    #logout-btn {
+      margin-left: .75rem; background: transparent; border: 1px solid #4b3538;
+      border-radius: 8px; color: #9e7e82; padding: .35rem .85rem;
+      font-family: inherit; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: border-color .2s, color .2s;
+    }
+    #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
+
+    /* ── Layout ───────────────────────────────────────── */
+    .handler-layout { display: flex; min-height: calc(100vh - 56px); }
+
+    /* ── Sidebar ──────────────────────────────────────── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      background: #1c1c1c; border-right: 1px solid #3d2a2e;
+      padding: .75rem 0 1.5rem;
+      position: sticky; top: 56px;
+      height: calc(100vh - 56px); overflow-y: auto;
+    }
+    .sidebar-section-label {
+      font-size: .63rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .1em; color: #5a3a3e;
+      padding: .75rem 1.25rem .3rem; margin-top: .5rem;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: .55rem;
+      width: 100%; padding: .6rem 1.25rem;
+      background: none; border: none; border-left: 3px solid transparent;
+      color: #9e7e82; font-family: inherit; font-size: .88rem; font-weight: 700;
+      cursor: pointer; transition: color .15s, background .15s, border-color .15s;
+      text-align: left;
+    }
+    .nav-item:hover { color: #e8aeb7; background: rgba(232,174,183,.06); }
+    .nav-item.active { color: #e8aeb7; background: rgba(232,174,183,.12); border-left-color: #e8aeb7; }
+
+    /* Sidebar device mini-status */
+    .sidebar-status {
+      margin: 1rem 1.25rem .5rem;
+      background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px;
+      padding: .85rem 1rem;
+    }
+    .sidebar-status .ss-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: .78rem; margin-bottom: .4rem;
+    }
+    .sidebar-status .ss-row:last-child { margin-bottom: 0; }
+    .sidebar-status .ss-label { color: #9e7e82; font-weight: 700; }
+    .sidebar-status .ss-val  { color: #f0e6e8; font-weight: 800; font-family: monospace; }
+    .battery-bar-wrap { margin: .35rem 0 .65rem; background: #2a1e20; border-radius: 4px; height: 6px; overflow: hidden; }
+    .battery-bar { height: 100%; border-radius: 4px; background: #4ade80; transition: width .5s, background .4s; }
+    .battery-bar.warn  { background: #fbbf24; }
+    .battery-bar.crit  { background: #f87171; }
+
+    /* ── Main content ─────────────────────────────────── */
+    .handler-main { flex: 1; padding: 1.75rem 2rem; min-width: 0; }
+
+    .section-heading {
+      font-size: 1.3rem; font-weight: 800; color: #e8aeb7;
+      margin-bottom: 1.5rem; display: flex; align-items: center; gap: .5rem;
+    }
+    .handler-section { display: none; }
+    .handler-section.active { display: block; }
+
+    /* ── Stat tiles ───────────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-tile {
+      background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
+      padding: 1.25rem 1rem; text-align: center;
+    }
+    .stat-tile .stat-icon { font-size: 1.6rem; margin-bottom: .4rem; }
+    .stat-tile .stat-value { font-size: 2rem; font-weight: 800; color: #e8aeb7; line-height: 1; }
+    .stat-tile .stat-label { font-size: .72rem; color: #9e7e82; margin-top: .35rem; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-tile .stat-sub   { font-size: .75rem; color: #c49a9f; margin-top: .2rem; }
+
+    /* ── Status badges ────────────────────────────────── */
+    .badge { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
+    .badge-ok    { background: rgba(74,222,128,.12); color: #4ade80; border: 1px solid #4ade80; }
+    .badge-warn  { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid #fbbf24; }
+    .badge-error { background: rgba(248,113,113,.12); color: #f87171; border: 1px solid #f87171; }
+    .badge-off   { background: rgba(156,163,175,.1);  color: #9ca3af; border: 1px solid #9ca3af; }
+
+    /* ── Alert banner ─────────────────────────────────── */
+    #ai-alert-banner {
+      display: none; align-items: center; gap: .75rem;
+      background: rgba(248,113,113,.12); border: 1px solid #f87171;
+      border-radius: 10px; padding: .85rem 1.1rem; margin-bottom: 1.5rem;
+      font-size: .9rem; font-weight: 700; color: #f87171;
+    }
+    #ai-alert-banner.visible { display: flex; }
+
+    /* ── Card ─────────────────────────────────────────── */
+    .card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .8rem 1.25rem; border-bottom: 1px solid #3d2a2e; background: #242424;
+    }
+    .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
+    .card-body { padding: 1.25rem; }
+
+    /* ── Map ──────────────────────────────────────────── */
+    #map {
+      width: 100%; height: 420px; border-radius: 10px;
+      border: 1px solid #3d2a2e; background: #1a1a1a;
+    }
+    #map-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      height: 420px; border-radius: 10px; border: 1px solid #3d2a2e;
+      background: #1a1a1a; color: #5a3a3e; font-size: .9rem; font-weight: 700;
+    }
+    #map-coords {
+      margin-top: .75rem; font-size: .82rem; color: #9e7e82; font-family: monospace;
+    }
+
+    /* ── Quick-action grid ────────────────────────────── */
+    .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+    .action-card {
+      background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 12px;
+      padding: 1.25rem 1rem; text-align: center;
+    }
+    .action-card .ac-icon { font-size: 2rem; margin-bottom: .6rem; }
+    .action-card .ac-label { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; margin-bottom: .65rem; }
+    .btn-action {
+      width: 100%; padding: .6rem 1rem; border-radius: 8px;
+      font-family: inherit; font-size: .9rem; font-weight: 700;
+      cursor: pointer; transition: background .15s, color .15s, transform .1s;
+      border: 1px solid #e8aeb7; background: #3d2028; color: #e8aeb7;
+    }
+    .btn-action:hover:not(:disabled) { background: #e8aeb7; color: #1a1a1a; }
+    .btn-action:active:not(:disabled) { transform: scale(.97); }
+    .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-action.danger-action { border-color: #f87171; background: rgba(248,113,113,.1); color: #f87171; }
+    .btn-action.danger-action:hover:not(:disabled) { background: #f87171; color: #1a1a1a; }
+    .ac-result { margin-top: .55rem; font-size: .77rem; color: #9e7e82; min-height: 1em; }
+
+    /* ── Tables ───────────────────────────────────────── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    .admin-table th { text-align: left; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; padding: .6rem .85rem; border-bottom: 1px solid #3d2a2e; }
+    .admin-table td { padding: .65rem .85rem; border-bottom: 1px solid #2a1e20; vertical-align: middle; }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .admin-table tr:hover td { background: rgba(232,174,183,.04); }
+    .empty-row td { color: #5a3a3e; text-align: center; padding: 1.5rem; }
+    .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
+
+    /* ── Toast ────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px;
+      padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s;
+      pointer-events: none; z-index: 300;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .sidebar.open { display: block; position: fixed; top: 56px; left: 0; bottom: 0; z-index: 100; }
+      .handler-main { padding: 1rem; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .action-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════ LOGIN ══════════════════════ -->
+  <div id="login-panel">
+    <div id="login-card">
+      <h1>🐾 Handler Panel</h1>
+      <p class="subtitle">Sign in with your admin credentials to access the Handler dashboard.</p>
+      <div class="field-group">
+        <label for="hp-username">Username</label>
+        <input id="hp-username" type="text" autocomplete="username" placeholder="admin" />
+      </div>
+      <div class="field-group">
+        <label for="hp-password">Password</label>
+        <input id="hp-password" type="password" autocomplete="current-password" placeholder="••••••••" />
+      </div>
+      <p id="login-error" role="alert" aria-live="polite"></p>
+      <button id="login-btn" class="btn-primary">🐾 Enter Handler Panel</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════ HANDLER PANEL ══════════════════════ -->
+  <div id="handler-panel">
+
+    <!-- Topbar -->
+    <div class="handler-topbar">
+      <span class="topbar-title">🐾 Handler Panel</span>
+      <span class="topbar-badge">ADMIN</span>
+      <div id="ws-status-dot" title="WebSocket connection status"></div>
+      <span id="ws-status-label">Connecting…</span>
+      <button id="logout-btn">Logout</button>
+    </div>
+
+    <div class="handler-layout">
+
+      <!-- ── Sidebar ── -->
+      <aside class="sidebar" id="sidebar">
+        <!-- Device quick-status -->
+        <div class="sidebar-status">
+          <div class="ss-row">
+            <span class="ss-label">🔋 Battery</span>
+            <span class="ss-val" id="sb-battery">—</span>
+          </div>
+          <div class="battery-bar-wrap">
+            <div class="battery-bar" id="sb-bar" style="width:0%"></div>
+          </div>
+          <div class="ss-row">
+            <span class="ss-label">📡 Status</span>
+            <span class="ss-val" id="sb-online">—</span>
+          </div>
+          <div class="ss-row">
+            <span class="ss-label">🔒 Lock</span>
+            <span class="ss-val" id="sb-lock">—</span>
+          </div>
+          <div class="ss-row">
+            <span class="ss-label">🤖 AI Filter</span>
+            <span class="ss-val" id="sb-ai">—</span>
+          </div>
+        </div>
+
+        <div class="sidebar-section-label">Navigation</div>
+        <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
+        <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
+        <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
+        <button class="nav-item" data-target="sec-logs">📜 Logs</button>
+      </aside>
+
+      <!-- ── Main ── -->
+      <main class="handler-main">
+
+        <!-- ─── AI Alert banner ─── -->
+        <div id="ai-alert-banner" role="alert">
+          ⚠️ <span id="ai-alert-text">AI filter triggered</span>
+        </div>
+
+        <!-- ═══════════════ OVERVIEW ═══════════════ -->
+        <section id="sec-overview" class="handler-section active">
+          <h2 class="section-heading">📊 Overview</h2>
+
+          <div class="stats-row">
+            <!-- Battery -->
+            <div class="stat-tile">
+              <div class="stat-icon">🔋</div>
+              <div class="stat-value" id="ov-battery">—</div>
+              <div class="stat-label">Battery</div>
+              <div class="stat-sub" id="ov-battery-sub"></div>
+            </div>
+            <!-- Location -->
+            <div class="stat-tile">
+              <div class="stat-icon">📍</div>
+              <div class="stat-value" id="ov-gps">—</div>
+              <div class="stat-label">GPS Fix</div>
+              <div class="stat-sub" id="ov-gps-sub"></div>
+            </div>
+            <!-- AI Filter -->
+            <div class="stat-tile">
+              <div class="stat-icon">🤖</div>
+              <div class="stat-value" id="ov-ai">—</div>
+              <div class="stat-label">AI Filter</div>
+              <div class="stat-sub" id="ov-ai-sub"></div>
+            </div>
+            <!-- Online -->
+            <div class="stat-tile">
+              <div class="stat-icon">📡</div>
+              <div class="stat-value" id="ov-online">—</div>
+              <div class="stat-label">Device</div>
+              <div class="stat-sub" id="ov-online-sub"></div>
+            </div>
+          </div>
+
+          <!-- Last-seen card -->
+          <div class="card">
+            <div class="card-header"><h2>📋 Device Details</h2></div>
+            <div class="card-body">
+              <table class="admin-table">
+                <tbody>
+                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700;width:160px">Last Seen</td><td class="ts-cell" id="det-last-seen">—</td></tr>
+                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Coordinates</td><td class="ts-cell" id="det-coords">—</td></tr>
+                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">—</td></tr>
+                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">—</td></tr>
+                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════ GPS MAP ═══════════════ -->
+        <section id="sec-map" class="handler-section">
+          <h2 class="section-heading">🗺️ GPS Map</h2>
+          <div class="card">
+            <div class="card-header">
+              <h2>Device Location</h2>
+              <button class="btn-action" id="map-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+            </div>
+            <div class="card-body">
+              <div id="map-placeholder">No GPS fix yet — waiting for device data.</div>
+              <div id="map" style="display:none"></div>
+              <div id="map-coords"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════ QUICK ACTIONS ═══════════════ -->
+        <section id="sec-actions" class="handler-section">
+          <h2 class="section-heading">⚡ Quick Actions</h2>
+
+          <div class="action-grid">
+
+            <!-- Lock Device -->
+            <div class="action-card">
+              <div class="ac-icon">🔒</div>
+              <div class="ac-label">Lock Device</div>
+              <button class="btn-action danger-action" id="btn-lock">Send Lock Command</button>
+              <div class="ac-result" id="res-lock"></div>
+            </div>
+
+            <!-- Lovense Vibrate -->
+            <div class="action-card">
+              <div class="ac-icon">💗</div>
+              <div class="ac-label">Lovense Toy</div>
+              <button class="btn-action" id="btn-lovense">Vibrate (Full)</button>
+              <div class="ac-result" id="res-lovense"></div>
+            </div>
+
+            <!-- PiShock Shock -->
+            <div class="action-card">
+              <div class="ac-icon">⚡</div>
+              <div class="ac-label">PiShock</div>
+              <button class="btn-action" id="btn-pishock">Send Shock</button>
+              <div class="ac-result" id="res-pishock"></div>
+            </div>
+
+            <!-- Pavlok Vibrate -->
+            <div class="action-card">
+              <div class="ac-icon">🌀</div>
+              <div class="ac-label">Pavlok</div>
+              <button class="btn-action" id="btn-pavlok">Vibrate (Full)</button>
+              <div class="ac-result" id="res-pavlok"></div>
+            </div>
+
+            <!-- Request Checkin -->
+            <div class="action-card">
+              <div class="ac-icon">📋</div>
+              <div class="ac-label">Check-in</div>
+              <button class="btn-action" id="btn-checkin">Request Check-in</button>
+              <div class="ac-result" id="res-checkin"></div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ═══════════════ LOGS ═══════════════ -->
+        <section id="sec-logs" class="handler-section">
+          <h2 class="section-heading">📜 Logs</h2>
+
+          <!-- TPE Events -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Consequence Events</h2>
+              <button class="btn-action" id="logs-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Event</th>
+                    <th>Reason</th>
+                    <th>Received</th>
+                  </tr>
+                </thead>
+                <tbody id="events-tbody">
+                  <tr class="empty-row"><td colspan="3">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Audit logs -->
+          <div class="card">
+            <div class="card-header"><h2>AI Audit Log</h2></div>
+            <div class="card-body" style="padding:0">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Score</th>
+                    <th>Ratio</th>
+                    <th>Received</th>
+                  </tr>
+                </thead>
+                <tbody id="audits-tbody">
+                  <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div><!-- .handler-layout -->
+  </div><!-- #handler-panel -->
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <script>
+    // ── Credential storage ─────────────────────────────
+    const CRED_KEY = 'handler_panel_creds';
+    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`)); }
+    function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
+    function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
+    function authHeader() {
+      const c = getCreds();
+      return c ? { 'Authorization': `Basic ${c}` } : {};
+    }
+
+    // ── Toast ──────────────────────────────────────────
+    let _toastTimer = null;
+    function showToast(msg, isError = false) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.borderColor = isError ? '#f87171' : '#e8aeb7';
+      el.style.color        = isError ? '#f87171' : '#e8aeb7';
+      el.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+
+    // ── HTML escape ────────────────────────────────────
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── API helpers ────────────────────────────────────
+    async function apiGet(path) {
+      const r = await fetch(path, { headers: authHeader() });
+      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    async function apiPost(path, body) {
+      const r = await fetch(path, {
+        method: 'POST',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+      return r;
+    }
+
+    // ── Panel switching ────────────────────────────────
+    function showLoginPanel(msg) {
+      document.getElementById('handler-panel').style.display = 'none';
+      document.getElementById('login-panel').style.display   = 'flex';
+      if (msg) document.getElementById('login-error').textContent = msg;
+      clearCreds();
+      disconnectWS();
+    }
+
+    function showHandlerPanel() {
+      document.getElementById('login-panel').style.display   = 'none';
+      document.getElementById('handler-panel').style.display = 'block';
+      initPanel();
+    }
+
+    // ── Login ──────────────────────────────────────────
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const user = document.getElementById('hp-username').value.trim();
+      const pass = document.getElementById('hp-password').value;
+      const errEl = document.getElementById('login-error');
+      const btn   = document.getElementById('login-btn');
+      errEl.textContent = '';
+      if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      saveCreds(user, pass);
+      try {
+        await apiGet('/api/handler/status');
+        showHandlerPanel();
+      } catch {
+        clearCreds();
+        errEl.textContent = '🐾 Invalid credentials.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🐾 Enter Handler Panel';
+      }
+    });
+    ['hp-username', 'hp-password'].forEach(id =>
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
+      })
+    );
+
+    // ── Logout ─────────────────────────────────────────
+    document.getElementById('logout-btn').addEventListener('click', () => showLoginPanel(''));
+
+    // ── Sidebar navigation ─────────────────────────────
+    document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.handler-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        const sec = document.getElementById(btn.dataset.target);
+        if (sec) sec.classList.add('active');
+        btn.classList.add('active');
+        if (btn.dataset.target === 'sec-map') initMap();
+        if (btn.dataset.target === 'sec-logs') loadLogs();
+      });
+    });
+
+    // ═══════════════ STATUS RENDERING ═══════════════
+    function renderStatus(s) {
+      if (!s || !s.updated_at) return;
+
+      // Battery
+      const batt = s.battery_pct;
+      const battStr = batt !== null && batt !== undefined ? `${batt}%` : '—';
+      setText('ov-battery',   battStr);
+      setText('sb-battery',   battStr);
+      setText('ov-battery-sub', batt !== null && batt !== undefined ? battLevel(batt) : '');
+      updateBatteryBar(batt);
+
+      // GPS
+      const hasGps = s.lat !== null && s.lat !== undefined && s.lon !== null && s.lon !== undefined;
+      setText('ov-gps',    hasGps ? '✅' : '❌');
+      setText('ov-gps-sub', hasGps ? `${(+s.lat).toFixed(4)}, ${(+s.lon).toFixed(4)}` : 'No fix');
+      setText('det-coords', hasGps ? `${(+s.lat).toFixed(6)}, ${(+s.lon).toFixed(6)}` : '—');
+
+      // AI Filter
+      const aiAlert = !!s.ai_alert;
+      setText('ov-ai',    aiAlert ? '⚠️' : '✅');
+      setText('ov-ai-sub', aiAlert ? (s.ai_label ?? 'Alert') : 'Clear');
+      setText('sb-ai',    aiAlert ? '⚠️ Alert' : '✅ Clear');
+      setText('det-ai-label', s.ai_label ?? '—');
+      setText('det-ai-score', s.ai_score !== null && s.ai_score !== undefined ? (+s.ai_score).toFixed(3) : '—');
+
+      // AI alert banner
+      const banner = document.getElementById('ai-alert-banner');
+      if (aiAlert) {
+        const label = s.ai_label ? ` (${esc(s.ai_label)})` : '';
+        const score = s.ai_score !== null && s.ai_score !== undefined ? ` — score: ${(+s.ai_score).toFixed(3)}` : '';
+        document.getElementById('ai-alert-text').textContent = `AI filter triggered${label}${score}`;
+        banner.classList.add('visible');
+      } else {
+        banner.classList.remove('visible');
+      }
+
+      // Online / Lock
+      const online = !!s.is_online;
+      const locked = !!s.is_locked;
+      setText('ov-online',    online ? '🟢' : '🔴');
+      setText('ov-online-sub', online ? 'Online' : 'Offline');
+      setText('sb-online',   online ? '🟢 Online' : '🔴 Offline');
+      setText('sb-lock',     locked ? '🔒 Locked' : '🔓 Open');
+      document.getElementById('det-lock').innerHTML = locked
+        ? '<span class="badge badge-error">Locked</span>'
+        : '<span class="badge badge-ok">Open</span>';
+
+      // Last seen
+      setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : '—');
+
+      // Update map marker
+      if (hasGps) updateMapMarker(+s.lat, +s.lon);
+    }
+
+    function setText(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    }
+
+    function battLevel(pct) {
+      if (pct >= 60) return '🟢 Good';
+      if (pct >= 20) return '🟡 Low';
+      return '🔴 Critical';
+    }
+
+    function updateBatteryBar(pct) {
+      const bar = document.getElementById('sb-bar');
+      if (!bar) return;
+      const p = Math.max(0, Math.min(100, pct ?? 0));
+      bar.style.width = `${p}%`;
+      bar.className = 'battery-bar';
+      if (p < 20)      bar.classList.add('crit');
+      else if (p < 60) bar.classList.add('warn');
+    }
+
+    function fmtDate(iso) {
+      try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    }
+
+    // ═══════════════ WEBSOCKET ═══════════════
+    let _ws = null;
+    let _wsReconnectTimer = null;
+    const WS_DOT   = document.getElementById('ws-status-dot');
+    const WS_LABEL = document.getElementById('ws-status-label');
+
+    function setWsDot(state) {
+      WS_DOT.className = state;
+      WS_LABEL.textContent = { connected: 'Live', error: 'Disconnected', '': 'Connecting…' }[state] ?? 'Connecting…';
+    }
+
+    function connectWS() {
+      const creds = getCreds();
+      if (!creds) return;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url   = `${proto}://${location.host}/ws/handler?creds=${encodeURIComponent(creds)}`;
+      _ws = new WebSocket(url);
+
+      _ws.addEventListener('open', () => setWsDot('connected'));
+      _ws.addEventListener('close', () => {
+        setWsDot('error');
+        scheduleReconnect();
+      });
+      _ws.addEventListener('error', () => setWsDot('error'));
+
+      _ws.addEventListener('message', evt => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        if (msg.type === 'ping') return;
+        if (msg.type === 'snapshot' || msg.type === 'status_update') renderStatus(msg);
+        if (msg.type === 'lock') {
+          showToast('🔒 Lock command confirmed by server.');
+          setText('sb-lock', '🔒 Locked');
+        }
+      });
+    }
+
+    function disconnectWS() {
+      if (_ws) { _ws.close(); _ws = null; }
+      if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+      setWsDot('');
+    }
+
+    function scheduleReconnect() {
+      if (_wsReconnectTimer) return;
+      _wsReconnectTimer = setTimeout(() => {
+        _wsReconnectTimer = null;
+        if (getCreds()) connectWS();
+      }, 4000);
+    }
+
+    // ═══════════════ LEAFLET MAP ═══════════════
+    let _map      = null;
+    let _marker   = null;
+    let _mapReady = false;
+
+    function initMap() {
+      if (_mapReady) return;
+      const placeholder = document.getElementById('map-placeholder');
+      const mapEl       = document.getElementById('map');
+      placeholder.style.display = 'none';
+      mapEl.style.display       = 'block';
+
+      _map = L.map('map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(_map);
+
+      _mapReady = true;
+
+      // If we already have a status, drop the marker now
+      fetchAndRenderStatus();
+    }
+
+    function updateMapMarker(lat, lon) {
+      if (!_mapReady || !_map) return;
+      const coords = L.latLng(lat, lon);
+      if (_marker) {
+        _marker.setLatLng(coords);
+      } else {
+        _marker = L.marker(coords).addTo(_map).bindPopup('📍 Device location');
+        _map.setView(coords, 15);
+      }
+      document.getElementById('map-coords').textContent =
+        `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+
+    document.getElementById('map-refresh-btn').addEventListener('click', fetchAndRenderStatus);
+
+    // ═══════════════ QUICK ACTIONS ═══════════════
+
+    /**
+     * Send the LOCK_DEVICE FCM command via POST /api/handler/lock.
+     */
+    async function sendLock() {
+      const btn = document.getElementById('btn-lock');
+      const res = document.getElementById('res-lock');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      try {
+        const r = await apiPost('/api/handler/lock');
+        if (r.ok) {
+          res.textContent = '✅ Lock sent.';
+          showToast('🔒 Lock command sent.');
+        } else {
+          const body = await r.json().catch(() => ({}));
+          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
+        }
+      } catch (e) {
+        if (e.message !== '401') res.textContent = '❌ Request failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /**
+     * Trigger a Lovense vibration via POST /api/admin/tpe/push.
+     */
+    async function sendVibrateLovense() {
+      const btn = document.getElementById('btn-lovense');
+      const res = document.getElementById('res-lovense');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      try {
+        const r = await apiPost('/api/admin/tpe/push', {
+          action:      'LOVENSE_COMMAND',
+          toy_command: 'vibrate',
+          toy_level:   '10',
+        });
+        if (r.ok) {
+          res.textContent = '✅ Vibrate sent.';
+          showToast('💗 Lovense vibrate sent.');
+        } else {
+          const body = await r.json().catch(() => ({}));
+          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
+        }
+      } catch (e) {
+        if (e.message !== '401') res.textContent = '❌ Request failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /**
+     * Trigger a PiShock shock via POST /api/admin/tpe/push.
+     * (PiShock_COMMAND is forwarded from the backend to the edge agent.)
+     */
+    async function sendShockPiShock() {
+      const btn = document.getElementById('btn-pishock');
+      const res = document.getElementById('res-pishock');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      try {
+        // PiShock is handled directly by the edge agent; we push a PAVLOK_COMMAND
+        // with intensity set to max as a proxy until a dedicated PiShock FCM action
+        // is available.  Replace with the correct action string when added.
+        const r = await apiPost('/api/admin/tpe/push', {
+          action:              'PAVLOK_COMMAND',
+          pavlok_cmd:          'shock',
+          pavlok_intensity:    '50',
+          pavlok_duration_ms:  '1000',
+        });
+        if (r.ok) {
+          res.textContent = '✅ Shock sent.';
+          showToast('⚡ PiShock command sent.');
+        } else {
+          const body = await r.json().catch(() => ({}));
+          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
+        }
+      } catch (e) {
+        if (e.message !== '401') res.textContent = '❌ Request failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /**
+     * Trigger a Pavlok vibration via POST /api/admin/tpe/push.
+     */
+    async function sendVibratePavlok() {
+      const btn = document.getElementById('btn-pavlok');
+      const res = document.getElementById('res-pavlok');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      try {
+        const r = await apiPost('/api/admin/tpe/push', {
+          action:              'PAVLOK_COMMAND',
+          pavlok_cmd:          'vibrate',
+          pavlok_intensity:    '100',
+          pavlok_duration_ms:  '5000',
+        });
+        if (r.ok) {
+          res.textContent = '✅ Vibrate sent.';
+          showToast('🌀 Pavlok vibrate sent.');
+        } else {
+          const body = await r.json().catch(() => ({}));
+          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
+        }
+      } catch (e) {
+        if (e.message !== '401') res.textContent = '❌ Request failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    /**
+     * Push a REQUEST_CHECKIN FCM so the device prompts a check-in.
+     */
+    async function requestCheckin() {
+      const btn = document.getElementById('btn-checkin');
+      const res = document.getElementById('res-checkin');
+      btn.disabled = true;
+      res.textContent = 'Sending…';
+      try {
+        const r = await apiPost('/api/admin/tpe/checkins/request');
+        if (r.ok) {
+          res.textContent = '✅ Check-in requested.';
+          showToast('📋 Check-in request sent.');
+        } else {
+          const body = await r.json().catch(() => ({}));
+          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
+        }
+      } catch (e) {
+        if (e.message !== '401') res.textContent = '❌ Request failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Wire up action buttons
+    document.getElementById('btn-lock').addEventListener('click',     sendLock);
+    document.getElementById('btn-lovense').addEventListener('click',  sendVibrateLovense);
+    document.getElementById('btn-pishock').addEventListener('click',  sendShockPiShock);
+    document.getElementById('btn-pavlok').addEventListener('click',   sendVibratePavlok);
+    document.getElementById('btn-checkin').addEventListener('click',  requestCheckin);
+
+    // ═══════════════ LOGS ═══════════════
+
+    async function loadLogs() {
+      await Promise.all([loadEvents(), loadAudits()]);
+    }
+
+    async function loadEvents() {
+      const tbody = document.getElementById('events-tbody');
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loading…</td></tr>';
+      try {
+        const data = await apiGet('/api/admin/tpe/events?limit=50');
+        if (!data.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(ev => `
+          <tr>
+            <td><span class="badge ${ev.event === 'punishment' ? 'badge-error' : 'badge-ok'}">${esc(ev.event)}</span></td>
+            <td>${esc(ev.reason ?? '—')}</td>
+            <td class="ts-cell">${fmtDate(ev.received_at)}</td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Failed to load events.</td></tr>';
+      }
+    }
+
+    async function loadAudits() {
+      const tbody = document.getElementById('audits-tbody');
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loading…</td></tr>';
+      try {
+        const data = await apiGet('/api/admin/tpe/audits?limit=50');
+        if (!data.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(a => `
+          <tr>
+            <td>${esc(a.last_label ?? '—')}</td>
+            <td class="ts-cell">${a.last_score !== null ? (+a.last_score).toFixed(3) : '—'}</td>
+            <td class="ts-cell">${a.detection_ratio !== null ? (+a.detection_ratio * 100).toFixed(1) + '%' : '—'}</td>
+            <td class="ts-cell">${fmtDate(a.received_at)}</td>
+          </tr>`).join('');
+      } catch {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load audits.</td></tr>';
+      }
+    }
+
+    document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
+
+    // ═══════════════ INITIALISATION ═══════════════
+
+    async function fetchAndRenderStatus() {
+      try {
+        const s = await apiGet('/api/handler/status');
+        renderStatus(s);
+      } catch { /* WS will deliver updates anyway */ }
+    }
+
+    function initPanel() {
+      connectWS();
+      fetchAndRenderStatus();
+    }
+  </script>
+</body>
+</html>
