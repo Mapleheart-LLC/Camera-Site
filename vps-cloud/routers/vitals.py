@@ -294,7 +294,7 @@ async def vitals_sync(
     # Use the most recent heart-rate reading for alert classification.
     # tpeapp may send only steps in the batch — guard against bpm=0.
     latest_bpm: int = next(
-        (r.heart_rate for r in reversed(readings) if r.heart_rate > 0), 0
+        (r.heart_rate for r in readings[::-1] if r.heart_rate > 0), 0
     )
     baseline = _get_baseline(db, effective_device_id)
     alert_status = _classify_alert(db, effective_device_id, latest_bpm, baseline) if latest_bpm > 0 else None

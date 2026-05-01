@@ -67,7 +67,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, Response
@@ -90,6 +90,7 @@ _TPE_UPLOAD_PATH    = Path(os.environ.get("TPE_UPLOAD_PATH", "/app/data/tpe_uplo
 
 _MAX_AUDIT_VIDEO_BYTES  = 200 * 1024 * 1024  # 200 MB
 _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short recordings
+_CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
 
 # ---------------------------------------------------------------------------
 # Firebase / FCM (lazy initialisation)
@@ -996,13 +997,13 @@ async def tpe_task_status(
             # so the resulting path contains no user-controlled data.
             file_ct_str = getattr(photo_file, "content_type", None) or "image/jpeg"
             ext = _ext_from_content_type(file_ct_str, fallback=".jpg")
-            safe_tid = _safe_filename_part(task_id)
-            photo_name = f"task_{safe_tid}_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
+            # Use a timestamp+UUID for the filename — zero user-controlled data in the path.
+            photo_name = f"task_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
             dest = _TPE_UPLOAD_PATH / photo_name
             try:
                 total = 0
                 with open(dest, "wb") as fh:
-                    while chunk := await photo_file.read(256 * 1024):
+                    while chunk := await photo_file.read(_CHUNK_SIZE_BYTES):
                         total += len(chunk)
                         if total > _MAX_UPLOAD_BYTES:
                             fh.close()
@@ -1087,7 +1088,7 @@ async def tpe_upload(
         dest = _TPE_UPLOAD_PATH / filename
         try:
             with open(dest, "wb") as fh:
-                while chunk := await upload_file.read(256 * 1024):
+                while chunk := await upload_file.read(_CHUNK_SIZE_BYTES):
                     size_bytes += len(chunk)
                     if size_bytes > _MAX_UPLOAD_BYTES:
                         fh.close()
@@ -1101,7 +1102,7 @@ async def tpe_upload(
             raise HTTPException(status_code=500, detail="Failed to save upload.")
     else:
         # Raw binary body — extension comes entirely from Content-Type (no user input).
-        ext = ".jpg" if "image/jpeg" in ct else ".png" if "image/png" in ct else ".mp4" if "video" in ct else ".bin"
+        ext = _ext_from_content_type(ct, fallback=".bin")
         filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
         dest = _TPE_UPLOAD_PATH / filename
         try:
@@ -1602,7 +1603,7 @@ def tpe_pairing_qr(
     if live_session and ws_base:
         signaling_url = f"{ws_base}/api/tpe/signal/{live_session['id']}"
 
-    qr_payload: dict[str, str] = {
+    qr_payload: Dict[str, str] = {
         "endpoint": base_url,
         "pairing_token": pairing_token,
     }
