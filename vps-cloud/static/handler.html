@@ -632,7 +632,7 @@
       // AI alert banner
       const banner = document.getElementById('ai-alert-banner');
       if (aiAlert) {
-        const label = s.ai_label ? ` (${esc(s.ai_label)})` : '';
+        const label = s.ai_label ? ` (${s.ai_label})` : '';
         const score = s.ai_score !== null && s.ai_score !== undefined ? ` — score: ${(+s.ai_score).toFixed(3)}` : '';
         document.getElementById('ai-alert-text').textContent = `AI filter triggered${label}${score}`;
         banner.classList.add('visible');

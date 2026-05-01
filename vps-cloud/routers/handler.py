@@ -104,7 +104,10 @@ def _verify_admin_creds(creds_b64: str) -> bool:
     if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         return False
     try:
-        decoded = base64.b64decode(creds_b64 + "==").decode("utf-8")
+        # Recalculate correct padding (btoa() output may omit trailing '=' chars)
+        rem = len(creds_b64) % 4
+        padded = creds_b64 + ("=" * ((4 - rem) % 4))
+        decoded = base64.b64decode(padded, validate=True).decode("utf-8")
         user, _, pwd = decoded.partition(":")
     except Exception:
         return False
