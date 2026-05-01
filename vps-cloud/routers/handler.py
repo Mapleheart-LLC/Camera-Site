@@ -465,16 +465,26 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
             "devices": [dict(r) for r in rows],
         })
 
-        # Keep-alive loop: send a ping every 30 s; also drain any incoming
-        # messages from the client so the receive buffer never fills up.
-        while True:
-            try:
-                msg = await asyncio.wait_for(websocket.receive(), timeout=30.0)
+        # Keep-alive: send a ping every 30 s from a background task so that
+        # the main receive loop is never interrupted by a timeout-cancel, which
+        # can leave the WebSocket in an inconsistent state.
+        async def _ping_loop() -> None:
+            while True:
+                await asyncio.sleep(30)
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+
+        ping_task = asyncio.create_task(_ping_loop())
+        try:
+            while True:
+                msg = await websocket.receive()
                 # Ignore any client-sent frames (text or binary).
                 if msg.get("type") == "websocket.disconnect":
                     break
-            except asyncio.TimeoutError:
-                await websocket.send_json({"type": "ping"})
+        finally:
+            ping_task.cancel()
     except WebSocketDisconnect:
         pass
     finally:
@@ -503,6 +513,7 @@ async def device_audio_ws_endpoint(
     - The connection is closed (code 4004) when *device_id* is empty.
     """
     if not device_id.strip():
+        await websocket.accept()
         await websocket.close(code=4004)
         return
 

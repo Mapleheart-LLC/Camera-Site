@@ -95,6 +95,8 @@ class _HandlerWSManager:
         if not row:
             return False
 
+        # db connections are always created via get_db_connection() which sets
+        # row_factory = sqlite3.Row, so dict-style column access is safe.
         handler_id: str = row["handler_id"]
         ws = self._handler_sockets.get(handler_id)
         if ws is None:
