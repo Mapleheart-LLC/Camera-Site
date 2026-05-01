@@ -18,7 +18,10 @@ Admin-only (JWT Bearer auth – role 'admin'):
   DELETE /api/handler/assignments  – Remove a handler↔device assignment.
 
 WebSocket (JWT via query parameter):
-  WS   /ws/handler                 – Real-time device status stream.
+  WS   /ws/handler                 – Real-time device status stream + binary audio relay target.
+
+Device audio relay (webhook secret via query parameter):
+  WS   /ws/device-audio/{device_id} – Device streams binary audio; relayed to assigned handler.
 """
 
 from __future__ import annotations
@@ -428,8 +431,9 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
     - Handlers receive only their assigned devices.
 
     While open: the server pushes ``status_update`` and ``lock`` events
-    (each including ``device_id``) whenever a device posts new data.  A
-    ``ping`` frame is sent every 30 s to keep the connection alive through proxies.
+    (each including ``device_id``) whenever a device posts new data, and
+    forwards binary audio chunks relayed from assigned devices.  A ``ping``
+    frame is sent every 30 s to keep the connection alive through proxies.
     """
     payload = _verify_ws_token(token)
     if payload is None:
@@ -441,7 +445,8 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
 
     db = get_db_connection()
     try:
-        await _handler_ws.connect(websocket)
+        # Register by user_id so the audio relay can target this socket.
+        await _handler_ws.connect(websocket, user_id=user_id)
 
         if role == "admin":
             rows = db.execute("SELECT * FROM handler_device_status").fetchall()
@@ -460,11 +465,70 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
             "devices": [dict(r) for r in rows],
         })
 
+        # Keep-alive loop: send a ping every 30 s; also drain any incoming
+        # messages from the client so the receive buffer never fills up.
         while True:
-            await asyncio.sleep(30)
-            await websocket.send_json({"type": "ping"})
+            try:
+                msg = await asyncio.wait_for(websocket.receive(), timeout=30.0)
+                # Ignore any client-sent frames (text or binary).
+                if msg.get("type") == "websocket.disconnect":
+                    break
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
     except WebSocketDisconnect:
         pass
     finally:
-        _handler_ws.disconnect(websocket)
+        _handler_ws.disconnect(websocket, user_id=user_id)
+        db.close()
+
+
+@router.websocket("/ws/device-audio/{device_id}")
+async def device_audio_ws_endpoint(
+    websocket: WebSocket,
+    device_id: str,
+    secret: str = "",
+) -> None:
+    """
+    Binary audio relay endpoint for field devices.
+
+    A device authenticates by passing ``?secret=<webhook_secret>`` as a query
+    parameter (matching the TPE webhook secret configured for this server).
+    Once connected it may stream raw binary audio frames of any size; each
+    frame is immediately forwarded to the WebSocket of the Handler currently
+    assigned to *device_id* in the ``handler_device_assignments`` table.
+
+    - If no handler is assigned, or the assigned handler is not connected,
+      chunks are silently dropped (the device keeps streaming without error).
+    - The connection is closed (code 4001) when the secret is invalid.
+    - The connection is closed (code 4004) when *device_id* is empty.
+    """
+    if not device_id.strip():
+        await websocket.close(code=4004)
+        return
+
+    db = get_db_connection()
+    try:
+        expected = _effective_webhook_secret(db)
+        if expected and not secrets.compare_digest(secret, expected):
+            await websocket.close(code=4001)
+            return
+
+        await websocket.accept()
+
+        while True:
+            try:
+                msg = await websocket.receive()
+            except WebSocketDisconnect:
+                break
+
+            msg_type = msg.get("type")
+            if msg_type == "websocket.disconnect":
+                break
+
+            if msg_type == "websocket.receive":
+                chunk = msg.get("bytes")
+                if chunk:
+                    await _handler_ws.relay_audio(device_id, chunk, db)
+                # Ignore text frames from devices.
+    finally:
         db.close()
