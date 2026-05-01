@@ -989,10 +989,13 @@ async def tpe_task_status(
             ext = _safe_extension(raw_ext)
             safe_tid = _safe_filename_part(task_id)
             photo_name = f"task_{safe_tid}_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
-            dest = _TPE_UPLOAD_PATH / photo_name
+            dest = (_TPE_UPLOAD_PATH / photo_name).resolve()
+            # Guard: ensure path hasn't escaped the upload directory.
+            if not str(dest).startswith(str(_TPE_UPLOAD_PATH.resolve())):
+                raise HTTPException(status_code=400, detail="Invalid filename.")
             try:
                 total = 0
-                with dest.open("wb") as fh:
+                with open(dest, "wb") as fh:
                     while chunk := await photo_file.read(256 * 1024):
                         total += len(chunk)
                         if total > _MAX_UPLOAD_BYTES:
@@ -1071,13 +1074,15 @@ async def tpe_upload(
         upload_file = form.get("file") or form.get("image")
         if upload_file is None:
             raise HTTPException(status_code=400, detail="Missing file or image field")
-        orig_name = getattr(upload_file, "filename", None) or "upload"
+        orig_name = getattr(upload_file, "filename", None) or "upload.bin"
         ext = _safe_extension(Path(orig_name).suffix or ".bin")
         file_ct = getattr(upload_file, "content_type", ct) or ct
         filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
-        dest = _TPE_UPLOAD_PATH / filename
+        dest = (_TPE_UPLOAD_PATH / filename).resolve()
+        if not str(dest).startswith(str(_TPE_UPLOAD_PATH.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid filename.")
         try:
-            with dest.open("wb") as fh:
+            with open(dest, "wb") as fh:
                 while chunk := await upload_file.read(256 * 1024):
                     size_bytes += len(chunk)
                     if size_bytes > _MAX_UPLOAD_BYTES:
@@ -1091,12 +1096,12 @@ async def tpe_upload(
             logger.error("TPE upload save failed: %s", exc)
             raise HTTPException(status_code=500, detail="Failed to save upload.")
     else:
-        # Raw binary body.
+        # Raw binary body — extension comes entirely from Content-Type (no user input).
         ext = ".jpg" if "image/jpeg" in ct else ".png" if "image/png" in ct else ".mp4" if "video" in ct else ".bin"
         filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
         dest = _TPE_UPLOAD_PATH / filename
         try:
-            with dest.open("wb") as fh:
+            with open(dest, "wb") as fh:
                 async for chunk in request.stream():
                     size_bytes += len(chunk)
                     if size_bytes > _MAX_UPLOAD_BYTES:
