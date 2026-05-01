@@ -1409,8 +1409,11 @@
       try { label = new Date(timestamp || Date.now()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
       catch(e) { label = ''; }
 
-      // Shift oldest point off when we have > 60 minutes worth (≈ 720 pts at 5-s interval)
-      if (_vitalsChart.data.labels.length > 720) {
+      // Keep at most 60 minutes of chart points.
+      // Assuming the worst-case push rate of 1 reading every 5 seconds that gives
+      // MAX_CHART_POINTS = 60 * 60 / 5 = 720 data points.
+      var MAX_CHART_POINTS = 720;
+      if (_vitalsChart.data.labels.length > MAX_CHART_POINTS) {
         _vitalsChart.data.labels.shift();
         _vitalsChart.data.datasets.forEach(function(ds) { ds.data.shift(); });
       }

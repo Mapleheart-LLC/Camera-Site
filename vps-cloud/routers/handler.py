@@ -37,6 +37,7 @@ import jwt as _jwt
 from db import get_db, get_db_connection
 from dependencies import SECRET_KEY, ALGORITHM, role_required
 from routers.tpe import _effective_webhook_secret, _send_fcm_to_token
+from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
 
@@ -120,38 +121,6 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-# ---------------------------------------------------------------------------
-# WebSocket connection manager
-# ---------------------------------------------------------------------------
-
-class _HandlerWSManager:
-    def __init__(self) -> None:
-        self._connections: List[WebSocket] = []
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        self._connections.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        try:
-            self._connections.remove(ws)
-        except ValueError:
-            pass
-
-    async def broadcast(self, data: dict) -> None:
-        dead: List[WebSocket] = []
-        for ws in list(self._connections):
-            try:
-                await ws.send_json(data)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
-
-
-_handler_ws = _HandlerWSManager()
 
 
 def _verify_ws_token(token: str) -> Optional[dict]:

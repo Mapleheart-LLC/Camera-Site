@@ -28,6 +28,7 @@ from pydantic import BaseModel
 
 from db import get_db, get_db_connection
 from dependencies import role_required
+from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,9 @@ def _effective_webhook_secret(db: sqlite3.Connection) -> str:
     return (row["value"] or "").strip() if row else ""
 
 
+_BEARER_PREFIX = "Bearer "
+
+
 # ---------------------------------------------------------------------------
 # Device-facing endpoint
 # ---------------------------------------------------------------------------
@@ -196,8 +200,8 @@ async def vitals_sync(
     expected = _effective_webhook_secret(db)
     if expected:
         provided = ""
-        if authorization and authorization.startswith("Bearer "):
-            provided = authorization[len("Bearer "):].strip()
+        if authorization and authorization.startswith(_BEARER_PREFIX):
+            provided = authorization[len(_BEARER_PREFIX):].strip()
         if not secrets.compare_digest(provided, expected):
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
@@ -225,9 +229,6 @@ async def vitals_sync(
     alert_status = _classify_alert(db, body.device_id, latest_bpm, baseline)
 
     # ── Broadcast to Handler Panel WebSocket clients ──────────────────────────
-    # Import here to avoid a circular import at module level.
-    from routers.handler import _handler_ws  # noqa: PLC0415
-
     await _handler_ws.broadcast(
         {
             "type": "vitals_update",
