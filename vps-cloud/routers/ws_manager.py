@@ -12,6 +12,16 @@ chunks.  The manager looks up which handler user is assigned to that device
 and forwards every chunk directly to that handler's open ``/ws/handler``
 WebSocket, bypassing the broadcast list entirely so the data reaches only the
 intended recipient.
+
+Hot-mic (tpeapp)
+----------------
+Devices from the TPE Flutter app connect to ``/ws`` (no device_id in path).
+The manager registers these connections in ``_device_sockets`` keyed by
+device_id (or a generated ID when none is provided).  Binary audio chunks
+from these devices are broadcast to all connected handler sockets so the
+partner panel can listen.  The manager also exposes ``send_mic_command()``
+so the handler panel can send ``START_HOT_MIC`` / ``STOP_HOT_MIC`` commands
+back to one or all connected devices.
 """
 
 from __future__ import annotations
@@ -34,6 +44,8 @@ class _HandlerWSManager:
         self._connections: List[WebSocket] = []
         # user_id → WebSocket for targeted audio relay.
         self._handler_sockets: Dict[str, WebSocket] = {}
+        # device_id → WebSocket for TPE hot-mic relay (tpeapp /ws endpoint).
+        self._device_sockets: Dict[str, WebSocket] = {}
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -113,6 +125,60 @@ class _HandlerWSManager:
             self.disconnect(ws, handler_id)
             return False
 
+    async def relay_audio_broadcast(self, chunk: bytes) -> None:
+        """Broadcast binary audio *chunk* to all connected handler sockets.
 
-#: Singleton used by handler.py and vitals.py.
+        Used by the ``/ws`` hot-mic endpoint when the device_id is unknown or
+        not yet assigned to a specific handler.
+        """
+        dead: List[WebSocket] = []
+        for ws in list(self._connections):
+            try:
+                await asyncio.wait_for(ws.send_bytes(chunk), timeout=5.0)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+    # ------------------------------------------------------------------
+    # Device hot-mic socket registry (tpeapp /ws endpoint)
+    # ------------------------------------------------------------------
+
+    def connect_device(self, device_id: str, ws: WebSocket) -> None:
+        """Register a TPE device WebSocket for hot-mic relay."""
+        self._device_sockets[device_id] = ws
+        logger.debug("Hot-mic device connected: %s (total: %d)", device_id, len(self._device_sockets))
+
+    def disconnect_device(self, device_id: str, ws: WebSocket) -> None:
+        """Remove a TPE device WebSocket from the registry."""
+        if self._device_sockets.get(device_id) is ws:
+            del self._device_sockets[device_id]
+        logger.debug("Hot-mic device disconnected: %s (total: %d)", device_id, len(self._device_sockets))
+
+    async def send_mic_command(self, command: str, device_id: Optional[str] = None) -> int:
+        """Send a ``{"command": <command>}`` JSON frame to one or all devices.
+
+        ``command`` is typically ``"START_HOT_MIC"`` or ``"STOP_HOT_MIC"``.
+        When *device_id* is ``None`` the command is broadcast to every connected
+        device.  Returns the number of devices the command was sent to.
+        """
+        import json as _json
+        payload = _json.dumps({"command": command})
+        sent = 0
+
+        dead_ids: List[str] = []
+        for did, ws in list(self._device_sockets.items()):
+            if device_id is not None and did != device_id:
+                continue
+            try:
+                await asyncio.wait_for(ws.send_text(payload), timeout=5.0)
+                sent += 1
+            except Exception:
+                dead_ids.append(did)
+        for did in dead_ids:
+            self._device_sockets.pop(did, None)
+        return sent
+
+
+#: Singleton used by handler.py, vitals.py, and tpe.py.
 handler_ws = _HandlerWSManager()
