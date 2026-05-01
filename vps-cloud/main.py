@@ -26,6 +26,7 @@ from dependencies import (
     SECRET_KEY,
     create_access_token,
     get_current_user,
+    role_required,
 )
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
@@ -429,6 +430,23 @@ def init_db() -> None:
             conn.execute(f"ALTER TABLE users ADD COLUMN {_col} {_defn}")
         except Exception:
             pass  # column already exists
+    # Idempotent migration: add role column for admin/handler access control.
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'handler'")
+    except Exception:
+        pass  # column already exists
+    # ── Handler device assignment table (many-to-many) ────────────────────
+    # Links a handler user (by user_id) to specific device_ids they may
+    # view and command.  Admins bypass this table and see all devices.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_device_assignments (
+            handler_id TEXT NOT NULL,
+            device_id  TEXT NOT NULL,
+            PRIMARY KEY (handler_id, device_id)
+        )
+        """
+    )
     # Indexes for analytics date-range queries (idempotent – safe to re-run)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_camera_service_logs_accessed_at ON camera_service_logs(accessed_at)"
@@ -820,14 +838,14 @@ async def auth_login(
 
     if effective_mock_auth:
         mock_token = create_access_token(
-            {"sub": "mock-user", "access_level": 3},
+            {"sub": "mock-user", "access_level": 3, "role": "admin"},
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         )
-        return {"access_token": mock_token, "token_type": "bearer"}
+        return {"access_token": mock_token, "token_type": "bearer", "role": "admin"}
 
     username_lower = body.username.lower()
     row = db.execute(
-        "SELECT id, password_hash, access_level FROM users WHERE username = ?",
+        "SELECT id, password_hash, access_level, role FROM users WHERE username = ?",
         (username_lower,),
     ).fetchone()
 
@@ -845,6 +863,9 @@ async def auth_login(
 
     user_id: str = row["id"]
     access_level: int = row["access_level"]
+    # Fallback handles any existing row where role was NULL before the migration
+    # added the column (SQLite ignores NOT NULL on ALTER TABLE ADD COLUMN).
+    role: str = row["role"] or "handler"
 
     # Refresh access_level from Discord guild roles if the account is linked.
     discord_row = db.execute(
@@ -868,10 +889,10 @@ async def auth_login(
             )
 
     site_token = create_access_token(
-        {"sub": user_id, "access_level": access_level},
+        {"sub": user_id, "access_level": access_level, "role": role},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return {"access_token": site_token, "token_type": "bearer"}
+    return {"access_token": site_token, "token_type": "bearer", "role": role}
 
 
 # ---------------------------------------------------------------------------
@@ -1037,11 +1058,15 @@ async def age_gate_middleware(request: Request, call_next):
 
 
 @app.get("/admin", include_in_schema=False)
-def admin_page_redirect(request: Request):
-    """Redirect /admin (and /admin?q=...) to the static admin.html page."""
-    qs = request.url.query
-    target = f"/admin.html?{qs}" if qs else "/admin.html"
-    return RedirectResponse(url=target, status_code=301)
+def admin_page():
+    """Serve the admin panel at /admin without a .html extension."""
+    return FileResponse("static/admin.html")
+
+
+@app.get("/handler", include_in_schema=False)
+def handler_panel_page():
+    """Serve the handler panel at /handler without a .html extension."""
+    return FileResponse("static/handler.html")
 
 
 @app.get("/drool", include_in_schema=False)
