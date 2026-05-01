@@ -27,6 +27,7 @@ back to one or all connected devices.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sqlite3
 from typing import Dict, List, Optional
@@ -162,8 +163,7 @@ class _HandlerWSManager:
         When *device_id* is ``None`` the command is broadcast to every connected
         device.  Returns the number of devices the command was sent to.
         """
-        import json as _json
-        payload = _json.dumps({"command": command})
+        payload = json.dumps({"command": command})
         sent = 0
 
         dead_ids: List[str] = []

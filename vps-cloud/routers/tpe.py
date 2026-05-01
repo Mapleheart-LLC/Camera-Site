@@ -61,6 +61,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import uuid
@@ -220,22 +221,28 @@ def _safe_filename_part(value: str, max_len: int = 64) -> str:
     This is used to sanitize user-supplied values (e.g. task_id, file extension)
     before embedding them into filesystem paths.
     """
-    import re
     sanitised = re.sub(r"[^A-Za-z0-9_\-]", "_", value)
     return sanitised[:max_len]
 
 
-def _safe_extension(raw_ext: str) -> str:
-    """Return a safe file extension (dot + up to 8 alphanumeric chars).
+def _ext_from_content_type(content_type: str, fallback: str = ".bin") -> str:
+    """Return a safe file extension derived solely from a MIME content-type string.
 
-    Falls back to ``.bin`` when the supplied extension is empty or unsafe.
+    Only inspects the MIME type portion — no user-supplied filename is used —
+    so the result is always a fixed known extension, never attacker-controlled.
     """
-    import re
-    # Strip leading dot(s) then allow only alphanumeric chars.
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", raw_ext.lstrip("."))
-    if not cleaned:
-        return ".bin"
-    return "." + cleaned[:8].lower()
+    mime = content_type.lower().split(";")[0].strip()
+    _MAP = {
+        "image/jpeg":       ".jpg",
+        "image/jpg":        ".jpg",
+        "image/png":        ".png",
+        "image/gif":        ".gif",
+        "image/webp":       ".webp",
+        "video/mp4":        ".mp4",
+        "video/webm":       ".webm",
+        "application/octet-stream": fallback,
+    }
+    return _MAP.get(mime, fallback)
 
 
 def _effective_pairing_token(db: sqlite3.Connection) -> str:
@@ -985,14 +992,13 @@ async def tpe_task_status(
 
         if photo_file is not None and hasattr(photo_file, "read"):
             _TPE_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
-            raw_ext = Path(getattr(photo_file, "filename", "photo.jpg")).suffix or ".jpg"
-            ext = _safe_extension(raw_ext)
+            # Derive extension from content-type only — never from the client filename —
+            # so the resulting path contains no user-controlled data.
+            file_ct_str = getattr(photo_file, "content_type", None) or "image/jpeg"
+            ext = _ext_from_content_type(file_ct_str, fallback=".jpg")
             safe_tid = _safe_filename_part(task_id)
             photo_name = f"task_{safe_tid}_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
-            dest = (_TPE_UPLOAD_PATH / photo_name).resolve()
-            # Guard: ensure path hasn't escaped the upload directory.
-            if not str(dest).startswith(str(_TPE_UPLOAD_PATH.resolve())):
-                raise HTTPException(status_code=400, detail="Invalid filename.")
+            dest = _TPE_UPLOAD_PATH / photo_name
             try:
                 total = 0
                 with open(dest, "wb") as fh:
@@ -1074,13 +1080,11 @@ async def tpe_upload(
         upload_file = form.get("file") or form.get("image")
         if upload_file is None:
             raise HTTPException(status_code=400, detail="Missing file or image field")
-        orig_name = getattr(upload_file, "filename", None) or "upload.bin"
-        ext = _safe_extension(Path(orig_name).suffix or ".bin")
-        file_ct = getattr(upload_file, "content_type", ct) or ct
+        # Derive extension from content-type, not the client filename, to avoid path injection.
+        file_ct = getattr(upload_file, "content_type", None) or ct or "application/octet-stream"
+        ext = _ext_from_content_type(file_ct, fallback=".bin")
         filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
-        dest = (_TPE_UPLOAD_PATH / filename).resolve()
-        if not str(dest).startswith(str(_TPE_UPLOAD_PATH.resolve())):
-            raise HTTPException(status_code=400, detail="Invalid filename.")
+        dest = _TPE_UPLOAD_PATH / filename
         try:
             with open(dest, "wb") as fh:
                 while chunk := await upload_file.read(256 * 1024):

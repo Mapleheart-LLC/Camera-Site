@@ -27,6 +27,7 @@ Device audio relay (webhook secret via query parameter):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import sqlite3
@@ -491,8 +492,7 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
                     text = msg.get("text")
                     if text:
                         try:
-                            import json as _json
-                            cmd = _json.loads(text)
+                            cmd = json.loads(text)
                             action = cmd.get("action", "")
                             target_device = cmd.get("device_id") or None
                             if action == "mic_start":
