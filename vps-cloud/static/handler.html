@@ -76,6 +76,16 @@
       background: rgba(232,174,183,.1); border: 1px solid #e8aeb7;
       color: #e8aeb7; font-size: .7rem; font-weight: 700; letter-spacing: .06em;
     }
+    #back-to-kennel-btn {
+      display: none;
+      align-items: center; gap: .4rem;
+      background: rgba(232,174,183,.08); border: 1px solid #3d2a2e;
+      border-radius: 8px; color: #e8aeb7; padding: .35rem .85rem;
+      font-family: inherit; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: background .2s, border-color .2s;
+      white-space: nowrap;
+    }
+    #back-to-kennel-btn:hover { background: rgba(232,174,183,.18); border-color: #e8aeb7; }
     #ws-status-dot {
       width: 10px; height: 10px; border-radius: 50%;
       background: #4b3538; transition: background .4s;
@@ -92,7 +102,90 @@
     }
     #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
-    /* ── Layout ───────────────────────────────────────── */
+    /* ── Kennel overview ──────────────────────────────── */
+    #kennel-overview { padding: 1.75rem 2rem; }
+
+    .kennel-overview-heading {
+      font-size: 1.3rem; font-weight: 800; color: #e8aeb7;
+      margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem;
+    }
+
+    /* Master map */
+    #master-map-wrap {
+      background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
+      overflow: hidden; margin-bottom: 2rem;
+    }
+    #master-map-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .8rem 1.25rem; border-bottom: 1px solid #3d2a2e; background: #242424;
+    }
+    #master-map-header h2 {
+      font-size: .88rem; font-weight: 800; color: #e8aeb7;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    #master-map { width: 100%; height: 320px; background: #1a1a1a; display: none; }
+    #master-map-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      height: 160px; color: #5a3a3e; font-size: .9rem; font-weight: 700;
+    }
+
+    /* Kennel card grid */
+    #kennel-grid-heading {
+      font-size: 1rem; font-weight: 800; color: #c49a9f;
+      margin-bottom: 1rem; text-transform: uppercase; letter-spacing: .06em;
+    }
+    #kennel-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    #kennel-empty { color: #5a3a3e; font-size: .9rem; font-weight: 700; padding: 1rem 0; }
+
+    /* Individual kennel summary card */
+    .kennel-card {
+      background: #202020; border: 1px solid #3d2a2e; border-radius: 14px;
+      padding: 1.25rem 1.1rem; cursor: pointer;
+      transition: border-color .2s, background .2s, transform .15s, box-shadow .2s;
+    }
+    .kennel-card:hover {
+      border-color: #e8aeb7; background: #282020;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(232,174,183,.14);
+    }
+    .kennel-card:active { transform: translateY(0); }
+    .kc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: .85rem;
+    }
+    .kc-id {
+      font-size: .92rem; font-weight: 800; color: #e8aeb7;
+      max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .kc-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      background: #4b3538; transition: background .4s;
+    }
+    .kc-dot.online  { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,.5); }
+    .kc-dot.offline { background: #f87171; }
+    .kc-stats {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .6rem;
+      margin-bottom: .85rem;
+    }
+    .kc-stat { font-size: .78rem; font-weight: 700; color: #c49a9f; }
+    .kc-stat.kc-alert { color: #f87171; }
+    .kc-last-seen {
+      font-size: .71rem; color: #5a3a3e; font-family: monospace;
+      margin-bottom: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kc-cta {
+      font-size: .78rem; font-weight: 800; color: #e8aeb7;
+      text-align: right; letter-spacing: .04em;
+      opacity: 0; transition: opacity .2s;
+    }
+    .kennel-card:hover .kc-cta { opacity: 1; }
+
+    /* ── Puppy detail wrapper ─────────────────────────── */
+    #puppy-detail { display: none; }
     .handler-layout { display: flex; min-height: calc(100vh - 56px); }
 
     /* ── Sidebar ──────────────────────────────────────── */
@@ -124,6 +217,12 @@
       margin: 1rem 1.25rem .5rem;
       background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px;
       padding: .85rem 1rem;
+    }
+    .sidebar-device-name {
+      font-size: .7rem; font-weight: 800; color: #5a3a3e;
+      text-transform: uppercase; letter-spacing: .08em;
+      margin-bottom: .65rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .sidebar-status .ss-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -183,7 +282,7 @@
     .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
     .card-body { padding: 1.25rem; }
 
-    /* ── Map ──────────────────────────────────────────── */
+    /* ── Detail map ───────────────────────────────────── */
     #map {
       width: 100%; height: 420px; border-radius: 10px;
       border: 1px solid #3d2a2e; background: #1a1a1a;
@@ -193,9 +292,7 @@
       height: 420px; border-radius: 10px; border: 1px solid #3d2a2e;
       background: #1a1a1a; color: #5a3a3e; font-size: .9rem; font-weight: 700;
     }
-    #map-coords {
-      margin-top: .75rem; font-size: .82rem; color: #9e7e82; font-family: monospace;
-    }
+    #map-coords { margin-top: .75rem; font-size: .82rem; color: #9e7e82; font-family: monospace; }
 
     /* ── Quick-action grid ────────────────────────────── */
     .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
@@ -238,34 +335,18 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
-    /* ── Device selector ─────────────────────────────── */
-    .device-selector-wrap {
-      margin: .75rem 1.25rem .25rem;
-    }
-    .device-selector-wrap label {
-      display: block; font-size: .63rem; font-weight: 800; text-transform: uppercase;
-      letter-spacing: .1em; color: #5a3a3e; margin-bottom: .4rem;
-    }
-    .device-selector-wrap select {
-      width: 100%; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 8px;
-      color: #f0e6e8; font-family: inherit; font-size: .82rem; padding: .45rem .65rem;
-      outline: none; cursor: pointer; transition: border-color .2s;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239e7e82' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right .6rem center;
-      padding-right: 1.8rem;
-    }
-    .device-selector-wrap select:focus { border-color: #e8aeb7; }
-    .device-selector-wrap select option { background: #242424; }
-
     /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
+      #kennel-overview { padding: 1rem; }
+      #kennel-grid { grid-template-columns: 1fr 1fr; }
       .sidebar { display: none; }
       .sidebar.open { display: block; position: fixed; top: 56px; left: 0; bottom: 0; z-index: 100; }
       .handler-main { padding: 1rem; }
       .stats-row { grid-template-columns: 1fr 1fr; }
       .action-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      #kennel-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -296,228 +377,212 @@
     <div class="handler-topbar">
       <span class="topbar-title">🐾 Handler Panel</span>
       <span class="topbar-badge">ADMIN</span>
+      <button id="back-to-kennel-btn">← Back to Kennel</button>
       <div id="ws-status-dot" title="WebSocket connection status"></div>
       <span id="ws-status-label">Connecting…</span>
       <button id="logout-btn">Logout</button>
     </div>
 
-    <div class="handler-layout">
+    <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
+    <div id="kennel-overview">
+      <h2 class="kennel-overview-heading">🏠 Kennel Overview</h2>
 
-      <!-- ── Sidebar ── -->
-      <aside class="sidebar" id="sidebar">
-
-        <!-- Device selector -->
-        <div class="device-selector-wrap">
-          <label for="device-select">📱 Device</label>
-          <select id="device-select">
-            <option value="">— select device —</option>
-          </select>
+      <!-- Master Leaflet map showing all device pins -->
+      <div id="master-map-wrap">
+        <div id="master-map-header">
+          <h2>🗺️ All Device Locations</h2>
         </div>
+        <div id="master-map-placeholder">No GPS data yet — waiting for device check-ins.</div>
+        <div id="master-map"></div>
+      </div>
 
-        <!-- Device quick-status -->
-        <div class="sidebar-status">
-          <div class="ss-row">
-            <span class="ss-label">🔋 Battery</span>
-            <span class="ss-val" id="sb-battery">—</span>
-          </div>
-          <div class="battery-bar-wrap">
-            <div class="battery-bar" id="sb-bar" style="width:0%"></div>
-          </div>
-          <div class="ss-row">
-            <span class="ss-label">📡 Status</span>
-            <span class="ss-val" id="sb-online">—</span>
-          </div>
-          <div class="ss-row">
-            <span class="ss-label">🔒 Lock</span>
-            <span class="ss-val" id="sb-lock">—</span>
-          </div>
-          <div class="ss-row">
-            <span class="ss-label">🤖 AI Filter</span>
-            <span class="ss-val" id="sb-ai">—</span>
-          </div>
-        </div>
+      <!-- Device summary card grid -->
+      <div id="kennel-grid-heading">📱 Connected Devices</div>
+      <div id="kennel-grid">
+        <p id="kennel-empty">No devices have checked in yet.</p>
+      </div>
+    </div>
 
-        <div class="sidebar-section-label">Navigation</div>
-        <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
-        <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
-        <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
-        <button class="nav-item" data-target="sec-logs">📜 Logs</button>
-      </aside>
+    <!-- ═══════════════ PUPPY DETAIL ═══════════════ -->
+    <div id="puppy-detail">
+      <div class="handler-layout">
 
-      <!-- ── Main ── -->
-      <main class="handler-main">
+        <!-- ── Sidebar ── -->
+        <aside class="sidebar" id="sidebar">
 
-        <!-- ─── AI Alert banner ─── -->
-        <div id="ai-alert-banner" role="alert">
-          ⚠️ <span id="ai-alert-text">AI filter triggered</span>
-        </div>
-
-        <!-- ═══════════════ OVERVIEW ═══════════════ -->
-        <section id="sec-overview" class="handler-section active">
-          <h2 class="section-heading">📊 Overview</h2>
-
-          <div class="stats-row">
-            <!-- Battery -->
-            <div class="stat-tile">
-              <div class="stat-icon">🔋</div>
-              <div class="stat-value" id="ov-battery">—</div>
-              <div class="stat-label">Battery</div>
-              <div class="stat-sub" id="ov-battery-sub"></div>
+          <!-- Viewed-device quick-status -->
+          <div class="sidebar-status">
+            <div class="sidebar-device-name" id="sb-device-name">—</div>
+            <div class="ss-row">
+              <span class="ss-label">🔋 Battery</span>
+              <span class="ss-val" id="sb-battery">—</span>
             </div>
-            <!-- Location -->
-            <div class="stat-tile">
-              <div class="stat-icon">📍</div>
-              <div class="stat-value" id="ov-gps">—</div>
-              <div class="stat-label">GPS Fix</div>
-              <div class="stat-sub" id="ov-gps-sub"></div>
+            <div class="battery-bar-wrap">
+              <div class="battery-bar" id="sb-bar" style="width:0%"></div>
             </div>
-            <!-- AI Filter -->
-            <div class="stat-tile">
-              <div class="stat-icon">🤖</div>
-              <div class="stat-value" id="ov-ai">—</div>
-              <div class="stat-label">AI Filter</div>
-              <div class="stat-sub" id="ov-ai-sub"></div>
+            <div class="ss-row">
+              <span class="ss-label">📡 Status</span>
+              <span class="ss-val" id="sb-online">—</span>
             </div>
-            <!-- Online -->
-            <div class="stat-tile">
-              <div class="stat-icon">📡</div>
-              <div class="stat-value" id="ov-online">—</div>
-              <div class="stat-label">Device</div>
-              <div class="stat-sub" id="ov-online-sub"></div>
+            <div class="ss-row">
+              <span class="ss-label">🔒 Lock</span>
+              <span class="ss-val" id="sb-lock">—</span>
+            </div>
+            <div class="ss-row">
+              <span class="ss-label">🤖 AI Filter</span>
+              <span class="ss-val" id="sb-ai">—</span>
             </div>
           </div>
 
-          <!-- Last-seen card -->
-          <div class="card">
-            <div class="card-header"><h2>📋 Device Details</h2></div>
-            <div class="card-body">
-              <table class="admin-table">
-                <tbody>
-                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700;width:160px">Last Seen</td><td class="ts-cell" id="det-last-seen">—</td></tr>
-                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Coordinates</td><td class="ts-cell" id="det-coords">—</td></tr>
-                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">—</td></tr>
-                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">—</td></tr>
-                  <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+          <div class="sidebar-section-label">Navigation</div>
+          <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
+          <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
+          <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
+          <button class="nav-item" data-target="sec-logs">📜 Logs</button>
+        </aside>
 
-        <!-- ═══════════════ GPS MAP ═══════════════ -->
-        <section id="sec-map" class="handler-section">
-          <h2 class="section-heading">🗺️ GPS Map</h2>
-          <div class="card">
-            <div class="card-header">
-              <h2>Device Location</h2>
-              <button class="btn-action" id="map-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
-            </div>
-            <div class="card-body">
-              <div id="map-placeholder">No GPS fix yet — waiting for device data.</div>
-              <div id="map" style="display:none"></div>
-              <div id="map-coords"></div>
-            </div>
-          </div>
-        </section>
+        <!-- ── Main ── -->
+        <main class="handler-main">
 
-        <!-- ═══════════════ QUICK ACTIONS ═══════════════ -->
-        <section id="sec-actions" class="handler-section">
-          <h2 class="section-heading">⚡ Quick Actions</h2>
-
-          <div class="action-grid">
-
-            <!-- Lock Device -->
-            <div class="action-card">
-              <div class="ac-icon">🔒</div>
-              <div class="ac-label">Lock Device</div>
-              <button class="btn-action danger-action" id="btn-lock">Send Lock Command</button>
-              <div class="ac-result" id="res-lock"></div>
-            </div>
-
-            <!-- Lovense Vibrate -->
-            <div class="action-card">
-              <div class="ac-icon">💗</div>
-              <div class="ac-label">Lovense Toy</div>
-              <button class="btn-action" id="btn-lovense">Vibrate (Full)</button>
-              <div class="ac-result" id="res-lovense"></div>
-            </div>
-
-            <!-- PiShock Shock -->
-            <div class="action-card">
-              <div class="ac-icon">⚡</div>
-              <div class="ac-label">PiShock</div>
-              <button class="btn-action" id="btn-pishock">Send Shock</button>
-              <div class="ac-result" id="res-pishock"></div>
-            </div>
-
-            <!-- Pavlok Vibrate -->
-            <div class="action-card">
-              <div class="ac-icon">🌀</div>
-              <div class="ac-label">Pavlok</div>
-              <button class="btn-action" id="btn-pavlok">Vibrate (Full)</button>
-              <div class="ac-result" id="res-pavlok"></div>
-            </div>
-
-            <!-- Request Checkin -->
-            <div class="action-card">
-              <div class="ac-icon">📋</div>
-              <div class="ac-label">Check-in</div>
-              <button class="btn-action" id="btn-checkin">Request Check-in</button>
-              <div class="ac-result" id="res-checkin"></div>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- ═══════════════ LOGS ═══════════════ -->
-        <section id="sec-logs" class="handler-section">
-          <h2 class="section-heading">📜 Logs</h2>
-
-          <!-- TPE Events -->
-          <div class="card">
-            <div class="card-header">
-              <h2>Consequence Events</h2>
-              <button class="btn-action" id="logs-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
-            </div>
-            <div class="card-body" style="padding:0">
-              <table class="admin-table">
-                <thead>
-                  <tr>
-                    <th>Event</th>
-                    <th>Reason</th>
-                    <th>Received</th>
-                  </tr>
-                </thead>
-                <tbody id="events-tbody">
-                  <tr class="empty-row"><td colspan="3">Loading…</td></tr>
-                </tbody>
-              </table>
-            </div>
+          <!-- ─── AI Alert banner ─── -->
+          <div id="ai-alert-banner" role="alert">
+            ⚠️ <span id="ai-alert-text">AI filter triggered</span>
           </div>
 
-          <!-- Audit logs -->
-          <div class="card">
-            <div class="card-header"><h2>AI Audit Log</h2></div>
-            <div class="card-body" style="padding:0">
-              <table class="admin-table">
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Score</th>
-                    <th>Ratio</th>
-                    <th>Received</th>
-                  </tr>
-                </thead>
-                <tbody id="audits-tbody">
-                  <tr class="empty-row"><td colspan="4">Loading…</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+          <!-- ═══════════════ OVERVIEW ═══════════════ -->
+          <section id="sec-overview" class="handler-section active">
+            <h2 class="section-heading">📊 Overview</h2>
 
-      </main>
-    </div><!-- .handler-layout -->
+            <div class="stats-row">
+              <div class="stat-tile">
+                <div class="stat-icon">🔋</div>
+                <div class="stat-value" id="ov-battery">—</div>
+                <div class="stat-label">Battery</div>
+                <div class="stat-sub" id="ov-battery-sub"></div>
+              </div>
+              <div class="stat-tile">
+                <div class="stat-icon">📍</div>
+                <div class="stat-value" id="ov-gps">—</div>
+                <div class="stat-label">GPS Fix</div>
+                <div class="stat-sub" id="ov-gps-sub"></div>
+              </div>
+              <div class="stat-tile">
+                <div class="stat-icon">🤖</div>
+                <div class="stat-value" id="ov-ai">—</div>
+                <div class="stat-label">AI Filter</div>
+                <div class="stat-sub" id="ov-ai-sub"></div>
+              </div>
+              <div class="stat-tile">
+                <div class="stat-icon">📡</div>
+                <div class="stat-value" id="ov-online">—</div>
+                <div class="stat-label">Device</div>
+                <div class="stat-sub" id="ov-online-sub"></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h2>📋 Device Details</h2></div>
+              <div class="card-body">
+                <table class="admin-table">
+                  <tbody>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700;width:160px">Last Seen</td><td class="ts-cell" id="det-last-seen">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Coordinates</td><td class="ts-cell" id="det-coords">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ GPS MAP ═══════════════ -->
+          <section id="sec-map" class="handler-section">
+            <h2 class="section-heading">🗺️ GPS Map</h2>
+            <div class="card">
+              <div class="card-header">
+                <h2>Device Location</h2>
+                <button class="btn-action" id="map-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+              </div>
+              <div class="card-body">
+                <div id="map-placeholder">No GPS fix yet — waiting for device data.</div>
+                <div id="map" style="display:none"></div>
+                <div id="map-coords"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ QUICK ACTIONS ═══════════════ -->
+          <section id="sec-actions" class="handler-section">
+            <h2 class="section-heading">⚡ Quick Actions</h2>
+            <div class="action-grid">
+              <div class="action-card">
+                <div class="ac-icon">🔒</div>
+                <div class="ac-label">Lock Device</div>
+                <button class="btn-action danger-action" id="btn-lock">Send Lock Command</button>
+                <div class="ac-result" id="res-lock"></div>
+              </div>
+              <div class="action-card">
+                <div class="ac-icon">💗</div>
+                <div class="ac-label">Lovense Toy</div>
+                <button class="btn-action" id="btn-lovense">Vibrate (Full)</button>
+                <div class="ac-result" id="res-lovense"></div>
+              </div>
+              <div class="action-card">
+                <div class="ac-icon">⚡</div>
+                <div class="ac-label">PiShock</div>
+                <button class="btn-action" id="btn-pishock">Send Shock</button>
+                <div class="ac-result" id="res-pishock"></div>
+              </div>
+              <div class="action-card">
+                <div class="ac-icon">🌀</div>
+                <div class="ac-label">Pavlok</div>
+                <button class="btn-action" id="btn-pavlok">Vibrate (Full)</button>
+                <div class="ac-result" id="res-pavlok"></div>
+              </div>
+              <div class="action-card">
+                <div class="ac-icon">📋</div>
+                <div class="ac-label">Check-in</div>
+                <button class="btn-action" id="btn-checkin">Request Check-in</button>
+                <div class="ac-result" id="res-checkin"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ LOGS ═══════════════ -->
+          <section id="sec-logs" class="handler-section">
+            <h2 class="section-heading">📜 Logs</h2>
+            <div class="card">
+              <div class="card-header">
+                <h2>Consequence Events</h2>
+                <button class="btn-action" id="logs-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+              </div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Event</th><th>Reason</th><th>Received</th></tr></thead>
+                  <tbody id="events-tbody">
+                    <tr class="empty-row"><td colspan="3">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><h2>AI Audit Log</h2></div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Label</th><th>Score</th><th>Ratio</th><th>Received</th></tr></thead>
+                  <tbody id="audits-tbody">
+                    <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+        </main>
+      </div><!-- .handler-layout -->
+    </div><!-- #puppy-detail -->
+
   </div><!-- #handler-panel -->
 
   <!-- Toast -->
@@ -527,43 +592,48 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
   <script>
-    // ── Credential storage ─────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════
+
     const CRED_KEY = 'handler_panel_creds';
-    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`)); }
+
+    /**
+     * device_id of the puppy currently shown in the detail panel.
+     * null → kennel overview is the active view.
+     */
+    let viewingDeviceId = null;
+
+    /**
+     * Latest known status for every device, keyed by device_id.
+     * Updated on every WS status_update, lock, and snapshot message.
+     */
+    const _deviceCache = {};
+
+    // ── Credential storage ─────────────────────────────
+    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(user + ':' + pass)); }
     function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
     function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
     function authHeader() {
       const c = getCreds();
-      return c ? { 'Authorization': `Basic ${c}` } : {};
-    }
-
-    // ── Selected device ────────────────────────────────
-    let selectedDeviceId = null;
-
-    function setSelectedDevice(deviceId) {
-      selectedDeviceId = deviceId || null;
-      const sel = document.getElementById('device-select');
-      if (sel && sel.value !== (deviceId ?? '')) sel.value = deviceId ?? '';
-      // Clear displayed status when switching devices
-      renderStatus({});
-      if (selectedDeviceId) fetchAndRenderStatus();
+      return c ? { 'Authorization': 'Basic ' + c } : {};
     }
 
     // ── Toast ──────────────────────────────────────────
     let _toastTimer = null;
-    function showToast(msg, isError = false) {
+    function showToast(msg, isError) {
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.style.borderColor = isError ? '#f87171' : '#e8aeb7';
       el.style.color        = isError ? '#f87171' : '#e8aeb7';
       el.classList.add('show');
       if (_toastTimer) clearTimeout(_toastTimer);
-      _toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+      _toastTimer = setTimeout(function() { el.classList.remove('show'); }, 3200);
     }
 
     // ── HTML escape ────────────────────────────────────
     function esc(s) {
-      return String(s ?? '')
+      return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
@@ -572,180 +642,28 @@
     async function apiGet(path) {
       const r = await fetch(path, { headers: authHeader() });
       if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }
 
     async function apiPost(path, body) {
       const r = await fetch(path, {
         method: 'POST',
-        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        headers: Object.assign({}, authHeader(), { 'Content-Type': 'application/json' }),
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
       if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
       return r;
     }
 
-    // ── Panel switching ────────────────────────────────
-    function showLoginPanel(msg) {
-      document.getElementById('handler-panel').style.display = 'none';
-      document.getElementById('login-panel').style.display   = 'flex';
-      if (msg) document.getElementById('login-error').textContent = msg;
-      clearCreds();
-      disconnectWS();
-      selectedDeviceId = null;
-    }
-
-    function showHandlerPanel() {
-      document.getElementById('login-panel').style.display   = 'none';
-      document.getElementById('handler-panel').style.display = 'block';
-      initPanel();
-    }
-
-    async function loadDeviceList() {
-      try {
-        const devices = await apiGet('/api/handler/devices');
-        _applyDeviceListToDropdown(devices);
-      } catch { /* non-critical */ }
-    }
-
-    /**
-     * Populate (or refresh) the device dropdown from an array of device objects.
-     * Preserves the current selection if still present; auto-selects when only one device.
-     */
-    function _applyDeviceListToDropdown(devices) {
-      const sel = document.getElementById('device-select');
-      const prev = sel.value;
-      sel.innerHTML = '<option value="">— select device —</option>';
-      devices.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value       = d.device_id;
-        opt.textContent = d.device_id + (d.is_online ? ' 🟢' : ' 🔴');
-        sel.appendChild(opt);
-      });
-      if (prev && devices.some(d => d.device_id === prev)) {
-        sel.value = prev;
-      } else if (devices.length === 1 && !selectedDeviceId) {
-        sel.value = devices[0].device_id;
-        setSelectedDevice(devices[0].device_id);
-      }
-    }
-
-    // ── Login ──────────────────────────────────────────
-    document.getElementById('login-btn').addEventListener('click', async () => {
-      const user = document.getElementById('hp-username').value.trim();
-      const pass = document.getElementById('hp-password').value;
-      const errEl = document.getElementById('login-error');
-      const btn   = document.getElementById('login-btn');
-      errEl.textContent = '';
-      if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
-      btn.disabled = true;
-      btn.textContent = 'Checking…';
-      saveCreds(user, pass);
-      try {
-        await apiGet('/api/handler/status');
-        showHandlerPanel();
-      } catch {
-        clearCreds();
-        errEl.textContent = '🐾 Invalid credentials.';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = '🐾 Enter Handler Panel';
-      }
-    });
-    ['hp-username', 'hp-password'].forEach(id =>
-      document.getElementById(id).addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('login-btn').click();
-      })
-    );
-
-    // ── Logout ─────────────────────────────────────────
-    document.getElementById('logout-btn').addEventListener('click', () => showLoginPanel(''));
-
-    // ── Device selector ────────────────────────────────
-    document.getElementById('device-select').addEventListener('change', function () {
-      setSelectedDevice(this.value || null);
-    });
-
-    // ── Sidebar navigation ─────────────────────────────
-    document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.handler-section').forEach(s => s.classList.remove('active'));
-        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-        const sec = document.getElementById(btn.dataset.target);
-        if (sec) sec.classList.add('active');
-        btn.classList.add('active');
-        if (btn.dataset.target === 'sec-map') initMap();
-        if (btn.dataset.target === 'sec-logs') loadLogs();
-      });
-    });
-
-    // ═══════════════ STATUS RENDERING ═══════════════
-    function renderStatus(s) {
-      if (!s || !s.updated_at) {
-        // Clear displayed values when no data (e.g. device switched)
-        ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
-         'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
-         'ov-online','ov-online-sub','sb-online','sb-lock','det-last-seen'].forEach(id => setText(id, '—'));
-        updateBatteryBar(0);
-        document.getElementById('ai-alert-banner').classList.remove('visible');
-        document.getElementById('det-lock').textContent = '—';
-        return;
-      }
-      // Battery
-      const batt = s.battery_pct;
-      const battStr = batt !== null && batt !== undefined ? `${batt}%` : '—';
-      setText('ov-battery',   battStr);
-      setText('sb-battery',   battStr);
-      setText('ov-battery-sub', batt !== null && batt !== undefined ? battLevel(batt) : '');
-      updateBatteryBar(batt);
-
-      // GPS
-      const hasGps = s.lat !== null && s.lat !== undefined && s.lon !== null && s.lon !== undefined;
-      setText('ov-gps',    hasGps ? '✅' : '❌');
-      setText('ov-gps-sub', hasGps ? `${(+s.lat).toFixed(4)}, ${(+s.lon).toFixed(4)}` : 'No fix');
-      setText('det-coords', hasGps ? `${(+s.lat).toFixed(6)}, ${(+s.lon).toFixed(6)}` : '—');
-
-      // AI Filter
-      const aiAlert = !!s.ai_alert;
-      setText('ov-ai',    aiAlert ? '⚠️' : '✅');
-      setText('ov-ai-sub', aiAlert ? (s.ai_label ?? 'Alert') : 'Clear');
-      setText('sb-ai',    aiAlert ? '⚠️ Alert' : '✅ Clear');
-      setText('det-ai-label', s.ai_label ?? '—');
-      setText('det-ai-score', s.ai_score !== null && s.ai_score !== undefined ? (+s.ai_score).toFixed(3) : '—');
-
-      // AI alert banner
-      const banner = document.getElementById('ai-alert-banner');
-      if (aiAlert) {
-        const label = s.ai_label ? ` (${s.ai_label})` : '';
-        const score = s.ai_score !== null && s.ai_score !== undefined ? ` — score: ${(+s.ai_score).toFixed(3)}` : '';
-        document.getElementById('ai-alert-text').textContent = `AI filter triggered${label}${score}`;
-        banner.classList.add('visible');
-      } else {
-        banner.classList.remove('visible');
-      }
-
-      // Online / Lock
-      const online = !!s.is_online;
-      const locked = !!s.is_locked;
-      setText('ov-online',    online ? '🟢' : '🔴');
-      setText('ov-online-sub', online ? 'Online' : 'Offline');
-      setText('sb-online',   online ? '🟢 Online' : '🔴 Offline');
-      setText('sb-lock',     locked ? '🔒 Locked' : '🔓 Open');
-      document.getElementById('det-lock').innerHTML = locked
-        ? '<span class="badge badge-error">Locked</span>'
-        : '<span class="badge badge-ok">Open</span>';
-
-      // Last seen
-      setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : '—');
-
-      // Update map marker
-      if (hasGps) updateMapMarker(+s.lat, +s.lon);
-    }
-
+    // ── Utility ───────────────────────────────────────
     function setText(id, val) {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
+    }
+
+    function fmtDate(iso) {
+      try { return new Date(iso).toLocaleString(); } catch(e) { return iso; }
     }
 
     function battLevel(pct) {
@@ -754,83 +672,346 @@
       return '🔴 Critical';
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // VIEW NAVIGATION
+    // ═══════════════════════════════════════════════════════════
+
+    function showLoginPanel(msg) {
+      document.getElementById('handler-panel').style.display = 'none';
+      document.getElementById('login-panel').style.display   = 'flex';
+      if (msg) document.getElementById('login-error').textContent = msg;
+      clearCreds();
+      disconnectWS();
+      viewingDeviceId = null;
+    }
+
+    function showHandlerPanel() {
+      document.getElementById('login-panel').style.display   = 'none';
+      document.getElementById('handler-panel').style.display = 'block';
+      initPanel();
+    }
+
+    /** Show the kennel overview (top-level view). */
+    function showKennelOverview() {
+      viewingDeviceId = null;
+      document.getElementById('kennel-overview').style.display  = 'block';
+      document.getElementById('puppy-detail').style.display     = 'none';
+      document.getElementById('back-to-kennel-btn').style.display = 'none';
+    }
+
+    /**
+     * Drill into the detail dashboard for a specific device.
+     * Populates the sidebar name, resets sections, renders cached data.
+     */
+    function showPuppyDetail(deviceId) {
+      viewingDeviceId = deviceId;
+
+      document.getElementById('kennel-overview').style.display     = 'none';
+      document.getElementById('puppy-detail').style.display        = 'block';
+      document.getElementById('back-to-kennel-btn').style.display  = 'flex';
+
+      setText('sb-device-name', deviceId);
+
+      // Reset to overview section
+      document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById('sec-overview').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
+      var overviewNav = document.querySelector('.nav-item[data-target="sec-overview"]');
+      if (overviewNav) overviewNav.classList.add('active');
+
+      // Render immediately from cache, or fetch
+      var cached = _deviceCache[deviceId];
+      if (cached) {
+        renderStatus(cached);
+      } else {
+        renderStatus({});
+        fetchAndRenderStatus();
+      }
+    }
+
+    // ── Login ──────────────────────────────────────────
+    document.getElementById('login-btn').addEventListener('click', async function() {
+      var user = document.getElementById('hp-username').value.trim();
+      var pass = document.getElementById('hp-password').value;
+      var errEl = document.getElementById('login-error');
+      var btn   = document.getElementById('login-btn');
+      errEl.textContent = '';
+      if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      saveCreds(user, pass);
+      try {
+        await apiGet('/api/handler/status');
+        showHandlerPanel();
+      } catch(e) {
+        clearCreds();
+        errEl.textContent = '🐾 Invalid credentials.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🐾 Enter Handler Panel';
+      }
+    });
+    ['hp-username', 'hp-password'].forEach(function(id) {
+      document.getElementById(id).addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('login-btn').click();
+      });
+    });
+
+    // ── Logout ─────────────────────────────────────────
+    document.getElementById('logout-btn').addEventListener('click', function() { showLoginPanel(''); });
+
+    // ── Back to Kennel ─────────────────────────────────
+    document.getElementById('back-to-kennel-btn').addEventListener('click', showKennelOverview);
+
+    // ── Sidebar navigation ─────────────────────────────
+    document.querySelectorAll('.nav-item[data-target]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
+        document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
+        var sec = document.getElementById(btn.dataset.target);
+        if (sec) sec.classList.add('active');
+        btn.classList.add('active');
+        if (btn.dataset.target === 'sec-map') initDetailMap();
+        if (btn.dataset.target === 'sec-logs') loadLogs();
+      });
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // KENNEL OVERVIEW — DEVICE CARDS
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Create a new kennel card or update the existing one for a device.
+     */
+    function buildOrUpdateKennelCard(device) {
+      var grid    = document.getElementById('kennel-grid');
+      var emptyEl = document.getElementById('kennel-empty');
+      if (emptyEl) emptyEl.style.display = 'none';
+
+      var did  = device.device_id;
+      var card = grid.querySelector('[data-kennel-card="' + CSS.escape(did) + '"]');
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'kennel-card';
+        card.dataset.kennelCard = did;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('click', function() { showPuppyDetail(did); });
+        card.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPuppyDetail(did); }
+        });
+        grid.appendChild(card);
+      }
+      _renderKennelCard(card, device);
+    }
+
+    /** Render (or re-render) the inner content of a kennel summary card. */
+    function _renderKennelCard(card, device) {
+      var online  = !!device.is_online;
+      var locked  = !!device.is_locked;
+      var aiAlert = !!device.ai_alert;
+      var batt    = device.battery_pct;
+      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : '—';
+      var battIcon = '🟢';
+      if (batt !== null && batt !== undefined) {
+        if (batt < 20) battIcon = '🔴';
+        else if (batt < 60) battIcon = '🟡';
+      }
+      card.innerHTML =
+        '<div class="kc-header">' +
+          '<span class="kc-id" title="' + esc(device.device_id) + '">' + esc(device.device_id) + '</span>' +
+          '<span class="kc-dot ' + (online ? 'online' : 'offline') + '" title="' + (online ? 'Online' : 'Offline') + '"></span>' +
+        '</div>' +
+        '<div class="kc-stats">' +
+          '<div class="kc-stat">' + battIcon + ' ' + esc(battStr) + '</div>' +
+          '<div class="kc-stat">' + (locked ? '🔒 Locked' : '🔓 Open') + '</div>' +
+          '<div class="kc-stat' + (aiAlert ? ' kc-alert' : '') + '">' + (aiAlert ? '⚠️ Alert' : '🤖 Clear') + '</div>' +
+          '<div class="kc-stat">' + (online ? '📡 Online' : '📴 Offline') + '</div>' +
+        '</div>' +
+        '<div class="kc-last-seen">' + esc(device.last_seen ? fmtDate(device.last_seen) : '—') + '</div>' +
+        '<div class="kc-cta">View detail →</div>';
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // MASTER MAP (Kennel Overview)
+    // ═══════════════════════════════════════════════════════════
+
+    var _masterMap      = null;
+    var _masterMapReady = false;
+    var _masterMarkers  = {}; // device_id → L.Marker
+
+    function initMasterMap() {
+      if (_masterMapReady) return;
+      var placeholder = document.getElementById('master-map-placeholder');
+      var mapEl       = document.getElementById('master-map');
+      placeholder.style.display = 'none';
+      mapEl.style.display       = 'block';
+
+      _masterMap = L.map('master-map').setView([20, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(_masterMap);
+      _masterMapReady = true;
+    }
+
+    /** Add or move a pin on the master overview map for a device. */
+    function updateMasterMapPin(device) {
+      if (device.lat == null || device.lon == null) return;
+      initMasterMap();
+      var lat = +device.lat;
+      var lon = +device.lon;
+      var did = device.device_id;
+      if (_masterMarkers[did]) {
+        _masterMarkers[did].setLatLng([lat, lon]);
+      } else {
+        _masterMarkers[did] = L.marker([lat, lon])
+          .addTo(_masterMap)
+          .bindPopup('📍 ' + esc(did))
+          .on('click', function() { showPuppyDetail(did); });
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // DETAIL DASHBOARD — STATUS RENDERING
+    // ═══════════════════════════════════════════════════════════
+
+    function renderStatus(s) {
+      if (!s || !s.updated_at) {
+        ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
+         'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
+         'ov-online','ov-online-sub','sb-online','sb-lock','det-last-seen'].forEach(function(id) { setText(id, '—'); });
+        updateBatteryBar(0);
+        document.getElementById('ai-alert-banner').classList.remove('visible');
+        document.getElementById('det-lock').textContent = '—';
+        return;
+      }
+
+      var batt    = s.battery_pct;
+      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : '—';
+      setText('ov-battery',     battStr);
+      setText('sb-battery',     battStr);
+      setText('ov-battery-sub', (batt !== null && batt !== undefined) ? battLevel(batt) : '');
+      updateBatteryBar(batt);
+
+      var hasGps = s.lat !== null && s.lat !== undefined && s.lon !== null && s.lon !== undefined;
+      setText('ov-gps',     hasGps ? '✅' : '❌');
+      setText('ov-gps-sub', hasGps ? (+s.lat).toFixed(4) + ', ' + (+s.lon).toFixed(4) : 'No fix');
+      setText('det-coords', hasGps ? (+s.lat).toFixed(6) + ', ' + (+s.lon).toFixed(6) : '—');
+
+      var aiAlert = !!s.ai_alert;
+      setText('ov-ai',        aiAlert ? '⚠️' : '✅');
+      setText('ov-ai-sub',    aiAlert ? (s.ai_label || 'Alert') : 'Clear');
+      setText('sb-ai',        aiAlert ? '⚠️ Alert' : '✅ Clear');
+      setText('det-ai-label', s.ai_label || '—');
+      setText('det-ai-score', (s.ai_score !== null && s.ai_score !== undefined) ? (+s.ai_score).toFixed(3) : '—');
+
+      var banner = document.getElementById('ai-alert-banner');
+      if (aiAlert) {
+        var label = s.ai_label ? ' (' + s.ai_label + ')' : '';
+        var score = (s.ai_score !== null && s.ai_score !== undefined) ? ' — score: ' + (+s.ai_score).toFixed(3) : '';
+        document.getElementById('ai-alert-text').textContent = 'AI filter triggered' + label + score;
+        banner.classList.add('visible');
+      } else {
+        banner.classList.remove('visible');
+      }
+
+      var online = !!s.is_online;
+      var locked = !!s.is_locked;
+      setText('ov-online',     online ? '🟢' : '🔴');
+      setText('ov-online-sub', online ? 'Online' : 'Offline');
+      setText('sb-online',     online ? '🟢 Online' : '🔴 Offline');
+      setText('sb-lock',       locked ? '🔒 Locked' : '🔓 Open');
+      document.getElementById('det-lock').innerHTML = locked
+        ? '<span class="badge badge-error">Locked</span>'
+        : '<span class="badge badge-ok">Open</span>';
+
+      setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : '—');
+
+      if (hasGps) updateDetailMapMarker(+s.lat, +s.lon);
+    }
+
     function updateBatteryBar(pct) {
-      const bar = document.getElementById('sb-bar');
+      var bar = document.getElementById('sb-bar');
       if (!bar) return;
-      const p = Math.max(0, Math.min(100, pct ?? 0));
-      bar.style.width = `${p}%`;
+      var p = Math.max(0, Math.min(100, pct || 0));
+      bar.style.width = p + '%';
       bar.className = 'battery-bar';
       if (p < 20)      bar.classList.add('crit');
       else if (p < 60) bar.classList.add('warn');
     }
 
-    function fmtDate(iso) {
-      try { return new Date(iso).toLocaleString(); } catch { return iso; }
-    }
+    // ═══════════════════════════════════════════════════════════
+    // WEBSOCKET
+    // ═══════════════════════════════════════════════════════════
 
-    // ═══════════════ WEBSOCKET ═══════════════
-    let _ws = null;
-    let _wsReconnectTimer = null;
-    const WS_DOT   = document.getElementById('ws-status-dot');
-    const WS_LABEL = document.getElementById('ws-status-label');
+    var _ws = null;
+    var _wsReconnectTimer = null;
+    var WS_DOT   = document.getElementById('ws-status-dot');
+    var WS_LABEL = document.getElementById('ws-status-label');
 
     function setWsDot(state) {
       WS_DOT.className = state;
-      WS_LABEL.textContent = { connected: 'Live', error: 'Disconnected', '': 'Connecting…' }[state] ?? 'Connecting…';
+      var labels = { connected: 'Live', error: 'Disconnected', '': 'Connecting…' };
+      WS_LABEL.textContent = labels[state] !== undefined ? labels[state] : 'Connecting…';
     }
 
     function connectWS() {
-      const creds = getCreds();
+      var creds = getCreds();
       if (!creds) return;
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const url   = `${proto}://${location.host}/ws/handler?creds=${encodeURIComponent(creds)}`;
+      var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      var url   = proto + '://' + location.host + '/ws/handler?creds=' + encodeURIComponent(creds);
       _ws = new WebSocket(url);
 
-      _ws.addEventListener('open', () => setWsDot('connected'));
-      _ws.addEventListener('close', () => {
-        setWsDot('error');
-        scheduleReconnect();
-      });
-      _ws.addEventListener('error', () => setWsDot('error'));
+      _ws.addEventListener('open',  function() { setWsDot('connected'); });
+      _ws.addEventListener('close', function() { setWsDot('error'); scheduleReconnect(); });
+      _ws.addEventListener('error', function() { setWsDot('error'); });
 
-      _ws.addEventListener('message', evt => {
-        let msg;
-        try { msg = JSON.parse(evt.data); } catch { return; }
+      _ws.addEventListener('message', function(evt) {
+        var msg;
+        try { msg = JSON.parse(evt.data); } catch(e) { return; }
         if (msg.type === 'ping') return;
 
+        // ── Snapshot: initial device list sent on WS connect ──────────
         if (msg.type === 'snapshot') {
-          // Format: { type: 'snapshot', devices: [...] }
-          // Refresh the device dropdown and render selected device's status
-          if (Array.isArray(msg.devices)) {
-            _refreshDropdownFromWS(msg.devices);
-          } else {
-            logger.warn && logger.warn('WS snapshot missing devices array', msg);
+          if (!Array.isArray(msg.devices)) return;
+          msg.devices.forEach(function(d) {
+            _deviceCache[d.device_id] = d;
+            buildOrUpdateKennelCard(d);   // always update overview
+            updateMasterMapPin(d);        // always update master map
+          });
+          // Re-render detail dashboard if already viewing a device
+          if (viewingDeviceId && _deviceCache[viewingDeviceId]) {
+            renderStatus(_deviceCache[viewingDeviceId]);
           }
           return;
         }
 
-        // status_update and lock events are per-device — filter by selection
+        // ── Status update: device posted new telemetry ────────────────
         if (msg.type === 'status_update') {
-          if (selectedDeviceId && msg.device_id === selectedDeviceId) renderStatus(msg);
+          var prev = _deviceCache[msg.device_id] || {};
+          _deviceCache[msg.device_id] = Object.assign({}, prev, msg);
+          buildOrUpdateKennelCard(_deviceCache[msg.device_id]); // always update card
+          updateMasterMapPin(_deviceCache[msg.device_id]);      // always update master map pin
+          // Only update the detail dashboard if this is the viewed device
+          if (msg.device_id === viewingDeviceId) {
+            renderStatus(_deviceCache[msg.device_id]);
+          }
           return;
         }
+
+        // ── Lock confirmation ─────────────────────────────────────────
         if (msg.type === 'lock') {
-          if (!selectedDeviceId || msg.device_id === selectedDeviceId) {
+          if (_deviceCache[msg.device_id]) {
+            _deviceCache[msg.device_id].is_locked = msg.is_locked !== undefined ? msg.is_locked : 1;
+            buildOrUpdateKennelCard(_deviceCache[msg.device_id]);
+          }
+          if (msg.device_id === viewingDeviceId) {
             showToast('🔒 Lock command confirmed by server.');
-            setText('sb-lock', '🔒 Locked');
+            setText('sb-lock', '�� Locked');
           }
         }
       });
-    }
-
-    function _refreshDropdownFromWS(devices) {
-      const prevSel = selectedDeviceId;
-      _applyDeviceListToDropdown(devices);
-      // If there was a previously selected device, re-render its status from snapshot
-      if (prevSel) {
-        const devData = devices.find(d => d.device_id === prevSel);
-        if (devData) renderStatus(devData);
-      }
     }
 
     function disconnectWS() {
@@ -841,276 +1022,211 @@
 
     function scheduleReconnect() {
       if (_wsReconnectTimer) return;
-      _wsReconnectTimer = setTimeout(() => {
+      _wsReconnectTimer = setTimeout(function() {
         _wsReconnectTimer = null;
         if (getCreds()) connectWS();
       }, 4000);
     }
 
-    // ═══════════════ LEAFLET MAP ═══════════════
-    let _map      = null;
-    let _marker   = null;
-    let _mapReady = false;
+    // ═══════════════════════════════════════════════════════════
+    // DETAIL MAP (Puppy Detail view)
+    // ═══════════════════════════════════════════════════════════
 
-    function initMap() {
-      if (_mapReady) return;
-      const placeholder = document.getElementById('map-placeholder');
-      const mapEl       = document.getElementById('map');
+    var _detailMap      = null;
+    var _detailMarker   = null;
+    var _detailMapReady = false;
+
+    function initDetailMap() {
+      if (_detailMapReady) return;
+      var placeholder = document.getElementById('map-placeholder');
+      var mapEl       = document.getElementById('map');
       placeholder.style.display = 'none';
       mapEl.style.display       = 'block';
 
-      _map = L.map('map').setView([20, 0], 2);
+      _detailMap = L.map('map').setView([20, 0], 2);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
-      }).addTo(_map);
+      }).addTo(_detailMap);
+      _detailMapReady = true;
 
-      _mapReady = true;
-
-      // If we already have a status, drop the marker now
       fetchAndRenderStatus();
     }
 
-    function updateMapMarker(lat, lon) {
-      if (!_mapReady || !_map) return;
-      const coords = L.latLng(lat, lon);
-      if (_marker) {
-        _marker.setLatLng(coords);
+    function updateDetailMapMarker(lat, lon) {
+      if (!_detailMapReady || !_detailMap) return;
+      var coords = L.latLng(lat, lon);
+      if (_detailMarker) {
+        _detailMarker.setLatLng(coords);
       } else {
-        _marker = L.marker(coords).addTo(_map).bindPopup('📍 Device location');
-        _map.setView(coords, 15);
+        _detailMarker = L.marker(coords).addTo(_detailMap).bindPopup('📍 Device location');
+        _detailMap.setView(coords, 15);
       }
       document.getElementById('map-coords').textContent =
-        `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        '📍 ' + lat.toFixed(6) + ', ' + lon.toFixed(6);
     }
 
     document.getElementById('map-refresh-btn').addEventListener('click', fetchAndRenderStatus);
 
-    // ═══════════════ QUICK ACTIONS ═══════════════
+    // ═══════════════════════════════════════════════════════════
+    // QUICK ACTIONS
+    // ═══════════════════════════════════════════════════════════
 
     function _requireDevice(resEl) {
-      if (!selectedDeviceId) {
-        resEl.textContent = '⚠️ Select a device first.';
-        return false;
-      }
+      if (!viewingDeviceId) { resEl.textContent = '⚠️ No device selected.'; return false; }
       return true;
     }
 
-    /**
-     * Send the LOCK_DEVICE FCM command via POST /api/handler/lock.
-     */
     async function sendLock() {
-      const btn = document.getElementById('btn-lock');
-      const res = document.getElementById('res-lock');
+      var btn = document.getElementById('btn-lock');
+      var res = document.getElementById('res-lock');
       if (!_requireDevice(res)) return;
-      btn.disabled = true;
-      res.textContent = 'Sending…';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/handler/lock', { device_id: selectedDeviceId });
-        if (r.ok) {
-          res.textContent = '✅ Lock sent.';
-          showToast('🔒 Lock command sent.');
-        } else {
-          const body = await r.json().catch(() => ({}));
-          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
-        }
-      } catch (e) {
-        if (e.message !== '401') res.textContent = '❌ Request failed.';
-      } finally {
-        btn.disabled = false;
-      }
+        var r = await apiPost('/api/handler/lock', { device_id: viewingDeviceId });
+        if (r.ok) { res.textContent = '✅ Lock sent.'; showToast('🔒 Lock command sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
+      finally { btn.disabled = false; }
     }
 
-    /**
-     * Trigger a Lovense vibration via POST /api/admin/tpe/push.
-     */
     async function sendVibrateLovense() {
-      const btn = document.getElementById('btn-lovense');
-      const res = document.getElementById('res-lovense');
+      var btn = document.getElementById('btn-lovense');
+      var res = document.getElementById('res-lovense');
       if (!_requireDevice(res)) return;
-      btn.disabled = true;
-      res.textContent = 'Sending…';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/admin/tpe/push', {
-          device_id:   selectedDeviceId,
-          action:      'LOVENSE_COMMAND',
-          toy_command: 'vibrate',
-          toy_level:   '10',
+        var r = await apiPost('/api/admin/tpe/push', {
+          device_id: viewingDeviceId, action: 'LOVENSE_COMMAND', toy_command: 'vibrate', toy_level: '10',
         });
-        if (r.ok) {
-          res.textContent = '✅ Vibrate sent.';
-          showToast('💗 Lovense vibrate sent.');
-        } else {
-          const body = await r.json().catch(() => ({}));
-          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
-        }
-      } catch (e) {
-        if (e.message !== '401') res.textContent = '❌ Request failed.';
-      } finally {
-        btn.disabled = false;
-      }
+        if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('💗 Lovense vibrate sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
+      finally { btn.disabled = false; }
     }
 
-    /**
-     * Trigger a PiShock shock via POST /api/admin/tpe/push.
-     * (PiShock_COMMAND is forwarded from the backend to the edge agent.)
-     */
     async function sendShockPiShock() {
-      const btn = document.getElementById('btn-pishock');
-      const res = document.getElementById('res-pishock');
+      var btn = document.getElementById('btn-pishock');
+      var res = document.getElementById('res-pishock');
       if (!_requireDevice(res)) return;
-      btn.disabled = true;
-      res.textContent = 'Sending…';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
-        // PiShock is handled directly by the edge agent; we push a PAVLOK_COMMAND
-        // with intensity set to max as a proxy until a dedicated PiShock FCM action
-        // is available.  Replace with the correct action string when added.
-        const r = await apiPost('/api/admin/tpe/push', {
-          device_id:           selectedDeviceId,
-          action:              'PAVLOK_COMMAND',
-          pavlok_cmd:          'shock',
-          pavlok_intensity:    '50',
-          pavlok_duration_ms:  '1000',
+        var r = await apiPost('/api/admin/tpe/push', {
+          device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
+          pavlok_cmd: 'shock', pavlok_intensity: '50', pavlok_duration_ms: '1000',
         });
-        if (r.ok) {
-          res.textContent = '✅ Shock sent.';
-          showToast('⚡ PiShock command sent.');
-        } else {
-          const body = await r.json().catch(() => ({}));
-          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
-        }
-      } catch (e) {
-        if (e.message !== '401') res.textContent = '❌ Request failed.';
-      } finally {
-        btn.disabled = false;
-      }
+        if (r.ok) { res.textContent = '✅ Shock sent.'; showToast('⚡ PiShock command sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
+      finally { btn.disabled = false; }
     }
 
-    /**
-     * Trigger a Pavlok vibration via POST /api/admin/tpe/push.
-     */
     async function sendVibratePavlok() {
-      const btn = document.getElementById('btn-pavlok');
-      const res = document.getElementById('res-pavlok');
+      var btn = document.getElementById('btn-pavlok');
+      var res = document.getElementById('res-pavlok');
       if (!_requireDevice(res)) return;
-      btn.disabled = true;
-      res.textContent = 'Sending…';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/admin/tpe/push', {
-          device_id:           selectedDeviceId,
-          action:              'PAVLOK_COMMAND',
-          pavlok_cmd:          'vibrate',
-          pavlok_intensity:    '100',
-          pavlok_duration_ms:  '5000',
+        var r = await apiPost('/api/admin/tpe/push', {
+          device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
+          pavlok_cmd: 'vibrate', pavlok_intensity: '100', pavlok_duration_ms: '5000',
         });
-        if (r.ok) {
-          res.textContent = '✅ Vibrate sent.';
-          showToast('🌀 Pavlok vibrate sent.');
-        } else {
-          const body = await r.json().catch(() => ({}));
-          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
-        }
-      } catch (e) {
-        if (e.message !== '401') res.textContent = '❌ Request failed.';
-      } finally {
-        btn.disabled = false;
-      }
+        if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('🌀 Pavlok vibrate sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
+      finally { btn.disabled = false; }
     }
 
-    /**
-     * Push a REQUEST_CHECKIN FCM so the device prompts a check-in.
-     */
     async function requestCheckin() {
-      const btn = document.getElementById('btn-checkin');
-      const res = document.getElementById('res-checkin');
+      var btn = document.getElementById('btn-checkin');
+      var res = document.getElementById('res-checkin');
       if (!_requireDevice(res)) return;
-      btn.disabled = true;
-      res.textContent = 'Sending…';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
-        const r = await apiPost('/api/admin/tpe/checkins/request', { device_id: selectedDeviceId });
-        if (r.ok) {
-          res.textContent = '✅ Check-in requested.';
-          showToast('📋 Check-in request sent.');
-        } else {
-          const body = await r.json().catch(() => ({}));
-          res.textContent = `❌ ${body.detail ?? `HTTP ${r.status}`}`;
-        }
-      } catch (e) {
-        if (e.message !== '401') res.textContent = '❌ Request failed.';
-      } finally {
-        btn.disabled = false;
-      }
+        var r = await apiPost('/api/admin/tpe/checkins/request', { device_id: viewingDeviceId });
+        if (r.ok) { res.textContent = '✅ Check-in requested.'; showToast('📋 Check-in request sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
+      finally { btn.disabled = false; }
     }
 
-    // Wire up action buttons
     document.getElementById('btn-lock').addEventListener('click',     sendLock);
     document.getElementById('btn-lovense').addEventListener('click',  sendVibrateLovense);
     document.getElementById('btn-pishock').addEventListener('click',  sendShockPiShock);
     document.getElementById('btn-pavlok').addEventListener('click',   sendVibratePavlok);
     document.getElementById('btn-checkin').addEventListener('click',  requestCheckin);
 
-    // ═══════════════ LOGS ═══════════════
+    // ═══════════════════════════════════════════════════════════
+    // LOGS
+    // ═══════════════════════════════════════════════════════════
 
-    async function loadLogs() {
-      await Promise.all([loadEvents(), loadAudits()]);
-    }
+    async function loadLogs() { await Promise.all([loadEvents(), loadAudits()]); }
 
     async function loadEvents() {
-      const tbody = document.getElementById('events-tbody');
+      var tbody = document.getElementById('events-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loading…</td></tr>';
       try {
-        const data = await apiGet('/api/admin/tpe/events?limit=50');
-        if (!data.length) {
-          tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>';
-          return;
-        }
-        tbody.innerHTML = data.map(ev => `
-          <tr>
-            <td><span class="badge ${ev.event === 'punishment' ? 'badge-error' : 'badge-ok'}">${esc(ev.event)}</span></td>
-            <td>${esc(ev.reason ?? '—')}</td>
-            <td class="ts-cell">${fmtDate(ev.received_at)}</td>
-          </tr>`).join('');
-      } catch {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Failed to load events.</td></tr>';
-      }
+        var data = await apiGet('/api/admin/tpe/events?limit=50');
+        if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>'; return; }
+        tbody.innerHTML = data.map(function(ev) {
+          return '<tr><td><span class="badge ' + (ev.event === 'punishment' ? 'badge-error' : 'badge-ok') + '">' + esc(ev.event) + '</span></td>' +
+            '<td>' + esc(ev.reason || '—') + '</td>' +
+            '<td class="ts-cell">' + fmtDate(ev.received_at) + '</td></tr>';
+        }).join('');
+      } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Failed to load events.</td></tr>'; }
     }
 
     async function loadAudits() {
-      const tbody = document.getElementById('audits-tbody');
+      var tbody = document.getElementById('audits-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loading…</td></tr>';
       try {
-        const data = await apiGet('/api/admin/tpe/audits?limit=50');
-        if (!data.length) {
-          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>';
-          return;
-        }
-        tbody.innerHTML = data.map(a => `
-          <tr>
-            <td>${esc(a.last_label ?? '—')}</td>
-            <td class="ts-cell">${a.last_score !== null ? (+a.last_score).toFixed(3) : '—'}</td>
-            <td class="ts-cell">${a.detection_ratio !== null ? (+a.detection_ratio * 100).toFixed(1) + '%' : '—'}</td>
-            <td class="ts-cell">${fmtDate(a.received_at)}</td>
-          </tr>`).join('');
-      } catch {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load audits.</td></tr>';
-      }
+        var data = await apiGet('/api/admin/tpe/audits?limit=50');
+        if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>'; return; }
+        tbody.innerHTML = data.map(function(a) {
+          return '<tr><td>' + esc(a.last_label || '—') + '</td>' +
+            '<td class="ts-cell">' + (a.last_score !== null ? (+a.last_score).toFixed(3) : '—') + '</td>' +
+            '<td class="ts-cell">' + (a.detection_ratio !== null ? (+a.detection_ratio * 100).toFixed(1) + '%' : '—') + '</td>' +
+            '<td class="ts-cell">' + fmtDate(a.received_at) + '</td></tr>';
+        }).join('');
+      } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load audits.</td></tr>'; }
     }
 
     document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
 
-    // ═══════════════ INITIALISATION ═══════════════
+    // ═══════════════════════════════════════════════════════════
+    // INITIALISATION
+    // ═══════════════════════════════════════════════════════════
 
+    /**
+     * Fetch the latest status for the currently-viewed device and render it
+     * in the detail dashboard.  No-op when in kennel overview.
+     */
     async function fetchAndRenderStatus() {
-      if (!selectedDeviceId) return;
+      if (!viewingDeviceId) return;
       try {
-        const s = await apiGet(`/api/handler/status?device_id=${encodeURIComponent(selectedDeviceId)}`);
+        var s = await apiGet('/api/handler/status?device_id=' + encodeURIComponent(viewingDeviceId));
+        if (s && s.device_id) {
+          _deviceCache[s.device_id] = s;
+          buildOrUpdateKennelCard(s);
+          updateMasterMapPin(s);
+        }
         renderStatus(s);
-      } catch { /* WS will deliver updates anyway */ }
+      } catch(e) { /* WS will deliver updates anyway */ }
     }
 
     function initPanel() {
       connectWS();
-      loadDeviceList();
+      showKennelOverview();
+
+      // Eagerly populate kennel cards before the first WS push
+      apiGet('/api/handler/devices').then(function(devices) {
+        devices.forEach(function(d) {
+          var existing = _deviceCache[d.device_id] || {};
+          _deviceCache[d.device_id] = Object.assign({}, existing, d);
+          buildOrUpdateKennelCard(_deviceCache[d.device_id]);
+          updateMasterMapPin(_deviceCache[d.device_id]);
+        });
+      }).catch(function() {});
     }
   </script>
 </body>
