@@ -1084,7 +1084,7 @@ async def tpe_upload(
         # Derive extension from content-type, not the client filename, to avoid path injection.
         file_ct = getattr(upload_file, "content_type", None) or ct or "application/octet-stream"
         ext = _ext_from_content_type(file_ct, fallback=".bin")
-        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
+        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
         dest = _TPE_UPLOAD_PATH / filename
         try:
             with open(dest, "wb") as fh:
@@ -1103,7 +1103,7 @@ async def tpe_upload(
     else:
         # Raw binary body — extension comes entirely from Content-Type (no user input).
         ext = _ext_from_content_type(ct, fallback=".bin")
-        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}{ext}"
+        filename = f"upload_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{ext}"
         dest = _TPE_UPLOAD_PATH / filename
         try:
             with open(dest, "wb") as fh:
