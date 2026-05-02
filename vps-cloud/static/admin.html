@@ -3470,6 +3470,12 @@
 
     const ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
 
+    function roleBadge(role) {
+      const r = role || 'handler';
+      const isAdmin = r === 'admin';
+      return `<span style="font-size:.78rem;padding:.15rem .45rem;border-radius:3px;background:${isAdmin ? 'rgba(232,174,183,.2)' : 'rgba(100,116,139,.15)'};color:${isAdmin ? '#e8aeb7' : '#94a3b8'}">${esc(r)}</span>`;
+    }
+
     async function loadUsersAdmin() {
       const tbody = document.getElementById('usr-tbody');
       try {
@@ -3481,11 +3487,11 @@
         tbody.innerHTML = users.map(u => `
           <tr id="usr-row-${esc(u.id)}">
             <td>${esc(u.username)}</td>
-            <td><span style="font-size:.78rem;padding:.15rem .45rem;border-radius:3px;background:${u.role === 'admin' ? 'rgba(232,174,183,.2)' : 'rgba(100,116,139,.15)'};color:${u.role === 'admin' ? '#e8aeb7' : '#94a3b8'}">${esc(u.role || 'handler')}</span></td>
+            <td>${roleBadge(u.role)}</td>
             <td>${esc(ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
             <td style="font-size:.72rem;color:#5a3a3e">${esc(u.id)}</td>
             <td style="white-space:nowrap">
-              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${esc(u.access_level)},'${esc(u.role || 'handler')}')">Edit</button>
+              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${u.access_level},'${esc(u.role || 'handler')}')">Edit</button>
               <button class="btn-sm btn-delete" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')" style="margin-left:.3rem">Delete</button>
             </td>
           </tr>
