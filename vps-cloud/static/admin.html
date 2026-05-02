@@ -1111,6 +1111,13 @@
                     <option value="3">3 – Tier 2</option>
                   </select>
                 </div>
+                <div class="form-field" style="min-width:110px">
+                  <label for="usr-new-role">Role</label>
+                  <select id="usr-new-role">
+                    <option value="handler">Handler</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
                 <div class="form-field" style="min-width:110px;justify-content:flex-end">
                   <button id="usr-create-btn" class="btn-sm btn-edit" style="margin-top:1.4rem">➕ Create</button>
                 </div>
@@ -1131,13 +1138,14 @@
                   <thead>
                     <tr>
                       <th>Username</th>
+                      <th>Role</th>
                       <th>Access Level</th>
                       <th style="font-size:.7rem;color:#5a3a3e">ID</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="usr-tbody">
-                    <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                    <tr class="empty-row"><td colspan="5">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -3467,21 +3475,22 @@
       try {
         const users = await apiGet('/api/admin/users');
         if (!users.length) {
-          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No users yet.</td></tr>';
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No users yet.</td></tr>';
           return;
         }
         tbody.innerHTML = users.map(u => `
           <tr id="usr-row-${esc(u.id)}">
             <td>${esc(u.username)}</td>
+            <td><span style="font-size:.78rem;padding:.15rem .45rem;border-radius:3px;background:${u.role === 'admin' ? 'rgba(232,174,183,.2)' : 'rgba(100,116,139,.15)'};color:${u.role === 'admin' ? '#e8aeb7' : '#94a3b8'}">${esc(u.role || 'handler')}</span></td>
             <td>${esc(ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
             <td style="font-size:.72rem;color:#5a3a3e">${esc(u.id)}</td>
             <td style="white-space:nowrap">
-              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${esc(u.access_level)})">Edit</button>
+              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${esc(u.access_level)},'${esc(u.role || 'handler')}')">Edit</button>
               <button class="btn-sm btn-delete" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')" style="margin-left:.3rem">Delete</button>
             </td>
           </tr>
           <tr id="usr-edit-row-${esc(u.id)}" style="display:none;background:rgba(232,174,183,.04)">
-            <td colspan="4" style="padding:.75rem .85rem">
+            <td colspan="5" style="padding:.75rem .85rem">
               <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
                 <div class="form-field" style="flex:1;min-width:160px">
                   <label>New Password <span style="color:#5a3a3e;font-size:.75rem">(leave blank to keep)</span></label>
@@ -3496,19 +3505,28 @@
                     <option value="3">3 – Tier 2</option>
                   </select>
                 </div>
+                <div class="form-field" style="min-width:110px">
+                  <label>Role</label>
+                  <select id="usr-edit-role-${esc(u.id)}">
+                    <option value="handler">Handler</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
                 <button class="btn-sm btn-edit" onclick="saveUsrEdit('${esc(u.id)}')">💾 Save</button>
                 <button class="btn-sm btn-delete" onclick="hideUsrEdit('${esc(u.id)}')">Cancel</button>
               </div>
               <p id="usr-edit-msg-${esc(u.id)}" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
             </td>
           </tr>`).join('');
-      } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Error loading users.</td></tr>'; console.error(e); }
+      } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Error loading users.</td></tr>'; console.error(e); }
     }
 
-    function showUsrEdit(id, currentLevel) {
+    function showUsrEdit(id, currentLevel, currentRole) {
       document.getElementById(`usr-edit-row-${id}`).style.display = '';
       const sel = document.getElementById(`usr-edit-level-${id}`);
       if (sel) sel.value = String(currentLevel);
+      const roleSel = document.getElementById(`usr-edit-role-${id}`);
+      if (roleSel) roleSel.value = currentRole || 'handler';
       document.getElementById(`usr-edit-pw-${id}`).value = '';
       document.getElementById(`usr-edit-msg-${id}`).textContent = '';
     }
@@ -3522,9 +3540,11 @@
       msgEl.textContent = '';
       const pw = document.getElementById(`usr-edit-pw-${id}`).value;
       const level = parseInt(document.getElementById(`usr-edit-level-${id}`).value, 10);
+      const role = document.getElementById(`usr-edit-role-${id}`).value;
       const body = {};
       if (pw) body.password = pw;
       body.access_level = level;
+      body.role = role;
       try {
         const resp = await apiPatch(`/api/admin/users/${id}`, body);
         if (resp.ok) {
@@ -3551,14 +3571,16 @@
       const username = document.getElementById('usr-new-username').value.trim();
       const password = document.getElementById('usr-new-password').value;
       const access_level = parseInt(document.getElementById('usr-new-level').value, 10);
+      const role = document.getElementById('usr-new-role').value;
       if (!username) { msgEl.textContent = 'Username is required.'; return; }
       if (!password || password.length < 8) { msgEl.textContent = 'Password must be at least 8 characters.'; return; }
       try {
-        const resp = await apiPost('/api/admin/users', { username, password, access_level });
+        const resp = await apiPost('/api/admin/users', { username, password, access_level, role });
         if (resp.ok) {
           document.getElementById('usr-new-username').value = '';
           document.getElementById('usr-new-password').value = '';
           document.getElementById('usr-new-level').value = '0';
+          document.getElementById('usr-new-role').value = 'handler';
           msgEl.style.color = '#a3e635';
           msgEl.textContent = `User "${username}" created.`;
           loadUsersAdmin();
