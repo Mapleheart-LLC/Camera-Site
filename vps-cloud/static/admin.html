@@ -406,6 +406,7 @@
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
         </button>
         <button class="nav-item" data-target="s-devices">🎮 Devices</button>
+        <button class="nav-item" data-target="s-users">👥 Users</button>
         <div class="sidebar-section-label">Site</div>
         <button class="nav-item" data-target="s-links">🔗 Links</button>
         <button class="nav-item" data-target="s-store">🛍️ Store</button>
@@ -1078,6 +1079,68 @@
                 <button class="btn-sm btn-delete" onclick="clearJamUrl()">✕ Clear</button>
               </div>
               <p id="jam-status" aria-live="polite" style="font-size:.75rem;color:#8a7a7d;margin-top:.5rem"></p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Users ─────────────────────────────────── -->
+        <section id="s-users" class="admin-section">
+          <h1 class="section-heading">👥 User Management</h1>
+
+          <!-- Create user card -->
+          <div class="card" style="margin-bottom:1.25rem">
+            <div class="card-header">
+              <h2>Create User</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-row" style="flex-wrap:wrap;gap:.5rem;align-items:flex-end">
+                <div class="form-field" style="flex:1;min-width:140px">
+                  <label for="usr-new-username">Username</label>
+                  <input id="usr-new-username" type="text" autocomplete="off" placeholder="alphanumeric, _ -" />
+                </div>
+                <div class="form-field" style="flex:1;min-width:160px">
+                  <label for="usr-new-password">Password</label>
+                  <input id="usr-new-password" type="password" autocomplete="new-password" placeholder="min 8 chars" />
+                </div>
+                <div class="form-field" style="min-width:130px">
+                  <label for="usr-new-level">Access Level</label>
+                  <select id="usr-new-level">
+                    <option value="0">0 – Registered</option>
+                    <option value="1">1 – Free Tier</option>
+                    <option value="2">2 – Tier 1</option>
+                    <option value="3">3 – Tier 2</option>
+                  </select>
+                </div>
+                <div class="form-field" style="min-width:110px;justify-content:flex-end">
+                  <button id="usr-create-btn" class="btn-sm btn-edit" style="margin-top:1.4rem">➕ Create</button>
+                </div>
+              </div>
+              <p id="usr-create-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
+            </div>
+          </div>
+
+          <!-- Users table card -->
+          <div class="card">
+            <div class="card-header">
+              <h2>All Users</h2>
+              <button id="usr-refresh-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
+            </div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" id="usr-table" aria-label="Site users">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Access Level</th>
+                      <th style="font-size:.7rem;color:#5a3a3e">ID</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usr-tbody">
+                    <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -3153,6 +3216,11 @@
           loadVodsAdmin();
         });
       }
+      if (btn.dataset.target === 's-users') {
+        btn.addEventListener('click', () => {
+          loadUsersAdmin();
+        });
+      }
     });
 
     // ── Stream Section ────────────────────────────────────────────────────
@@ -3389,6 +3457,120 @@
         loadVodsAdmin();
       } catch(e) { alert('Error: ' + e.message); }
     }
+
+    // ── Users Admin ───────────────────────────────────────────────────────
+
+    const _ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
+
+    async function loadUsersAdmin() {
+      const tbody = document.getElementById('usr-tbody');
+      try {
+        const users = await apiGet('/api/admin/users');
+        if (!users.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No users yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = users.map(u => `
+          <tr id="usr-row-${esc(u.id)}">
+            <td>${esc(u.username)}</td>
+            <td>${esc(_ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
+            <td style="font-size:.72rem;color:#5a3a3e">${esc(u.id)}</td>
+            <td style="white-space:nowrap">
+              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}','${esc(u.username)}',${u.access_level})">Edit</button>
+              <button class="btn-sm btn-delete" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')" style="margin-left:.3rem">Delete</button>
+            </td>
+          </tr>
+          <tr id="usr-edit-row-${esc(u.id)}" style="display:none;background:rgba(232,174,183,.04)">
+            <td colspan="4" style="padding:.75rem .85rem">
+              <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                <div class="form-field" style="flex:1;min-width:160px">
+                  <label>New Password <span style="color:#5a3a3e;font-size:.75rem">(leave blank to keep)</span></label>
+                  <input id="usr-edit-pw-${esc(u.id)}" type="password" autocomplete="new-password" placeholder="min 8 chars" />
+                </div>
+                <div class="form-field" style="min-width:130px">
+                  <label>Access Level</label>
+                  <select id="usr-edit-level-${esc(u.id)}">
+                    <option value="0">0 – Registered</option>
+                    <option value="1">1 – Free Tier</option>
+                    <option value="2">2 – Tier 1</option>
+                    <option value="3">3 – Tier 2</option>
+                  </select>
+                </div>
+                <button class="btn-sm btn-edit" onclick="saveUsrEdit('${esc(u.id)}')">💾 Save</button>
+                <button class="btn-sm btn-delete" onclick="hideUsrEdit('${esc(u.id)}')">Cancel</button>
+              </div>
+              <p id="usr-edit-msg-${esc(u.id)}" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
+            </td>
+          </tr>`).join('');
+      } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Error loading users.</td></tr>'; console.error(e); }
+    }
+
+    function showUsrEdit(id, _username, currentLevel) {
+      document.getElementById(`usr-edit-row-${id}`).style.display = '';
+      const sel = document.getElementById(`usr-edit-level-${id}`);
+      if (sel) sel.value = String(currentLevel);
+      document.getElementById(`usr-edit-pw-${id}`).value = '';
+      document.getElementById(`usr-edit-msg-${id}`).textContent = '';
+    }
+
+    function hideUsrEdit(id) {
+      document.getElementById(`usr-edit-row-${id}`).style.display = 'none';
+    }
+
+    async function saveUsrEdit(id) {
+      const msgEl = document.getElementById(`usr-edit-msg-${id}`);
+      msgEl.textContent = '';
+      const pw = document.getElementById(`usr-edit-pw-${id}`).value;
+      const level = parseInt(document.getElementById(`usr-edit-level-${id}`).value);
+      const body = {};
+      if (pw) body.password = pw;
+      body.access_level = level;
+      try {
+        const resp = await apiPatch(`/api/admin/users/${id}`, body);
+        if (resp.ok) {
+          hideUsrEdit(id);
+          loadUsersAdmin();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          msgEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch(e) { msgEl.textContent = 'Error: ' + e.message; }
+    }
+
+    async function deleteUser(id, username) {
+      if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+      try {
+        await apiDelete(`/api/admin/users/${id}`);
+        loadUsersAdmin();
+      } catch(e) { alert('Error: ' + e.message); }
+    }
+
+    document.getElementById('usr-create-btn').addEventListener('click', async () => {
+      const msgEl = document.getElementById('usr-create-msg');
+      msgEl.textContent = '';
+      const username = document.getElementById('usr-new-username').value.trim();
+      const password = document.getElementById('usr-new-password').value;
+      const access_level = parseInt(document.getElementById('usr-new-level').value);
+      if (!username) { msgEl.textContent = 'Username is required.'; return; }
+      if (!password || password.length < 8) { msgEl.textContent = 'Password must be at least 8 characters.'; return; }
+      try {
+        const resp = await apiPost('/api/admin/users', { username, password, access_level });
+        if (resp.ok) {
+          document.getElementById('usr-new-username').value = '';
+          document.getElementById('usr-new-password').value = '';
+          document.getElementById('usr-new-level').value = '0';
+          msgEl.style.color = '#a3e635';
+          msgEl.textContent = `User "${username}" created.`;
+          loadUsersAdmin();
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          msgEl.style.color = '#f87171';
+          msgEl.textContent = data.detail || `Error ${resp.status}`;
+        }
+      } catch(e) { msgEl.style.color = '#f87171'; msgEl.textContent = 'Error: ' + e.message; }
+    });
+
+    document.getElementById('usr-refresh-btn').addEventListener('click', () => loadUsersAdmin());
 
     function esc(s) {
       return escHtml(String(s));
