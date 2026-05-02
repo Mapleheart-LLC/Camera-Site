@@ -3460,7 +3460,7 @@
 
     // ── Users Admin ───────────────────────────────────────────────────────
 
-    const _ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
+    const ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
 
     async function loadUsersAdmin() {
       const tbody = document.getElementById('usr-tbody');
@@ -3473,10 +3473,10 @@
         tbody.innerHTML = users.map(u => `
           <tr id="usr-row-${esc(u.id)}">
             <td>${esc(u.username)}</td>
-            <td>${esc(_ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
+            <td>${esc(ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
             <td style="font-size:.72rem;color:#5a3a3e">${esc(u.id)}</td>
             <td style="white-space:nowrap">
-              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}','${esc(u.username)}',${u.access_level})">Edit</button>
+              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${esc(u.access_level)})">Edit</button>
               <button class="btn-sm btn-delete" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')" style="margin-left:.3rem">Delete</button>
             </td>
           </tr>
@@ -3505,7 +3505,7 @@
       } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Error loading users.</td></tr>'; console.error(e); }
     }
 
-    function showUsrEdit(id, _username, currentLevel) {
+    function showUsrEdit(id, currentLevel) {
       document.getElementById(`usr-edit-row-${id}`).style.display = '';
       const sel = document.getElementById(`usr-edit-level-${id}`);
       if (sel) sel.value = String(currentLevel);
@@ -3521,7 +3521,7 @@
       const msgEl = document.getElementById(`usr-edit-msg-${id}`);
       msgEl.textContent = '';
       const pw = document.getElementById(`usr-edit-pw-${id}`).value;
-      const level = parseInt(document.getElementById(`usr-edit-level-${id}`).value);
+      const level = parseInt(document.getElementById(`usr-edit-level-${id}`).value, 10);
       const body = {};
       if (pw) body.password = pw;
       body.access_level = level;
@@ -3550,7 +3550,7 @@
       msgEl.textContent = '';
       const username = document.getElementById('usr-new-username').value.trim();
       const password = document.getElementById('usr-new-password').value;
-      const access_level = parseInt(document.getElementById('usr-new-level').value);
+      const access_level = parseInt(document.getElementById('usr-new-level').value, 10);
       if (!username) { msgEl.textContent = 'Username is required.'; return; }
       if (!password || password.length < 8) { msgEl.textContent = 'Password must be at least 8 characters.'; return; }
       try {
