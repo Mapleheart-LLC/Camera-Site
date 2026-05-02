@@ -1183,11 +1183,13 @@ class _CreateUserPayload(BaseModel):
     username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     password: str = Field(..., min_length=8, max_length=128)
     access_level: int = Field(0, ge=0, le=3)
+    role: str = Field("handler", pattern=r"^(handler|admin)$")
 
 
 class _UpdateUserPayload(BaseModel):
     password: Optional[str] = Field(None, min_length=8, max_length=128)
     access_level: Optional[int] = Field(None, ge=0, le=3)
+    role: Optional[str] = Field(None, pattern=r"^(handler|admin)$")
 
 
 @router.get("/users")
@@ -1197,7 +1199,7 @@ def list_users(
 ):
     """Return all registered site users (no password hashes)."""
     rows = db.execute(
-        "SELECT id, username, access_level FROM users ORDER BY rowid DESC"
+        "SELECT id, username, access_level, role FROM users ORDER BY rowid DESC"
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -1221,12 +1223,12 @@ def create_user(
     user_id = secrets.token_hex(16)
     pw_hash = _pwd_context.hash(body.password)
     db.execute(
-        "INSERT INTO users (id, username, password_hash, access_level) VALUES (?, ?, ?, ?)",
-        (user_id, username_lower, pw_hash, body.access_level),
+        "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, ?, ?)",
+        (user_id, username_lower, pw_hash, body.access_level, body.role),
     )
     db.commit()
-    logger.info("Admin '%s' created user: username=%s id=%s", admin_user, username_lower, user_id)
-    return {"id": user_id, "username": username_lower, "access_level": body.access_level}
+    logger.info("Admin '%s' created user: username=%s id=%s role=%s", admin_user, username_lower, user_id, body.role)
+    return {"id": user_id, "username": username_lower, "access_level": body.access_level, "role": body.role}
 
 
 @router.patch("/users/{user_id}")
@@ -1250,6 +1252,11 @@ def update_user(
         db.execute(
             "UPDATE users SET access_level = ? WHERE id = ?",
             (body.access_level, user_id),
+        )
+    if body.role is not None:
+        db.execute(
+            "UPDATE users SET role = ? WHERE id = ?",
+            (body.role, user_id),
         )
     db.commit()
     logger.info("Admin '%s' updated user id=%s", admin_user, user_id)
