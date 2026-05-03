@@ -354,6 +354,37 @@
       0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.5); }
       50%       { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
     }
+    @keyframes active-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.5); }
+      50%       { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+    }
+
+    /* ── Screen Share ─────────────────────────────────── */
+    .btn-screen-share {
+      width: 100%; padding: .6rem 1rem; border-radius: 8px;
+      font-family: inherit; font-size: .9rem; font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s, transform .1s, box-shadow .2s;
+      border: 1px solid #60a5fa; background: rgba(96,165,250,.1); color: #60a5fa;
+    }
+    .btn-screen-share:hover:not(:disabled) { background: rgba(96,165,250,.22); }
+    .btn-screen-share:active:not(:disabled) { transform: scale(.97); }
+    .btn-screen-share.active {
+      border-color: #f87171; background: rgba(248,113,113,.15); color: #f87171;
+      animation: active-pulse 1.4s ease-in-out infinite;
+    }
+    .btn-screen-share.active:hover:not(:disabled) { background: rgba(248,113,113,.3); }
+    #screen-share-video-wrap {
+      background: #0a0a0a; border-radius: 10px; border: 1px solid #3d2a2e;
+      aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; margin-bottom: 1rem;
+    }
+    #screen-share-video {
+      width: 100%; height: 100%; object-fit: contain; display: none;
+    }
+    #screen-share-placeholder {
+      color: #5a3a3e; font-size: .9rem; font-weight: 700;
+    }
 
     /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
@@ -468,6 +499,7 @@
           <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
           <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
           <button class="nav-item" data-target="sec-logs">📜 Logs</button>
+          <button class="nav-item" data-target="sec-screenshare">📺 Screen Share</button>
         </aside>
 
         <!-- ── Main ── -->
@@ -630,6 +662,12 @@
                 <button class="btn-live-listen" id="btn-live-listen-actions">🎙️ Live Listen</button>
                 <div class="ac-result" id="res-live-listen-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
               </div>
+              <div class="action-card">
+                <div class="ac-icon">📺</div>
+                <div class="ac-label">Screen Share</div>
+                <button class="btn-screen-share" id="btn-screen-share-actions">📺 Start Screen Share</button>
+                <div class="ac-result" id="res-screen-share-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
+              </div>
             </div>
           </section>
 
@@ -659,6 +697,24 @@
                     <tr class="empty-row"><td colspan="4">Loading…</td></tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ SCREEN SHARE ═══════════════ -->
+          <section id="sec-screenshare" class="handler-section">
+            <h2 class="section-heading">📺 Screen Share</h2>
+            <div class="card">
+              <div class="card-header">
+                <h2>Remote Device Screen</h2>
+                <button class="btn-screen-share" id="btn-screen-share-section" style="width:auto;padding:.35rem .9rem;font-size:.85rem">📺 Start Screen Share</button>
+              </div>
+              <div class="card-body">
+                <div id="screen-share-video-wrap">
+                  <div id="screen-share-placeholder">No screen share active — click Start to begin.</div>
+                  <video id="screen-share-video" autoplay playsinline aria-label="Remote device screen share"></video>
+                </div>
+                <div id="screen-share-status" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></div>
               </div>
             </div>
           </section>
@@ -764,6 +820,7 @@
 
     function showLoginPanel(msg) {
       sendMicStop();
+      stopScreenShare();
       document.getElementById('handler-panel').style.display = 'none';
       document.getElementById('login-panel').style.display   = 'flex';
       if (msg) document.getElementById('login-error').textContent = msg;
@@ -781,6 +838,7 @@
     /** Show the kennel overview (top-level view). */
     function showKennelOverview() {
       if (_micActive) sendMicStop();
+      stopScreenShare();
       viewingDeviceId = null;
       document.getElementById('kennel-overview').style.display  = 'block';
       document.getElementById('puppy-detail').style.display     = 'none';
@@ -792,8 +850,9 @@
      * Populates the sidebar name, resets sections, renders cached data.
      */
     function showPuppyDetail(deviceId) {
-      // Stop the mic if switching to a different device while listening.
+      // Stop the mic and any active screen share when switching to a different device.
       if (_micActive && viewingDeviceId !== deviceId) sendMicStop();
+      if (_screenShareActive && viewingDeviceId !== deviceId) stopScreenShare();
       viewingDeviceId = deviceId;
 
       document.getElementById('kennel-overview').style.display     = 'none';
@@ -1068,6 +1127,12 @@
         var msg;
         try { msg = JSON.parse(evt.data); } catch(e) { return; }
         if (msg.type === 'ping') return;
+
+        // ── WebRTC signaling: answer / ICE candidates relayed from device ─
+        if (msg.type === 'webrtc_answer' || msg.type === 'webrtc_ice_candidate') {
+          if (msg.device_id === viewingDeviceId) _handleRtcSignal(msg);
+          return;
+        }
 
         // ── Snapshot: initial device list sent on WS connect ──────────
         if (msg.type === 'snapshot') {
@@ -1565,6 +1630,140 @@
     }
 
     document.getElementById('vitals-refresh-btn').addEventListener('click', loadVitalsHistory);
+
+    // ═══════════════════════════════════════════════════════════
+    // SCREEN SHARE — WebRTC
+    // ═══════════════════════════════════════════════════════════
+
+    var _rtcPc             = null;
+    var _screenShareActive = false;
+    var _RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    function _setScreenShareStatus(msg) {
+      var el = document.getElementById('screen-share-status');
+      if (el) el.textContent = msg;
+      var res = document.getElementById('res-screen-share-actions');
+      if (res) res.textContent = msg;
+    }
+
+    function _updateScreenShareBtns() {
+      document.querySelectorAll('.btn-screen-share').forEach(function(btn) {
+        if (_screenShareActive) {
+          btn.textContent = '🔴 Stop Screen Share';
+          btn.classList.add('active');
+        } else {
+          btn.textContent = '📺 Start Screen Share';
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    function stopScreenShare() {
+      _screenShareActive = false;
+      if (_rtcPc) { _rtcPc.close(); _rtcPc = null; }
+      var video       = document.getElementById('screen-share-video');
+      var placeholder = document.getElementById('screen-share-placeholder');
+      if (video)       { video.srcObject = null; video.style.display = 'none'; }
+      if (placeholder) { placeholder.style.display = 'block'; }
+      _setScreenShareStatus('');
+      _updateScreenShareBtns();
+    }
+
+    function startScreenShare() {
+      if (!viewingDeviceId) { showToast('⚠️ No device selected.', true); return; }
+      if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+        showToast('⚠️ WebSocket not connected.', true); return;
+      }
+      if (_rtcPc) return; // Already active — toggleScreenShare handles stop/start.
+
+      _screenShareActive = true;
+      _updateScreenShareBtns();
+      _setScreenShareStatus('🔄 Initiating connection…');
+
+      var pc = new RTCPeerConnection(_RTC_CONFIG);
+      _rtcPc = pc;
+
+      // We only receive a video track from the device (screen capture).
+      pc.addTransceiver('video', { direction: 'recvonly' });
+
+      pc.onicecandidate = function(evt) {
+        if (!evt.candidate) return;
+        if (_ws && _ws.readyState === WebSocket.OPEN) {
+          _ws.send(JSON.stringify({
+            action: 'webrtc_ice_candidate',
+            device_id: viewingDeviceId,
+            candidate: evt.candidate.toJSON(),
+          }));
+        }
+      };
+
+      pc.ontrack = function(evt) {
+        var video       = document.getElementById('screen-share-video');
+        var placeholder = document.getElementById('screen-share-placeholder');
+        if (video && evt.streams && evt.streams[0]) {
+          video.srcObject = evt.streams[0];
+          video.style.display = 'block';
+          if (placeholder) placeholder.style.display = 'none';
+          _setScreenShareStatus('✅ Receiving screen share.');
+          showToast('📺 Screen share connected.');
+        }
+      };
+
+      pc.onconnectionstatechange = function() {
+        var stateLabels = {
+          connecting: '🔄 Connecting…',
+          connected:  '✅ Connected',
+          disconnected: '⚠️ Disconnected — reconnecting…',
+          failed: '❌ Connection failed.',
+          closed: '',
+        };
+        _setScreenShareStatus(stateLabels[pc.connectionState] || ('Connection: ' + pc.connectionState));
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          stopScreenShare();
+        }
+      };
+
+      pc.createOffer().then(function(offer) {
+        return pc.setLocalDescription(offer).then(function() {
+          _ws.send(JSON.stringify({
+            action: 'webrtc_offer',
+            device_id: viewingDeviceId,
+            sdp: offer.sdp,
+          }));
+          _setScreenShareStatus('⏳ Offer sent — waiting for device answer…');
+        });
+      }).catch(function(err) {
+        console.error('[ScreenShare] createOffer error:', err);
+        _setScreenShareStatus('❌ Failed to create offer.');
+        stopScreenShare();
+      });
+    }
+
+    function toggleScreenShare() {
+      if (_screenShareActive) stopScreenShare(); else startScreenShare();
+    }
+
+    /**
+     * Handle incoming WebRTC signaling messages relayed from the device via /ws/handler.
+     * Relay format: {type: "webrtc_answer"|"webrtc_ice_candidate", device_id, sdp?, candidate?}
+     */
+    function _handleRtcSignal(msg) {
+      if (!_rtcPc) return;
+      if (msg.type === 'webrtc_answer') {
+        _rtcPc.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
+          .then(function() { _setScreenShareStatus('✅ Answer received — negotiating ICE…'); })
+          .catch(function(err) {
+            console.error('[ScreenShare] setRemoteDescription error:', err);
+            _setScreenShareStatus('❌ Failed to set remote description.');
+          });
+      } else if (msg.type === 'webrtc_ice_candidate' && msg.candidate) {
+        _rtcPc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+          .catch(function(err) { console.warn('[ScreenShare] addIceCandidate error:', err); });
+      }
+    }
+
+    document.getElementById('btn-screen-share-section').addEventListener('click', toggleScreenShare);
+    document.getElementById('btn-screen-share-actions').addEventListener('click', toggleScreenShare);
 
     // ═══════════════════════════════════════════════════════════
     // INITIALISATION
