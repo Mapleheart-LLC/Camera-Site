@@ -1132,9 +1132,10 @@
     // LIVE LISTEN — Web Audio API + mic commands
     // ═══════════════════════════════════════════════════════════
 
-    var _micActive  = false;
-    var _audioCtx   = null;
-    var _nextPlayAt = 0;   // wall-clock schedule pointer (AudioContext seconds)
+    var _micActive       = false;
+    var _audioCtx        = null;
+    var _nextPlayAt      = 0;      // wall-clock schedule pointer (AudioContext seconds)
+    var _AUDIO_LOOKAHEAD = 0.05;   // 50 ms scheduling lookahead / initial anchor offset
 
     /**
      * Lazily create and/or resume the AudioContext.
@@ -1143,7 +1144,7 @@
     function _getAudioCtx() {
       if (!_audioCtx) {
         _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        _nextPlayAt = _audioCtx.currentTime + 0.05;
+        _nextPlayAt = _audioCtx.currentTime + _AUDIO_LOOKAHEAD;
       }
       if (_audioCtx.state === 'suspended') _audioCtx.resume();
       return _audioCtx;
@@ -1152,18 +1153,19 @@
     /**
      * Decode a binary audio chunk and schedule it for seamless, gap-free playback.
      * Accepts any format supported by the browser's AudioContext (PCM, AAC, Opus, MP3, OGG).
+     * Note: decodeAudioData detaches (neuterises) the passed buffer, so arrayBuffer
+     * must not be read or stored by the caller after this call returns.
      */
     function _playAudioChunk(arrayBuffer) {
       if (!_micActive) return;
       var ctx = _getAudioCtx();
-      // decodeAudioData "neuterises" (detaches) the passed buffer, so copy it first.
-      ctx.decodeAudioData(arrayBuffer.slice(0), function(decoded) {
+      ctx.decodeAudioData(arrayBuffer, function(decoded) {
         var src = ctx.createBufferSource();
         src.buffer  = decoded;
         src.connect(ctx.destination);
         var now = ctx.currentTime;
         // If schedule pointer fell behind real time (e.g. large gap), re-anchor it.
-        if (_nextPlayAt < now + 0.05) _nextPlayAt = now + 0.05;
+        if (_nextPlayAt < now + _AUDIO_LOOKAHEAD) _nextPlayAt = now + _AUDIO_LOOKAHEAD;
         src.start(_nextPlayAt);
         _nextPlayAt += decoded.duration;
       }, function(err) {
@@ -1205,7 +1207,7 @@
       _micActive = false;
       if (wasActive && _ws && _ws.readyState === WebSocket.OPEN) {
         try {
-          _ws.send(JSON.stringify({ action: 'mic_stop', device_id: viewingDeviceId || undefined }));
+          _ws.send(JSON.stringify({ action: 'mic_stop', device_id: viewingDeviceId }));
         } catch(e) { /* socket may already be closing */ }
       }
       _updateLiveListenBtns();
