@@ -335,6 +335,26 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
+    /* ── Live Listen button ───────────────────────────── */
+    .btn-live-listen {
+      width: 100%; padding: .6rem 1rem; border-radius: 8px;
+      font-family: inherit; font-size: .9rem; font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s, transform .1s, box-shadow .2s;
+      border: 1px solid #4ade80; background: rgba(74,222,128,.1); color: #4ade80;
+    }
+    .btn-live-listen:hover:not(:disabled) { background: rgba(74,222,128,.22); }
+    .btn-live-listen:active:not(:disabled) { transform: scale(.97); }
+    .btn-live-listen.active {
+      border-color: #f87171; background: rgba(248,113,113,.15); color: #f87171;
+      animation: mic-pulse 1.4s ease-in-out infinite;
+    }
+    .btn-live-listen.active:hover:not(:disabled) { background: rgba(248,113,113,.3); }
+    @keyframes mic-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.5); }
+      50%       { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
+    }
+
     /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
       #kennel-overview { padding: 1rem; }
@@ -432,6 +452,14 @@
               <span class="ss-label">🤖 AI Filter</span>
               <span class="ss-val" id="sb-ai">—</span>
             </div>
+          </div>
+
+          <!-- Live Listen toggle (always visible in Puppy Detail) -->
+          <div style="margin:.75rem 1.25rem 0;padding-top:.75rem;border-top:1px solid #3d2a2e">
+            <button class="btn-live-listen" id="btn-live-listen-sidebar" style="font-size:.82rem">
+              🎙️ Live Listen
+            </button>
+            <div id="res-live-listen-sidebar" style="font-size:.7rem;color:#9e7e82;margin-top:.35rem;min-height:1em"></div>
           </div>
 
           <div class="sidebar-section-label">Navigation</div>
@@ -596,6 +624,12 @@
                 <button class="btn-action" id="btn-checkin">Request Check-in</button>
                 <div class="ac-result" id="res-checkin"></div>
               </div>
+              <div class="action-card">
+                <div class="ac-icon">🎙️</div>
+                <div class="ac-label">Live Listen</div>
+                <button class="btn-live-listen" id="btn-live-listen-actions">🎙️ Live Listen</button>
+                <div class="ac-result" id="res-live-listen-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
+              </div>
             </div>
           </section>
 
@@ -729,6 +763,7 @@
     // ═══════════════════════════════════════════════════════════
 
     function showLoginPanel(msg) {
+      sendMicStop();
       document.getElementById('handler-panel').style.display = 'none';
       document.getElementById('login-panel').style.display   = 'flex';
       if (msg) document.getElementById('login-error').textContent = msg;
@@ -745,6 +780,7 @@
 
     /** Show the kennel overview (top-level view). */
     function showKennelOverview() {
+      if (_micActive) sendMicStop();
       viewingDeviceId = null;
       document.getElementById('kennel-overview').style.display  = 'block';
       document.getElementById('puppy-detail').style.display     = 'none';
@@ -756,6 +792,8 @@
      * Populates the sidebar name, resets sections, renders cached data.
      */
     function showPuppyDetail(deviceId) {
+      // Stop the mic if switching to a different device while listening.
+      if (_micActive && viewingDeviceId !== deviceId) sendMicStop();
       viewingDeviceId = deviceId;
 
       document.getElementById('kennel-overview').style.display     = 'none';
@@ -1015,12 +1053,18 @@
       var proto = location.protocol === 'https:' ? 'wss' : 'ws';
       var url   = proto + '://' + location.host + '/ws/handler?creds=' + encodeURIComponent(creds);
       _ws = new WebSocket(url);
+      _ws.binaryType = 'arraybuffer';
 
       _ws.addEventListener('open',  function() { setWsDot('connected'); });
       _ws.addEventListener('close', function() { setWsDot('error'); scheduleReconnect(); });
       _ws.addEventListener('error', function() { setWsDot('error'); });
 
       _ws.addEventListener('message', function(evt) {
+        // Binary audio chunk relayed from device → feed to Web Audio API.
+        if (evt.data instanceof ArrayBuffer) {
+          _playAudioChunk(evt.data);
+          return;
+        }
         var msg;
         try { msg = JSON.parse(evt.data); } catch(e) { return; }
         if (msg.type === 'ping') return;
@@ -1078,9 +1122,99 @@
     }
 
     function disconnectWS() {
+      sendMicStop();  // ensure device gets STOP_HOT_MIC before socket closes
       if (_ws) { _ws.close(); _ws = null; }
       if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
       setWsDot('');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // LIVE LISTEN — Web Audio API + mic commands
+    // ═══════════════════════════════════════════════════════════
+
+    var _micActive       = false;
+    var _audioCtx        = null;
+    var _nextPlayAt      = 0;      // wall-clock schedule pointer (AudioContext seconds)
+    var _AUDIO_LOOKAHEAD = 0.05;   // 50 ms scheduling lookahead / initial anchor offset
+
+    /**
+     * Lazily create and/or resume the AudioContext.
+     * Must be called from a user-gesture handler to satisfy browser autoplay policy.
+     */
+    function _getAudioCtx() {
+      if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        _nextPlayAt = _audioCtx.currentTime + _AUDIO_LOOKAHEAD;
+      }
+      if (_audioCtx.state === 'suspended') _audioCtx.resume();
+      return _audioCtx;
+    }
+
+    /**
+     * Decode a binary audio chunk and schedule it for seamless, gap-free playback.
+     * Accepts any format supported by the browser's AudioContext (PCM, AAC, Opus, MP3, OGG).
+     * Note: decodeAudioData detaches (neuterises) the passed buffer, so arrayBuffer
+     * must not be read or stored by the caller after this call returns.
+     */
+    function _playAudioChunk(arrayBuffer) {
+      if (!_micActive) return;
+      var ctx = _getAudioCtx();
+      ctx.decodeAudioData(arrayBuffer, function(decoded) {
+        var src = ctx.createBufferSource();
+        src.buffer  = decoded;
+        src.connect(ctx.destination);
+        var now = ctx.currentTime;
+        // If schedule pointer fell behind real time (e.g. large gap), re-anchor it.
+        if (_nextPlayAt < now + _AUDIO_LOOKAHEAD) _nextPlayAt = now + _AUDIO_LOOKAHEAD;
+        src.start(_nextPlayAt);
+        _nextPlayAt += decoded.duration;
+      }, function(err) {
+        console.warn('[LiveListen] Audio decode error:', err);
+      });
+    }
+
+    /**
+     * Sync every Live Listen button on the page to the current _micActive state.
+     */
+    function _updateLiveListenBtns() {
+      document.querySelectorAll('.btn-live-listen').forEach(function(btn) {
+        if (_micActive) {
+          btn.textContent = '🔴 Stop Listening';
+          btn.classList.add('active');
+        } else {
+          btn.textContent = '🎙️ Live Listen';
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    /** Begin streaming: warm up AudioContext then send START_HOT_MIC to the device. */
+    function sendMicStart() {
+      if (!viewingDeviceId) { showToast('⚠️ No device selected.', true); return; }
+      if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+        showToast('⚠️ WebSocket not connected.', true); return;
+      }
+      _micActive = true;
+      _getAudioCtx();  // pre-warm before first audio chunk arrives
+      _ws.send(JSON.stringify({ action: 'mic_start', device_id: viewingDeviceId }));
+      _updateLiveListenBtns();
+      showToast('🎙️ Live Listen started.');
+    }
+
+    /** Stop streaming: send STOP_HOT_MIC to the device and silence local playback. */
+    function sendMicStop() {
+      var wasActive = _micActive;
+      _micActive = false;
+      if (wasActive && _ws && _ws.readyState === WebSocket.OPEN) {
+        try {
+          _ws.send(JSON.stringify({ action: 'mic_stop', device_id: viewingDeviceId }));
+        } catch(e) { /* socket may already be closing */ }
+      }
+      _updateLiveListenBtns();
+    }
+
+    function toggleLiveListen() {
+      if (_micActive) sendMicStop(); else sendMicStart();
     }
 
     function scheduleReconnect() {
@@ -1218,6 +1352,8 @@
     document.getElementById('btn-pishock').addEventListener('click',  sendShockPiShock);
     document.getElementById('btn-pavlok').addEventListener('click',   sendVibratePavlok);
     document.getElementById('btn-checkin').addEventListener('click',  requestCheckin);
+    document.getElementById('btn-live-listen-sidebar').addEventListener('click', toggleLiveListen);
+    document.getElementById('btn-live-listen-actions').addEventListener('click', toggleLiveListen);
 
     // ═══════════════════════════════════════════════════════════
     // LOGS
