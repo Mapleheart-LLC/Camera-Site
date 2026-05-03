@@ -499,6 +499,22 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
                                 await _handler_ws.send_mic_command("START_HOT_MIC", device_id=target_device)
                             elif action == "mic_stop":
                                 await _handler_ws.send_mic_command("STOP_HOT_MIC", device_id=target_device)
+                            elif action == "webrtc_offer" and target_device:
+                                # Route SDP offer from handler to the target device verbatim.
+                                sdp = cmd.get("sdp")
+                                if sdp is not None:
+                                    await _handler_ws.relay_signal_to_device(
+                                        target_device,
+                                        {"type": "webrtc_offer", "sdp": sdp},
+                                    )
+                            elif action == "webrtc_ice_candidate" and target_device:
+                                # Route ICE candidate from handler to the target device verbatim.
+                                candidate = cmd.get("candidate")
+                                if candidate is not None:
+                                    await _handler_ws.relay_signal_to_device(
+                                        target_device,
+                                        {"type": "webrtc_ice_candidate", "candidate": candidate},
+                                    )
                         except Exception:
                             pass  # Ignore malformed frames.
         finally:
@@ -544,20 +560,34 @@ async def device_audio_ws_endpoint(
 
         await websocket.accept()
 
-        while True:
-            try:
-                msg = await websocket.receive()
-            except WebSocketDisconnect:
-                break
+        _handler_ws.connect_signaling_device(device_id, websocket)
+        try:
+            while True:
+                try:
+                    msg = await websocket.receive()
+                except WebSocketDisconnect:
+                    break
 
-            msg_type = msg.get("type")
-            if msg_type == "websocket.disconnect":
-                break
+                msg_type = msg.get("type")
+                if msg_type == "websocket.disconnect":
+                    break
 
-            if msg_type == "websocket.receive":
-                chunk = msg.get("bytes")
-                if chunk:
-                    await _handler_ws.relay_audio(device_id, chunk, db)
-                # Ignore text frames from devices.
+                if msg_type == "websocket.receive":
+                    chunk = msg.get("bytes")
+                    if chunk:
+                        await _handler_ws.relay_audio(device_id, chunk, db)
+                    else:
+                        # Handle WebRTC signaling messages (text frames) from device.
+                        text = msg.get("text")
+                        if text:
+                            try:
+                                sig = json.loads(text)
+                                sig_type = sig.get("type", "")
+                                if sig_type in ("webrtc_answer", "webrtc_ice_candidate"):
+                                    await _handler_ws.relay_signal_to_handler(device_id, sig, db)
+                            except Exception:
+                                pass  # Ignore malformed frames.
+        finally:
+            _handler_ws.disconnect_signaling_device(device_id, websocket)
     finally:
         db.close()

@@ -22,6 +22,18 @@ from these devices are broadcast to all connected handler sockets so the
 partner panel can listen.  The manager also exposes ``send_mic_command()``
 so the handler panel can send ``START_HOT_MIC`` / ``STOP_HOT_MIC`` commands
 back to one or all connected devices.
+
+WebRTC Signaling
+----------------
+The server acts as a signaling relay for WebRTC screen-sharing sessions
+established between a Handler and a Device.  Devices register their
+``/ws/device-audio/{device_id}`` socket in ``_signaling_sockets``; the handler
+panel sends ``webrtc_offer`` / ``webrtc_ice_candidate`` actions via
+``/ws/handler`` and the manager routes them to the correct device socket.
+Likewise, ``webrtc_answer`` and ``webrtc_ice_candidate`` messages originating
+from a device are routed to its assigned handler via ``relay_signal_to_handler``.
+SDP payloads and ICE candidates are forwarded verbatim – the server never
+inspects or modifies their contents.
 """
 
 from __future__ import annotations
@@ -47,6 +59,8 @@ class _HandlerWSManager:
         self._handler_sockets: Dict[str, WebSocket] = {}
         # device_id → WebSocket for TPE hot-mic relay (tpeapp /ws endpoint).
         self._device_sockets: Dict[str, WebSocket] = {}
+        # device_id → WebSocket for WebRTC signaling relay (/ws/device-audio/{device_id}).
+        self._signaling_sockets: Dict[str, WebSocket] = {}
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -178,6 +192,89 @@ class _HandlerWSManager:
         for did in dead_ids:
             self._device_sockets.pop(did, None)
         return sent
+
+    # ------------------------------------------------------------------
+    # WebRTC signaling relay
+    # ------------------------------------------------------------------
+
+    def connect_signaling_device(self, device_id: str, ws: WebSocket) -> None:
+        """Register a device WebSocket for WebRTC signaling relay."""
+        self._signaling_sockets[device_id] = ws
+        logger.debug("Signaling device connected: %s (total: %d)", device_id, len(self._signaling_sockets))
+
+    def disconnect_signaling_device(self, device_id: str, ws: WebSocket) -> None:
+        """Remove a device WebSocket from the signaling registry."""
+        if self._signaling_sockets.get(device_id) is ws:
+            del self._signaling_sockets[device_id]
+        logger.debug("Signaling device disconnected: %s (total: %d)", device_id, len(self._signaling_sockets))
+
+    async def relay_signal_to_device(self, device_id: str, payload: dict) -> bool:
+        """Forward a WebRTC signaling *payload* from a handler to *device_id*.
+
+        The payload is delivered verbatim – SDP and ICE candidate contents are
+        never inspected or modified.
+
+        Returns ``True`` when the message was delivered, ``False`` when the
+        device is not currently connected.
+        """
+        ws = self._signaling_sockets.get(device_id)
+        if ws is None:
+            logger.debug("Signaling relay to device %s failed: not connected", device_id)
+            return False
+        try:
+            await asyncio.wait_for(ws.send_json(payload), timeout=5.0)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("Signaling relay timeout for device %s; dropping frame", device_id)
+            return False
+        except Exception as exc:
+            logger.warning("Signaling relay error for device %s: %s", device_id, exc)
+            self.disconnect_signaling_device(device_id, ws)
+            return False
+
+    async def relay_signal_to_handler(
+        self,
+        device_id: str,
+        payload: dict,
+        db: sqlite3.Connection,
+    ) -> bool:
+        """Forward a WebRTC signaling *payload* from *device_id* to its assigned handler.
+
+        Looks up the handler assigned to *device_id* in the
+        ``handler_device_assignments`` table and sends the payload – with
+        ``device_id`` added so the handler can match it to the right peer – to
+        that handler's active WebSocket.
+
+        SDP and ICE candidate contents are never inspected or modified.
+
+        Returns ``True`` when the message was delivered, ``False`` otherwise.
+        """
+        row = db.execute(
+            "SELECT handler_id FROM handler_device_assignments WHERE device_id = ? LIMIT 1",
+            (device_id,),
+        ).fetchone()
+        if not row:
+            logger.debug("Signaling relay from device %s failed: no handler assigned", device_id)
+            return False
+
+        handler_id: str = row["handler_id"]
+        ws = self._handler_sockets.get(handler_id)
+        if ws is None:
+            logger.debug("Signaling relay from device %s failed: handler %s not connected", device_id, handler_id)
+            return False
+
+        # Inject device_id so the handler panel can identify the peer.
+        routed = {**payload, "device_id": device_id}
+        try:
+            await asyncio.wait_for(ws.send_json(routed), timeout=5.0)
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("Signaling relay timeout for handler %s; dropping frame", handler_id)
+            return False
+        except Exception as exc:
+            logger.warning("Signaling relay error for handler %s: %s", handler_id, exc)
+            self.disconnect(ws, handler_id)
+            return False
 
 
 #: Singleton used by handler.py, vitals.py, and tpe.py.
