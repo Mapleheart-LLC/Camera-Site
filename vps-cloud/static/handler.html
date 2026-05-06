@@ -874,7 +874,7 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Honorific</span>
                   <div class="cmd-inputs">
-                    <input id="cmd-honorific" placeholder='e.g. Sir, Master, Ma&apos;am' />
+                    <input id="cmd-honorific" placeholder="e.g. Sir, Master, Ma'am" />
                   </div>
                   <button class="btn-cmd" onclick="sendFcm('SET_HONORIFIC',{honorific:v('cmd-honorific')},'res-cmd-honorific')">Send</button>
                   <span class="cmd-result" id="res-cmd-honorific"></span>
@@ -2183,8 +2183,9 @@
     function dateToMs(id) {
       var raw = v(id);
       if (!raw) return '';
-      var ms = new Date(raw).getTime();
-      return isNaN(ms) ? '' : String(ms);
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) return '';
+      return String(d.getTime());
     }
 
     /**
@@ -2202,7 +2203,7 @@
       if (res) res.textContent = 'Sending…';
       var payload = { device_id: viewingDeviceId, action: action };
       Object.keys(fieldsObj).forEach(function(k) {
-        if (fieldsObj[k] !== '' && fieldsObj[k] != null) payload[k] = fieldsObj[k];
+        if (fieldsObj[k] !== '' && fieldsObj[k] !== null && fieldsObj[k] !== undefined) payload[k] = fieldsObj[k];
       });
       try {
         var r = await apiPost('/api/admin/tpe/push', payload);

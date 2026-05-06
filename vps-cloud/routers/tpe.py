@@ -819,7 +819,7 @@ class TpePushRequest(BaseModel):
     endpoint: Optional[str] = None
 
     # SET_HANDLER_MODEL — named handler_model here to avoid Pydantic v2 reserved-name
-    # collision; serialised as "model" in the FCM data dict.
+    # collision; serialized as "model" in the FCM data dict.
     handler_model: Optional[str] = None
 
     # LOVENSE_COMMAND
@@ -1060,7 +1060,7 @@ def tpe_push_settings(
         "api_key":            body.api_key,
         # SET_HANDLER_ENDPOINT
         "endpoint":           body.endpoint,
-        # SET_HANDLER_MODEL — handler_model maps to FCM key "model"
+        # SET_HANDLER_MODEL — handler_model serialized to FCM key "model"
         "model":              body.handler_model,
         # LOVENSE_COMMAND
         "toy_command":        body.toy_command,
