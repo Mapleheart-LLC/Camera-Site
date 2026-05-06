@@ -660,67 +660,319 @@ class TpePushRequest(BaseModel):
     Flexible FCM push payload.  ``action`` maps to the FCM ``data.action`` field
     understood by ``PartnerFcmService`` in the TPE app.
 
-    Supported actions (and their additional fields):
-      UPDATE_SETTINGS              threshold (float str), strict (bool str), blocked_classes (JSON str)
-      UPDATE_NOTIFICATION_BLOCKLIST blocklist (JSON str)
-      UPDATE_RESTRICTED_VOCABULARY  vocabulary (JSON str)
-      UPDATE_TONE_COMPLIANCE        strict_tone_mode (bool str)
-      LOVENSE_COMMAND               toy_command, toy_level (int str 0–20)
-      PAVLOK_COMMAND                pavlok_cmd, pavlok_intensity (0–255), pavlok_duration_ms
-      TASK_ASSIGNED                 task_id, task_title, task_desc, deadline_ms (epoch ms str)
-      REQUEST_CHECKIN               (no additional fields)
-      RULE_REMINDER                 rule_id (str), rule_text
-      START_REVIEW                  session_id, signaling_url
-
-    Pass ``device_id`` to send the FCM to a specific device only (its FCM token is
-    looked up from the handler_device_status table).  Omit to broadcast to all
+    All field values are strings (FCM data payloads are string-only).
+    Pass ``device_id`` to target a specific device; omit to broadcast to all
     paired devices.
+
+    Field reference by action group:
+      UPDATE_SETTINGS              threshold, strict, blocked_classes, nudenet_enabled
+      UPDATE_NOTIFICATION_BLOCKLIST blocklist (JSON array str)
+      UPDATE_RESTRICTED_VOCABULARY  vocabulary (JSON array str)
+      UPDATE_TONE_COMPLIANCE        strict_tone_mode (bool str)
+      SEND_NOTIFICATION            title, body, channel_id (opt)
+      CLEAR_NOTIFICATIONS          (no fields)
+      NEW_QUESTION                 question_id, question_preview (opt)
+      RULE_REMINDER                rule_id, rule_text
+      REQUEST_CHECKIN              (no fields)
+      TASK_ASSIGNED                task_id, task_title, task_desc (opt), deadline_ms
+      SET_RITUALS                  steps (JSON array str)
+      SET_RITUAL_TIMES             morning_minutes, evening_minutes
+      SET_HONORIFIC                honorific
+      SET_HONORIFIC_ENABLED        enabled (bool str)
+      SET_PTS_ENABLED              enabled (bool str)
+      SET_PTS_APPROVED             packages (JSON array str)
+      APP_PERMISSION_RESPONSE      request_id, granted (bool str)
+      SET_GATING_ENABLED           enabled (bool str)
+      SET_GATING_APPROVED          packages (JSON array str)
+      SET_GEOFENCES                geofences (JSON array str)
+      SET_GEOFENCE_ENABLED         enabled (bool str)
+      SET_AFFIRMATIONS             affirmations (JSON array str)
+      SHOW_AFFIRMATION             text
+      SET_MANTRA_ENABLED           enabled (bool str)
+      SET_MANTRA_INTERVAL          minutes (int str)
+      START_CORNER_TIME            duration_minutes, title (opt)
+      CANCEL_ESCALATION            (no fields)
+      SET_SUB_STATUS               status
+      SET_HANDLER_SYSTEM_PROMPT    prompt
+      SET_HANDLER_API_KEY          api_key
+      SET_HANDLER_ENDPOINT         endpoint
+      SET_HANDLER_MODEL            handler_model (→ FCM key "model")
+      LOVENSE_COMMAND              toy_command, toy_level (0–20 str)
+      SET_LOVENSE_SCHEDULES        schedules (JSON array str)
+      PAVLOK_COMMAND               pavlok_cmd, pavlok_intensity (0–255), pavlok_duration_ms
+      OPEN_APP / FORCE_STOP_APP / DISABLE_APP / ENABLE_APP /
+        CLEAR_APP_CACHE / UNINSTALL_APP / SUSPEND_APP / UNSUSPEND_APP  app_name
+      OPEN_URL                     url
+      SET_BRIGHTNESS               value (0–255 str)
+      SCREEN_ON / SCREEN_OFF       (no fields)
+      SET_SCREEN_TIMEOUT           ms (int str)
+      SHOW_OVERLAY                 title, message, image_url (opt)
+      SET_ORIENTATION              landscape (bool str)
+      SET_ROTATION / SET_AUTO_ROTATE  enabled (bool str)
+      SET_WALLPAPER                url
+      SET_VOLUME                   stream, level (0–100 str), max (bool str, opt)
+      SET_RINGER_MODE              mode (normal/vibrate/silent)
+      PLAY_AUDIO                   url
+      SPEAK_TEXT                   text
+      LOCK_DEVICE / DISMISS_KEYGUARD  (no fields)
+      SET_WIFI / SET_MOBILE_DATA / SET_AIRPLANE_MODE / SET_BLUETOOTH  enabled (bool str)
+      CONNECT_WIFI                 ssid, password (opt)
+      TAKE_SCREENSHOT / GET_LOCATION  (no fields)
+      RECORD_SCREEN                duration_sec (int str)
+      SET_FLASHLIGHT               enabled (bool str)
+      SET_DND                      policy (all/priority/alarms_only/total_silence)
+      SET_ALARM                    title, time_ms (epoch ms str)
+      SET_NFC                      enabled (bool str)
+      SET_FONT_SIZE                scale (float str, e.g. "1.15")
+      START_REVIEW                 session_id, signaling_url
     """
 
     action: str
     device_id: Optional[str] = None  # target a specific device; omit to broadcast
-    # UPDATE_SETTINGS
+
+    # UPDATE_SETTINGS / NudeNet
     threshold: Optional[str] = None
     strict: Optional[str] = None
     blocked_classes: Optional[str] = None
+    nudenet_enabled: Optional[str] = None
+
     # UPDATE_NOTIFICATION_BLOCKLIST
     blocklist: Optional[str] = None
+
     # UPDATE_RESTRICTED_VOCABULARY
     vocabulary: Optional[str] = None
+
     # UPDATE_TONE_COMPLIANCE
     strict_tone_mode: Optional[str] = None
-    # LOVENSE_COMMAND
-    toy_command: Optional[str] = None
-    toy_level: Optional[str] = None
-    # PAVLOK_COMMAND
-    pavlok_cmd: Optional[str] = None
-    pavlok_intensity: Optional[str] = None
-    pavlok_duration_ms: Optional[str] = None
+
+    # SEND_NOTIFICATION
+    title: Optional[str] = None
+    body: Optional[str] = None
+    channel_id: Optional[str] = None
+
+    # SHOW_OVERLAY
+    message: Optional[str] = None
+    image_url: Optional[str] = None
+
+    # NEW_QUESTION
+    question_id: Optional[str] = None
+    question_preview: Optional[str] = None
+
+    # RULE_REMINDER
+    rule_id: Optional[str] = None
+    rule_text: Optional[str] = None
+
     # TASK_ASSIGNED
     task_id: Optional[str] = None
     task_title: Optional[str] = None
     task_desc: Optional[str] = None
     deadline_ms: Optional[str] = None
-    # RULE_REMINDER
-    rule_id: Optional[str] = None
-    rule_text: Optional[str] = None
+
+    # SET_RITUALS
+    steps: Optional[str] = None
+
+    # SET_RITUAL_TIMES
+    morning_minutes: Optional[str] = None
+    evening_minutes: Optional[str] = None
+
+    # SET_HONORIFIC
+    honorific: Optional[str] = None
+
+    # SET_PTS_APPROVED / SET_GATING_APPROVED
+    packages: Optional[str] = None
+
+    # APP_PERMISSION_RESPONSE
+    request_id: Optional[str] = None
+    granted: Optional[str] = None
+
+    # Generic boolean toggle (SET_HONORIFIC_ENABLED, SET_PTS_ENABLED, SET_GATING_ENABLED,
+    # SET_GEOFENCE_ENABLED, SET_MANTRA_ENABLED, SET_WIFI, SET_MOBILE_DATA,
+    # SET_AIRPLANE_MODE, SET_BLUETOOTH, SET_FLASHLIGHT, SET_NFC, SET_ROTATION,
+    # SET_AUTO_ROTATE, VAULT_SET_CHANGE_BLOCK, etc.)
+    enabled: Optional[str] = None
+
+    # SET_GEOFENCES
+    geofences: Optional[str] = None
+
+    # SET_AFFIRMATIONS
+    affirmations: Optional[str] = None
+
+    # SPEAK_TEXT / SHOW_AFFIRMATION
+    text: Optional[str] = None
+
+    # SET_MANTRA_INTERVAL
+    minutes: Optional[str] = None
+
+    # START_CORNER_TIME (duration_minutes also used by VAULT_LOCK_*)
+    duration_minutes: Optional[str] = None
+
+    # SET_SUB_STATUS
+    status: Optional[str] = None
+
+    # SET_HANDLER_SYSTEM_PROMPT
+    prompt: Optional[str] = None
+
+    # SET_HANDLER_API_KEY
+    api_key: Optional[str] = None
+
+    # SET_HANDLER_ENDPOINT
+    endpoint: Optional[str] = None
+
+    # SET_HANDLER_MODEL — named handler_model here to avoid Pydantic v2 reserved-name
+    # collision; serialised as "model" in the FCM data dict.
+    handler_model: Optional[str] = None
+
+    # LOVENSE_COMMAND
+    toy_command: Optional[str] = None
+    toy_level: Optional[str] = None
+
+    # SET_LOVENSE_SCHEDULES
+    schedules: Optional[str] = None
+
+    # PAVLOK_COMMAND
+    pavlok_cmd: Optional[str] = None
+    pavlok_intensity: Optional[str] = None
+    pavlok_duration_ms: Optional[str] = None
+
+    # App management (OPEN_APP, FORCE_STOP_APP, DISABLE_APP, ENABLE_APP,
+    # CLEAR_APP_CACHE, UNINSTALL_APP, SUSPEND_APP, UNSUSPEND_APP)
+    app_name: Optional[str] = None
+
+    # OPEN_URL / PLAY_AUDIO / SET_WALLPAPER
+    url: Optional[str] = None
+
+    # SET_BRIGHTNESS (0–255)
+    value: Optional[str] = None
+
+    # SET_SCREEN_TIMEOUT
+    ms: Optional[str] = None
+
+    # SET_ORIENTATION
+    landscape: Optional[str] = None
+
+    # SET_VOLUME
+    stream: Optional[str] = None
+    level: Optional[str] = None
+    max: Optional[str] = None
+
+    # SET_RINGER_MODE / SET_DND
+    mode: Optional[str] = None
+    policy: Optional[str] = None
+
+    # SET_ALARM
+    time_ms: Optional[str] = None
+
+    # RECORD_SCREEN
+    duration_sec: Optional[str] = None
+
+    # CONNECT_WIFI
+    ssid: Optional[str] = None
+    password: Optional[str] = None
+
+    # SET_FONT_SIZE
+    scale: Optional[str] = None
+
     # START_REVIEW
     session_id: Optional[str] = None
     signaling_url: Optional[str] = None
 
 
 _VALID_TPE_ACTIONS = {
+    # Content filter / NudeNet
     "UPDATE_SETTINGS",
+    # Notifications & messaging
     "UPDATE_NOTIFICATION_BLOCKLIST",
+    "SEND_NOTIFICATION",
+    "CLEAR_NOTIFICATIONS",
+    "NEW_QUESTION",
+    "RULE_REMINDER",
+    # Tone & vocabulary
     "UPDATE_RESTRICTED_VOCABULARY",
     "UPDATE_TONE_COMPLIANCE",
-    "LOVENSE_COMMAND",
-    "PAVLOK_COMMAND",
+    # Tasks
     "TASK_ASSIGNED",
+    # Check-in & review
     "REQUEST_CHECKIN",
-    "RULE_REMINDER",
     "START_REVIEW",
-    "NEW_QUESTION",
+    # Rituals
+    "SET_RITUALS",
+    "SET_RITUAL_TIMES",
+    # Honorifics
+    "SET_HONORIFIC",
+    "SET_HONORIFIC_ENABLED",
+    # Permission to Speak
+    "SET_PTS_ENABLED",
+    "SET_PTS_APPROVED",
+    # App gating / geofencing
+    "APP_PERMISSION_RESPONSE",
+    "SET_GATING_ENABLED",
+    "SET_GATING_APPROVED",
+    "SET_GEOFENCES",
+    "SET_GEOFENCE_ENABLED",
+    # Affirmations & mantras
+    "SET_AFFIRMATIONS",
+    "SHOW_AFFIRMATION",
+    "SET_MANTRA_ENABLED",
+    "SET_MANTRA_INTERVAL",
+    # Consequences
+    "START_CORNER_TIME",
+    "CANCEL_ESCALATION",
+    # Sub status
+    "SET_SUB_STATUS",
+    # Handler / AI chat settings
+    "SET_HANDLER_SYSTEM_PROMPT",
+    "SET_HANDLER_API_KEY",
+    "SET_HANDLER_ENDPOINT",
+    "SET_HANDLER_MODEL",
+    # Lovense toy control
+    "LOVENSE_COMMAND",
+    "SET_LOVENSE_SCHEDULES",
+    # Pavlok control
+    "PAVLOK_COMMAND",
+    # App management
+    "OPEN_APP",
+    "FORCE_STOP_APP",
+    "DISABLE_APP",
+    "ENABLE_APP",
+    "CLEAR_APP_CACHE",
+    "UNINSTALL_APP",
+    "SUSPEND_APP",
+    "UNSUSPEND_APP",
+    # Screen & display
+    "OPEN_URL",
+    "SET_BRIGHTNESS",
+    "SCREEN_ON",
+    "SCREEN_OFF",
+    "SET_SCREEN_TIMEOUT",
+    "SHOW_OVERLAY",
+    "SET_ORIENTATION",
+    "SET_ROTATION",
+    "SET_AUTO_ROTATE",
+    "SET_WALLPAPER",
+    # Audio & sound
+    "SET_VOLUME",
+    "SET_RINGER_MODE",
+    "PLAY_AUDIO",
+    "SPEAK_TEXT",
+    # Lock screen & access
+    "LOCK_DEVICE",
+    "DISMISS_KEYGUARD",
+    # Network & connectivity
+    "SET_WIFI",
+    "SET_MOBILE_DATA",
+    "SET_AIRPLANE_MODE",
+    "SET_BLUETOOTH",
+    "CONNECT_WIFI",
+    # Camera & sensors
+    "TAKE_SCREENSHOT",
+    "RECORD_SCREEN",
+    "SET_FLASHLIGHT",
+    "GET_LOCATION",
+    # Device settings
+    "SET_DND",
+    "SET_ALARM",
+    "SET_NFC",
+    "SET_FONT_SIZE",
 }
 
 
@@ -747,25 +999,107 @@ def tpe_push_settings(
     data: dict[str, str] = {"action": body.action}
 
     field_map = {
-        "threshold":        body.threshold,
-        "strict":           body.strict,
-        "blocked_classes":  body.blocked_classes,
-        "blocklist":        body.blocklist,
-        "vocabulary":       body.vocabulary,
-        "strict_tone_mode": body.strict_tone_mode,
-        "toy_command":      body.toy_command,
-        "toy_level":        body.toy_level,
-        "pavlok_cmd":       body.pavlok_cmd,
-        "pavlok_intensity": body.pavlok_intensity,
+        # UPDATE_SETTINGS / NudeNet
+        "threshold":          body.threshold,
+        "strict":             body.strict,
+        "blocked_classes":    body.blocked_classes,
+        "nudenet_enabled":    body.nudenet_enabled,
+        # UPDATE_NOTIFICATION_BLOCKLIST
+        "blocklist":          body.blocklist,
+        # UPDATE_RESTRICTED_VOCABULARY
+        "vocabulary":         body.vocabulary,
+        # UPDATE_TONE_COMPLIANCE
+        "strict_tone_mode":   body.strict_tone_mode,
+        # SEND_NOTIFICATION
+        "title":              body.title,
+        "body":               body.body,
+        "channel_id":         body.channel_id,
+        # SHOW_OVERLAY
+        "message":            body.message,
+        "image_url":          body.image_url,
+        # NEW_QUESTION
+        "question_id":        body.question_id,
+        "question_preview":   body.question_preview,
+        # RULE_REMINDER
+        "rule_id":            body.rule_id,
+        "rule_text":          body.rule_text,
+        # TASK_ASSIGNED
+        "task_id":            body.task_id,
+        "task_title":         body.task_title,
+        "task_desc":          body.task_desc,
+        "deadline_ms":        body.deadline_ms,
+        # SET_RITUALS
+        "steps":              body.steps,
+        # SET_RITUAL_TIMES
+        "morning_minutes":    body.morning_minutes,
+        "evening_minutes":    body.evening_minutes,
+        # SET_HONORIFIC
+        "honorific":          body.honorific,
+        # SET_PTS_APPROVED / SET_GATING_APPROVED
+        "packages":           body.packages,
+        # APP_PERMISSION_RESPONSE
+        "request_id":         body.request_id,
+        "granted":            body.granted,
+        # Generic boolean toggle
+        "enabled":            body.enabled,
+        # SET_GEOFENCES
+        "geofences":          body.geofences,
+        # SET_AFFIRMATIONS
+        "affirmations":       body.affirmations,
+        # SPEAK_TEXT / SHOW_AFFIRMATION
+        "text":               body.text,
+        # SET_MANTRA_INTERVAL
+        "minutes":            body.minutes,
+        # START_CORNER_TIME / VAULT_LOCK_*
+        "duration_minutes":   body.duration_minutes,
+        # SET_SUB_STATUS
+        "status":             body.status,
+        # SET_HANDLER_SYSTEM_PROMPT
+        "prompt":             body.prompt,
+        # SET_HANDLER_API_KEY
+        "api_key":            body.api_key,
+        # SET_HANDLER_ENDPOINT
+        "endpoint":           body.endpoint,
+        # SET_HANDLER_MODEL — handler_model maps to FCM key "model"
+        "model":              body.handler_model,
+        # LOVENSE_COMMAND
+        "toy_command":        body.toy_command,
+        "toy_level":          body.toy_level,
+        # SET_LOVENSE_SCHEDULES
+        "schedules":          body.schedules,
+        # PAVLOK_COMMAND
+        "pavlok_cmd":         body.pavlok_cmd,
+        "pavlok_intensity":   body.pavlok_intensity,
         "pavlok_duration_ms": body.pavlok_duration_ms,
-        "task_id":          body.task_id,
-        "task_title":       body.task_title,
-        "task_desc":        body.task_desc,
-        "deadline_ms":      body.deadline_ms,
-        "rule_id":          body.rule_id,
-        "rule_text":        body.rule_text,
-        "session_id":       body.session_id,
-        "signaling_url":    body.signaling_url,
+        # App management
+        "app_name":           body.app_name,
+        # OPEN_URL / PLAY_AUDIO / SET_WALLPAPER
+        "url":                body.url,
+        # SET_BRIGHTNESS
+        "value":              body.value,
+        # SET_SCREEN_TIMEOUT
+        "ms":                 body.ms,
+        # SET_ORIENTATION
+        "landscape":          body.landscape,
+        # SET_VOLUME
+        "stream":             body.stream,
+        "level":              body.level,
+        "max":                body.max,
+        # SET_RINGER_MODE / SET_DND
+        "mode":               body.mode,
+        "policy":             body.policy,
+        # SET_ALARM
+        "time_ms":            body.time_ms,
+        # RECORD_SCREEN
+        "duration_sec":       body.duration_sec,
+        # CONNECT_WIFI
+        "ssid":               body.ssid,
+        "password":           body.password,
+        # SET_FONT_SIZE
+        "scale":              body.scale,
+        # START_REVIEW
+        "session_id":         body.session_id,
+        "signaling_url":      body.signaling_url,
     }
     for field, val in field_map.items():
         if val is not None:
