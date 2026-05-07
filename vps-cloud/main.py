@@ -33,8 +33,11 @@ from dependencies import (
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
     SECRET_KEY,
+    ROLE_ACCESS_LEVEL,
     create_access_token,
     get_current_user,
+    get_optional_user,
+    require_role,
     role_required,
 )
 from routers.interactive import router as interactive_router
@@ -218,7 +221,8 @@ def init_db() -> None:
             id            TEXT    PRIMARY KEY,
             username      TEXT    NOT NULL UNIQUE,
             password_hash TEXT    NOT NULL DEFAULT '',
-            access_level  INTEGER NOT NULL DEFAULT 0
+            access_level  INTEGER NOT NULL DEFAULT 0,
+            role          TEXT    NOT NULL DEFAULT 'user'
         )
         """
     )
@@ -814,7 +818,7 @@ def auth_register(body: _RegisterRequest, db: sqlite3.Connection = Depends(get_d
     user_id = secrets.token_hex(16)
     pw_hash = _hash_password(body.password)
     db.execute(
-        "INSERT INTO users (id, username, password_hash, access_level) VALUES (?, ?, ?, 0)",
+        "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, 0, 'user')",
         (user_id, username_lower, pw_hash),
     )
     db.commit()
@@ -888,7 +892,7 @@ async def auth_login(
     access_level: int = row["access_level"]
     # Fallback handles any existing row where role was NULL before the migration
     # added the column (SQLite ignores NOT NULL on ALTER TABLE ADD COLUMN).
-    role: str = row["role"] or "handler"
+    role: str = row["role"] or "user"
 
     # Refresh access_level from Discord guild roles if the account is linked.
     discord_row = db.execute(
@@ -928,8 +932,16 @@ def get_my_cameras(
     current_user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Return cameras the authenticated user is permitted to view."""
-    access_level: int = current_user["access_level"]
+    """Return cameras the authenticated user is permitted to view.
+
+    Access is derived from the user's role via the RBAC hierarchy:
+      user       → minimum_access_level 1 (SFW streams)
+      paid_user  → minimum_access_level 2 (SFW + NSFW streams)
+      handler / admin → minimum_access_level 3 (all streams)
+    """
+    role: str = current_user.get("role", "user")
+    # Derive the effective camera access tier from the user's role.
+    effective_level: int = ROLE_ACCESS_LEVEL.get(role, 1)
     user_id: str = current_user["user_id"]
 
     rows = db.execute(
@@ -939,12 +951,12 @@ def get_my_cameras(
             WHERE minimum_access_level <= ?
             ORDER BY minimum_access_level, id
             """,
-            (access_level,),
+            (effective_level,),
         ).fetchall()
 
     db.execute(
         "INSERT INTO camera_service_logs (user_id, access_level, camera_count, accessed_at) VALUES (?, ?, ?, ?)",
-        (user_id, access_level, len(rows), datetime.now(timezone.utc).isoformat()),
+        (user_id, effective_level, len(rows), datetime.now(timezone.utc).isoformat()),
     )
     db.commit()
 
@@ -960,12 +972,17 @@ async def proxy_webrtc(
     current_user: dict = Depends(get_current_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Proxy the WebRTC SDP exchange to go2rtc, enforcing stream-level access control."""
-    access_level: int = current_user["access_level"]
+    """Proxy the WebRTC SDP exchange to go2rtc, enforcing stream-level access control.
+
+    The user's role is mapped to an effective camera access tier via the RBAC
+    hierarchy before checking stream eligibility.
+    """
+    role: str = current_user.get("role", "user")
+    effective_level: int = ROLE_ACCESS_LEVEL.get(role, 1)
 
     row = db.execute(
         "SELECT id FROM cameras WHERE stream_slug = ? AND minimum_access_level <= ?",
-        (src, access_level),
+        (src, effective_level),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=403, detail="Access denied to this stream")
@@ -2428,3 +2445,106 @@ async def chat_ws(websocket: WebSocket, token: str = ""):
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+
+# ---------------------------------------------------------------------------
+# RBAC example endpoint shells
+#
+# These skeleton endpoints illustrate how to apply the unified RBAC
+# dependency injection functions to each access tier.  They are intentionally
+# minimal – replace the pass/return bodies with real business logic.
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/api/examples/public",
+    tags=["rbac-examples"],
+    summary="Public endpoint (no authentication required)",
+)
+def example_public_endpoint(
+    current_user: Optional[dict] = Depends(get_optional_user),
+):
+    """Open to all visitors.  Optionally enriches the response for logged-in users.
+
+    Use ``get_optional_user`` (returns ``None`` for unauthenticated requests)
+    so the endpoint is accessible without a JWT while still being able to
+    personalise the response when a valid token is present.
+
+    Suitable for: store listings, drool log, Q&A, public link pages.
+    """
+    if current_user:
+        return {"public": True, "user_id": current_user["user_id"]}
+    return {"public": True, "user_id": None}
+
+
+@app.get(
+    "/api/examples/sfw-stream",
+    tags=["rbac-examples"],
+    summary="SFW live stream endpoint (role: user or above)",
+)
+def example_sfw_stream_endpoint(
+    current_user: dict = Depends(require_role(["user"])),
+):
+    """Requires at least the 'user' role.
+
+    ``require_role(["user"])`` passes any authenticated user whose role is
+    'user', 'paid_user', 'handler', or 'admin' (hierarchy-aware).
+
+    Suitable for: SFW camera stream access, basic member content.
+    """
+    return {"stream": "sfw", "user_id": current_user["user_id"], "role": current_user["role"]}
+
+
+@app.get(
+    "/api/examples/nsfw-stream",
+    tags=["rbac-examples"],
+    summary="NSFW live stream / VOD endpoint (role: paid_user or above)",
+)
+def example_nsfw_stream_endpoint(
+    current_user: dict = Depends(require_role(["paid_user"])),
+):
+    """Requires at least the 'paid_user' role.
+
+    ``require_role(["paid_user"])`` passes 'paid_user', 'handler', and 'admin'.
+    Plain 'user' accounts receive 403 Forbidden.
+
+    Suitable for: NSFW camera streams, uploaded VOD content.
+    """
+    return {"stream": "nsfw", "user_id": current_user["user_id"], "role": current_user["role"]}
+
+
+@app.post(
+    "/api/examples/handler-control",
+    tags=["rbac-examples"],
+    summary="Device control endpoint (role: handler or above)",
+)
+def example_handler_control_endpoint(
+    current_user: dict = Depends(require_role(["handler"])),
+):
+    """Requires at least the 'handler' role.
+
+    ``require_role(["handler"])`` passes 'handler' and 'admin'.
+    'user' and 'paid_user' accounts receive 403 Forbidden.
+
+    Suitable for: tpeapp hardware control, device lock/unlock, flagging
+    streams as public for specific user/paid_user accounts.
+    """
+    return {"action": "control", "user_id": current_user["user_id"], "role": current_user["role"]}
+
+
+@app.delete(
+    "/api/examples/admin-only",
+    tags=["rbac-examples"],
+    summary="Admin-only endpoint (role: admin)",
+)
+def example_admin_only_endpoint(
+    current_user: dict = Depends(require_role(["admin"])),
+):
+    """Requires the 'admin' role.
+
+    ``require_role(["admin"])`` passes only 'admin' users.
+    All other roles receive 403 Forbidden.
+
+    Suitable for: user management, system configuration, unrestricted access.
+    """
+    return {"action": "admin", "user_id": current_user["user_id"]}
