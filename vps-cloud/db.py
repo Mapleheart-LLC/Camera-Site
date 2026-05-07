@@ -8,6 +8,7 @@ factory without creating circular imports.
 
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -16,6 +17,14 @@ _BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
 DATABASE_PATH: str = os.environ.get(
     "DATABASE_PATH", os.path.join(_BASE_DIR, "camera_site.db")
 )
+
+_USER_ACCOUNT_COLUMNS = {
+    "username": "TEXT NOT NULL DEFAULT ''",
+    "password_hash": "TEXT NOT NULL DEFAULT ''",
+    "role": "TEXT NOT NULL DEFAULT 'handler'",
+}
+_VALIDATED_USER_SCHEMA_PATHS: set[str] = set()
+_USER_SCHEMA_LOCK = threading.Lock()
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -35,6 +44,14 @@ def get_db():
 
 def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
     """Backfill legacy ``users`` columns needed by auth and admin user management."""
+    db_row = conn.execute("PRAGMA database_list").fetchone()
+    db_path = (
+        db_row["file"] if isinstance(db_row, sqlite3.Row) else db_row[2]
+    ) if db_row else ""
+    with _USER_SCHEMA_LOCK:
+        if db_path and db_path in _VALIDATED_USER_SCHEMA_PATHS:
+            return
+
     rows = conn.execute("PRAGMA table_info(users)").fetchall()
     if not rows:
         return
@@ -45,11 +62,7 @@ def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
     }
     changed = False
 
-    for column_name, column_def in [
-        ("username", "TEXT NOT NULL DEFAULT ''"),
-        ("password_hash", "TEXT NOT NULL DEFAULT ''"),
-        ("role", "TEXT NOT NULL DEFAULT 'handler'"),
-    ]:
+    for column_name, column_def in _USER_ACCOUNT_COLUMNS.items():
         if column_name in existing_columns:
             continue
         conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
@@ -57,6 +70,9 @@ def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
 
     if changed:
         conn.commit()
+    with _USER_SCHEMA_LOCK:
+        if db_path:
+            _VALIDATED_USER_SCHEMA_PATHS.add(db_path)
 
 
 def get_setting(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
