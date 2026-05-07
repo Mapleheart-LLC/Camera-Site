@@ -40,7 +40,14 @@ from pydantic import BaseModel
 import jwt as _jwt
 from db import get_db, get_db_connection
 from dependencies import SECRET_KEY, ALGORITHM, role_required
-from routers.tpe import _effective_webhook_secret, _send_fcm_to_token
+from routers.tpe import (
+    _effective_webhook_secret,
+    _send_fcm_to_token,
+    _send_fcm_to_all,
+    TpePushRequest,
+    _VALID_TPE_ACTIONS,
+    _build_tpe_payload,
+)
 from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
@@ -412,6 +419,108 @@ def handler_delete_assignment(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Assignment not found.")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Handler-level TPE (FCM) endpoints
+# Mirrors a subset of /api/admin/tpe/* but secured with JWT Bearer auth so
+# that handler-role users ("guest controllers") can use the handler panel.
+# ---------------------------------------------------------------------------
+
+
+class _CheckinRequestBody(BaseModel):
+    device_id: Optional[str] = None
+
+
+@router.post("/api/handler/tpe/push")
+def handler_tpe_push(
+    body: TpePushRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Push an FCM command to a specific device via JWT-authenticated handler panel.
+
+    Handlers may only push to devices they are assigned to.
+    Admins may push to any device.  A ``device_id`` is always required.
+    """
+    if body.action not in _VALID_TPE_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown action '{body.action}'.",
+        )
+    if not body.device_id:
+        raise HTTPException(status_code=400, detail="device_id is required.")
+
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if body.device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
+    row = db.execute(
+        "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
+        (body.device_id,),
+    ).fetchone()
+    if not row or not row["fcm_token"]:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No FCM token found for device_id '{body.device_id}'.",
+        )
+    return _send_fcm_to_token(db, row["fcm_token"], _build_tpe_payload(body))
+
+
+@router.post("/api/handler/tpe/checkins/request")
+def handler_tpe_checkins_request(
+    body: _CheckinRequestBody,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Push a REQUEST_CHECKIN FCM to a device via JWT-authenticated handler panel."""
+    if body.device_id:
+        if current_user["role"] != "admin":
+            assigned = _handler_allowed_devices(db, current_user["user_id"])
+            if body.device_id not in assigned:
+                raise HTTPException(status_code=403, detail="Access denied to this device.")
+        row = db.execute(
+            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
+            (body.device_id,),
+        ).fetchone()
+        if not row or not row["fcm_token"]:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No FCM token found for device_id '{body.device_id}'.",
+            )
+        return _send_fcm_to_token(db, row["fcm_token"], {"action": "REQUEST_CHECKIN"})
+    return _send_fcm_to_all(db, {"action": "REQUEST_CHECKIN"})
+
+
+@router.get("/api/handler/tpe/events")
+def handler_tpe_events(
+    limit: int = 100,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """List the most recent TPE device events (JWT-authenticated handler panel)."""
+    rows = db.execute(
+        "SELECT id, event, reason, session_ts, payload_json, received_at "
+        "FROM tpe_events ORDER BY id DESC LIMIT ?",
+        (min(limit, 500),),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/handler/tpe/audits")
+def handler_tpe_audits(
+    limit: int = 50,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """List the most recent adherence audit records (JWT-authenticated handler panel)."""
+    rows = db.execute(
+        "SELECT id, detection_ratio, last_label, last_score, session_ts, video_filename, received_at "
+        "FROM tpe_audit_logs ORDER BY id DESC LIMIT ?",
+        (min(limit, 200),),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------

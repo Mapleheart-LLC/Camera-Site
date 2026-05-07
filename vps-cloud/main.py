@@ -23,6 +23,8 @@ from pydantic import BaseModel, Field
 from db import DATABASE_PATH, get_db, get_db_connection, get_setting, set_setting
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD,
     SECRET_KEY,
     create_access_token,
     get_current_user,
@@ -57,6 +59,10 @@ from slowapi import _rate_limit_exceeded_handler
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 GO2RTC_TIMEOUT: float = 15.0
+
+# Pre-compute the lowercased admin username once at startup so the auth-login
+# fallback comparison uses a fixed-length string with no runtime .lower() call.
+_ADMIN_USERNAME_LOWER: str = ADMIN_USERNAME.lower()
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -858,6 +864,24 @@ async def auth_login(
     password_ok = _verify_password(body.password, stored_hash)
 
     if not row or not password_ok:
+        # Fallback: allow the HTTP-Basic admin env-var credentials to also log
+        # in via this endpoint so the admin user can access the handler panel
+        # with the same username/password used for admin.html.
+        if ADMIN_USERNAME and ADMIN_PASSWORD:
+            _username_match = secrets.compare_digest(
+                username_lower.encode(),
+                _ADMIN_USERNAME_LOWER.encode(),
+            )
+            _password_match = secrets.compare_digest(
+                body.password.encode(),
+                ADMIN_PASSWORD.encode(),
+            )
+            if _username_match and _password_match:
+                admin_token = create_access_token(
+                    {"sub": "admin", "access_level": 3, "role": "admin"},
+                    expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+                )
+                return {"access_token": admin_token, "token_type": "bearer", "role": "admin"}
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",

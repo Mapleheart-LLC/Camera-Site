@@ -386,6 +386,61 @@
       color: #5a3a3e; font-size: .9rem; font-weight: 700;
     }
 
+    /* ── Commands section ─────────────────────────────── */
+    .cmd-group {
+      background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
+      margin-bottom: .85rem; overflow: hidden;
+    }
+    .cmd-group summary {
+      font-size: .82rem; font-weight: 800; color: #e8aeb7;
+      text-transform: uppercase; letter-spacing: .06em;
+      padding: .7rem 1.1rem; cursor: pointer;
+      background: #242424; border-bottom: 1px solid #3d2a2e;
+      list-style: none; display: flex; align-items: center; gap: .5rem;
+      user-select: none;
+    }
+    .cmd-group summary::-webkit-details-marker { display: none; }
+    .cmd-group summary::after { content: '▼'; margin-left: auto; font-size: .65rem; color: #5a3a3e; }
+    .cmd-group[open] summary::after { content: '▲'; }
+    .cmd-group[open] summary { border-bottom-color: #3d2a2e; }
+    .cmd-group-body { padding: .6rem 1.1rem; }
+    .cmd-row {
+      display: flex; align-items: flex-start; gap: .55rem; flex-wrap: wrap;
+      padding: .5rem 0; border-bottom: 1px solid #2a1e20;
+    }
+    .cmd-row:last-child { border-bottom: none; }
+    .cmd-row-label {
+      font-size: .72rem; font-weight: 800; color: #9e7e82;
+      text-transform: uppercase; letter-spacing: .04em;
+      min-width: 175px; flex-shrink: 0; padding-top: .3rem;
+    }
+    .cmd-inputs { display: flex; gap: .35rem; flex-wrap: wrap; flex: 1; align-items: center; }
+    .cmd-inputs input, .cmd-inputs select {
+      background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 6px;
+      color: #f0e6e8; font-family: inherit; font-size: .82rem; padding: .3rem .55rem;
+      outline: none; transition: border-color .2s; min-width: 70px; flex: 1;
+    }
+    .cmd-inputs input:focus, .cmd-inputs select:focus { border-color: #e8aeb7; }
+    .cmd-inputs textarea {
+      background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 6px;
+      color: #f0e6e8; font-family: monospace; font-size: .78rem; padding: .35rem .55rem;
+      outline: none; resize: vertical; min-height: 52px; width: 100%;
+      transition: border-color .2s;
+    }
+    .cmd-inputs textarea:focus { border-color: #e8aeb7; }
+    .btn-cmd {
+      padding: .3rem .75rem; border-radius: 6px;
+      font-family: inherit; font-size: .78rem; font-weight: 700;
+      cursor: pointer; transition: background .15s, color .15s, transform .1s;
+      border: 1px solid #e8aeb7; background: #3d2028; color: #e8aeb7;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-cmd:hover { background: #e8aeb7; color: #1a1a1a; }
+    .btn-cmd:active { transform: scale(.96); }
+    .btn-cmd.danger { border-color: #f87171; background: rgba(248,113,113,.1); color: #f87171; }
+    .btn-cmd.danger:hover { background: #f87171; color: #1a1a1a; }
+    .cmd-result { font-size: .72rem; color: #9e7e82; min-width: 60px; flex-shrink: 0; padding-top: .3rem; }
+
     /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
       #kennel-overview { padding: 1rem; }
@@ -498,6 +553,7 @@
           <button class="nav-item" data-target="sec-vitals">💓 Vitals</button>
           <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
           <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
+          <button class="nav-item" data-target="sec-commands">📡 Commands</button>
           <button class="nav-item" data-target="sec-logs">📜 Logs</button>
           <button class="nav-item" data-target="sec-screenshare">📺 Screen Share</button>
         </aside>
@@ -671,6 +727,699 @@
             </div>
           </section>
 
+          <!-- ═══════════════ REMOTE COMMANDS ═══════════════ -->
+          <section id="sec-commands" class="handler-section">
+            <h2 class="section-heading">📡 Remote Commands</h2>
+
+            <!-- ── Notifications & Messaging ── -->
+            <details class="cmd-group" open>
+              <summary>📣 Notifications &amp; Messaging</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Send Notification</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-notif-title" placeholder="Title" />
+                    <input id="cmd-notif-body" placeholder="Body text" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SEND_NOTIFICATION',{title:v('cmd-notif-title'),body:v('cmd-notif-body')},'res-cmd-notif')">Send</button>
+                  <span class="cmd-result" id="res-cmd-notif"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Clear Notifications</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('CLEAR_NOTIFICATIONS',{},'res-cmd-clear-notif')">Send</button>
+                  <span class="cmd-result" id="res-cmd-clear-notif"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">New Question (Puppy Pouch)</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-nq-id" placeholder="Question ID" />
+                    <input id="cmd-nq-preview" placeholder="Preview text (opt)" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('NEW_QUESTION',{question_id:v('cmd-nq-id'),question_preview:v('cmd-nq-preview')},'res-cmd-nq')">Send</button>
+                  <span class="cmd-result" id="res-cmd-nq"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Rule Reminder</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-rule-id" placeholder="Rule ID" />
+                    <input id="cmd-rule-text" placeholder="Rule text" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('RULE_REMINDER',{rule_id:v('cmd-rule-id'),rule_text:v('cmd-rule-text')},'res-cmd-rule')">Send</button>
+                  <span class="cmd-result" id="res-cmd-rule"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Request Check-in</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('REQUEST_CHECKIN',{},'res-cmd-checkin2')">Send</button>
+                  <span class="cmd-result" id="res-cmd-checkin2"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Content Filter / NudeNet ── -->
+            <details class="cmd-group">
+              <summary>🔍 Content Filter / NudeNet</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Update Settings</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" />
+                    <select id="cmd-cf-strict"><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
+                    <select id="cmd-cf-nudenet"><option value="">nudenet?</option><option value="true">nudenet: on</option><option value="false">nudenet: off</option></select>
+                    <textarea id="cmd-cf-classes" placeholder='blocked_classes JSON e.g. ["EXPOSED_BREAST_F"]' style="min-height:40px"></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_SETTINGS',{threshold:v('cmd-cf-thresh'),strict:v('cmd-cf-strict'),nudenet_enabled:v('cmd-cf-nudenet'),blocked_classes:v('cmd-cf-classes')},'res-cmd-cf')">Send</button>
+                  <span class="cmd-result" id="res-cmd-cf"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Tone & Vocabulary ── -->
+            <details class="cmd-group">
+              <summary>🗣️ Tone &amp; Vocabulary Enforcement</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Tone Compliance</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-tone"><option value="true">Enable strict mode</option><option value="false">Disable strict mode</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_TONE_COMPLIANCE',{strict_tone_mode:v('cmd-tone')},'res-cmd-tone')">Send</button>
+                  <span class="cmd-result" id="res-cmd-tone"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Restricted Vocabulary</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-vocab" placeholder='JSON array e.g. ["word1","word2"]' style="min-height:40px"></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_RESTRICTED_VOCABULARY',{vocabulary:v('cmd-vocab')},'res-cmd-vocab')">Send</button>
+                  <span class="cmd-result" id="res-cmd-vocab"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Notification Blocklist</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-blocklist" placeholder='JSON array e.g. ["keyword1","keyword2"]' style="min-height:40px"></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_NOTIFICATION_BLOCKLIST',{blocklist:v('cmd-blocklist')},'res-cmd-blocklist')">Send</button>
+                  <span class="cmd-result" id="res-cmd-blocklist"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Tasks ── -->
+            <details class="cmd-group">
+              <summary>📋 Tasks</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Assign Task</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-task-title" placeholder="Title" />
+                    <textarea id="cmd-task-desc" placeholder="Description (opt)" style="min-height:40px"></textarea>
+                    <input id="cmd-task-deadline" type="datetime-local" title="Deadline" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('TASK_ASSIGNED',{task_id:String(Date.now()),task_title:v('cmd-task-title'),task_desc:v('cmd-task-desc'),deadline_ms:dateToMs('cmd-task-deadline')},'res-cmd-task')">Send</button>
+                  <span class="cmd-result" id="res-cmd-task"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Rituals ── -->
+            <details class="cmd-group">
+              <summary>🌹 Rituals</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Rituals</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-rituals-steps" placeholder='JSON array of steps e.g. [{"id":"1","title":"Wake up","description":"","requiresPhoto":false}]'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_RITUALS',{steps:v('cmd-rituals-steps')},'res-cmd-rituals')">Send</button>
+                  <span class="cmd-result" id="res-cmd-rituals"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Ritual Times</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-ritual-morning" type="number" placeholder="Morning (min from midnight)" min="0" max="1439" />
+                    <input id="cmd-ritual-evening" type="number" placeholder="Evening (min from midnight)" min="0" max="1439" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_RITUAL_TIMES',{morning_minutes:v('cmd-ritual-morning'),evening_minutes:v('cmd-ritual-evening')},'res-cmd-ritual-times')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ritual-times"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Honorifics ── -->
+            <details class="cmd-group">
+              <summary>🏷️ Honorifics</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Honorific</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-honorific" placeholder="e.g. Sir, Master, Ma'am" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HONORIFIC',{honorific:v('cmd-honorific')},'res-cmd-honorific')">Send</button>
+                  <span class="cmd-result" id="res-cmd-honorific"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Honorific Enforcement</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-honorific-enabled"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HONORIFIC_ENABLED',{enabled:v('cmd-honorific-enabled')},'res-cmd-honorific-en')">Send</button>
+                  <span class="cmd-result" id="res-cmd-honorific-en"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Permission to Speak ── -->
+            <details class="cmd-group">
+              <summary>🗣️ Permission to Speak (PTS)</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">PTS Enabled</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-pts-enabled"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_PTS_ENABLED',{enabled:v('cmd-pts-enabled')},'res-cmd-pts-en')">Send</button>
+                  <span class="cmd-result" id="res-cmd-pts-en"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">PTS Approved Contacts</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-pts-packages" placeholder='JSON array of contact package names'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_PTS_APPROVED',{packages:v('cmd-pts-packages')},'res-cmd-pts-pkgs')">Send</button>
+                  <span class="cmd-result" id="res-cmd-pts-pkgs"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── App Gating / Geofencing ── -->
+            <details class="cmd-group">
+              <summary>🚧 App Gating / Geofencing</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">App Gating Enabled</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-gating-enabled"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GATING_ENABLED',{enabled:v('cmd-gating-enabled')},'res-cmd-gating-en')">Send</button>
+                  <span class="cmd-result" id="res-cmd-gating-en"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Gating Approved Apps</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-gating-pkgs" placeholder='JSON array of package names e.g. ["com.example.app"]'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GATING_APPROVED',{packages:v('cmd-gating-pkgs')},'res-cmd-gating-pkgs')">Send</button>
+                  <span class="cmd-result" id="res-cmd-gating-pkgs"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">App Permission Response</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-perm-rid" placeholder="Request ID" />
+                    <select id="cmd-perm-granted"><option value="true">Grant</option><option value="false">Deny</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('APP_PERMISSION_RESPONSE',{request_id:v('cmd-perm-rid'),granted:v('cmd-perm-granted')},'res-cmd-perm')">Send</button>
+                  <span class="cmd-result" id="res-cmd-perm"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Geofences</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-geofences" placeholder='JSON array e.g. [{"id":"home","name":"Home","latitude":0.0,"longitude":0.0,"radius_meters":100}]'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GEOFENCES',{geofences:v('cmd-geofences')},'res-cmd-geofences')">Send</button>
+                  <span class="cmd-result" id="res-cmd-geofences"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Geofence Monitoring</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-geo-enabled"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GEOFENCE_ENABLED',{enabled:v('cmd-geo-enabled')},'res-cmd-geo-en')">Send</button>
+                  <span class="cmd-result" id="res-cmd-geo-en"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Affirmations & Mantras ── -->
+            <details class="cmd-group">
+              <summary>⏰ Affirmations &amp; Mantras</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Affirmations</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-affirmations" placeholder='JSON array e.g. [{"id":"1","text":"I am obedient"}]'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_AFFIRMATIONS',{affirmations:v('cmd-affirmations')},'res-cmd-affirmations')">Send</button>
+                  <span class="cmd-result" id="res-cmd-affirmations"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Show Affirmation</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-show-affirmation" placeholder="Affirmation text" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SHOW_AFFIRMATION',{text:v('cmd-show-affirmation')},'res-cmd-show-affirmation')">Send</button>
+                  <span class="cmd-result" id="res-cmd-show-affirmation"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Mantra Prompts</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-mantra-enabled"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_MANTRA_ENABLED',{enabled:v('cmd-mantra-enabled')},'res-cmd-mantra-en')">Send</button>
+                  <span class="cmd-result" id="res-cmd-mantra-en"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Mantra Interval</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-mantra-mins" type="number" placeholder="Minutes between prompts" min="1" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_MANTRA_INTERVAL',{minutes:v('cmd-mantra-mins')},'res-cmd-mantra-int')">Send</button>
+                  <span class="cmd-result" id="res-cmd-mantra-int"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Consequences ── -->
+            <details class="cmd-group">
+              <summary>⚖️ Consequences</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Start Corner Time</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-corner-dur" type="number" placeholder="Duration (minutes)" min="1" style="max-width:170px" />
+                    <input id="cmd-corner-title" placeholder="Title (opt)" />
+                  </div>
+                  <button class="btn-cmd danger" onclick="sendFcm('START_CORNER_TIME',{duration_minutes:v('cmd-corner-dur'),title:v('cmd-corner-title')},'res-cmd-corner')">Send</button>
+                  <span class="cmd-result" id="res-cmd-corner"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Cancel Escalation</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('CANCEL_ESCALATION',{},'res-cmd-escalation')">Send</button>
+                  <span class="cmd-result" id="res-cmd-escalation"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Sub Status ── -->
+            <details class="cmd-group">
+              <summary>🔵 Sub Status</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Sub Status</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-sub-status" placeholder="Status string" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_SUB_STATUS',{status:v('cmd-sub-status')},'res-cmd-sub-status')">Send</button>
+                  <span class="cmd-result" id="res-cmd-sub-status"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Handler / AI Settings ── -->
+            <details class="cmd-group">
+              <summary>🤖 Handler / AI Chat Settings</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">System Prompt</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-ai-prompt" placeholder="LLM system prompt"></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HANDLER_SYSTEM_PROMPT',{prompt:v('cmd-ai-prompt')},'res-cmd-ai-prompt')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ai-prompt"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">API Key</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-ai-key" type="password" placeholder="LLM API key" autocomplete="off" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HANDLER_API_KEY',{api_key:v('cmd-ai-key')},'res-cmd-ai-key')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ai-key"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">API Endpoint</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-ai-endpoint" placeholder="https://api.openai.com/v1" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HANDLER_ENDPOINT',{endpoint:v('cmd-ai-endpoint')},'res-cmd-ai-endpoint')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ai-endpoint"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">LLM Model</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-ai-model" placeholder="e.g. gpt-4o" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_HANDLER_MODEL',{handler_model:v('cmd-ai-model')},'res-cmd-ai-model')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ai-model"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Lovense Toy Control ── -->
+            <details class="cmd-group">
+              <summary>💙 Lovense Toy Control</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Toy Command</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-lovense-cmd"><option value="vibrate">Vibrate</option><option value="rotate">Rotate</option><option value="pump">Pump</option><option value="stop">Stop</option><option value="battery">Battery</option></select>
+                    <input id="cmd-lovense-level" type="number" placeholder="Level (0–20)" min="0" max="20" style="max-width:130px" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('LOVENSE_COMMAND',{toy_command:v('cmd-lovense-cmd'),toy_level:v('cmd-lovense-level')},'res-cmd-lovense')">Send</button>
+                  <span class="cmd-result" id="res-cmd-lovense"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Lovense Schedule</span>
+                  <div class="cmd-inputs">
+                    <textarea id="cmd-lovense-sched" placeholder='JSON array e.g. [{"id":"1","time_of_day_minutes":480,"vibration_level":10,"duration_ms":5000,"label":"Morning"}]'></textarea>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_LOVENSE_SCHEDULES',{schedules:v('cmd-lovense-sched')},'res-cmd-lovense-sched')">Send</button>
+                  <span class="cmd-result" id="res-cmd-lovense-sched"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Pavlok Control ── -->
+            <details class="cmd-group">
+              <summary>⚡ Pavlok Control</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Pavlok Command</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-pavlok-cmd"><option value="zap">Zap</option><option value="vibrate">Vibrate</option><option value="beep">Beep</option><option value="stop">Stop</option></select>
+                    <input id="cmd-pavlok-intensity" type="number" placeholder="Intensity (0–255)" min="0" max="255" style="max-width:150px" />
+                    <input id="cmd-pavlok-dur" type="number" placeholder="Duration (ms)" min="0" max="25500" style="max-width:130px" />
+                  </div>
+                  <button class="btn-cmd danger" onclick="sendFcm('PAVLOK_COMMAND',{pavlok_cmd:v('cmd-pavlok-cmd'),pavlok_intensity:v('cmd-pavlok-intensity'),pavlok_duration_ms:v('cmd-pavlok-dur')},'res-cmd-pavlok')">Send</button>
+                  <span class="cmd-result" id="res-cmd-pavlok"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── App Management ── -->
+            <details class="cmd-group">
+              <summary>📱 App Management</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Open App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-open" placeholder="Display name (e.g. Instagram)" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('OPEN_APP',{app_name:v('cmd-app-open')},'res-cmd-app-open')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-open"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Force Stop App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-stop" placeholder="App name" /></div>
+                  <button class="btn-cmd danger" onclick="sendFcm('FORCE_STOP_APP',{app_name:v('cmd-app-stop')},'res-cmd-app-stop')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-stop"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Disable App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-disable" placeholder="App name" /></div>
+                  <button class="btn-cmd danger" onclick="sendFcm('DISABLE_APP',{app_name:v('cmd-app-disable')},'res-cmd-app-disable')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-disable"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Enable App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-enable" placeholder="App name" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('ENABLE_APP',{app_name:v('cmd-app-enable')},'res-cmd-app-enable')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-enable"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Clear App Cache</span>
+                  <div class="cmd-inputs"><input id="cmd-app-cache" placeholder="App name" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('CLEAR_APP_CACHE',{app_name:v('cmd-app-cache')},'res-cmd-app-cache')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-cache"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Uninstall App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-uninstall" placeholder="App name" /></div>
+                  <button class="btn-cmd danger" onclick="sendFcm('UNINSTALL_APP',{app_name:v('cmd-app-uninstall')},'res-cmd-app-uninstall')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-uninstall"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Suspend App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-suspend" placeholder="App name" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SUSPEND_APP',{app_name:v('cmd-app-suspend')},'res-cmd-app-suspend')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-suspend"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Unsuspend App</span>
+                  <div class="cmd-inputs"><input id="cmd-app-unsuspend" placeholder="App name" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('UNSUSPEND_APP',{app_name:v('cmd-app-unsuspend')},'res-cmd-app-unsuspend')">Send</button>
+                  <span class="cmd-result" id="res-cmd-app-unsuspend"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Screen & Display ── -->
+            <details class="cmd-group">
+              <summary>🖥️ Screen &amp; Display</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Open URL</span>
+                  <div class="cmd-inputs"><input id="cmd-url" placeholder="https://…" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('OPEN_URL',{url:v('cmd-url')},'res-cmd-url')">Send</button>
+                  <span class="cmd-result" id="res-cmd-url"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Brightness</span>
+                  <div class="cmd-inputs"><input id="cmd-brightness" type="number" placeholder="0–255" min="0" max="255" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_BRIGHTNESS',{value:v('cmd-brightness')},'res-cmd-brightness')">Send</button>
+                  <span class="cmd-result" id="res-cmd-brightness"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Screen On / Off</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('SCREEN_ON',{},'res-cmd-screen')">On</button>
+                  <button class="btn-cmd danger" onclick="sendFcm('SCREEN_OFF',{},'res-cmd-screen')" style="margin-left:.35rem">Off</button>
+                  <span class="cmd-result" id="res-cmd-screen"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Screen Timeout</span>
+                  <div class="cmd-inputs"><input id="cmd-timeout" type="number" placeholder="Timeout (ms, e.g. 60000)" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_SCREEN_TIMEOUT',{ms:v('cmd-timeout')},'res-cmd-timeout')">Send</button>
+                  <span class="cmd-result" id="res-cmd-timeout"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Show Overlay</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-overlay-title" placeholder="Title" />
+                    <input id="cmd-overlay-msg" placeholder="Message" />
+                    <input id="cmd-overlay-img" placeholder="Image URL (opt)" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SHOW_OVERLAY',{title:v('cmd-overlay-title'),message:v('cmd-overlay-msg'),image_url:v('cmd-overlay-img')},'res-cmd-overlay')">Send</button>
+                  <span class="cmd-result" id="res-cmd-overlay"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Orientation</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-orientation"><option value="false">Portrait</option><option value="true">Landscape</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_ORIENTATION',{landscape:v('cmd-orientation')},'res-cmd-orientation')">Send</button>
+                  <span class="cmd-result" id="res-cmd-orientation"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Rotation Lock</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-rotation"><option value="true">Enable rotation</option><option value="false">Lock rotation</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_ROTATION',{enabled:v('cmd-rotation')},'res-cmd-rotation')">Send</button>
+                  <span class="cmd-result" id="res-cmd-rotation"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Auto-Rotate</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-autorotate"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_AUTO_ROTATE',{enabled:v('cmd-autorotate')},'res-cmd-autorotate')">Send</button>
+                  <span class="cmd-result" id="res-cmd-autorotate"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Wallpaper</span>
+                  <div class="cmd-inputs"><input id="cmd-wallpaper" placeholder="Image URL" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_WALLPAPER',{url:v('cmd-wallpaper')},'res-cmd-wallpaper')">Send</button>
+                  <span class="cmd-result" id="res-cmd-wallpaper"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Audio & Sound ── -->
+            <details class="cmd-group">
+              <summary>🔊 Audio &amp; Sound</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Volume</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-vol-stream"><option value="media">Media</option><option value="ring">Ring</option><option value="alarm">Alarm</option><option value="notification">Notification</option><option value="system">System</option><option value="call">Voice Call</option></select>
+                    <input id="cmd-vol-level" type="number" placeholder="Level (0–100)" min="0" max="100" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_VOLUME',{stream:v('cmd-vol-stream'),level:v('cmd-vol-level')},'res-cmd-volume')">Send</button>
+                  <span class="cmd-result" id="res-cmd-volume"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Ringer Mode</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-ringer"><option value="normal">Normal</option><option value="vibrate">Vibrate</option><option value="silent">Silent</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_RINGER_MODE',{mode:v('cmd-ringer')},'res-cmd-ringer')">Send</button>
+                  <span class="cmd-result" id="res-cmd-ringer"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Play Audio</span>
+                  <div class="cmd-inputs"><input id="cmd-play-url" placeholder="Audio file URL" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('PLAY_AUDIO',{url:v('cmd-play-url')},'res-cmd-play')">Send</button>
+                  <span class="cmd-result" id="res-cmd-play"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Speak Text (TTS)</span>
+                  <div class="cmd-inputs"><input id="cmd-tts" placeholder="Text to speak" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SPEAK_TEXT',{text:v('cmd-tts')},'res-cmd-tts')">Send</button>
+                  <span class="cmd-result" id="res-cmd-tts"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Lock Screen & Access ── -->
+            <details class="cmd-group">
+              <summary>🔒 Lock Screen &amp; Access</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Lock Device</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd danger" onclick="sendFcm('LOCK_DEVICE',{},'res-cmd-lockdev')">Send</button>
+                  <span class="cmd-result" id="res-cmd-lockdev"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Dismiss Keyguard</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('DISMISS_KEYGUARD',{},'res-cmd-keyguard')">Send</button>
+                  <span class="cmd-result" id="res-cmd-keyguard"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Network & Connectivity ── -->
+            <details class="cmd-group">
+              <summary>🌐 Network &amp; Connectivity</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Wi-Fi</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-wifi"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_WIFI',{enabled:v('cmd-wifi')},'res-cmd-wifi')">Send</button>
+                  <span class="cmd-result" id="res-cmd-wifi"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Mobile Data</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-mobile-data"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_MOBILE_DATA',{enabled:v('cmd-mobile-data')},'res-cmd-mobile-data')">Send</button>
+                  <span class="cmd-result" id="res-cmd-mobile-data"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Airplane Mode</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-airplane"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_AIRPLANE_MODE',{enabled:v('cmd-airplane')},'res-cmd-airplane')">Send</button>
+                  <span class="cmd-result" id="res-cmd-airplane"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Bluetooth</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-bluetooth"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_BLUETOOTH',{enabled:v('cmd-bluetooth')},'res-cmd-bluetooth')">Send</button>
+                  <span class="cmd-result" id="res-cmd-bluetooth"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Connect to Wi-Fi</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-wifi-ssid" placeholder="SSID" />
+                    <input id="cmd-wifi-pass" type="password" placeholder="Password (opt)" autocomplete="off" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('CONNECT_WIFI',{ssid:v('cmd-wifi-ssid'),password:v('cmd-wifi-pass')},'res-cmd-connect-wifi')">Send</button>
+                  <span class="cmd-result" id="res-cmd-connect-wifi"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Camera & Sensors ── -->
+            <details class="cmd-group">
+              <summary>📷 Camera &amp; Sensors</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Take Screenshot</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('TAKE_SCREENSHOT',{},'res-cmd-screenshot')">Send</button>
+                  <span class="cmd-result" id="res-cmd-screenshot"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Record Screen</span>
+                  <div class="cmd-inputs"><input id="cmd-rec-dur" type="number" placeholder="Duration (sec, default 10)" min="1" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('RECORD_SCREEN',{duration_sec:v('cmd-rec-dur')||'10'},'res-cmd-record')">Send</button>
+                  <span class="cmd-result" id="res-cmd-record"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Flashlight</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-flashlight"><option value="true">On</option><option value="false">Off</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_FLASHLIGHT',{enabled:v('cmd-flashlight')},'res-cmd-flashlight')">Send</button>
+                  <span class="cmd-result" id="res-cmd-flashlight"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Get Location</span>
+                  <div class="cmd-inputs"></div>
+                  <button class="btn-cmd" onclick="sendFcm('GET_LOCATION',{},'res-cmd-location')">Send</button>
+                  <span class="cmd-result" id="res-cmd-location"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Device Settings ── -->
+            <details class="cmd-group">
+              <summary>⚙️ Device Settings</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Do Not Disturb</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-dnd"><option value="all">All (unrestricted)</option><option value="priority">Priority only</option><option value="alarms_only">Alarms only</option><option value="total_silence">Total silence</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_DND',{policy:v('cmd-dnd')},'res-cmd-dnd')">Send</button>
+                  <span class="cmd-result" id="res-cmd-dnd"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Set Alarm</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-alarm-title" placeholder="Alarm title" />
+                    <input id="cmd-alarm-time" type="datetime-local" title="Alarm time" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_ALARM',{title:v('cmd-alarm-title'),time_ms:dateToMs('cmd-alarm-time')},'res-cmd-alarm')">Send</button>
+                  <span class="cmd-result" id="res-cmd-alarm"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">NFC</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-nfc"><option value="true">Enable</option><option value="false">Disable</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_NFC',{enabled:v('cmd-nfc')},'res-cmd-nfc')">Send</button>
+                  <span class="cmd-result" id="res-cmd-nfc"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Font Size Scale</span>
+                  <div class="cmd-inputs"><input id="cmd-font-scale" type="number" step="0.05" placeholder="e.g. 1.15" min="0.5" max="3.0" /></div>
+                  <button class="btn-cmd" onclick="sendFcm('SET_FONT_SIZE',{scale:v('cmd-font-scale')},'res-cmd-font')">Send</button>
+                  <span class="cmd-result" id="res-cmd-font"></span>
+                </div>
+              </div>
+            </details>
+
+          </section>
+
           <!-- ═══════════════ LOGS ═══════════════ -->
           <section id="sec-logs" class="handler-section">
             <h2 class="section-heading">📜 Logs</h2>
@@ -738,7 +1487,7 @@
     // STATE
     // ═══════════════════════════════════════════════════════════
 
-    const CRED_KEY = 'handler_panel_creds';
+    const JWT_KEY = 'handler_panel_jwt';
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -753,12 +1502,12 @@
     const _deviceCache = {};
 
     // ── Credential storage ─────────────────────────────
-    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(user + ':' + pass)); }
-    function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
-    function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
+    function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
+    function getJwt()        { return sessionStorage.getItem(JWT_KEY); }
+    function clearJwt()    { sessionStorage.removeItem(JWT_KEY); }
     function authHeader() {
-      const c = getCreds();
-      return c ? { 'Authorization': 'Basic ' + c } : {};
+      var jwt = getJwt();
+      return jwt ? { 'Authorization': 'Bearer ' + jwt } : {};
     }
 
     // ── Toast ──────────────────────────────────────────
@@ -824,7 +1573,7 @@
       document.getElementById('handler-panel').style.display = 'none';
       document.getElementById('login-panel').style.display   = 'flex';
       if (msg) document.getElementById('login-error').textContent = msg;
-      clearCreds();
+      clearJwt();
       disconnectWS();
       viewingDeviceId = null;
     }
@@ -880,21 +1629,38 @@
 
     // ── Login ──────────────────────────────────────────
     document.getElementById('login-btn').addEventListener('click', async function() {
-      var user = document.getElementById('hp-username').value.trim();
-      var pass = document.getElementById('hp-password').value;
+      var user  = document.getElementById('hp-username').value.trim();
+      var pass  = document.getElementById('hp-password').value;
       var errEl = document.getElementById('login-error');
       var btn   = document.getElementById('login-btn');
       errEl.textContent = '';
       if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
       btn.disabled = true;
       btn.textContent = 'Checking…';
-      saveCreds(user, pass);
       try {
-        await apiGet('/api/handler/status');
+        var resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass }),
+        });
+        if (!resp.ok) {
+          var errData = await resp.json().catch(function() { return {}; });
+          errEl.textContent = '🐾 ' + (errData.detail || 'Invalid credentials.');
+          return;
+        }
+        var data = await resp.json();
+        if (data.role !== 'handler' && data.role !== 'admin') {
+          errEl.textContent = '🐾 Access denied — handler or admin role required.';
+          return;
+        }
+        saveJwt(data.access_token);
+        // Update topbar role badge
+        var badge = document.querySelector('.topbar-badge');
+        if (badge) badge.textContent = data.role.toUpperCase();
         showHandlerPanel();
       } catch(e) {
-        clearCreds();
-        errEl.textContent = '🐾 Invalid credentials.';
+        clearJwt();
+        errEl.textContent = '🐾 Login failed. Please try again.';
       } finally {
         btn.disabled = false;
         btn.textContent = '🐾 Enter Handler Panel';
@@ -1107,10 +1873,10 @@
     }
 
     function connectWS() {
-      var creds = getCreds();
-      if (!creds) return;
+      var jwt = getJwt();
+      if (!jwt) return;
       var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      var url   = proto + '://' + location.host + '/ws/handler?creds=' + encodeURIComponent(creds);
+      var url   = proto + '://' + location.host + '/ws/handler?token=' + encodeURIComponent(jwt);
       _ws = new WebSocket(url);
       _ws.binaryType = 'arraybuffer';
 
@@ -1286,7 +2052,7 @@
       if (_wsReconnectTimer) return;
       _wsReconnectTimer = setTimeout(function() {
         _wsReconnectTimer = null;
-        if (getCreds()) connectWS();
+        if (getJwt()) connectWS();
       }, 4000);
     }
 
@@ -1358,7 +2124,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'LOVENSE_COMMAND', toy_command: 'vibrate', toy_level: '10',
         });
         if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('💗 Lovense vibrate sent.'); }
@@ -1373,7 +2139,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'shock', pavlok_intensity: '50', pavlok_duration_ms: '1000',
         });
@@ -1389,7 +2155,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'vibrate', pavlok_intensity: '100', pavlok_duration_ms: '5000',
         });
@@ -1405,7 +2171,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/checkins/request', { device_id: viewingDeviceId });
+        var r = await apiPost('/api/handler/tpe/checkins/request', { device_id: viewingDeviceId });
         if (r.ok) { res.textContent = '✅ Check-in requested.'; showToast('📋 Check-in request sent.'); }
         else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
       } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
@@ -1421,6 +2187,56 @@
     document.getElementById('btn-live-listen-actions').addEventListener('click', toggleLiveListen);
 
     // ═══════════════════════════════════════════════════════════
+    // REMOTE COMMANDS — generic FCM push helpers
+    // ═══════════════════════════════════════════════════════════
+
+    /** Return trimmed value of an input/select/textarea by id. */
+    function v(id) {
+      var el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    }
+
+    /** Convert a datetime-local input value to epoch-milliseconds string. */
+    function dateToMs(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var d = new Date(raw);
+      if (isNaN(d.getTime())) return '';
+      return String(d.getTime());
+    }
+
+    /**
+     * Generic FCM push helper used by all Remote Command buttons.
+     * Sends POST /api/handler/tpe/push with device_id + action + any extra fields.
+     * Empty-string values are omitted from the payload automatically.
+     */
+    async function sendFcm(action, fieldsObj, resId) {
+      var res = resId ? document.getElementById(resId) : null;
+      if (!viewingDeviceId) {
+        if (res) res.textContent = '⚠️ No device selected.';
+        showToast('⚠️ No device selected.', true);
+        return;
+      }
+      if (res) res.textContent = 'Sending…';
+      var payload = { device_id: viewingDeviceId, action: action };
+      Object.keys(fieldsObj).forEach(function(k) {
+        if (fieldsObj[k] !== '' && fieldsObj[k] !== null && fieldsObj[k] !== undefined) payload[k] = fieldsObj[k];
+      });
+      try {
+        var r = await apiPost('/api/handler/tpe/push', payload);
+        if (r.ok) {
+          if (res) res.textContent = '✅ Sent.';
+          showToast('✅ ' + action + ' sent.');
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch(e) {
+        if (e.message !== '401' && res) res.textContent = '❌ Request failed.';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // LOGS
     // ═══════════════════════════════════════════════════════════
 
@@ -1430,7 +2246,7 @@
       var tbody = document.getElementById('events-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loading…</td></tr>';
       try {
-        var data = await apiGet('/api/admin/tpe/events?limit=50');
+        var data = await apiGet('/api/handler/tpe/events?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(ev) {
           return '<tr><td><span class="badge ' + (ev.event === 'punishment' ? 'badge-error' : 'badge-ok') + '">' + esc(ev.event) + '</span></td>' +
@@ -1444,7 +2260,7 @@
       var tbody = document.getElementById('audits-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loading…</td></tr>';
       try {
-        var data = await apiGet('/api/admin/tpe/audits?limit=50');
+        var data = await apiGet('/api/handler/tpe/audits?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(a) {
           return '<tr><td>' + esc(a.last_label || '—') + '</td>' +
