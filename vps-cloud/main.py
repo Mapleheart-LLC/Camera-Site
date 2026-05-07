@@ -2645,7 +2645,7 @@ app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
 @app.exception_handler(404)
-async def _json_404_handler(request: Request, exc):
+async def _json_404_handler(request: Request, _exc):
     """Return a JSON 404 for any path not matched by a route or static file.
 
     Without this handler, FastAPI falls through to the ``StaticFiles`` mount
