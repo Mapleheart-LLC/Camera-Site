@@ -1504,7 +1504,7 @@
     // ── Credential storage ─────────────────────────────
     function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
     function getJwt()        { return sessionStorage.getItem(JWT_KEY); }
-    function clearCreds()    { sessionStorage.removeItem(JWT_KEY); }
+    function clearJwt()    { sessionStorage.removeItem(JWT_KEY); }
     function authHeader() {
       var jwt = getJwt();
       return jwt ? { 'Authorization': 'Bearer ' + jwt } : {};
@@ -1573,7 +1573,7 @@
       document.getElementById('handler-panel').style.display = 'none';
       document.getElementById('login-panel').style.display   = 'flex';
       if (msg) document.getElementById('login-error').textContent = msg;
-      clearCreds();
+      clearJwt();
       disconnectWS();
       viewingDeviceId = null;
     }
@@ -1659,7 +1659,7 @@
         if (badge) badge.textContent = data.role.toUpperCase();
         showHandlerPanel();
       } catch(e) {
-        clearCreds();
+        clearJwt();
         errEl.textContent = '🐾 Login failed. Please try again.';
       } finally {
         btn.disabled = false;

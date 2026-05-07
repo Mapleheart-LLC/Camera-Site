@@ -470,7 +470,7 @@ def handler_tpe_push(
 
 @router.post("/api/handler/tpe/checkins/request")
 def handler_tpe_checkins_request(
-    body: _CheckinRequestBody = _CheckinRequestBody(),
+    body: _CheckinRequestBody,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
