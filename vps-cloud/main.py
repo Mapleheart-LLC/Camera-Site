@@ -470,6 +470,9 @@ def init_db() -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_drool_archive_timestamp ON drool_archive(timestamp)"
     )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE)"
+    )
     # ── Age verification table ────────────────────────────────────────────
     conn.execute(
         """
@@ -851,10 +854,10 @@ async def auth_login(
         )
         return {"access_token": mock_token, "token_type": "bearer", "role": "admin"}
 
-    username_lower = body.username.lower()
+    username_normalized = body.username.strip().lower()
     row = db.execute(
-        "SELECT id, password_hash, access_level, role FROM users WHERE username = ?",
-        (username_lower,),
+        "SELECT id, password_hash, access_level, role FROM users WHERE username COLLATE NOCASE = ?",
+        (username_normalized,),
     ).fetchone()
 
     # Use a valid bcrypt hash for the dummy comparison to ensure constant-time
@@ -869,7 +872,7 @@ async def auth_login(
         # with the same username/password used for admin.html.
         if ADMIN_USERNAME and ADMIN_PASSWORD:
             _username_match = secrets.compare_digest(
-                username_lower.encode(),
+                username_normalized.encode(),
                 _ADMIN_USERNAME_LOWER.encode(),
             )
             _password_match = secrets.compare_digest(
