@@ -878,7 +878,13 @@ async def auth_login(
             {"sub": "mock-user", "access_level": 3, "role": "admin"},
             expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
         )
-        return {"access_token": mock_token, "token_type": "bearer", "role": "admin"}
+        return {
+            "access_token": mock_token,
+            "token_type": "bearer",
+            "role": "admin",
+            "user_id": "mock-user",
+            "username": "mock-user",
+        }
 
     username_normalized = body.username.strip().lower()
     row = db.execute(
@@ -910,7 +916,13 @@ async def auth_login(
                     {"sub": "admin", "access_level": 3, "role": "admin"},
                     expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
                 )
-                return {"access_token": admin_token, "token_type": "bearer", "role": "admin"}
+                return {
+                    "access_token": admin_token,
+                    "token_type": "bearer",
+                    "role": "admin",
+                    "user_id": "admin",
+                    "username": ADMIN_USERNAME,
+                }
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
@@ -947,7 +959,85 @@ async def auth_login(
         {"sub": user_id, "access_level": access_level, "role": role},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return {"access_token": site_token, "token_type": "bearer", "role": role}
+    return {
+        "access_token": site_token,
+        "token_type": "bearer",
+        "role": role,
+        "user_id": user_id,
+        "username": username_normalized,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Token refresh and user-profile endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/auth/refresh")
+def auth_refresh(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Exchange a still-valid JWT for a fresh one with a reset expiry.
+
+    The client presents its current Bearer token; the endpoint validates it and
+    returns a new token with the same claims.  This lets Flutter apps silently
+    extend their session without the user having to log in again.
+
+    Returns the same shape as ``POST /api/auth/login``.
+    """
+    user_id: str = current_user["user_id"]
+    role: str = current_user.get("role", "user")
+    access_level: int = current_user.get("access_level", 1)
+
+    # Look up the current username from the DB so the response is consistent.
+    row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    username: str = row["username"] if row else user_id
+
+    new_token = create_access_token(
+        {"sub": user_id, "access_level": access_level, "role": role},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {
+        "access_token": new_token,
+        "token_type": "bearer",
+        "role": role,
+        "user_id": user_id,
+        "username": username,
+    }
+
+
+@app.get("/api/auth/me")
+def auth_me(
+    current_user: dict = Depends(get_current_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the authenticated user's profile.
+
+    Flutter apps call this on startup to re-hydrate a stored token into a full
+    user profile (username, role, access_level) without having to decode or
+    store the JWT payload themselves.
+
+    Returns 401 if the token is missing or expired.
+    """
+    user_id: str = current_user["user_id"]
+    row = db.execute(
+        "SELECT username, role, access_level FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not row:
+        # Admin env-var account – no DB row, synthesise a profile.
+        return {
+            "user_id": user_id,
+            "username": user_id,
+            "role": current_user.get("role", "admin"),
+            "access_level": current_user.get("access_level", 3),
+        }
+    return {
+        "user_id": user_id,
+        "username": row["username"],
+        "role": row["role"] or current_user.get("role", "user"),
+        "access_level": row["access_level"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1118,6 +1208,15 @@ async def age_gate_middleware(request: Request, call_next):
     # Check the age_verified cookie
     if request.cookies.get("age_verified") == "1":
         return await call_next(request)
+
+    # Requests carrying a Bearer token come from API clients (e.g. Flutter) that
+    # cannot follow an HTML redirect or set cookies.  Return a JSON error so
+    # they can surface a proper "age verification required" screen.
+    if request.headers.get("authorization", "").lower().startswith("bearer "):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Age verification required."},
+        )
 
     # Redirect to the age gate, preserving the originally-requested URL as
     # a query parameter so the gate can send the user back after verification.
@@ -2543,6 +2642,18 @@ async def chat_ws(websocket: WebSocket, token: str = ""):
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+
+@app.exception_handler(404)
+async def _json_404_handler(request: Request, exc):
+    """Return a JSON 404 for any path not matched by a route or static file.
+
+    Without this handler, FastAPI falls through to the ``StaticFiles`` mount
+    which returns an HTML "Not Found" page — unusable by API clients such as
+    the Flutter app.  With it, unrecognised ``/api/*`` paths (and any other
+    stray request) get a clean JSON body so the client can handle it properly.
+    """
+    return JSONResponse(status_code=404, content={"detail": "Not found."})
 
 
 # ---------------------------------------------------------------------------
