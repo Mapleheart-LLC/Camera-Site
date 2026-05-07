@@ -33,6 +33,32 @@ def get_db():
         conn.close()
 
 
+def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
+    """Backfill legacy ``users`` columns needed by auth and admin user management."""
+    rows = conn.execute("PRAGMA table_info(users)").fetchall()
+    if not rows:
+        return
+
+    existing_columns = {
+        row["name"] if isinstance(row, sqlite3.Row) else row[1]
+        for row in rows
+    }
+    changed = False
+
+    for column_name, column_def in [
+        ("username", "TEXT NOT NULL DEFAULT ''"),
+        ("password_hash", "TEXT NOT NULL DEFAULT ''"),
+        ("role", "TEXT NOT NULL DEFAULT 'handler'"),
+    ]:
+        if column_name in existing_columns:
+            continue
+        conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
+        changed = True
+
+    if changed:
+        conn.commit()
+
+
 def get_setting(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
     """Return a runtime setting value from the settings table, or *default* if absent."""
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()

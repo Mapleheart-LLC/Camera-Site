@@ -20,7 +20,14 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from db import DATABASE_PATH, get_db, get_db_connection, get_setting, set_setting
+from db import (
+    DATABASE_PATH,
+    ensure_user_account_schema,
+    get_db,
+    get_db_connection,
+    get_setting,
+    set_setting,
+)
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ADMIN_USERNAME,
@@ -426,22 +433,7 @@ def init_db() -> None:
         conn.execute("ALTER TABLE drool_archive ADD COLUMN media_urls TEXT")
     except Exception:
         pass  # column already exists
-    # Idempotent migration: add username/password_hash columns.
-    # Column names and type definitions are hardcoded string literals (not
-    # derived from user input), so the f-string interpolation is safe here.
-    for _col, _defn in [
-        ("username",      "TEXT NOT NULL DEFAULT ''"),
-        ("password_hash", "TEXT NOT NULL DEFAULT ''"),
-    ]:
-        try:
-            conn.execute(f"ALTER TABLE users ADD COLUMN {_col} {_defn}")
-        except Exception:
-            pass  # column already exists
-    # Idempotent migration: add role column for admin/handler access control.
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'handler'")
-    except Exception:
-        pass  # column already exists
+    ensure_user_account_schema(conn)
     # ── Handler device assignment table (many-to-many) ────────────────────
     # Links a handler user (by user_id) to specific device_ids they may
     # view and command.  Admins bypass this table and see all devices.
@@ -808,6 +800,7 @@ def auth_register(body: _RegisterRequest, db: sqlite3.Connection = Depends(get_d
     underscores, and hyphens (3–32 characters).  New accounts start at
     access_level=0; a Discord role link is required to gain tier access.
     """
+    ensure_user_account_schema(db)
     username_lower = body.username.lower()
     existing = db.execute(
         "SELECT id FROM users WHERE username = ?", (username_lower,)
@@ -841,6 +834,7 @@ async def auth_login(
     linked Discord, guild roles are queried to refresh the stored access_level
     before issuing the JWT.
     """
+    ensure_user_account_schema(db)
     # DB setting takes precedence over the env var for runtime toggle.
     db_mock_auth = get_setting(db, "mock_auth")
     effective_mock_auth = (

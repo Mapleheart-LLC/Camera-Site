@@ -45,7 +45,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 
-from db import get_db, get_db_connection, get_setting, set_setting
+from db import ensure_user_account_schema, get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user
 from routers.tpe import _send_fcm_to_all
 
@@ -1202,6 +1202,7 @@ def list_users(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Return all registered site users (no password hashes)."""
+    ensure_user_account_schema(db)
     rows = db.execute(
         "SELECT id, username, access_level, role FROM users ORDER BY rowid DESC"
     ).fetchall()
@@ -1215,6 +1216,7 @@ def create_user(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Create a new site user account."""
+    ensure_user_account_schema(db)
     username_lower = body.username.lower()
     existing = db.execute(
         "SELECT id FROM users WHERE username = ?", (username_lower,)
@@ -1243,6 +1245,7 @@ def update_user(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Update a user's password and/or access_level."""
+    ensure_user_account_schema(db)
     row = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
