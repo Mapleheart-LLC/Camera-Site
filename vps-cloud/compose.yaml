@@ -5,6 +5,13 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # ── Flutter frontend ──────────────────────────────
+      # Set FLUTTER_FRONTEND_URL to the root URL of the Flutter web app
+      # (e.g. https://mochii.live) to redirect all browser-facing pages there.
+      # Leave empty (the default) to keep serving the built-in HTML frontend.
+      # When set, the Flutter origin is automatically added to CORS allowed-origins
+      # so the app can make authenticated API calls without extra configuration.
+      - FLUTTER_FRONTEND_URL=${FLUTTER_FRONTEND_URL:-}
       # Set SECRET_KEY in your shell or a .env file before running docker-compose.
       # Example: export SECRET_KEY=$(openssl rand -hex 32)
       - SECRET_KEY=${SECRET_KEY:-changeme-replace-in-production!!}

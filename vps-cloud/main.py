@@ -124,6 +124,21 @@ MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool
 BASE_URL: str = os.environ.get("BASE_URL", "").rstrip("/")
 
 # ---------------------------------------------------------------------------
+# Flutter frontend configuration
+#
+# FLUTTER_FRONTEND_URL – root URL of the Flutter web app
+#   (e.g. https://app.mochii.live or https://mochii.live).
+#
+# When set, every browser-facing GET request that is NOT an API call,
+# WebSocket, static asset, or SEO file is redirected (302) to the Flutter
+# app at the same path so the new frontend handles all user-visible pages
+# (including admin and handler panels).
+#
+# Leave empty (the default) to keep serving the built-in HTML frontend.
+# ---------------------------------------------------------------------------
+FLUTTER_FRONTEND_URL: str = os.environ.get("FLUTTER_FRONTEND_URL", "").rstrip("/")
+
+# ---------------------------------------------------------------------------
 # Age gate configuration
 #
 # AGE_GATE_ENABLED – set to "true" to require age verification before any
@@ -163,17 +178,30 @@ _SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool")
 
 
 def _build_allowed_origins() -> list[str]:
-    """Derive the CORS allowed-origins list from ALLOWED_ORIGINS env var or BASE_URL."""
+    """Derive the CORS allowed-origins list from ALLOWED_ORIGINS env var or BASE_URL.
+
+    When FLUTTER_FRONTEND_URL is set it is automatically added so the Flutter
+    app can make authenticated API calls cross-origin without extra configuration.
+    """
     raw = os.environ.get("ALLOWED_ORIGINS", "").strip()
     if raw:
-        return [o.strip() for o in raw.split(",") if o.strip()]
+        origins = [o.strip() for o in raw.split(",") if o.strip()]
+        # Still inject the Flutter URL even when ALLOWED_ORIGINS is explicit
+        if FLUTTER_FRONTEND_URL and FLUTTER_FRONTEND_URL not in origins:
+            origins.append(FLUTTER_FRONTEND_URL)
+        return origins
     if not BASE_URL:
         # Fallback for local development when no BASE_URL is set
-        return ["http://localhost:8000", "http://localhost:3000"]
+        origins = ["http://localhost:8000", "http://localhost:3000"]
+        if FLUTTER_FRONTEND_URL and FLUTTER_FRONTEND_URL not in origins:
+            origins.append(FLUTTER_FRONTEND_URL)
+        return origins
     origins = [BASE_URL]  # e.g. https://mochii.live
     parsed = urlparse(BASE_URL)
     for prefix in _SUBDOMAIN_PREFIXES:
         origins.append(f"{parsed.scheme}://{prefix}.{parsed.hostname}")
+    if FLUTTER_FRONTEND_URL and FLUTTER_FRONTEND_URL not in origins:
+        origins.append(FLUTTER_FRONTEND_URL)
     return origins
 
 
@@ -1096,6 +1124,76 @@ async def age_gate_middleware(request: Request, call_next):
     from fastapi.responses import RedirectResponse as _RR
     from urllib.parse import quote as _q
     return _RR(url=f"/age-gate?next={_q(str(request.url), safe='')}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Flutter frontend redirect middleware
+#
+# Paths that must always be handled by the backend itself, even when
+# FLUTTER_FRONTEND_URL is set.  Everything else is redirected to the
+# Flutter app so it can own all user-visible pages (including admin and
+# handler panels).
+# ---------------------------------------------------------------------------
+_BACKEND_ONLY_PREFIXES = (
+    "/api/",
+    "/ws/",
+    "/static/",
+    "/favicon.ico",
+    "/sw.js",
+    "/manifest.json",
+    "/offline.html",
+    "/robots.txt",
+    "/sitemap.xml",
+)
+
+
+@app.middleware("http")
+async def flutter_frontend_redirect(request: Request, call_next):
+    """Redirect browser-facing GET requests to the Flutter web app when enabled.
+
+    When FLUTTER_FRONTEND_URL is set the middleware issues a 302 redirect to
+    ``{FLUTTER_FRONTEND_URL}{path}?{query}`` for any request that is not:
+
+    * an API or WebSocket call  (``/api/*``, ``/ws/*``)
+    * a raw static-asset fetch  (``/static/*``)
+    * a server-rendered utility  (OG images at ``/q/*/og-image.png``)
+    * an SEO/PWA file            (``/robots.txt``, ``/sitemap.xml``, …)
+
+    All of those continue to be served by this backend so link previews,
+    search-engine crawlers, and PWA manifests keep working regardless of
+    which frontend is active.
+
+    Leave FLUTTER_FRONTEND_URL empty (the default) to serve the built-in
+    static HTML frontend as before.
+    """
+    if not FLUTTER_FRONTEND_URL:
+        return await call_next(request)
+
+    # Only redirect GET/HEAD requests – let POST/PUT/… pass through.
+    if request.method not in ("GET", "HEAD"):
+        return await call_next(request)
+
+    path = request.url.path
+
+    # Always keep backend-only paths on this server.
+    for prefix in _BACKEND_ONLY_PREFIXES:
+        if path.startswith(prefix):
+            return await call_next(request)
+
+    # Keep OG preview images on the backend so link unfurlers still work.
+    if path.endswith("/og-image.png"):
+        return await call_next(request)
+
+    # Redirect everything else (including /, /admin, /handler, /anon, …)
+    # to the Flutter app, preserving path and query string.
+    #
+    # Normalise the path so it always starts with exactly one "/" to prevent
+    # open-redirect attacks where a crafted path like "//evil.com" could
+    # cause browsers to navigate to an attacker-controlled origin.
+    safe_path = "/" + path.lstrip("/")
+    qs = request.url.query
+    target = FLUTTER_FRONTEND_URL + safe_path + (f"?{qs}" if qs else "")
+    return RedirectResponse(url=target, status_code=302)
 
 
 @app.get("/admin", include_in_schema=False)
