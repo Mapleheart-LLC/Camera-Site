@@ -206,13 +206,28 @@ def require_role(allowed_roles: List[str]) -> Callable:
         def delete_user(current_user: dict = Depends(require_role(["admin"]))):
             ...
     """
+    # Validate all requested roles at definition time to catch configuration bugs early.
+    unknown = [r for r in allowed_roles if r not in VALID_ROLES]
+    if unknown:
+        raise ValueError(
+            f"require_role() received unknown role(s): {unknown}. "
+            f"Valid roles are: {sorted(VALID_ROLES)}"
+        )
+
     # Compute the minimum rank required once at definition time.
-    min_rank: int = min(ROLE_HIERARCHY.get(r, 0) for r in allowed_roles)
+    min_rank: int = min(ROLE_HIERARCHY[r] for r in allowed_roles)
 
     def _check_role(
         current_user: dict = Depends(get_current_user),
     ) -> dict:
-        user_rank = ROLE_HIERARCHY.get(current_user.get("role", ""), 0)
+        user_role = current_user.get("role", "")
+        if user_role not in VALID_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user role in token. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_rank = ROLE_HIERARCHY[user_role]
         if user_rank < min_rank:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

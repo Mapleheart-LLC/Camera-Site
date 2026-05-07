@@ -818,7 +818,7 @@ def auth_register(body: _RegisterRequest, db: sqlite3.Connection = Depends(get_d
     user_id = secrets.token_hex(16)
     pw_hash = _hash_password(body.password)
     db.execute(
-        "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, 0, 'user')",
+        "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, 1, 'user')",
         (user_id, username_lower, pw_hash),
     )
     db.commit()
