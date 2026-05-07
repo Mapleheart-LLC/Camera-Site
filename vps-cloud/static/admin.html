@@ -1114,6 +1114,7 @@
                 <div class="form-field" style="min-width:110px">
                   <label for="usr-new-role">Role</label>
                   <select id="usr-new-role">
+                    <option value="user">User</option>
                     <option value="handler">Handler</option>
                     <option value="admin">Admin</option>
                   </select>
@@ -3471,7 +3472,7 @@
     const ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
 
     function roleBadge(role) {
-      const r = role || 'handler';
+      const r = role || 'user';
       const isAdmin = r === 'admin';
       return `<span style="font-size:.78rem;padding:.15rem .45rem;border-radius:3px;background:${isAdmin ? 'rgba(232,174,183,.2)' : 'rgba(100,116,139,.15)'};color:${isAdmin ? '#e8aeb7' : '#94a3b8'}">${esc(r)}</span>`;
     }
@@ -3491,7 +3492,7 @@
             <td>${esc(ACCESS_LEVEL_LABELS[u.access_level] ?? u.access_level)}</td>
             <td style="font-size:.72rem;color:#5a3a3e">${esc(u.id)}</td>
             <td style="white-space:nowrap">
-              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${u.access_level},'${esc(u.role || 'handler')}')">Edit</button>
+              <button class="btn-sm btn-edit" onclick="showUsrEdit('${esc(u.id)}',${u.access_level},'${esc(u.role || 'user')}')">Edit</button>
               <button class="btn-sm btn-delete" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')" style="margin-left:.3rem">Delete</button>
             </td>
           </tr>
@@ -3514,6 +3515,7 @@
                 <div class="form-field" style="min-width:110px">
                   <label>Role</label>
                   <select id="usr-edit-role-${esc(u.id)}">
+                    <option value="user">User</option>
                     <option value="handler">Handler</option>
                     <option value="admin">Admin</option>
                   </select>
@@ -3532,7 +3534,7 @@
       const sel = document.getElementById(`usr-edit-level-${id}`);
       if (sel) sel.value = String(currentLevel);
       const roleSel = document.getElementById(`usr-edit-role-${id}`);
-      if (roleSel) roleSel.value = currentRole || 'handler';
+      if (roleSel) roleSel.value = currentRole || 'user';
       document.getElementById(`usr-edit-pw-${id}`).value = '';
       document.getElementById(`usr-edit-msg-${id}`).textContent = '';
     }
@@ -3586,7 +3588,7 @@
           document.getElementById('usr-new-username').value = '';
           document.getElementById('usr-new-password').value = '';
           document.getElementById('usr-new-level').value = '0';
-          document.getElementById('usr-new-role').value = 'handler';
+          document.getElementById('usr-new-role').value = 'user';
           msgEl.style.color = '#a3e635';
           msgEl.textContent = `User "${username}" created.`;
           loadUsersAdmin();
