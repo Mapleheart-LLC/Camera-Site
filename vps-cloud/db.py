@@ -18,11 +18,6 @@ DATABASE_PATH: str = os.environ.get(
     "DATABASE_PATH", os.path.join(_BASE_DIR, "camera_site.db")
 )
 
-_USER_ACCOUNT_COLUMNS = {
-    "username": "TEXT NOT NULL DEFAULT ''",
-    "password_hash": "TEXT NOT NULL DEFAULT ''",
-    "role": "TEXT NOT NULL DEFAULT 'handler'",
-}
 _VALIDATED_USER_SCHEMA_PATHS: set[str] = set()
 _USER_SCHEMA_LOCK = threading.Lock()
 
@@ -44,33 +39,35 @@ def get_db():
 
 def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
     """Backfill legacy ``users`` columns needed by auth and admin user management."""
-    db_row = conn.execute("PRAGMA database_list").fetchone()
-    db_path = (
-        db_row["file"] if isinstance(db_row, sqlite3.Row) else db_row[2]
-    ) if db_row else ""
     with _USER_SCHEMA_LOCK:
+        db_row = conn.execute("PRAGMA database_list").fetchone()
+        db_path = (
+            db_row["file"] if isinstance(db_row, sqlite3.Row) else db_row[2]
+        ) if db_row else ""
         if db_path and db_path in _VALIDATED_USER_SCHEMA_PATHS:
             return
+        rows = conn.execute("PRAGMA table_info(users)").fetchall()
+        if not rows:
+            return
 
-    rows = conn.execute("PRAGMA table_info(users)").fetchall()
-    if not rows:
-        return
+        existing_columns = {
+            row["name"] if isinstance(row, sqlite3.Row) else row[1]
+            for row in rows
+        }
+        changed = False
 
-    existing_columns = {
-        row["name"] if isinstance(row, sqlite3.Row) else row[1]
-        for row in rows
-    }
-    changed = False
+        if "username" not in existing_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+            changed = True
+        if "password_hash" not in existing_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
+            changed = True
+        if "role" not in existing_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'handler'")
+            changed = True
 
-    for column_name, column_def in _USER_ACCOUNT_COLUMNS.items():
-        if column_name in existing_columns:
-            continue
-        conn.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
-        changed = True
-
-    if changed:
-        conn.commit()
-    with _USER_SCHEMA_LOCK:
+        if changed:
+            conn.commit()
         if db_path:
             _VALIDATED_USER_SCHEMA_PATHS.add(db_path)
 
