@@ -26,6 +26,10 @@ Endpoints
                                          (Reddit API, Reddit IFTTT, Twitter, Bluesky)
   DELETE /api/admin/drool/{entry_id}   – delete a single drool archive entry (+ its comments/reactions)
   POST   /api/admin/drool/purge-bad    – delete all entries whose original_url is not a valid http(s) URL
+  GET    /api/admin/users              – list all registered site users
+  POST   /api/admin/users              – create a new user account (username/password/access_level/role)
+  PATCH  /api/admin/users/{user_id}    – update a user's password, access_level, and/or role
+  DELETE /api/admin/users/{user_id}    – delete a user account
 """
 
 import logging

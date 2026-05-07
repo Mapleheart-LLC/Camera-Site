@@ -1487,7 +1487,7 @@
     // STATE
     // ═══════════════════════════════════════════════════════════
 
-    const CRED_KEY = 'handler_panel_creds';
+    const JWT_KEY = 'handler_panel_jwt';
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -1502,12 +1502,12 @@
     const _deviceCache = {};
 
     // ── Credential storage ─────────────────────────────
-    function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(user + ':' + pass)); }
-    function getCreds()            { return sessionStorage.getItem(CRED_KEY); }
-    function clearCreds()          { sessionStorage.removeItem(CRED_KEY); }
+    function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
+    function getJwt()        { return sessionStorage.getItem(JWT_KEY); }
+    function clearCreds()    { sessionStorage.removeItem(JWT_KEY); }
     function authHeader() {
-      const c = getCreds();
-      return c ? { 'Authorization': 'Basic ' + c } : {};
+      var jwt = getJwt();
+      return jwt ? { 'Authorization': 'Bearer ' + jwt } : {};
     }
 
     // ── Toast ──────────────────────────────────────────
@@ -1629,21 +1629,38 @@
 
     // ── Login ──────────────────────────────────────────
     document.getElementById('login-btn').addEventListener('click', async function() {
-      var user = document.getElementById('hp-username').value.trim();
-      var pass = document.getElementById('hp-password').value;
+      var user  = document.getElementById('hp-username').value.trim();
+      var pass  = document.getElementById('hp-password').value;
       var errEl = document.getElementById('login-error');
       var btn   = document.getElementById('login-btn');
       errEl.textContent = '';
       if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
       btn.disabled = true;
       btn.textContent = 'Checking…';
-      saveCreds(user, pass);
       try {
-        await apiGet('/api/handler/status');
+        var resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass }),
+        });
+        if (!resp.ok) {
+          var errData = await resp.json().catch(function() { return {}; });
+          errEl.textContent = '🐾 ' + (errData.detail || 'Invalid credentials.');
+          return;
+        }
+        var data = await resp.json();
+        if (data.role !== 'handler' && data.role !== 'admin') {
+          errEl.textContent = '🐾 Access denied — handler or admin role required.';
+          return;
+        }
+        saveJwt(data.access_token);
+        // Update topbar role badge
+        var badge = document.querySelector('.topbar-badge');
+        if (badge) badge.textContent = data.role.toUpperCase();
         showHandlerPanel();
       } catch(e) {
         clearCreds();
-        errEl.textContent = '🐾 Invalid credentials.';
+        errEl.textContent = '🐾 Login failed. Please try again.';
       } finally {
         btn.disabled = false;
         btn.textContent = '🐾 Enter Handler Panel';
@@ -1856,10 +1873,10 @@
     }
 
     function connectWS() {
-      var creds = getCreds();
-      if (!creds) return;
+      var jwt = getJwt();
+      if (!jwt) return;
       var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      var url   = proto + '://' + location.host + '/ws/handler?creds=' + encodeURIComponent(creds);
+      var url   = proto + '://' + location.host + '/ws/handler?token=' + encodeURIComponent(jwt);
       _ws = new WebSocket(url);
       _ws.binaryType = 'arraybuffer';
 
@@ -2035,7 +2052,7 @@
       if (_wsReconnectTimer) return;
       _wsReconnectTimer = setTimeout(function() {
         _wsReconnectTimer = null;
-        if (getCreds()) connectWS();
+        if (getJwt()) connectWS();
       }, 4000);
     }
 
@@ -2107,7 +2124,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'LOVENSE_COMMAND', toy_command: 'vibrate', toy_level: '10',
         });
         if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('💗 Lovense vibrate sent.'); }
@@ -2122,7 +2139,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'shock', pavlok_intensity: '50', pavlok_duration_ms: '1000',
         });
@@ -2138,7 +2155,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/push', {
+        var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'vibrate', pavlok_intensity: '100', pavlok_duration_ms: '5000',
         });
@@ -2154,7 +2171,7 @@
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
-        var r = await apiPost('/api/admin/tpe/checkins/request', { device_id: viewingDeviceId });
+        var r = await apiPost('/api/handler/tpe/checkins/request', { device_id: viewingDeviceId });
         if (r.ok) { res.textContent = '✅ Check-in requested.'; showToast('📋 Check-in request sent.'); }
         else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
       } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
@@ -2190,7 +2207,7 @@
 
     /**
      * Generic FCM push helper used by all Remote Command buttons.
-     * Sends POST /api/admin/tpe/push with device_id + action + any extra fields.
+     * Sends POST /api/handler/tpe/push with device_id + action + any extra fields.
      * Empty-string values are omitted from the payload automatically.
      */
     async function sendFcm(action, fieldsObj, resId) {
@@ -2206,7 +2223,7 @@
         if (fieldsObj[k] !== '' && fieldsObj[k] !== null && fieldsObj[k] !== undefined) payload[k] = fieldsObj[k];
       });
       try {
-        var r = await apiPost('/api/admin/tpe/push', payload);
+        var r = await apiPost('/api/handler/tpe/push', payload);
         if (r.ok) {
           if (res) res.textContent = '✅ Sent.';
           showToast('✅ ' + action + ' sent.');
@@ -2229,7 +2246,7 @@
       var tbody = document.getElementById('events-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loading…</td></tr>';
       try {
-        var data = await apiGet('/api/admin/tpe/events?limit=50');
+        var data = await apiGet('/api/handler/tpe/events?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(ev) {
           return '<tr><td><span class="badge ' + (ev.event === 'punishment' ? 'badge-error' : 'badge-ok') + '">' + esc(ev.event) + '</span></td>' +
@@ -2243,7 +2260,7 @@
       var tbody = document.getElementById('audits-tbody');
       tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loading…</td></tr>';
       try {
-        var data = await apiGet('/api/admin/tpe/audits?limit=50');
+        var data = await apiGet('/api/handler/tpe/audits?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(a) {
           return '<tr><td>' + esc(a.last_label || '—') + '</td>' +

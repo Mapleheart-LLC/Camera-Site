@@ -976,28 +976,13 @@ _VALID_TPE_ACTIONS = {
 }
 
 
-@admin_router.post("/push")
-def tpe_push_settings(
-    body: TpePushRequest,
-    _admin: str = Depends(get_admin_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    """
-    Push an FCM data message to all paired TPE devices, or to a specific device
-    when ``device_id`` is provided.
+def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
+    """Build the FCM data dict from a ``TpePushRequest``.
 
-    The ``action`` field must be one of the actions understood by
-    ``PartnerFcmService`` in the TPE Android app.
+    All values must be strings per FCM spec; ``None`` fields are omitted.
+    Returns a dict with ``"action"`` set plus every non-``None`` optional field.
     """
-    if body.action not in _VALID_TPE_ACTIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown action '{body.action}'. Valid: {sorted(_VALID_TPE_ACTIONS)}",
-        )
-
-    # Build the FCM data payload (all values must be strings per FCM spec)
     data: dict[str, str] = {"action": body.action}
-
     field_map = {
         # UPDATE_SETTINGS / NudeNet
         "threshold":          body.threshold,
@@ -1104,6 +1089,29 @@ def tpe_push_settings(
     for field, val in field_map.items():
         if val is not None:
             data[field] = val
+    return data
+
+
+@admin_router.post("/push")
+def tpe_push_settings(
+    body: TpePushRequest,
+    _admin: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Push an FCM data message to all paired TPE devices, or to a specific device
+    when ``device_id`` is provided.
+
+    The ``action`` field must be one of the actions understood by
+    ``PartnerFcmService`` in the TPE Android app.
+    """
+    if body.action not in _VALID_TPE_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown action '{body.action}'. Valid: {sorted(_VALID_TPE_ACTIONS)}",
+        )
+
+    data = _build_tpe_payload(body)
 
     if body.device_id:
         row = db.execute(
