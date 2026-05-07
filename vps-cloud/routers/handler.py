@@ -35,7 +35,8 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from passlib.context import CryptContext
+from pydantic import BaseModel, Field
 
 import jwt as _jwt
 from db import get_db, get_db_connection
@@ -51,6 +52,8 @@ from routers.tpe import (
 from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(tags=["handler"])
 
