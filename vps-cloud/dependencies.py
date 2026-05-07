@@ -5,15 +5,30 @@ Centralises JWT configuration, token creation, and the ``get_current_user``
 dependency so that both ``main.py`` and sub-routers can import them without
 creating circular imports.
 
-Also provides the ``get_admin_user`` HTTP Basic Auth dependency that guards
-all ``/api/admin`` endpoints, and the ``role_required`` factory that protects
-handler-panel endpoints by JWT user role ('admin' or 'handler').
+Also provides:
+  - ``get_admin_user``   – HTTP Basic Auth guard for all ``/api/admin`` endpoints.
+  - ``get_optional_user`` – Returns the authenticated user dict, or ``None`` for
+                            unauthenticated requests (for public endpoints).
+  - ``role_required``    – Legacy factory; protects endpoints by exact role match.
+  - ``require_role``     – Preferred factory; enforces the RBAC role hierarchy so
+                            higher-ranked roles automatically satisfy lower-ranked
+                            requirements.
+
+Role hierarchy (lowest → highest):
+  user < paid_user < handler < admin
+
+Defined roles and their permissions:
+  user       – Access to SFW live stream endpoints.
+  paid_user  – Access to SFW + NSFW live stream endpoints and uploaded VOD content.
+  handler    – Full control over device interaction (tpeapp hardware) plus the
+               ability to flag devices/streams as public for user/paid_user accounts.
+  admin      – Unrestricted access to all endpoints.
 """
 
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -45,6 +60,32 @@ ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# ---------------------------------------------------------------------------
+# RBAC role definitions
+# ---------------------------------------------------------------------------
+
+# Canonical set of valid site roles.
+VALID_ROLES: frozenset[str] = frozenset({"user", "paid_user", "handler", "admin"})
+
+# Numeric rank for each role.  A higher rank means more privileges.
+# Used by ``require_role`` to implement hierarchical access checks so that
+# higher-ranked roles automatically satisfy lower-ranked requirements.
+ROLE_HIERARCHY: dict[str, int] = {
+    "user":      1,
+    "paid_user": 2,
+    "handler":   3,
+    "admin":     4,
+}
+
+# Maps a user's role to the integer access_level used by the cameras table
+# (minimum_access_level column).  Admins and handlers have full camera access.
+ROLE_ACCESS_LEVEL: dict[str, int] = {
+    "user":      1,
+    "paid_user": 2,
+    "handler":   3,
+    "admin":     3,
+}
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Return a signed JWT encoding *data* with an expiry claim."""
@@ -71,7 +112,7 @@ def get_current_user(
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: Optional[str] = payload.get("sub")
         access_level: int = int(payload.get("access_level", 0))
-        role: str = payload.get("role", "handler")
+        role: str = payload.get("role", "user")
         if user_id is None:
             raise credentials_exception
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
@@ -79,8 +120,38 @@ def get_current_user(
     return {"user_id": user_id, "access_level": access_level, "role": role}
 
 
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[dict]:
+    """Return the decoded JWT payload dict, or ``None`` for unauthenticated requests.
+
+    Use this dependency on public endpoints that optionally enrich their
+    response for logged-in users without blocking anonymous visitors::
+
+        @router.get("/api/store/products")
+        def list_products(current_user: Optional[dict] = Depends(get_optional_user)):
+            ...
+    """
+    if not credentials:
+        return None
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: Optional[str] = payload.get("sub")
+        if user_id is None:
+            return None
+        access_level: int = int(payload.get("access_level", 0))
+        role: str = payload.get("role", "user")
+        return {"user_id": user_id, "access_level": access_level, "role": role}
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
 def role_required(*allowed_roles: str) -> Callable:
     """Return a FastAPI dependency that enforces the caller has one of *allowed_roles*.
+
+    Performs exact role matching.  Prefer ``require_role`` for new endpoints
+    because it applies the RBAC hierarchy so higher-ranked roles automatically
+    satisfy lower-ranked requirements.
 
     Usage::
 
@@ -92,6 +163,72 @@ def role_required(*allowed_roles: str) -> Callable:
         current_user: dict = Depends(get_current_user),
     ) -> dict:
         if current_user.get("role") not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient role privileges.",
+            )
+        return current_user
+
+    return _check_role
+
+
+def require_role(allowed_roles: List[str]) -> Callable:
+    """Return a FastAPI dependency that enforces a minimum role level via the RBAC hierarchy.
+
+    The *allowed_roles* list specifies the lowest-ranked role(s) that may access
+    the endpoint.  Any role ranked *at or above* the minimum required rank is also
+    permitted.  This means, for example, that ``require_role(["handler"])``
+    automatically allows both ``handler`` and ``admin`` users.
+
+    Role hierarchy (lowest → highest)::
+
+        user (1) < paid_user (2) < handler (3) < admin (4)
+
+    Usage::
+
+        # Requires at least 'user' role (paid_user, handler, and admin also pass)
+        @router.get("/api/stream/sfw")
+        def sfw_stream(current_user: dict = Depends(require_role(["user"]))):
+            ...
+
+        # Requires at least 'paid_user' role
+        @router.get("/api/stream/nsfw")
+        def nsfw_stream(current_user: dict = Depends(require_role(["paid_user"]))):
+            ...
+
+        # Requires at least 'handler' role (admin also passes)
+        @router.post("/api/handler/lock")
+        def lock_device(current_user: dict = Depends(require_role(["handler"]))):
+            ...
+
+        # Requires admin only
+        @router.delete("/api/admin/users/{user_id}")
+        def delete_user(current_user: dict = Depends(require_role(["admin"]))):
+            ...
+    """
+    # Validate all requested roles at definition time to catch configuration bugs early.
+    unknown = [r for r in allowed_roles if r not in VALID_ROLES]
+    if unknown:
+        raise ValueError(
+            f"require_role() received unknown role(s): {unknown}. "
+            f"Valid roles are: {sorted(VALID_ROLES)}"
+        )
+
+    # Compute the minimum rank required once at definition time.
+    min_rank: int = min(ROLE_HIERARCHY[r] for r in allowed_roles)
+
+    def _check_role(
+        current_user: dict = Depends(get_current_user),
+    ) -> dict:
+        user_role = current_user.get("role", "")
+        if user_role not in VALID_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid user role in token. Please log in again.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_rank = ROLE_HIERARCHY[user_role]
+        if user_rank < min_rank:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient role privileges.",
