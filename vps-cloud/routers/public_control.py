@@ -4,7 +4,7 @@ Public SMS control + WATCH signaling routes.
 Endpoints:
   POST /sms                       Twilio inbound SMS webhook (public)
   POST /api/public/leak           Device leak callback → send MMS to SECRET requester
-  GET  /api/public/leak/media/{id}Serve uploaded leak image for Twilio MediaUrl
+  GET  /api/public/leak/media/{id} Serve uploaded leak image for Twilio MediaUrl
   WS   /ws/public/watch/{id}      WebRTC signaling relay for 60-second WATCH sessions
 """
 
@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
@@ -44,7 +44,8 @@ _TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
 _TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
 
 _IMAGE_URL_RE = re.compile(r"(https?://\S+)", re.IGNORECASE)
-_IMAGE_EXT_RE = re.compile(r"\.(?:png|jpe?g|gif|webp|bmp|heic|heif)(?:[?#].*)?$", re.IGNORECASE)
+_IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif")
+_UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 # session_id -> connected peers
 _watch_rooms: dict[str, set[WebSocket]] = {}
@@ -109,8 +110,9 @@ def _extract_image_url(text: str) -> Optional[str]:
     if not text:
         return None
     for match in _IMAGE_URL_RE.findall(text):
-        candidate = match.strip(".,!?)(").strip()
-        if _IMAGE_EXT_RE.search(candidate):
+        candidate = match.strip(".,!?)").strip()
+        parsed = urlparse(candidate)
+        if parsed.scheme in {"http", "https"} and parsed.path.lower().endswith(_IMAGE_EXTS):
             return candidate
     return None
 
@@ -193,6 +195,17 @@ async def _send_twilio_mms(to_number: str, body_text: str, media_url: str) -> No
         )
 
 
+def _has_mms_attachment(num_media: str, media_url_0: str) -> bool:
+    if not media_url_0.strip():
+        return False
+    if not num_media:
+        return False
+    try:
+        return int(num_media) > 0
+    except ValueError:
+        return False
+
+
 @router.post("/sms")
 async def twilio_sms_webhook(
     body: str = Form(default="", alias="Body"),
@@ -205,7 +218,7 @@ async def twilio_sms_webhook(
     text_upper = text.upper()
 
     image_url = _extract_image_url(text)
-    if not image_url and num_media and num_media.isdigit() and int(num_media) > 0 and media_url_0:
+    if not image_url and _has_mms_attachment(num_media, media_url_0):
         image_url = media_url_0.strip()
 
     try:
@@ -268,7 +281,7 @@ def _store_uploaded_leak_media(db: sqlite3.Connection, upload: UploadFile) -> st
 
     with path.open("wb") as out:
         while True:
-            chunk = upload.file.read(1024 * 1024)
+            chunk = upload.file.read(_UPLOAD_CHUNK_SIZE)
             if not chunk:
                 break
             out.write(chunk)
