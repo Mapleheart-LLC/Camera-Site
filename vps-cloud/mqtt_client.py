@@ -55,8 +55,11 @@ class _MqttClientService:
         return default
 
     def _compile_presence_regexes(self) -> None:
-        self._status_topic_re = re.compile("^" + re.escape(self._presence_status_topic).replace(r"\+", r"([^/]+)") + "$")
-        self._heartbeat_topic_re = re.compile("^" + re.escape(self._presence_heartbeat_topic).replace(r"\+", r"([^/]+)") + "$")
+        self._status_topic_re = self._compile_topic_regex(self._presence_status_topic)
+        self._heartbeat_topic_re = self._compile_topic_regex(self._presence_heartbeat_topic)
+
+    def _compile_topic_regex(self, topic_pattern: str) -> re.Pattern[str]:
+        return re.compile("^" + re.escape(topic_pattern).replace(r"\+", r"([^/]+)") + "$")
 
     @property
     def enabled(self) -> bool:
@@ -146,7 +149,7 @@ class _MqttClientService:
             except Exception:
                 keepalive = 60
 
-            client = mqtt.Client(client_id=client_id)
+            client = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv311)
             if username:
                 client.username_pw_set(username=username, password=password or None)
 
@@ -158,7 +161,7 @@ class _MqttClientService:
                         certfile=tls_cert or None,
                         keyfile=tls_key or None,
                         cert_reqs=cert_reqs,
-                        tls_version=ssl.PROTOCOL_TLS_CLIENT,
+                        tls_version=getattr(ssl, "PROTOCOL_TLS_CLIENT", ssl.PROTOCOL_TLS),
                     )
                     client.tls_insecure_set(tls_insecure)
                 except Exception as exc:

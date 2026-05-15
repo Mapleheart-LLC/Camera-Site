@@ -140,17 +140,17 @@ def _send_mqtt_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str,
 
 def _send_mqtt_to_device(db: sqlite3.Connection, device_id: str, data: dict[str, str]) -> dict[str, int]:
     """Publish a command payload to one device over MQTT."""
-    device_id = (device_id or "").strip()
-    if not device_id:
+    sanitized_device_id = (device_id or "").strip()
+    if not sanitized_device_id:
         raise HTTPException(status_code=400, detail="device_id is required.")
 
     _ensure_mqtt_ready(db)
 
-    topic = _mqtt_client.topic_for_device_command(device_id)
+    topic = _mqtt_client.topic_for_device_command(sanitized_device_id)
     if _mqtt_client.publish_json(topic, data, qos=1):
-        logger.info("TPE MQTT targeted push: sent=1 device=%s", device_id)
+        logger.info("TPE MQTT targeted push: sent=1 device=%s", sanitized_device_id)
         return {"sent": 1, "failed": 0}
-    logger.warning("TPE MQTT targeted push failed for device %s", device_id)
+    logger.warning("TPE MQTT targeted push failed for device %s", sanitized_device_id)
     return {"sent": 0, "failed": 1}
 
 
