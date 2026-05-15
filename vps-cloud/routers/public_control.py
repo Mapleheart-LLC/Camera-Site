@@ -110,7 +110,7 @@ def _extract_image_url(text: str) -> Optional[str]:
     if not text:
         return None
     for match in _IMAGE_URL_RE.findall(text):
-        candidate = match.strip(".,!?)").strip()
+        candidate = match.strip().lstrip("(").rstrip(".,!?)]")
         parsed = urlparse(candidate)
         if parsed.scheme in {"http", "https"} and parsed.path.lower().endswith(_IMAGE_EXTS):
             return candidate
@@ -406,7 +406,20 @@ def _watch_session_active(db: sqlite3.Connection, session_id: str) -> bool:
         expires_at = datetime.fromisoformat(row["expires_at"])
     except Exception:
         return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
     return expires_at > _now()
+
+
+async def _relay_watch_payload(room: set[WebSocket], source: WebSocket, raw: str) -> None:
+    peers = [peer for peer in room if peer is not source]
+    if not peers:
+        return
+    tasks = [asyncio.wait_for(peer.send_text(raw), timeout=5.0) for peer in peers]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for peer, result in zip(peers, results):
+        if isinstance(result, Exception):
+            room.discard(peer)
 
 
 @router.websocket("/ws/public/watch/{session_id}")
@@ -428,16 +441,7 @@ async def public_watch_signal_ws(
         try:
             while True:
                 raw = await websocket.receive_text()
-                dead: list[WebSocket] = []
-                for peer in room:
-                    if peer is websocket:
-                        continue
-                    try:
-                        await asyncio.wait_for(peer.send_text(raw), timeout=5.0)
-                    except Exception:
-                        dead.append(peer)
-                for d in dead:
-                    room.discard(d)
+                await _relay_watch_payload(room, websocket, raw)
         except WebSocketDisconnect:
             pass
         finally:
