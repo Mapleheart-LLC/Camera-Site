@@ -40,10 +40,11 @@ from pydantic import BaseModel
 import jwt as _jwt
 from db import get_db, get_db_connection
 from dependencies import SECRET_KEY, ALGORITHM, role_required
+from mqtt_client import mqtt_client as _mqtt_client
 from routers.tpe import (
     _effective_webhook_secret,
-    _send_fcm_to_token,
-    _send_fcm_to_all,
+    _send_mqtt_to_device,
+    _send_mqtt_to_all,
     TpePushRequest,
     _VALID_TPE_ACTIONS,
     _build_tpe_payload,
@@ -58,6 +59,17 @@ router = APIRouter(tags=["handler"])
 # ---------------------------------------------------------------------------
 # DB migration
 # ---------------------------------------------------------------------------
+
+
+def _publish_signaling_fallback(device_id: str, payload: dict) -> None:
+    """Best-effort MQTT signaling fallback publish for device signaling topics."""
+    published = _mqtt_client.publish_json(
+        _mqtt_client.topic_for_device_signaling(device_id),
+        {"device_id": device_id, **payload},
+        qos=1,
+    )
+    if not published:
+        logger.debug("MQTT signaling fallback publish failed for device %s", device_id)
 
 _CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS handler_device_status (
@@ -341,18 +353,12 @@ async def handler_lock(
             raise HTTPException(status_code=403, detail="Access denied to this device.")
 
     row = db.execute(
-        "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
+        "SELECT device_id FROM handler_device_status WHERE device_id = ?",
         (body.device_id,),
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Device not found.")
-    if not row["fcm_token"]:
-        raise HTTPException(
-            status_code=409,
-            detail="Device has no FCM token registered — cannot send lock command.",
-        )
-
-    result = _send_fcm_to_token(db, row["fcm_token"], {"action": "LOCK_DEVICE"})
+    result = _send_mqtt_to_device(db, body.device_id, {"action": "LOCK_DEVICE"})
 
     now = _now_iso()
     db.execute(
@@ -366,7 +372,7 @@ async def handler_lock(
     db.commit()
 
     await _handler_ws.broadcast({"type": "lock", "device_id": body.device_id, "is_locked": 1})
-    return {"status": "lock_sent", "fcm": result}
+    return {"status": "lock_sent", "mqtt": result}
 
 
 # ---------------------------------------------------------------------------
@@ -456,16 +462,7 @@ def handler_tpe_push(
         if body.device_id not in assigned:
             raise HTTPException(status_code=403, detail="Access denied to this device.")
 
-    row = db.execute(
-        "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
-        (body.device_id,),
-    ).fetchone()
-    if not row or not row["fcm_token"]:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No FCM token found for device_id '{body.device_id}'.",
-        )
-    return _send_fcm_to_token(db, row["fcm_token"], _build_tpe_payload(body))
+    return _send_mqtt_to_device(db, body.device_id, _build_tpe_payload(body))
 
 
 @router.post("/api/handler/tpe/checkins/request")
@@ -480,17 +477,8 @@ def handler_tpe_checkins_request(
             assigned = _handler_allowed_devices(db, current_user["user_id"])
             if body.device_id not in assigned:
                 raise HTTPException(status_code=403, detail="Access denied to this device.")
-        row = db.execute(
-            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
-            (body.device_id,),
-        ).fetchone()
-        if not row or not row["fcm_token"]:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No FCM token found for device_id '{body.device_id}'.",
-            )
-        return _send_fcm_to_token(db, row["fcm_token"], {"action": "REQUEST_CHECKIN"})
-    return _send_fcm_to_all(db, {"action": "REQUEST_CHECKIN"})
+        return _send_mqtt_to_device(db, body.device_id, {"action": "REQUEST_CHECKIN"})
+    return _send_mqtt_to_all(db, {"action": "REQUEST_CHECKIN"})
 
 
 @router.get("/api/handler/tpe/events")
@@ -616,13 +604,19 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
                                         target_device,
                                         {"type": "webrtc_offer", "sdp": sdp},
                                     )
+                                    _publish_signaling_fallback(target_device, {"type": "webrtc_offer", "sdp": sdp})
                             elif action == "webrtc_ice_candidate" and target_device:
                                 # Route ICE candidate from handler to the target device verbatim.
                                 candidate = cmd.get("candidate")
                                 if candidate is not None:
+                                    payload = {"type": "webrtc_ice_candidate", "candidate": candidate}
                                     await _handler_ws.relay_signal_to_device(
                                         target_device,
-                                        {"type": "webrtc_ice_candidate", "candidate": candidate},
+                                        payload,
+                                    )
+                                    _publish_signaling_fallback(
+                                        target_device,
+                                        payload,
                                     )
                         except Exception:
                             pass  # Ignore malformed frames.
@@ -694,6 +688,7 @@ async def device_audio_ws_endpoint(
                                 sig_type = sig.get("type", "")
                                 if sig_type in ("webrtc_answer", "webrtc_ice_candidate"):
                                     await _handler_ws.relay_signal_to_handler(device_id, sig, db)
+                                    _publish_signaling_fallback(device_id, sig)
                             except Exception:
                                 pass  # Ignore malformed frames.
         finally:

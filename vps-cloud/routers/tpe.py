@@ -75,6 +75,7 @@ from pydantic import BaseModel
 
 from db import get_db, get_db_connection
 from dependencies import get_admin_user
+from mqtt_client import mqtt_client as _mqtt_client
 from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
@@ -93,118 +94,83 @@ _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short rec
 _CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
 
 # ---------------------------------------------------------------------------
-# Firebase / FCM (lazy initialisation)
+# MQTT dispatch
 # ---------------------------------------------------------------------------
 
-_firebase_app = None
 
-
-def _get_firebase_app(db: sqlite3.Connection):
-    """Return (and lazily initialise) the Firebase Admin app."""
-    global _firebase_app
-    if _firebase_app is not None:
-        return _firebase_app
-
-    try:
-        import firebase_admin
-        from firebase_admin import credentials as _creds
-
-        cred = None
-
-        # Priority 1: GOOGLE_APPLICATION_CREDENTIALS env var
-        gac = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-        if gac and Path(gac).is_file():
-            cred = _creds.Certificate(gac)
-
-        # Priority 2: service account JSON stored in the settings table
-        if cred is None:
-            row = db.execute(
-                "SELECT value FROM settings WHERE key = 'tpe_fcm_service_account_json'"
-            ).fetchone()
-            if row and row["value"]:
-                try:
-                    sa_info = json.loads(row["value"])
-                    cred = _creds.Certificate(sa_info)
-                except Exception as exc:
-                    logger.warning("TPE: invalid tpe_fcm_service_account_json: %s", exc)
-
-        if cred is None:
-            return None
-
-        # Avoid re-initialising if something already init'd the default app.
-        try:
-            _firebase_app = firebase_admin.get_app()
-        except ValueError:
-            _firebase_app = firebase_admin.initialize_app(cred)
-
-        return _firebase_app
-
-    except ImportError:
-        logger.warning("TPE: firebase-admin is not installed – FCM push unavailable")
-        return None
-
-
-def _send_fcm_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, int]:
-    """Send a data-only FCM message to every paired device.
-
-    Returns ``{"sent": n, "failed": n}``.
-    """
-    app = _get_firebase_app(db)
-    if app is None:
+def _ensure_mqtt_ready(db: sqlite3.Connection) -> None:
+    _mqtt_client.start(db)
+    if not _mqtt_client.enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "FCM is not configured. "
-                "Set GOOGLE_APPLICATION_CREDENTIALS or tpe_fcm_service_account_json."
+                "MQTT is not configured. "
+                "Set MQTT_BROKER_HOST (or tpe_mqtt_broker_host in settings)."
             ),
         )
 
-    from firebase_admin import messaging
 
-    rows = db.execute("SELECT fcm_token FROM tpe_paired_devices").fetchall()
-    if not rows:
+def _known_device_ids(db: sqlite3.Connection) -> list[str]:
+    rows = db.execute(
+        "SELECT device_id FROM handler_device_status WHERE device_id IS NOT NULL"
+    ).fetchall()
+    return [did for did in (str(r["device_id"]).strip() for r in rows) if did]
+
+
+def _send_mqtt_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, int]:
+    """Publish a command payload to all known devices over MQTT."""
+    _ensure_mqtt_ready(db)
+    device_ids = _known_device_ids(db)
+    if not device_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No paired devices registered.",
+            detail="No known devices registered.",
         )
 
     sent = failed = 0
-    for row in rows:
-        try:
-            messaging.send(messaging.Message(token=row["fcm_token"], data=data))
+    for device_id in device_ids:
+        topic = _mqtt_client.topic_for_device_command(device_id)
+        if _mqtt_client.publish_json(topic, data, qos=1):
             sent += 1
-        except Exception as exc:
-            logger.warning("TPE FCM delivery failed for token %s: %s", row["fcm_token"][:16], exc)
+        else:
             failed += 1
-
-    logger.info("TPE FCM push: sent=%d failed=%d", sent, failed)
+    logger.info("TPE MQTT push: sent=%d failed=%d", sent, failed)
     return {"sent": sent, "failed": failed}
 
 
-def _send_fcm_to_token(db: sqlite3.Connection, fcm_token: str, data: dict[str, str]) -> dict[str, int]:
-    """Send a data-only FCM message to a single specific device by its FCM token.
+def _send_mqtt_to_device(db: sqlite3.Connection, device_id: str, data: dict[str, str]) -> dict[str, int]:
+    """Publish a command payload to one device over MQTT."""
+    sanitized_device_id = (device_id or "").strip()
+    if not sanitized_device_id:
+        raise HTTPException(status_code=400, detail="device_id is required.")
 
-    Returns ``{"sent": n, "failed": n}``.
-    """
-    app = _get_firebase_app(db)
-    if app is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "FCM is not configured. "
-                "Set GOOGLE_APPLICATION_CREDENTIALS or tpe_fcm_service_account_json."
-            ),
-        )
+    _ensure_mqtt_ready(db)
 
-    from firebase_admin import messaging
-
-    try:
-        messaging.send(messaging.Message(token=fcm_token, data=data))
-        logger.info("TPE FCM targeted push: sent=1 token=…%s", fcm_token[-4:])
+    topic = _mqtt_client.topic_for_device_command(sanitized_device_id)
+    if _mqtt_client.publish_json(topic, data, qos=1):
+        logger.info("TPE MQTT targeted push: sent=1 device=%s", sanitized_device_id)
         return {"sent": 1, "failed": 0}
-    except Exception as exc:
-        logger.warning("TPE FCM targeted push failed for token …%s: %s", fcm_token[-4:], exc)
-        return {"sent": 0, "failed": 1}
+    logger.warning("TPE MQTT targeted push failed for device %s", sanitized_device_id)
+    return {"sent": 0, "failed": 1}
+
+
+def _send_fcm_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, int]:
+    """Backward-compatible alias for existing callers."""
+    return _send_mqtt_to_all(db, data)
+
+
+def _send_fcm_to_token(db: sqlite3.Connection, fcm_token: str, data: dict[str, str]) -> dict[str, int]:
+    """Backward-compatible alias that resolves token→device_id when available."""
+    row = db.execute(
+        "SELECT device_id FROM handler_device_status WHERE fcm_token = ? LIMIT 1",
+        (fcm_token,),
+    ).fetchone()
+    if not row or not str(row["device_id"] or "").strip():
+        raise HTTPException(
+            status_code=404,
+            detail="No device_id mapping found for the provided token.",
+        )
+    return _send_mqtt_to_device(db, str(row["device_id"]).strip(), data)
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +568,23 @@ _TPE_SETTING_KEYS = {
     "tpe_notification_blocklist",
     "tpe_restricted_vocabulary",
     "tpe_strict_tone_mode",
+    "tpe_mqtt_broker_host",
+    "tpe_mqtt_broker_port",
+    "tpe_mqtt_username",
+    "tpe_mqtt_password",
+    "tpe_mqtt_client_id",
+    "tpe_mqtt_keepalive",
+    "tpe_mqtt_tls_enabled",
+    "tpe_mqtt_tls_ca_cert",
+    "tpe_mqtt_tls_client_cert",
+    "tpe_mqtt_tls_client_key",
+    "tpe_mqtt_tls_insecure",
+    "tpe_mqtt_command_topic_template",
+    "tpe_mqtt_signaling_topic_template",
+    "tpe_mqtt_device_signaling_topic_template",
+    "tpe_mqtt_presence_enabled",
+    "tpe_mqtt_presence_heartbeat_topic",
+    "tpe_mqtt_presence_status_topic",
 }
 
 
@@ -616,7 +599,13 @@ def tpe_get_settings(
     ).fetchall()
     result = {r["key"]: r["value"] for r in rows}
     # Redact sensitive fields
-    for secret_key in ("tpe_pairing_token", "tpe_webhook_secret", "tpe_fcm_service_account_json"):
+    for secret_key in (
+        "tpe_pairing_token",
+        "tpe_webhook_secret",
+        "tpe_fcm_service_account_json",
+        "tpe_mqtt_password",
+        "tpe_mqtt_tls_client_key",
+    ):
         if result.get(secret_key):
             result[secret_key] = "***"
     return result
@@ -632,6 +621,23 @@ class TpeSettingsPatch(BaseModel):
     tpe_notification_blocklist: Optional[str] = None
     tpe_restricted_vocabulary: Optional[str] = None
     tpe_strict_tone_mode: Optional[str] = None
+    tpe_mqtt_broker_host: Optional[str] = None
+    tpe_mqtt_broker_port: Optional[str] = None
+    tpe_mqtt_username: Optional[str] = None
+    tpe_mqtt_password: Optional[str] = None
+    tpe_mqtt_client_id: Optional[str] = None
+    tpe_mqtt_keepalive: Optional[str] = None
+    tpe_mqtt_tls_enabled: Optional[str] = None
+    tpe_mqtt_tls_ca_cert: Optional[str] = None
+    tpe_mqtt_tls_client_cert: Optional[str] = None
+    tpe_mqtt_tls_client_key: Optional[str] = None
+    tpe_mqtt_tls_insecure: Optional[str] = None
+    tpe_mqtt_command_topic_template: Optional[str] = None
+    tpe_mqtt_signaling_topic_template: Optional[str] = None
+    tpe_mqtt_device_signaling_topic_template: Optional[str] = None
+    tpe_mqtt_presence_enabled: Optional[str] = None
+    tpe_mqtt_presence_heartbeat_topic: Optional[str] = None
+    tpe_mqtt_presence_status_topic: Optional[str] = None
 
 
 @admin_router.patch("/settings")
@@ -1114,18 +1120,9 @@ def tpe_push_settings(
     data = _build_tpe_payload(body)
 
     if body.device_id:
-        row = db.execute(
-            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
-            (body.device_id,),
-        ).fetchone()
-        if not row or not row["fcm_token"]:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No FCM token found for device_id '{body.device_id}'.",
-            )
-        return _send_fcm_to_token(db, row["fcm_token"], data)
+        return _send_mqtt_to_device(db, body.device_id, data)
 
-    return _send_fcm_to_all(db, data)
+    return _send_mqtt_to_all(db, data)
 
 
 @admin_router.get("/events")
@@ -1212,7 +1209,7 @@ def tpe_create_task(
 
     # Push FCM – best-effort; task row already saved even if FCM unavailable.
     try:
-        _send_fcm_to_all(db, {
+        _send_mqtt_to_all(db, {
             "action":      "TASK_ASSIGNED",
             "task_id":     task_id,
             "task_title":  body.title,
@@ -1220,7 +1217,7 @@ def tpe_create_task(
             "deadline_ms": str(body.deadline_ms),
         })
     except HTTPException as exc:
-        logger.warning("TPE task FCM push skipped: %s", exc.detail)
+        logger.warning("TPE task command push skipped: %s", exc.detail)
 
     return {"id": task_id, "status": "created"}
 
@@ -1629,17 +1626,8 @@ def tpe_request_checkin(
     """Push a ``REQUEST_CHECKIN`` FCM to a specific device (when ``device_id`` is
     given) or to all paired devices."""
     if body.device_id:
-        row = db.execute(
-            "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
-            (body.device_id,),
-        ).fetchone()
-        if not row or not row["fcm_token"]:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No FCM token found for device_id '{body.device_id}'.",
-            )
-        return _send_fcm_to_token(db, row["fcm_token"], {"action": "REQUEST_CHECKIN"})
-    return _send_fcm_to_all(db, {"action": "REQUEST_CHECKIN"})
+        return _send_mqtt_to_device(db, body.device_id, {"action": "REQUEST_CHECKIN"})
+    return _send_mqtt_to_all(db, {"action": "REQUEST_CHECKIN"})
 
 
 # ===========================================================================
@@ -1706,7 +1694,7 @@ def tpe_remind_rule(
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Rule not found")
-    return _send_fcm_to_all(db, {
+    return _send_mqtt_to_all(db, {
         "action":    "RULE_REMINDER",
         "rule_id":   str(row["id"]),
         "rule_text": row["rule_text"],
@@ -1768,6 +1756,20 @@ async def tpe_signal_ws(
     try:
         while True:
             raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+                if msg.get("type") in {"join", "offer", "answer", "ice-candidate", "leave"}:
+                    _mqtt_client.publish_json(
+                        _mqtt_client.topic_for_session_signaling(session_id),
+                        {
+                            "session_id": session_id,
+                            "transport": "websocket",
+                            **msg,
+                        },
+                        qos=1,
+                    )
+            except Exception as exc:
+                logger.debug("TPE signaling MQTT fallback publish failed: %s", exc)
             # Relay to all other peers in the room
             dead: list[WebSocket] = []
             for peer in room:
@@ -1827,15 +1829,20 @@ def tpe_start_review(
     signaling_url = f"{ws_base}/api/tpe/signal/{session_id}" if ws_base else ""
 
     try:
-        _send_fcm_to_all(db, {
+        _send_mqtt_to_all(db, {
             "action":        "START_REVIEW",
             "session_id":    session_id,
             "signaling_url": signaling_url,
+            "mqtt_signaling_topic": _mqtt_client.topic_for_session_signaling(session_id),
         })
     except HTTPException as exc:
-        logger.warning("TPE review FCM push skipped: %s", exc.detail)
+        logger.warning("TPE review command push skipped: %s", exc.detail)
 
-    return {"session_id": session_id, "signaling_url": signaling_url}
+    return {
+        "session_id": session_id,
+        "signaling_url": signaling_url,
+        "mqtt_signaling_topic": _mqtt_client.topic_for_session_signaling(session_id),
+    }
 
 
 @admin_router.get("/review/sessions")
