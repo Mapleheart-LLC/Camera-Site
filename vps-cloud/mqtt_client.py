@@ -152,7 +152,11 @@ class _MqttClientService:
             except Exception:
                 keepalive = 60
 
-            client = mqtt.Client(client_id=client_id, protocol=mqtt.MQTTv311)
+            client = mqtt.Client(
+                client_id=client_id,
+                protocol=mqtt.MQTTv311,
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION1,
+            )
             if username:
                 client.username_pw_set(username=username, password=password or None)
 

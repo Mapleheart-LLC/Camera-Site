@@ -112,9 +112,9 @@ def _ensure_mqtt_ready(db: sqlite3.Connection) -> None:
 
 def _known_device_ids(db: sqlite3.Connection) -> list[str]:
     rows = db.execute(
-        "SELECT device_id FROM handler_device_status WHERE device_id IS NOT NULL AND TRIM(device_id) <> ''"
+        "SELECT device_id FROM handler_device_status WHERE device_id IS NOT NULL"
     ).fetchall()
-    return [str(r["device_id"]) for r in rows]
+    return [did for did in (str(r["device_id"]).strip() for r in rows) if did]
 
 
 def _send_mqtt_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, int]:
@@ -162,15 +162,15 @@ def _send_fcm_to_all(db: sqlite3.Connection, data: dict[str, str]) -> dict[str, 
 def _send_fcm_to_token(db: sqlite3.Connection, fcm_token: str, data: dict[str, str]) -> dict[str, int]:
     """Backward-compatible alias that resolves token→device_id when available."""
     row = db.execute(
-        "SELECT device_id FROM handler_device_status WHERE fcm_token = ? AND TRIM(device_id) <> '' LIMIT 1",
+        "SELECT device_id FROM handler_device_status WHERE fcm_token = ? LIMIT 1",
         (fcm_token,),
     ).fetchone()
-    if not row:
+    if not row or not str(row["device_id"] or "").strip():
         raise HTTPException(
             status_code=404,
             detail="No device_id mapping found for the provided token.",
         )
-    return _send_mqtt_to_device(db, str(row["device_id"]), data)
+    return _send_mqtt_to_device(db, str(row["device_id"]).strip(), data)
 
 
 # ---------------------------------------------------------------------------
