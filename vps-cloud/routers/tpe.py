@@ -1769,7 +1769,7 @@ async def tpe_signal_ws(
                         qos=1,
                     )
             except Exception as exc:
-                logger.debug("TPE signaling MQTT fallback publish skipped: %s", exc)
+                logger.debug("TPE signaling MQTT fallback publish failed: %s", exc)
             # Relay to all other peers in the room
             dead: list[WebSocket] = []
             for peer in room:

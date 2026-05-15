@@ -14,6 +14,9 @@ from db import get_db_connection
 
 logger = logging.getLogger(__name__)
 
+_PRESENCE_QUEUE_MAX_SIZE = 10000
+_PRESENCE_QUEUE_TIMEOUT_SECONDS = 1.0
+
 
 def _as_bool(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
@@ -41,7 +44,7 @@ class _MqttClientService:
 
         self._status_topic_re: Optional[re.Pattern[str]] = None
         self._heartbeat_topic_re: Optional[re.Pattern[str]] = None
-        self._presence_queue: "queue.Queue[tuple[str, bool]]" = queue.Queue(maxsize=10000)
+        self._presence_queue: "queue.Queue[tuple[str, bool]]" = queue.Queue(maxsize=_PRESENCE_QUEUE_MAX_SIZE)
         self._presence_stop = threading.Event()
         self._presence_worker: Optional[threading.Thread] = None
 
@@ -155,13 +158,17 @@ class _MqttClientService:
 
             if tls_enabled:
                 cert_reqs = ssl.CERT_NONE if tls_insecure else ssl.CERT_REQUIRED
+                tls_protocol = getattr(ssl, "PROTOCOL_TLS_CLIENT", None)
+                if tls_protocol is None:
+                    tls_protocol = ssl.PROTOCOL_TLS
+                    logger.warning("ssl.PROTOCOL_TLS_CLIENT unavailable; falling back to ssl.PROTOCOL_TLS")
                 try:
                     client.tls_set(
                         ca_certs=tls_ca or None,
                         certfile=tls_cert or None,
                         keyfile=tls_key or None,
                         cert_reqs=cert_reqs,
-                        tls_version=getattr(ssl, "PROTOCOL_TLS_CLIENT", ssl.PROTOCOL_TLS),
+                        tls_version=tls_protocol,
                     )
                     client.tls_insecure_set(tls_insecure)
                 except Exception as exc:
@@ -259,7 +266,7 @@ class _MqttClientService:
         try:
             while not self._presence_stop.is_set():
                 try:
-                    device_id, is_online = self._presence_queue.get(timeout=1.0)
+                    device_id, is_online = self._presence_queue.get(timeout=_PRESENCE_QUEUE_TIMEOUT_SECONDS)
                 except queue.Empty:
                     continue
                 if not device_id:
