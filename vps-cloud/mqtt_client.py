@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import re
 import ssl
 import threading
@@ -40,6 +41,9 @@ class _MqttClientService:
 
         self._status_topic_re: Optional[re.Pattern[str]] = None
         self._heartbeat_topic_re: Optional[re.Pattern[str]] = None
+        self._presence_queue: "queue.Queue[tuple[str, bool]]" = queue.Queue(maxsize=10000)
+        self._presence_stop = threading.Event()
+        self._presence_worker: Optional[threading.Thread] = None
 
     def _setting(self, db, env_key: str, db_key: str, default: str = "") -> str:
         env_val = os.environ.get(env_key)
@@ -171,6 +175,13 @@ class _MqttClientService:
             try:
                 client.connect_async(host=host, port=port, keepalive=keepalive)
                 client.loop_start()
+                self._presence_stop.clear()
+                self._presence_worker = threading.Thread(
+                    target=self._presence_worker_loop,
+                    name="mqtt-presence-worker",
+                    daemon=True,
+                )
+                self._presence_worker.start()
                 self._client = client
                 self._enabled = True
                 self._started = True
@@ -193,6 +204,16 @@ class _MqttClientService:
             self._connected = False
             self._enabled = False
             self._started = False
+            self._presence_stop.set()
+            worker = self._presence_worker
+            self._presence_worker = None
+
+        if worker is not None:
+            try:
+                self._presence_queue.put_nowait(("", False))
+            except Exception:
+                pass
+            worker.join(timeout=2)
 
         if client is None:
             return
@@ -230,25 +251,33 @@ class _MqttClientService:
         else:
             logger.info("MQTT disconnected.")
 
-    def _set_device_online_state(self, device_id: str, is_online: bool) -> None:
+    def _presence_worker_loop(self) -> None:
         db = get_db_connection()
         try:
-            now = _iso_now()
-            db.execute(
-                """
-                INSERT INTO handler_device_status
-                    (device_id, is_locked, is_online, last_seen, updated_at)
-                VALUES (?, 0, ?, ?, ?)
-                ON CONFLICT(device_id) DO UPDATE SET
-                    is_online = excluded.is_online,
-                    last_seen = excluded.last_seen,
-                    updated_at = excluded.updated_at
-                """,
-                (device_id, 1 if is_online else 0, now, now),
-            )
-            db.commit()
-        except Exception as exc:
-            logger.debug("MQTT presence DB update failed for %s: %s", device_id, exc)
+            while not self._presence_stop.is_set():
+                try:
+                    device_id, is_online = self._presence_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+                if not device_id:
+                    continue
+                try:
+                    now = _iso_now()
+                    db.execute(
+                        """
+                        INSERT INTO handler_device_status
+                            (device_id, is_locked, is_online, last_seen, updated_at)
+                        VALUES (?, 0, ?, ?, ?)
+                        ON CONFLICT(device_id) DO UPDATE SET
+                            is_online = excluded.is_online,
+                            last_seen = excluded.last_seen,
+                            updated_at = excluded.updated_at
+                        """,
+                        (device_id, 1 if is_online else 0, now, now),
+                    )
+                    db.commit()
+                except Exception as exc:
+                    logger.debug("MQTT presence DB update failed for %s: %s", device_id, exc)
         finally:
             db.close()
 
@@ -286,7 +315,10 @@ class _MqttClientService:
                         pass
 
         if device_id and is_online is not None:
-            self._set_device_online_state(device_id, is_online)
+            try:
+                self._presence_queue.put_nowait((device_id, is_online))
+            except queue.Full:
+                logger.debug("MQTT presence queue full; dropping update for %s", device_id)
 
     def publish_json(self, topic: str, payload: dict[str, Any], qos: int = 1, retain: bool = False) -> bool:
         client = self._client

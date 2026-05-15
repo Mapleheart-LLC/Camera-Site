@@ -112,7 +112,7 @@ def _ensure_mqtt_ready(db: sqlite3.Connection) -> None:
 
 def _known_device_ids(db: sqlite3.Connection) -> list[str]:
     rows = db.execute(
-        "SELECT DISTINCT device_id FROM handler_device_status WHERE device_id IS NOT NULL AND TRIM(device_id) <> ''"
+        "SELECT device_id FROM handler_device_status WHERE device_id IS NOT NULL AND TRIM(device_id) <> ''"
     ).fetchall()
     return [str(r["device_id"]) for r in rows]
 
@@ -1768,8 +1768,8 @@ async def tpe_signal_ws(
                         },
                         qos=1,
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("TPE signaling MQTT fallback publish skipped: %s", exc)
             # Relay to all other peers in the room
             dead: list[WebSocket] = []
             for peer in room:
