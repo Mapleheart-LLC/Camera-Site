@@ -40,6 +40,7 @@ from dependencies import (
     require_role,
     role_required,
 )
+from mqtt_client import initialize_mqtt, shutdown_mqtt
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.questions import router as questions_router
@@ -774,12 +775,18 @@ async def lifespan(app: FastAPI):
     migrate_handler(get_db_connection())
     migrate_vitals(get_db_connection())
     migrate_public_control(get_db_connection())
+    mqtt_db = get_db_connection()
+    try:
+        initialize_mqtt(mqtt_db)
+    finally:
+        mqtt_db.close()
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
     await register_metadata_schema()
     await _register_idswyft_webhook()
     yield
     stop_drool_scheduler()
+    shutdown_mqtt()
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
 
