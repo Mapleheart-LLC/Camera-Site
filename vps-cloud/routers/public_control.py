@@ -55,6 +55,10 @@ _MAX_LEAK_BYTES = 10 * 1024 * 1024
 _MAX_BAN_WORD_LEN = 128
 _MAX_WS_MESSAGE_LEN = 64 * 1024
 _PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
+_UUID_HEX_RE = re.compile(r"[0-9a-f]{32}")
+_TWILIO_API_TIMEOUT_SECONDS = 12.0
+_WS_SEND_TIMEOUT_SECONDS = 5.0
+_WS_CLOSE_SESSION_NOT_FOUND = 4404
 
 # session_id -> connected peers
 _watch_rooms: dict[str, set[WebSocket]] = {}
@@ -153,7 +157,7 @@ def _store_watch_session(db: sqlite3.Connection, session_id: str, requester_phon
     db.commit()
 
 
-def _upsert_secret_request(db: sqlite3.Connection, requester_phone: str) -> None:
+def _record_secret_request(db: sqlite3.Connection, requester_phone: str) -> None:
     db.execute(
         """
         INSERT INTO public_secret_requests (requester_phone, requested_at, fulfilled_at)
@@ -191,7 +195,7 @@ def _validate_twilio_signature(
     digest = hmac.new(
         _TWILIO_AUTH_TOKEN.encode("utf-8"),
         s.encode("utf-8"),
-        hashlib.sha1,
+        hashlib.sha1,  # Twilio webhook signature spec mandates HMAC-SHA1.
     ).digest()
     expected = base64.b64encode(digest).decode("utf-8")
     return secrets.compare_digest(expected, signature)
@@ -224,7 +228,7 @@ async def _send_twilio_mms(to_number: str, body_text: str, media_url: str) -> No
         "Body": body_text,
         "MediaUrl": media_url,
     }
-    async with httpx.AsyncClient(timeout=12.0) as client:
+    async with httpx.AsyncClient(timeout=_TWILIO_API_TIMEOUT_SECONDS) as client:
         resp = await client.post(
             endpoint,
             content=urlencode(form),
@@ -286,7 +290,7 @@ async def twilio_sms_webhook(
 
         if text_upper == "WATCH":
             session_id = uuid.uuid4().hex
-            _store_watch_session(db, session_id, from_number.strip())
+            _store_watch_session(db, session_id, from_number)
             _dispatch_to_unit_084(
                 db,
                 {
@@ -300,7 +304,7 @@ async def twilio_sms_webhook(
         if text_upper == "SECRET":
             if not _valid_phone(from_number):
                 return _xml_response("Command failed. Please try again shortly.")
-            _upsert_secret_request(db, from_number.strip())
+            _record_secret_request(db, from_number)
             _dispatch_to_unit_084(db, {"action": "roulette_leak"})
             return _xml_response("Accessing Unit 084's gallery. Stand by.")
 
@@ -453,7 +457,7 @@ def get_public_leak_media(
     media_id: str,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    if not re.fullmatch(r"[0-9a-f]{32}", media_id):
+    if not _UUID_HEX_RE.fullmatch(media_id):
         raise HTTPException(status_code=400, detail="Invalid media id.")
     row = db.execute(
         "SELECT filename, content_type FROM public_leak_media WHERE id = ?",
@@ -498,7 +502,7 @@ async def _relay_watch_payload(room: set[WebSocket], source: WebSocket, raw: str
     peers = [peer for peer in room if peer is not source]
     if not peers:
         return
-    tasks = [asyncio.wait_for(peer.send_text(payload_text), timeout=5.0) for peer in peers]
+    tasks = [asyncio.wait_for(peer.send_text(payload_text), timeout=_WS_SEND_TIMEOUT_SECONDS) for peer in peers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for peer, result in zip(peers, results):
         if isinstance(result, Exception):
@@ -513,7 +517,7 @@ async def public_watch_signal_ws(
     db = get_db_connection()
     try:
         if not _watch_session_active(db, session_id):
-            await websocket.close(code=4404)
+            await websocket.close(code=_WS_CLOSE_SESSION_NOT_FOUND)
             return
 
         await websocket.accept()
