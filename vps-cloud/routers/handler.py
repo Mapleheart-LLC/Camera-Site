@@ -63,11 +63,13 @@ router = APIRouter(tags=["handler"])
 
 def _publish_signaling_fallback(device_id: str, payload: dict) -> None:
     """Best-effort MQTT signaling fallback publish for device signaling topics."""
-    _mqtt_client.publish_json(
+    published = _mqtt_client.publish_json(
         _mqtt_client.topic_for_device_signaling(device_id),
         {"device_id": device_id, **payload},
         qos=1,
     )
+    if not published:
+        logger.debug("MQTT signaling fallback publish failed for device %s", device_id)
 
 _CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS handler_device_status (
@@ -607,13 +609,14 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
                                 # Route ICE candidate from handler to the target device verbatim.
                                 candidate = cmd.get("candidate")
                                 if candidate is not None:
+                                    payload = {"type": "webrtc_ice_candidate", "candidate": candidate}
                                     await _handler_ws.relay_signal_to_device(
                                         target_device,
-                                        {"type": "webrtc_ice_candidate", "candidate": candidate},
+                                        payload,
                                     )
                                     _publish_signaling_fallback(
                                         target_device,
-                                        {"type": "webrtc_ice_candidate", "candidate": candidate},
+                                        payload,
                                     )
                         except Exception:
                             pass  # Ignore malformed frames.
