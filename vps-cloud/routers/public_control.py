@@ -12,10 +12,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import html
+import hmac
+import json
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -42,13 +46,19 @@ _LEAK_UPLOAD_PATH = Path(os.environ.get("PUBLIC_LEAK_UPLOAD_PATH", "/app/data/pu
 _TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
 _TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
 _TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
+_TWILIO_VALIDATE_SIGNATURE = os.environ.get("TWILIO_VALIDATE_SIGNATURE", "false").strip().lower() == "true"
 
 _IMAGE_URL_RE = re.compile(r"(https?://\S+)", re.IGNORECASE)
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif")
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
+_MAX_LEAK_BYTES = 10 * 1024 * 1024
+_MAX_BAN_WORD_LEN = 128
+_MAX_WS_MESSAGE_LEN = 64 * 1024
+_PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 
 # session_id -> connected peers
 _watch_rooms: dict[str, set[WebSocket]] = {}
+# WATCH links are intentionally short-lived (60 seconds) for public safety.
 _WATCH_TTL_SECONDS = 60
 
 
@@ -158,6 +168,35 @@ def _twilio_credentials_available() -> bool:
     return bool(_TWILIO_ACCOUNT_SID and _TWILIO_AUTH_TOKEN and _TWILIO_FROM_NUMBER)
 
 
+def _valid_phone(value: str) -> bool:
+    return bool(_PHONE_RE.fullmatch(value.strip()))
+
+
+def _is_safe_public_image_url(value: str) -> bool:
+    parsed = urlparse(value.strip())
+    return parsed.scheme in {"http", "https"} and parsed.path.lower().endswith(_IMAGE_EXTS)
+
+
+def _validate_twilio_signature(
+    request: Request,
+    signature: str,
+    fields: dict[str, str],
+) -> bool:
+    if not signature or not _TWILIO_AUTH_TOKEN:
+        return False
+    url = str(request.url).split("?", 1)[0]
+    s = url
+    for key in sorted(fields.keys()):
+        s += key + (fields[key] or "")
+    digest = hmac.new(
+        _TWILIO_AUTH_TOKEN.encode("utf-8"),
+        s.encode("utf-8"),
+        hashlib.sha1,
+    ).digest()
+    expected = base64.b64encode(digest).decode("utf-8")
+    return secrets.compare_digest(expected, signature)
+
+
 def _base_url_for_public(request: Request, db: sqlite3.Connection) -> str:
     row = db.execute("SELECT value FROM settings WHERE key = 'base_url'").fetchone()
     if row and row["value"]:
@@ -174,6 +213,10 @@ async def _send_twilio_mms(to_number: str, body_text: str, media_url: str) -> No
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Twilio MMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.",
         )
+    if not _valid_phone(to_number):
+        raise HTTPException(status_code=400, detail="Invalid destination phone number.")
+    if not _is_safe_public_image_url(media_url):
+        raise HTTPException(status_code=400, detail="Invalid media URL.")
     endpoint = f"https://api.twilio.com/2010-04-01/Accounts/{_TWILIO_ACCOUNT_SID}/Messages.json"
     form = {
         "To": to_number,
@@ -208,6 +251,7 @@ def _has_mms_attachment(num_media: str, media_url_0: str) -> bool:
 
 @router.post("/sms")
 async def twilio_sms_webhook(
+    request: Request,
     body: str = Form(default="", alias="Body"),
     from_number: str = Form(default="", alias="From"),
     num_media: str = Form(default="0", alias="NumMedia"),
@@ -216,10 +260,24 @@ async def twilio_sms_webhook(
 ):
     text = (body or "").strip()
     text_upper = text.upper()
+    from_number = from_number.strip()
+    signature = request.headers.get("X-Twilio-Signature", "").strip()
+
+    if _TWILIO_VALIDATE_SIGNATURE:
+        fields = {
+            "Body": body,
+            "From": from_number,
+            "NumMedia": num_media,
+            "MediaUrl0": media_url_0,
+        }
+        if not _validate_twilio_signature(request, signature, fields):
+            raise HTTPException(status_code=403, detail="Invalid Twilio signature.")
 
     image_url = _extract_image_url(text)
     if not image_url and _has_mms_attachment(num_media, media_url_0):
         image_url = media_url_0.strip()
+    if image_url and not _is_safe_public_image_url(image_url):
+        image_url = None
 
     try:
         if text_upper in {"SHOCK", "VIBRATE"}:
@@ -240,6 +298,8 @@ async def twilio_sms_webhook(
             return _xml_response(f"{_WATCH_LINK_BASE}/{session_id}")
 
         if text_upper == "SECRET":
+            if not _valid_phone(from_number):
+                return _xml_response("Command failed. Please try again shortly.")
             _upsert_secret_request(db, from_number.strip())
             _dispatch_to_unit_084(db, {"action": "roulette_leak"})
             return _xml_response("Accessing Unit 084's gallery. Stand by.")
@@ -248,7 +308,8 @@ async def twilio_sms_webhook(
             _dispatch_to_unit_084(db, {"action": "set_wallpaper", "image_url": image_url})
             return _xml_response("Unit's wallpaper overwritten.")
 
-        _dispatch_to_unit_084(db, {"action": "ban_word", "word": text})
+        ban_word = text[:_MAX_BAN_WORD_LEN] if text else "<empty>"
+        _dispatch_to_unit_084(db, {"action": "ban_word", "word": ban_word})
         return _xml_response("Word stolen. The Unit can no longer type this.")
     except HTTPException as exc:
         logger.warning("Public SMS command failed: %s", exc.detail)
@@ -280,10 +341,18 @@ def _store_uploaded_leak_media(db: sqlite3.Connection, upload: UploadFile) -> st
     path = _LEAK_UPLOAD_PATH / filename
 
     with path.open("wb") as out:
+        total = 0
         while True:
             chunk = upload.file.read(_UPLOAD_CHUNK_SIZE)
             if not chunk:
                 break
+            total += len(chunk)
+            if total > _MAX_LEAK_BYTES:
+                try:
+                    path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                raise HTTPException(status_code=413, detail="Leak file too large.")
             out.write(chunk)
 
     db.execute(
@@ -302,6 +371,8 @@ def _store_raw_leak_media(
     data: bytes,
     content_type: str = "image/jpeg",
 ) -> str:
+    if len(data) > _MAX_LEAK_BYTES:
+        raise HTTPException(status_code=413, detail="Leak payload too large.")
     _LEAK_UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
     media_id = uuid.uuid4().hex
     ext = _leak_ext_from_content_type(content_type)
@@ -382,6 +453,8 @@ def get_public_leak_media(
     media_id: str,
     db: sqlite3.Connection = Depends(get_db),
 ):
+    if not re.fullmatch(r"[0-9a-f]{32}", media_id):
+        raise HTTPException(status_code=400, detail="Invalid media id.")
     row = db.execute(
         "SELECT filename, content_type FROM public_leak_media WHERE id = ?",
         (media_id,),
@@ -412,10 +485,20 @@ def _watch_session_active(db: sqlite3.Connection, session_id: str) -> bool:
 
 
 async def _relay_watch_payload(room: set[WebSocket], source: WebSocket, raw: str) -> None:
+    if len(raw.encode("utf-8")) > _MAX_WS_MESSAGE_LEN:
+        raise HTTPException(status_code=413, detail="Signaling payload too large.")
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Signaling payload must be valid JSON.")
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=400, detail="Signaling payload must be a JSON object.")
+    payload_text = json.dumps(parsed, separators=(",", ":"))
+
     peers = [peer for peer in room if peer is not source]
     if not peers:
         return
-    tasks = [asyncio.wait_for(peer.send_text(raw), timeout=5.0) for peer in peers]
+    tasks = [asyncio.wait_for(peer.send_text(payload_text), timeout=5.0) for peer in peers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for peer, result in zip(peers, results):
         if isinstance(result, Exception):
