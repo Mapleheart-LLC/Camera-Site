@@ -62,6 +62,9 @@ def ensure_user_account_schema(conn: sqlite3.Connection) -> None:
         if "password_hash" not in existing_columns:
             conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
             changed = True
+        if "access_level" not in existing_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN access_level INTEGER NOT NULL DEFAULT 0")
+            changed = True
         if "role" not in existing_columns:
             conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
             changed = True
