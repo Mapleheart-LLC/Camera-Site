@@ -1575,7 +1575,7 @@
 
     const JWT_KEY = 'handler_panel_jwt';
     const AUTH_EXPIRED_ERROR = 'auth-expired';
-    let _currentUserRole = null;
+    let currentUserRole = null;
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -1710,7 +1710,7 @@
       clearJwt();
       disconnectWS();
       viewingDeviceId = null;
-      _currentUserRole = null;
+      currentUserRole = null;
       updateDeleteDeviceActionAccess();
     }
 
@@ -1770,7 +1770,7 @@
       const res = document.getElementById('res-delete-device');
       if (!btn) return;
 
-      if (_currentUserRole !== 'admin') {
+      if (currentUserRole !== 'admin') {
         btn.disabled = true;
         btn.textContent = 'Admin Only';
         if (res) res.textContent = 'Only admins can delete devices.';
@@ -1809,7 +1809,7 @@
           return;
         }
         saveJwt(data.access_token);
-        _currentUserRole = data.role;
+        currentUserRole = data.role;
         // Update topbar role badge
         var badge = document.querySelector('.topbar-badge');
         if (badge) badge.textContent = data.role.toUpperCase();
@@ -2371,13 +2371,13 @@
       const res = document.getElementById('res-delete-device');
       if (!_requireDevice(res)) return;
 
-      if (_currentUserRole !== 'admin') {
+      if (currentUserRole !== 'admin') {
         res.textContent = '❌ Admin role required.';
         showToast('❌ Only admins can delete devices.', true);
         return;
       }
 
-      const confirmText = `Delete device "${viewingDeviceId}"? This removes status, pairing, and assignments.`;
+      const confirmText = `Delete device "${viewingDeviceId}"? This will permanently remove the device and its related data.`;
       if (!window.confirm(confirmText)) {
         res.textContent = 'Cancelled.';
         return;
