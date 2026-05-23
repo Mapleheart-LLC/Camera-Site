@@ -1185,13 +1185,13 @@ def purge_bad_drool_entries(
 
 class _CreateUserPayload(BaseModel):
     username: str = Field(..., min_length=3, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=8, max_length=72)
     access_level: int = Field(0, ge=0, le=3)
     role: str = Field("user", pattern=r"^(user|paid_user|handler|admin)$")
 
 
 class _UpdateUserPayload(BaseModel):
-    password: Optional[str] = Field(None, min_length=8, max_length=128)
+    password: Optional[str] = Field(None, min_length=8, max_length=72)
     access_level: Optional[int] = Field(None, ge=0, le=3)
     role: Optional[str] = Field(None, pattern=r"^(user|paid_user|handler|admin)$")
 

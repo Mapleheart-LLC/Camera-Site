@@ -3562,7 +3562,7 @@
           loadUsersAdmin();
         } else {
           const data = await resp.json().catch(() => ({}));
-          msgEl.textContent = data.detail || `Error ${resp.status}`;
+          msgEl.textContent = formatApiError(data, resp.status);
         }
       } catch(e) { msgEl.textContent = 'Error: ' + e.message; }
     }
@@ -3583,6 +3583,8 @@
       const access_level = parseInt(document.getElementById('usr-new-level').value, 10);
       const role = document.getElementById('usr-new-role').value;
       if (!username) { msgEl.textContent = 'Username is required.'; return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(username)) { msgEl.textContent = 'Username may only contain letters, numbers, underscores, and hyphens.'; return; }
+      if (username.length < 3 || username.length > 32) { msgEl.textContent = 'Username must be 3-32 characters.'; return; }
       if (!password || password.length < 8) { msgEl.textContent = 'Password must be at least 8 characters.'; return; }
       try {
         const resp = await apiPost('/api/admin/users', { username, password, access_level, role });
@@ -3597,7 +3599,7 @@
         } else {
           const data = await resp.json().catch(() => ({}));
           msgEl.style.color = '#f87171';
-          msgEl.textContent = data.detail || `Error ${resp.status}`;
+          msgEl.textContent = formatApiError(data, resp.status);
         }
       } catch(e) { msgEl.style.color = '#f87171'; msgEl.textContent = 'Error: ' + e.message; }
     });
@@ -3606,6 +3608,17 @@
 
     function esc(s) {
       return escHtml(String(s));
+    }
+
+    function formatApiError(data, status) {
+      const detail = data.detail;
+      if (Array.isArray(detail)) {
+        return detail.map(e => {
+          const f = e.loc ? e.loc[e.loc.length - 1] : '';
+          return f ? `${f}: ${e.msg}` : e.msg;
+        }).join('; ');
+      }
+      return detail || `Error ${status}`;
     }
   </script>
 </body>
