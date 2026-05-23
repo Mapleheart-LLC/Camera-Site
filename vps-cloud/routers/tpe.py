@@ -385,7 +385,14 @@ def tpe_pair(
     if not secrets.compare_digest(body.pairing_token, expected):
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
-    device_id = (body.device_id or "").strip() or fcm_token or (x_device_id or "").strip()
+    body_device_id = (body.device_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    device_id = body_device_id or fcm_token or header_device_id
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Missing device identifier")
+
+    # tpeapp uses device_id as its stable token key; store paired row keyed by device_id.
+    paired_device_token = device_id
 
     now = _now_iso()
     db.execute(
@@ -394,7 +401,7 @@ def tpe_pair(
         VALUES (?, ?, ?)
         ON CONFLICT(fcm_token) DO UPDATE SET last_seen = excluded.last_seen
         """,
-        (device_id, now, now),
+        (paired_device_token, now, now),
     )
     db.execute(
         """
@@ -2005,12 +2012,7 @@ def tpe_pairing_qr(
             "tpe_mqtt_command_topic_template",
             "tpeapp/device/{device_id}/commands",
         )
-        mqtt_suffix = "/{device_id}/commands"
-        mqtt_topic_prefix = (
-            mqtt_topic_template[: -len(mqtt_suffix)]
-            if mqtt_topic_template.endswith(mqtt_suffix)
-            else mqtt_topic_template
-        ).rstrip("/")
+        mqtt_topic_prefix = re.sub(r"/\{device_id\}/commands$", "", mqtt_topic_template).rstrip("/")
 
         mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
         qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"
