@@ -1766,8 +1766,8 @@
     }
 
     function updateDeleteDeviceActionAccess() {
-      var btn = document.getElementById('btn-delete-device');
-      var res = document.getElementById('res-delete-device');
+      const btn = document.getElementById('btn-delete-device');
+      const res = document.getElementById('res-delete-device');
       if (!btn) return;
 
       if (_currentUserRole !== 'admin') {
@@ -2367,8 +2367,8 @@
     }
 
     async function deleteCurrentDevice() {
-      var btn = document.getElementById('btn-delete-device');
-      var res = document.getElementById('res-delete-device');
+      const btn = document.getElementById('btn-delete-device');
+      const res = document.getElementById('res-delete-device');
       if (!_requireDevice(res)) return;
 
       if (_currentUserRole !== 'admin') {
@@ -2377,7 +2377,7 @@
         return;
       }
 
-      var confirmText = 'Delete device "' + viewingDeviceId + '"? This removes status, pairing, and assignments.';
+      const confirmText = `Delete device "${viewingDeviceId}"? This removes status, pairing, and assignments.`;
       if (!window.confirm(confirmText)) {
         res.textContent = 'Cancelled.';
         return;
@@ -2386,14 +2386,14 @@
       btn.disabled = true;
       res.textContent = 'Deleting…';
       try {
-        var targetDeviceId = viewingDeviceId;
-        var r = await apiDelete('/api/handler/devices/' + encodeURIComponent(targetDeviceId));
+        const targetDeviceId = viewingDeviceId;
+        const r = await apiDelete('/api/handler/devices/' + encodeURIComponent(targetDeviceId));
         if (r.ok) {
           removeDeviceFromUi(targetDeviceId);
           res.textContent = '✅ Device deleted.';
           showToast('🗑️ Device deleted.');
         } else {
-          var b = await r.json().catch(function() { return {}; });
+          const b = await r.json().catch(function() { return {}; });
           if (r.status === 403) {
             res.textContent = '❌ Admin role required.';
             showToast('❌ Only admins can delete devices.', true);

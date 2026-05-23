@@ -391,18 +391,22 @@ async def handler_delete_device(
     if not row:
         raise HTTPException(status_code=404, detail="Device not found.")
 
-    token_candidates = [device_id]
     fcm_token = row["fcm_token"]
-    if fcm_token and fcm_token not in token_candidates:
-        token_candidates.append(fcm_token)
 
     db.execute("DELETE FROM handler_device_assignments WHERE device_id = ?", (device_id,))
     db.execute("DELETE FROM handler_device_status WHERE device_id = ?", (device_id,))
-    placeholders = ",".join("?" for _ in token_candidates)
-    db.execute(
-        f"DELETE FROM tpe_paired_devices WHERE fcm_token IN ({placeholders})",
-        token_candidates,
-    )
+    # Pairing rows are keyed by device_id, but we also remove any legacy row keyed
+    # by the status fcm_token if present.
+    if fcm_token and fcm_token != device_id:
+        db.execute(
+            "DELETE FROM tpe_paired_devices WHERE fcm_token = ? OR fcm_token = ?",
+            (device_id, fcm_token),
+        )
+    else:
+        db.execute(
+            "DELETE FROM tpe_paired_devices WHERE fcm_token = ?",
+            (device_id,),
+        )
     db.commit()
 
     await _handler_ws.broadcast({"type": "device_deleted", "device_id": device_id})
