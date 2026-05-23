@@ -193,8 +193,8 @@ services:
       # Bearer token the Android app includes in webhook/task/checkin requests.
       - TPE_WEBHOOK_SECRET=${TPE_WEBHOOK_SECRET:-}
       # Public MQTT broker the TPE Android app and backend both use.
-      - MQTT_BROKER_HOST=mqtt.mochii.live
-      - MQTT_BROKER_PORT=1883
+      - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mqtt.mochii.live}
+      - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
       # Directory where audit videos are stored (default: /app/data/tpe_audits)
       - TPE_AUDIT_PATH=${TPE_AUDIT_PATH:-/app/data/tpe_audits}
       # Path to a Firebase service-account JSON file for FCM push delivery.
