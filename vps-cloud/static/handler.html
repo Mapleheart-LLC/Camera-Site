@@ -1640,26 +1640,26 @@
     }
 
     async function loadPairingQr() {
-      var img = document.getElementById('pairing-qr-image');
-      var placeholder = document.getElementById('pairing-qr-placeholder');
-      var status = document.getElementById('pairing-qr-status');
+      const img = document.getElementById('pairing-qr-image');
+      const placeholder = document.getElementById('pairing-qr-placeholder');
+      const status = document.getElementById('pairing-qr-status');
       if (!img || !placeholder || !status) return;
       placeholder.style.display = 'block';
       placeholder.textContent = 'Loading pairing QR…';
       img.style.display = 'none';
       status.textContent = '';
       try {
-        var r = await fetch('/api/handler/tpe/qr', { headers: authHeader() });
+        const r = await fetch('/api/handler/tpe/qr', { headers: authHeader() });
         if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
-        var errText = '';
+        let errText = '';
         if (!r.ok) {
           try {
-            var errData = await r.json();
+            const errData = await r.json();
             errText = errData.detail || '';
           } catch(e) {}
           throw new Error(errText || ('HTTP ' + r.status));
         }
-        var blob = await r.blob();
+        const blob = await r.blob();
         if (_pairingQrObjectUrl) URL.revokeObjectURL(_pairingQrObjectUrl);
         _pairingQrObjectUrl = URL.createObjectURL(blob);
         img.src = _pairingQrObjectUrl;

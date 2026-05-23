@@ -220,7 +220,7 @@ def _effective_pairing_token(db: sqlite3.Connection) -> str:
     return (row["value"].strip() if row and row["value"] else "") or _TPE_PAIRING_TOKEN
 
 
-def _setting_value(
+def _resolve_setting(
     db: sqlite3.Connection,
     env_key: str,
     db_key: str,
@@ -280,15 +280,15 @@ def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
     if signaling_url:
         qr_payload["signaling_url"] = signaling_url
 
-    mqtt_broker_host = _setting_value(db, "MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
+    mqtt_broker_host = _resolve_setting(db, "MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
     if mqtt_broker_host:
-        mqtt_broker_port = _setting_value(db, "MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
+        mqtt_broker_port = _resolve_setting(db, "MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
         mqtt_tls_enabled = _as_bool(
-            _setting_value(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
+            _resolve_setting(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
         )
-        mqtt_username = _setting_value(db, "MQTT_USERNAME", "tpe_mqtt_username", "")
-        mqtt_password = _setting_value(db, "MQTT_PASSWORD", "tpe_mqtt_password", "")
-        mqtt_topic_template = _setting_value(
+        mqtt_username = _resolve_setting(db, "MQTT_USERNAME", "tpe_mqtt_username", "")
+        mqtt_password = _resolve_setting(db, "MQTT_PASSWORD", "tpe_mqtt_password", "")
+        mqtt_topic_template = _resolve_setting(
             db,
             "MQTT_COMMAND_TOPIC_TEMPLATE",
             "tpe_mqtt_command_topic_template",
