@@ -180,6 +180,11 @@
       font-size: .8rem;
       color: #9e7e82;
     }
+    .pairing-qr-refresh-btn {
+      width: auto;
+      padding: .35rem .9rem;
+      font-size: .82rem;
+    }
 
     /* Kennel card grid */
     #kennel-grid-heading {
@@ -549,7 +554,7 @@
       <div class="card pairing-card">
         <div class="card-header">
           <h2>🔗 Pair tpeapp</h2>
-          <button class="btn-action" id="pairing-qr-refresh-btn" style="width:auto;padding:.35rem .9rem;font-size:.82rem">Refresh QR</button>
+          <button class="btn-action pairing-qr-refresh-btn" id="pairing-qr-refresh-btn">Refresh QR</button>
         </div>
         <div class="card-body">
           <div class="pairing-qr-wrap">
@@ -1656,7 +1661,9 @@
           try {
             const errData = await r.json();
             errText = errData.detail || '';
-          } catch(e) {}
+          } catch(e) {
+            // Ignore JSON parse errors and fall back to the HTTP status text path below.
+          }
           throw new Error(errText || ('HTTP ' + r.status));
         }
         const blob = await r.blob();
