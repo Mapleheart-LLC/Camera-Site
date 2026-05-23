@@ -807,7 +807,7 @@
               <div class="action-card">
                 <div class="ac-icon">🗑️</div>
                 <div class="ac-label">Delete Device</div>
-                <button class="btn-action danger-action" id="btn-delete-device">Delete Device</button>
+                <button class="btn-action danger-action" id="btn-delete-device" aria-label="Delete current device permanently">Delete Device</button>
                 <div class="ac-result" id="res-delete-device"></div>
               </div>
             </div>
@@ -1576,6 +1576,7 @@
     const JWT_KEY = 'handler_panel_jwt';
     const AUTH_EXPIRED_ERROR = 'auth-expired';
     let currentUserRole = null;
+    let _deleteInProgress = false;
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -1777,7 +1778,7 @@
         return;
       }
 
-      btn.disabled = !viewingDeviceId;
+      btn.disabled = _deleteInProgress || !viewingDeviceId;
       btn.textContent = 'Delete Device';
       if (res) res.textContent = viewingDeviceId ? '' : 'Select a device first.';
     }
@@ -2384,6 +2385,7 @@
       }
 
       btn.disabled = true;
+      _deleteInProgress = true;
       res.textContent = 'Deleting…';
       try {
         const targetDeviceId = viewingDeviceId;
@@ -2406,6 +2408,7 @@
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR) res.textContent = '❌ Request failed.';
       } finally {
+        _deleteInProgress = false;
         updateDeleteDeviceActionAccess();
       }
     }
