@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import Response
 
 from db import get_db, get_db_connection
-from routers.tpe import _send_fcm_to_token
+from routers.tpe import _send_mqtt_to_device
 
 logger = logging.getLogger(__name__)
 
@@ -132,16 +132,7 @@ def _extract_image_url(text: str) -> Optional[str]:
 
 
 def _dispatch_to_unit_084(db: sqlite3.Connection, payload: dict[str, str]) -> None:
-    row = db.execute(
-        "SELECT fcm_token FROM handler_device_status WHERE device_id = ?",
-        (_UNIT_084_DEVICE_ID,),
-    ).fetchone()
-    if not row or not row["fcm_token"]:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"No FCM token found for device_id '{_UNIT_084_DEVICE_ID}'.",
-        )
-    _send_fcm_to_token(db, row["fcm_token"], payload)
+    _send_mqtt_to_device(db, _UNIT_084_DEVICE_ID, payload)
 
 
 def _store_watch_session(db: sqlite3.Connection, session_id: str, requester_phone: str) -> None:
@@ -285,7 +276,7 @@ async def twilio_sms_webhook(
 
     try:
         if text_upper in {"SHOCK", "VIBRATE"}:
-            _dispatch_to_unit_084(db, {"action": "ble_trigger", "mode": text_upper.lower()})
+            _dispatch_to_unit_084(db, {"action": "ble_trigger", "type": text_upper.lower()})
             return _xml_response("Physical stimulus delivered to Unit 084.")
 
         if text_upper == "WATCH":
