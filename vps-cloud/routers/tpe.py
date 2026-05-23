@@ -69,7 +69,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
@@ -476,8 +476,9 @@ class PairRequest(BaseModel):
 
 
 @device_router.post("/api/pair")
-async def tpe_pair(
+def tpe_pair(
     body: PairRequest,
+    background_tasks: BackgroundTasks,
     x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
     db: sqlite3.Connection = Depends(get_db),
 ):
@@ -521,14 +522,13 @@ async def tpe_pair(
     )
     db.execute(
         """
-        INSERT INTO handler_device_status (device_id, fcm_token, last_seen, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO handler_device_status (device_id, fcm_token, updated_at)
+        VALUES (?, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
             fcm_token = excluded.fcm_token,
-            last_seen = excluded.last_seen,
             updated_at = excluded.updated_at
         """,
-        (device_id, fcm_token, now, now),
+        (device_id, fcm_token, now),
     )
     db.commit()
     row = db.execute(
@@ -536,7 +536,7 @@ async def tpe_pair(
         (device_id,),
     ).fetchone()
     if row:
-        await _handler_ws.broadcast({"type": "status_update", **dict(row)})
+        background_tasks.add_task(_handler_ws.broadcast, {"type": "status_update", **dict(row)})
     logger.info("TPE device paired/refreshed: %s…", device_id[:16])
     return {"status": "paired"}
 
