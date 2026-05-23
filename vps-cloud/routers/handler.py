@@ -400,10 +400,9 @@ async def handler_delete_device(
     pairing_keys = {device_id}
     if fcm_token:
         pairing_keys.add(fcm_token)
-    placeholders = ",".join("?" for _ in pairing_keys)
-    db.execute(
-        f"DELETE FROM tpe_paired_devices WHERE fcm_token IN ({placeholders})",
-        tuple(pairing_keys),
+    db.executemany(
+        "DELETE FROM tpe_paired_devices WHERE fcm_token = ?",
+        [(key,) for key in pairing_keys],
     )
     db.commit()
 
