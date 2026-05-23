@@ -814,7 +814,10 @@ def tpe_update_settings(
             reload_mqtt(db)
             response["mqtt_reloaded"] = True
         except Exception as exc:
-            logger.exception("Failed to reload MQTT after TPE settings update")
+            logger.exception(
+                "Failed to reload MQTT after TPE settings update (keys: %s)",
+                sorted(key for key in updates if key in _TPE_MQTT_SETTING_KEYS),
+            )
             response["mqtt_reloaded"] = False
             response["mqtt_error"] = str(exc)
         response["mqtt_enabled"] = _mqtt_client.enabled
