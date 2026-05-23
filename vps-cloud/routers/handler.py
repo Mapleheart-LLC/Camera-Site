@@ -11,6 +11,7 @@ Handler/Admin-facing (JWT Bearer auth – role 'handler' or 'admin'):
   GET  /api/handler/devices        – List devices (handlers see only assigned ones).
   GET  /api/handler/status         – Latest status snapshot for a specific device.
   POST /api/handler/lock           – Send LOCK_DEVICE FCM to a specific device.
+  DELETE /api/handler/devices/{device_id} – Delete device records (admin only).
 
 Admin-only (JWT Bearer auth – role 'admin'):
   GET  /api/handler/assignments    – List all handler↔device assignments.
@@ -374,6 +375,38 @@ async def handler_lock(
 
     await _handler_ws.broadcast({"type": "lock", "device_id": body.device_id, "is_locked": 1})
     return {"status": "lock_sent", "mqtt": result}
+
+
+@router.delete("/api/handler/devices/{device_id}")
+async def handler_delete_device(
+    device_id: str,
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Delete a device and linked handler/pairing rows (admin only)."""
+    row = db.execute(
+        "SELECT device_id, fcm_token FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    token_candidates = [device_id]
+    fcm_token = row["fcm_token"]
+    if fcm_token and fcm_token not in token_candidates:
+        token_candidates.append(fcm_token)
+
+    db.execute("DELETE FROM handler_device_assignments WHERE device_id = ?", (device_id,))
+    db.execute("DELETE FROM handler_device_status WHERE device_id = ?", (device_id,))
+    placeholders = ",".join("?" for _ in token_candidates)
+    db.execute(
+        f"DELETE FROM tpe_paired_devices WHERE fcm_token IN ({placeholders})",
+        token_candidates,
+    )
+    db.commit()
+
+    await _handler_ws.broadcast({"type": "device_deleted", "device_id": device_id})
+    return {"deleted": True, "device_id": device_id}
 
 
 # ---------------------------------------------------------------------------
