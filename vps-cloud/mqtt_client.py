@@ -367,6 +367,7 @@ def initialize_mqtt(db) -> None:
 
 
 def reload_mqtt(db) -> None:
+    """Reload the MQTT client using the latest environment and DB-backed settings."""
     mqtt_client.stop()
     mqtt_client.start(db)
 

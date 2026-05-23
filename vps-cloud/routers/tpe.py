@@ -810,8 +810,13 @@ def tpe_update_settings(
     db.commit()
     response: dict[str, Any] = {"updated": list(updates.keys())}
     if any(key in _TPE_MQTT_SETTING_KEYS for key in updates):
-        reload_mqtt(db)
-        response["mqtt_reloaded"] = True
+        try:
+            reload_mqtt(db)
+            response["mqtt_reloaded"] = True
+        except Exception as exc:
+            logger.exception("Failed to reload MQTT after TPE settings update")
+            response["mqtt_reloaded"] = False
+            response["mqtt_error"] = str(exc)
         response["mqtt_enabled"] = _mqtt_client.enabled
     return response
 
