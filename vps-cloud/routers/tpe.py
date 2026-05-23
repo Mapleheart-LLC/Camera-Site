@@ -75,7 +75,7 @@ from pydantic import BaseModel
 
 from db import get_db, get_db_connection
 from dependencies import get_admin_user
-from mqtt_client import mqtt_client as _mqtt_client
+from mqtt_client import mqtt_client as _mqtt_client, reload_mqtt
 from routers.ws_manager import handler_ws as _handler_ws
 
 logger = logging.getLogger(__name__)
@@ -735,6 +735,8 @@ _TPE_SETTING_KEYS = {
     "tpe_mqtt_presence_status_topic",
 }
 
+_TPE_MQTT_SETTING_KEYS = {key for key in _TPE_SETTING_KEYS if key.startswith("tpe_mqtt_")}
+
 
 @admin_router.get("/settings")
 def tpe_get_settings(
@@ -806,7 +808,21 @@ def tpe_update_settings(
             (key, value),
         )
     db.commit()
-    return {"updated": list(updates.keys())}
+    response: dict[str, Any] = {"updated": list(updates.keys())}
+    mqtt_updates = sorted(key for key in updates if key in _TPE_MQTT_SETTING_KEYS)
+    if mqtt_updates:
+        try:
+            reload_mqtt(db)
+            response["mqtt_reloaded"] = True
+        except Exception as exc:
+            logger.exception(
+                "Failed to reload MQTT after TPE settings update (keys: %s)",
+                mqtt_updates,
+            )
+            response["mqtt_reloaded"] = False
+            response["mqtt_error"] = str(exc)
+        response["mqtt_enabled"] = _mqtt_client.enabled
+    return response
 
 
 class TpePushRequest(BaseModel):

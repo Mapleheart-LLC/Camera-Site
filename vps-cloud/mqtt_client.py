@@ -5,6 +5,7 @@ import logging
 import os
 import queue
 import re
+import sqlite3
 import ssl
 import threading
 from datetime import datetime, timezone
@@ -362,7 +363,13 @@ class _MqttClientService:
 mqtt_client = _MqttClientService()
 
 
-def initialize_mqtt(db) -> None:
+def initialize_mqtt(db: sqlite3.Connection) -> None:
+    mqtt_client.start(db)
+
+
+def reload_mqtt(db: sqlite3.Connection) -> None:
+    """Reload the MQTT client using the latest environment and DB-backed settings."""
+    mqtt_client.stop()
     mqtt_client.start(db)
 
 
