@@ -11,7 +11,6 @@ from urllib.parse import urlparse, quote as _url_quote
 
 import httpx
 import html as _html_lib
-from passlib.context import CryptContext
 
 from PIL import Image, ImageDraw, ImageFont
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
@@ -32,8 +31,7 @@ from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
-    enforce_bcrypt_password_limit,
-    is_bcrypt_password_compatible,
+    hash_password,
     SECRET_KEY,
     ROLE_ACCESS_LEVEL,
     create_access_token,
@@ -41,6 +39,7 @@ from dependencies import (
     get_optional_user,
     require_role,
     role_required,
+    verify_password,
 )
 from mqtt_client import initialize_mqtt, shutdown_mqtt
 from routers.interactive import router as interactive_router
@@ -78,24 +77,12 @@ GO2RTC_TIMEOUT: float = 15.0
 # fallback comparison uses a fixed-length string with no runtime .lower() call.
 _ADMIN_USERNAME_LOWER: str = ADMIN_USERNAME.lower()
 
-# ---------------------------------------------------------------------------
-# Password hashing
-# ---------------------------------------------------------------------------
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def _hash_password(password: str) -> str:
-    enforce_bcrypt_password_limit(password)
-    return _pwd_context.hash(password)
+    return hash_password(password)
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    if not is_bcrypt_password_compatible(plain):
-        return False
-    try:
-        return _pwd_context.verify(plain, hashed)
-    except ValueError:
-        return False
+    return verify_password(plain, hashed)
 
 
 # ---------------------------------------------------------------------------

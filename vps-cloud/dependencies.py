@@ -30,6 +30,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Callable, List, Optional
 
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import (
@@ -118,6 +119,23 @@ def enforce_bcrypt_password_limit(password: str) -> None:
                 "for bcrypt compatibility."
             ),
         )
+
+
+def hash_password(password: str) -> str:
+    enforce_bcrypt_password_limit(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if not is_bcrypt_password_compatible(password):
+        return False
+    try:
+        return bcrypt.checkpw(
+            password.encode("utf-8"),
+            password_hash.encode("utf-8"),
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
