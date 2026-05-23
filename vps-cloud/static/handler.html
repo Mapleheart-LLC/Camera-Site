@@ -804,6 +804,12 @@
                 <button class="btn-screen-share" id="btn-screen-share-actions">📺 Start Screen Share</button>
                 <div class="ac-result" id="res-screen-share-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
               </div>
+              <div class="action-card">
+                <div class="ac-icon">🗑️</div>
+                <div class="ac-label">Delete Device</div>
+                <button class="btn-action danger-action" id="btn-delete-device" aria-label="Delete current device permanently">Delete Device</button>
+                <div class="ac-result" id="res-delete-device"></div>
+              </div>
             </div>
           </section>
 
@@ -1569,6 +1575,8 @@
 
     const JWT_KEY = 'handler_panel_jwt';
     const AUTH_EXPIRED_ERROR = 'auth-expired';
+    let currentUserRole = null;
+    let _deleteInProgress = false;
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -1624,6 +1632,15 @@
         method: 'POST',
         headers: Object.assign({}, authHeader(), { 'Content-Type': 'application/json' }),
         body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
+      return r;
+    }
+
+    async function apiDelete(path) {
+      const r = await fetch(path, {
+        method: 'DELETE',
+        headers: authHeader(),
       });
       if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
       return r;
@@ -1694,6 +1711,8 @@
       clearJwt();
       disconnectWS();
       viewingDeviceId = null;
+      currentUserRole = null;
+      updateDeleteDeviceActionAccess();
     }
 
     function showHandlerPanel() {
@@ -1710,6 +1729,7 @@
       document.getElementById('kennel-overview').style.display  = 'block';
       document.getElementById('puppy-detail').style.display     = 'none';
       document.getElementById('back-to-kennel-btn').style.display = 'none';
+      updateDeleteDeviceActionAccess();
     }
 
     /**
@@ -1743,6 +1763,24 @@
         renderStatus({});
         fetchAndRenderStatus();
       }
+      updateDeleteDeviceActionAccess();
+    }
+
+    function updateDeleteDeviceActionAccess() {
+      const btn = document.getElementById('btn-delete-device');
+      const res = document.getElementById('res-delete-device');
+      if (!btn) return;
+
+      if (currentUserRole !== 'admin') {
+        btn.disabled = true;
+        btn.textContent = 'Admin Only';
+        if (res) res.textContent = 'Only admins can delete devices.';
+        return;
+      }
+
+      btn.disabled = _deleteInProgress || !viewingDeviceId;
+      btn.textContent = 'Delete Device';
+      if (res) res.textContent = viewingDeviceId ? '' : 'Select a device first.';
     }
 
     // ── Login ──────────────────────────────────────────
@@ -1772,6 +1810,7 @@
           return;
         }
         saveJwt(data.access_token);
+        currentUserRole = data.role;
         // Update topbar role badge
         var badge = document.querySelector('.topbar-badge');
         if (badge) badge.textContent = data.role.toUpperCase();
@@ -1864,6 +1903,33 @@
         '</div>' +
         '<div class="kc-last-seen">' + esc(device.last_seen ? fmtDate(device.last_seen) : '—') + '</div>' +
         '<div class="kc-cta">View detail →</div>';
+    }
+
+    function _refreshKennelEmptyState() {
+      var grid = document.getElementById('kennel-grid');
+      var emptyEl = document.getElementById('kennel-empty');
+      if (!grid || !emptyEl) return;
+      var hasCards = !!grid.querySelector('.kennel-card');
+      emptyEl.style.display = hasCards ? 'none' : 'block';
+    }
+
+    function removeDeviceFromUi(deviceId) {
+      if (!deviceId) return;
+      delete _deviceCache[deviceId];
+
+      var card = document.querySelector('[data-kennel-card="' + CSS.escape(deviceId) + '"]');
+      if (card && card.parentNode) card.parentNode.removeChild(card);
+      _refreshKennelEmptyState();
+
+      if (_masterMarkers[deviceId]) {
+        if (_masterMap) _masterMap.removeLayer(_masterMarkers[deviceId]);
+        delete _masterMarkers[deviceId];
+      }
+
+      if (viewingDeviceId === deviceId) {
+        showToast('🗑️ Device deleted.');
+        showKennelOverview();
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2043,6 +2109,11 @@
           if (msg.device_id === viewingDeviceId) {
             renderStatus(_deviceCache[msg.device_id]);
           }
+          return;
+        }
+
+        if (msg.type === 'device_deleted' && msg.device_id) {
+          removeDeviceFromUi(msg.device_id);
           return;
         }
 
@@ -2296,11 +2367,58 @@
       finally { btn.disabled = false; }
     }
 
+    async function deleteCurrentDevice() {
+      const btn = document.getElementById('btn-delete-device');
+      const res = document.getElementById('res-delete-device');
+      if (!_requireDevice(res)) return;
+
+      if (currentUserRole !== 'admin') {
+        res.textContent = '❌ Admin role required.';
+        showToast('❌ Only admins can delete devices.', true);
+        return;
+      }
+
+      const confirmText = `Delete device "${viewingDeviceId}"? This will permanently remove the device and its related data.`;
+      if (!window.confirm(confirmText)) {
+        res.textContent = 'Cancelled.';
+        return;
+      }
+
+      btn.disabled = true;
+      _deleteInProgress = true;
+      res.textContent = 'Deleting…';
+      try {
+        const targetDeviceId = viewingDeviceId;
+        const r = await apiDelete('/api/handler/devices/' + encodeURIComponent(targetDeviceId));
+        if (r.ok) {
+          removeDeviceFromUi(targetDeviceId);
+          res.textContent = '✅ Device deleted.';
+          showToast('🗑️ Device deleted.');
+        } else {
+          const b = await r.json().catch(function() { return {}; });
+          if (r.status === 403) {
+            res.textContent = '❌ Admin role required.';
+            showToast('❌ Only admins can delete devices.', true);
+          } else if (r.status === 404) {
+            res.textContent = '❌ Device not found.';
+          } else {
+            res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          }
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) res.textContent = '❌ Request failed.';
+      } finally {
+        _deleteInProgress = false;
+        updateDeleteDeviceActionAccess();
+      }
+    }
+
     document.getElementById('btn-lock').addEventListener('click',     sendLock);
     document.getElementById('btn-lovense').addEventListener('click',  sendVibrateLovense);
     document.getElementById('btn-pishock').addEventListener('click',  sendShockPiShock);
     document.getElementById('btn-pavlok').addEventListener('click',   sendVibratePavlok);
     document.getElementById('btn-checkin').addEventListener('click',  requestCheckin);
+    document.getElementById('btn-delete-device').addEventListener('click', deleteCurrentDevice);
     document.getElementById('btn-live-listen-sidebar').addEventListener('click', toggleLiveListen);
     document.getElementById('btn-live-listen-actions').addEventListener('click', toggleLiveListen);
 
@@ -2724,6 +2842,7 @@
       connectWS();
       showKennelOverview();
       loadPairingQr();
+      updateDeleteDeviceActionAccess();
 
       // Eagerly populate kennel cards before the first WS push
       apiGet('/api/handler/devices').then(function(devices) {
@@ -2733,6 +2852,7 @@
           buildOrUpdateKennelCard(_deviceCache[d.device_id]);
           updateMasterMapPin(_deviceCache[d.device_id]);
         });
+        _refreshKennelEmptyState();
       }).catch(function() {});
     }
 
