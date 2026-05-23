@@ -366,5 +366,10 @@ def initialize_mqtt(db) -> None:
     mqtt_client.start(db)
 
 
+def reload_mqtt(db) -> None:
+    mqtt_client.stop()
+    mqtt_client.start(db)
+
+
 def shutdown_mqtt() -> None:
     mqtt_client.stop()
