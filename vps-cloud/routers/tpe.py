@@ -355,18 +355,24 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
 class PairRequest(BaseModel):
     fcm_token: str
     pairing_token: str
+    device_id: Optional[str] = None
+    mqtt_client_id: Optional[str] = None
 
 
 @device_router.post("/api/pair")
-def tpe_pair(body: PairRequest, db: sqlite3.Connection = Depends(get_db)):
+def tpe_pair(
+    body: PairRequest,
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
+    db: sqlite3.Connection = Depends(get_db),
+):
     """
     Register a TPE device's FCM token.
 
     The Android app calls this after scanning the partner QR code.
     Body: ``{"fcm_token": "...", "pairing_token": "..."}``
     """
-    token = body.fcm_token.strip()
-    if not token:
+    fcm_token = body.fcm_token.strip()
+    if not fcm_token:
         raise HTTPException(status_code=400, detail="Missing or invalid fcm_token")
 
     expected = _effective_pairing_token(db)
@@ -379,6 +385,8 @@ def tpe_pair(body: PairRequest, db: sqlite3.Connection = Depends(get_db)):
     if not secrets.compare_digest(body.pairing_token, expected):
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
+    device_id = (body.device_id or "").strip() or fcm_token or (x_device_id or "").strip()
+
     now = _now_iso()
     db.execute(
         """
@@ -386,10 +394,20 @@ def tpe_pair(body: PairRequest, db: sqlite3.Connection = Depends(get_db)):
         VALUES (?, ?, ?)
         ON CONFLICT(fcm_token) DO UPDATE SET last_seen = excluded.last_seen
         """,
-        (token, now, now),
+        (device_id, now, now),
+    )
+    db.execute(
+        """
+        INSERT INTO handler_device_status (device_id, fcm_token, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(device_id) DO UPDATE SET
+            fcm_token = excluded.fcm_token,
+            updated_at = excluded.updated_at
+        """,
+        (device_id, fcm_token, now),
     )
     db.commit()
-    logger.info("TPE device paired/refreshed: %s…", token[:16])
+    logger.info("TPE device paired/refreshed: %s…", device_id[:16])
     return {"status": "paired"}
 
 
@@ -1952,6 +1970,21 @@ def tpe_pairing_qr(
     if live_session and ws_base:
         signaling_url = f"{ws_base}/api/tpe/signal/{live_session['id']}"
 
+    def _setting(env_key: str, db_key: str, default: str = "") -> str:
+        env_val = os.environ.get(env_key)
+        if env_val is not None and env_val != "":
+            return env_val
+        setting_row = db.execute(
+            "SELECT value FROM settings WHERE key = ?",
+            (db_key,),
+        ).fetchone()
+        if setting_row and setting_row["value"] is not None and setting_row["value"] != "":
+            return str(setting_row["value"]).strip()
+        return default
+
+    def _as_bool(value: str) -> bool:
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
     qr_payload: Dict[str, str] = {
         "endpoint": base_url,
         "pairing_token": pairing_token,
@@ -1960,6 +1993,33 @@ def tpe_pairing_qr(
         qr_payload["webhook_secret"] = webhook_secret
     if signaling_url:
         qr_payload["signaling_url"] = signaling_url
+
+    mqtt_broker_host = _setting("MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
+    if mqtt_broker_host:
+        mqtt_broker_port = _setting("MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
+        mqtt_tls_enabled = _as_bool(_setting("MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false"))
+        mqtt_username = _setting("MQTT_USERNAME", "tpe_mqtt_username", "")
+        mqtt_password = _setting("MQTT_PASSWORD", "tpe_mqtt_password", "")
+        mqtt_topic_template = _setting(
+            "MQTT_COMMAND_TOPIC_TEMPLATE",
+            "tpe_mqtt_command_topic_template",
+            "tpeapp/device/{device_id}/commands",
+        )
+        mqtt_suffix = "/{device_id}/commands"
+        mqtt_topic_prefix = (
+            mqtt_topic_template[: -len(mqtt_suffix)]
+            if mqtt_topic_template.endswith(mqtt_suffix)
+            else mqtt_topic_template
+        ).rstrip("/")
+
+        mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
+        qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"
+        if mqtt_username:
+            qr_payload["mqtt_username"] = mqtt_username
+        if mqtt_password:
+            qr_payload["mqtt_password"] = mqtt_password
+        if mqtt_topic_prefix:
+            qr_payload["mqtt_topic_prefix"] = mqtt_topic_prefix
 
     payload = json.dumps(qr_payload)
 
