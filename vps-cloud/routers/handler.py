@@ -395,18 +395,16 @@ async def handler_delete_device(
 
     db.execute("DELETE FROM handler_device_assignments WHERE device_id = ?", (device_id,))
     db.execute("DELETE FROM handler_device_status WHERE device_id = ?", (device_id,))
-    # Pairing rows are keyed by device_id, but we also remove any legacy row keyed
-    # by the status fcm_token if present.
-    if fcm_token and fcm_token != device_id:
-        db.execute(
-            "DELETE FROM tpe_paired_devices WHERE fcm_token = ? OR fcm_token = ?",
-            (device_id, fcm_token),
-        )
-    else:
-        db.execute(
-            "DELETE FROM tpe_paired_devices WHERE fcm_token = ?",
-            (device_id,),
-        )
+    # Pairing rows are keyed by device_id; also remove any legacy row keyed by
+    # status fcm_token.
+    pairing_keys = {device_id}
+    if fcm_token:
+        pairing_keys.add(fcm_token)
+    placeholders = ",".join("?" for _ in pairing_keys)
+    db.execute(
+        f"DELETE FROM tpe_paired_devices WHERE fcm_token IN ({placeholders})",
+        tuple(pairing_keys),
+    )
     db.commit()
 
     await _handler_ws.broadcast({"type": "device_deleted", "device_id": device_id})
