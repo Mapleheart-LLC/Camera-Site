@@ -48,6 +48,7 @@ from routers.tpe import (
     TpePushRequest,
     _VALID_TPE_ACTIONS,
     _build_tpe_payload,
+    _render_tpe_pairing_qr_png,
 )
 from routers.ws_manager import handler_ws as _handler_ws
 
@@ -509,6 +510,15 @@ def handler_tpe_audits(
         (min(limit, 200),),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.get("/api/handler/tpe/qr")
+def handler_tpe_pairing_qr(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Serve the TPE pairing QR for the JWT-authenticated handler panel."""
+    return _render_tpe_pairing_qr_png(db)
 
 
 # ---------------------------------------------------------------------------

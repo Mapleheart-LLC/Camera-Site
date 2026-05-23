@@ -220,6 +220,122 @@ def _effective_pairing_token(db: sqlite3.Connection) -> str:
     return (row["value"].strip() if row and row["value"] else "") or _TPE_PAIRING_TOKEN
 
 
+def _setting_value(
+    db: sqlite3.Connection,
+    env_key: str,
+    db_key: str,
+    default: str = "",
+) -> str:
+    env_val = os.environ.get(env_key)
+    if env_val is not None and env_val != "":
+        return env_val
+    setting_row = db.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        (db_key,),
+    ).fetchone()
+    if setting_row and setting_row["value"] is not None and setting_row["value"] != "":
+        return str(setting_row["value"]).strip()
+    return default
+
+
+def _as_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
+    pairing_token = _effective_pairing_token(db)
+    if not pairing_token:
+        raise HTTPException(
+            status_code=503,
+            detail="TPE pairing token is not configured. Set TPE_PAIRING_TOKEN.",
+        )
+
+    base_url = os.environ.get("BASE_URL", "")
+    row = db.execute("SELECT value FROM settings WHERE key = 'base_url'").fetchone()
+    if row and row["value"]:
+        base_url = row["value"].rstrip("/")
+
+    if base_url.startswith("https://"):
+        ws_base = "wss://" + base_url[len("https://"):]
+    elif base_url.startswith("http://"):
+        ws_base = "ws://" + base_url[len("http://"):]
+    else:
+        ws_base = base_url
+
+    webhook_secret = _effective_webhook_secret(db)
+
+    signaling_url = ""
+    live_session = db.execute(
+        "SELECT id FROM tpe_review_sessions WHERE ended_at IS NULL ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    if live_session and ws_base:
+        signaling_url = f"{ws_base}/api/tpe/signal/{live_session['id']}"
+
+    qr_payload: Dict[str, str] = {
+        "endpoint": base_url,
+        "pairing_token": pairing_token,
+    }
+    if webhook_secret:
+        qr_payload["webhook_secret"] = webhook_secret
+    if signaling_url:
+        qr_payload["signaling_url"] = signaling_url
+
+    mqtt_broker_host = _setting_value(db, "MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
+    if mqtt_broker_host:
+        mqtt_broker_port = _setting_value(db, "MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
+        mqtt_tls_enabled = _as_bool(
+            _setting_value(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
+        )
+        mqtt_username = _setting_value(db, "MQTT_USERNAME", "tpe_mqtt_username", "")
+        mqtt_password = _setting_value(db, "MQTT_PASSWORD", "tpe_mqtt_password", "")
+        mqtt_topic_template = _setting_value(
+            db,
+            "MQTT_COMMAND_TOPIC_TEMPLATE",
+            "tpe_mqtt_command_topic_template",
+            "tpeapp/device/{device_id}/commands",
+        )
+        mqtt_topic_prefix = re.sub(r"/\{device_id\}/commands$", "", mqtt_topic_template).rstrip("/")
+
+        mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
+        qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"
+        if mqtt_username:
+            qr_payload["mqtt_username"] = mqtt_username
+        if mqtt_password:
+            qr_payload["mqtt_password"] = mqtt_password
+        if mqtt_topic_prefix:
+            qr_payload["mqtt_topic_prefix"] = mqtt_topic_prefix
+
+    return qr_payload
+
+
+def _render_tpe_pairing_qr_png(db: sqlite3.Connection) -> Response:
+    try:
+        import qrcode
+        from qrcode.image.pil import PilImage
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="qrcode library is not installed. Add qrcode[pil] to requirements.",
+        )
+
+    payload = json.dumps(_build_tpe_pairing_payload(db))
+
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    img = qr.make_image(image_factory=PilImage, fill_color="black", back_color="white")
+
+    import io
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
 def _effective_webhook_secret(db: sqlite3.Connection) -> str:
     row = db.execute(
         "SELECT value FROM settings WHERE key = 'tpe_webhook_secret'"
@@ -360,7 +476,7 @@ class PairRequest(BaseModel):
 
 
 @device_router.post("/api/pair")
-def tpe_pair(
+async def tpe_pair(
     body: PairRequest,
     x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
     db: sqlite3.Connection = Depends(get_db),
@@ -405,15 +521,22 @@ def tpe_pair(
     )
     db.execute(
         """
-        INSERT INTO handler_device_status (device_id, fcm_token, updated_at)
-        VALUES (?, ?, ?)
+        INSERT INTO handler_device_status (device_id, fcm_token, last_seen, updated_at)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
             fcm_token = excluded.fcm_token,
+            last_seen = excluded.last_seen,
             updated_at = excluded.updated_at
         """,
-        (device_id, fcm_token, now),
+        (device_id, fcm_token, now, now),
     )
     db.commit()
+    row = db.execute(
+        "SELECT * FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if row:
+        await _handler_ws.broadcast({"type": "status_update", **dict(row)})
     logger.info("TPE device paired/refreshed: %s…", device_id[:16])
     return {"status": "paired"}
 
@@ -1937,105 +2060,4 @@ def tpe_pairing_qr(
 
     Returns a PNG image (``Content-Type: image/png``).
     """
-    try:
-        import qrcode
-        from qrcode.image.pil import PilImage
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="qrcode library is not installed. Add qrcode[pil] to requirements.",
-        )
-
-    pairing_token = _effective_pairing_token(db)
-    if not pairing_token:
-        raise HTTPException(
-            status_code=503,
-            detail="TPE pairing token is not configured. Set TPE_PAIRING_TOKEN.",
-        )
-
-    base_url = os.environ.get("BASE_URL", "")
-    row = db.execute("SELECT value FROM settings WHERE key = 'base_url'").fetchone()
-    if row and row["value"]:
-        base_url = row["value"].rstrip("/")
-
-    # Build WebSocket base URL (wss:// / ws://).
-    if base_url.startswith("https://"):
-        ws_base = "wss://" + base_url[len("https://"):]
-    elif base_url.startswith("http://"):
-        ws_base = "ws://" + base_url[len("http://"):]
-    else:
-        ws_base = base_url
-
-    # Include webhook_secret so the device can authenticate outbound calls.
-    webhook_secret = _effective_webhook_secret(db)
-
-    # If there is an active review session, embed its signaling URL.
-    signaling_url = ""
-    live_session = db.execute(
-        "SELECT id FROM tpe_review_sessions WHERE ended_at IS NULL ORDER BY created_at DESC LIMIT 1"
-    ).fetchone()
-    if live_session and ws_base:
-        signaling_url = f"{ws_base}/api/tpe/signal/{live_session['id']}"
-
-    def _setting(env_key: str, db_key: str, default: str = "") -> str:
-        env_val = os.environ.get(env_key)
-        if env_val is not None and env_val != "":
-            return env_val
-        setting_row = db.execute(
-            "SELECT value FROM settings WHERE key = ?",
-            (db_key,),
-        ).fetchone()
-        if setting_row and setting_row["value"] is not None and setting_row["value"] != "":
-            return str(setting_row["value"]).strip()
-        return default
-
-    def _as_bool(value: str) -> bool:
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-    qr_payload: Dict[str, str] = {
-        "endpoint": base_url,
-        "pairing_token": pairing_token,
-    }
-    if webhook_secret:
-        qr_payload["webhook_secret"] = webhook_secret
-    if signaling_url:
-        qr_payload["signaling_url"] = signaling_url
-
-    mqtt_broker_host = _setting("MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
-    if mqtt_broker_host:
-        mqtt_broker_port = _setting("MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
-        mqtt_tls_enabled = _as_bool(_setting("MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false"))
-        mqtt_username = _setting("MQTT_USERNAME", "tpe_mqtt_username", "")
-        mqtt_password = _setting("MQTT_PASSWORD", "tpe_mqtt_password", "")
-        mqtt_topic_template = _setting(
-            "MQTT_COMMAND_TOPIC_TEMPLATE",
-            "tpe_mqtt_command_topic_template",
-            "tpeapp/device/{device_id}/commands",
-        )
-        mqtt_topic_prefix = re.sub(r"/\{device_id\}/commands$", "", mqtt_topic_template).rstrip("/")
-
-        mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
-        qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"
-        if mqtt_username:
-            qr_payload["mqtt_username"] = mqtt_username
-        if mqtt_password:
-            qr_payload["mqtt_password"] = mqtt_password
-        if mqtt_topic_prefix:
-            qr_payload["mqtt_topic_prefix"] = mqtt_topic_prefix
-
-    payload = json.dumps(qr_payload)
-
-    qr = qrcode.QRCode(
-        version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(payload)
-    qr.make(fit=True)
-    img = qr.make_image(image_factory=PilImage, fill_color="black", back_color="white")
-
-    import io
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return Response(content=buf.getvalue(), media_type="image/png")
+    return _render_tpe_pairing_qr_png(db)

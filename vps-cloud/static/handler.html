@@ -128,6 +128,58 @@
       display: flex; align-items: center; justify-content: center;
       height: 160px; color: #5a3a3e; font-size: .9rem; font-weight: 700;
     }
+    .pairing-card .card-body {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) 1fr;
+      gap: 1.25rem;
+      align-items: center;
+    }
+    .pairing-qr-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 240px;
+      background: #1a1a1a;
+      border: 1px solid #3d2a2e;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #pairing-qr-image {
+      display: none;
+      width: min(100%, 260px);
+      height: auto;
+      border-radius: 10px;
+      background: #fff;
+      padding: .75rem;
+    }
+    #pairing-qr-placeholder {
+      color: #5a3a3e;
+      font-size: .9rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 1rem;
+    }
+    .pairing-copy {
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+    .pairing-copy p {
+      color: #c49a9f;
+      font-size: .92rem;
+      line-height: 1.5;
+    }
+    .pairing-copy ol {
+      margin-left: 1.2rem;
+      color: #f0e6e8;
+      display: grid;
+      gap: .45rem;
+    }
+    #pairing-qr-status {
+      min-height: 1.2em;
+      font-size: .8rem;
+      color: #9e7e82;
+    }
 
     /* Kennel card grid */
     #kennel-grid-heading {
@@ -445,6 +497,7 @@
     @media (max-width: 768px) {
       #kennel-overview { padding: 1rem; }
       #kennel-grid { grid-template-columns: 1fr 1fr; }
+      .pairing-card .card-body { grid-template-columns: 1fr; }
       .sidebar { display: none; }
       .sidebar.open { display: block; position: fixed; top: 56px; left: 0; bottom: 0; z-index: 100; }
       .handler-main { padding: 1rem; }
@@ -492,6 +545,28 @@
     <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
     <div id="kennel-overview">
       <h2 class="kennel-overview-heading">🏠 Kennel Overview</h2>
+
+      <div class="card pairing-card">
+        <div class="card-header">
+          <h2>🔗 Pair tpeapp</h2>
+          <button class="btn-action" id="pairing-qr-refresh-btn" style="width:auto;padding:.35rem .9rem;font-size:.82rem">Refresh QR</button>
+        </div>
+        <div class="card-body">
+          <div class="pairing-qr-wrap">
+            <img id="pairing-qr-image" alt="TPE pairing QR code" />
+            <div id="pairing-qr-placeholder">Loading pairing QR…</div>
+          </div>
+          <div class="pairing-copy">
+            <p>Scan this code in <strong>tpeapp</strong> to register the device with this site. Newly paired devices will appear here automatically.</p>
+            <ol>
+              <li>Open the pairing flow in tpeapp.</li>
+              <li>Scan this QR code.</li>
+              <li>Keep the app open until the device finishes pairing.</li>
+            </ol>
+            <div id="pairing-qr-status"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- Master Leaflet map showing all device pins -->
       <div id="master-map-wrap">
@@ -1500,6 +1575,7 @@
      * Updated on every WS status_update, lock, and snapshot message.
      */
     const _deviceCache = {};
+    let _pairingQrObjectUrl = null;
 
     // ── Credential storage ─────────────────────────────
     function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
@@ -1561,6 +1637,40 @@
       if (pct >= 60) return '🟢 Good';
       if (pct >= 20) return '🟡 Low';
       return '🔴 Critical';
+    }
+
+    async function loadPairingQr() {
+      var img = document.getElementById('pairing-qr-image');
+      var placeholder = document.getElementById('pairing-qr-placeholder');
+      var status = document.getElementById('pairing-qr-status');
+      if (!img || !placeholder || !status) return;
+      placeholder.style.display = 'block';
+      placeholder.textContent = 'Loading pairing QR…';
+      img.style.display = 'none';
+      status.textContent = '';
+      try {
+        var r = await fetch('/api/handler/tpe/qr', { headers: authHeader() });
+        if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+        var errText = '';
+        if (!r.ok) {
+          try {
+            var errData = await r.json();
+            errText = errData.detail || '';
+          } catch(e) {}
+          throw new Error(errText || ('HTTP ' + r.status));
+        }
+        var blob = await r.blob();
+        if (_pairingQrObjectUrl) URL.revokeObjectURL(_pairingQrObjectUrl);
+        _pairingQrObjectUrl = URL.createObjectURL(blob);
+        img.src = _pairingQrObjectUrl;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+        status.textContent = 'Ready to scan.';
+      } catch(e) {
+        if (e.message === '401') return;
+        placeholder.textContent = 'Pairing QR unavailable.';
+        status.textContent = e.message || 'Failed to load pairing QR.';
+      }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2605,6 +2715,7 @@
     function initPanel() {
       connectWS();
       showKennelOverview();
+      loadPairingQr();
 
       // Eagerly populate kennel cards before the first WS push
       apiGet('/api/handler/devices').then(function(devices) {
@@ -2616,6 +2727,10 @@
         });
       }).catch(function() {});
     }
+
+    document.getElementById('pairing-qr-refresh-btn').addEventListener('click', function() {
+      loadPairingQr();
+    });
   </script>
 </body>
 </html>
