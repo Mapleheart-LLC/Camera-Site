@@ -80,14 +80,30 @@ _ADMIN_USERNAME_LOWER: str = ADMIN_USERNAME.lower()
 # Password hashing
 # ---------------------------------------------------------------------------
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+
+def _validate_bcrypt_password(password: str) -> None:
+    if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Password must be {BCRYPT_MAX_PASSWORD_BYTES} bytes or fewer "
+                "for bcrypt compatibility."
+            ),
+        )
 
 
 def _hash_password(password: str) -> str:
+    _validate_bcrypt_password(password)
     return _pwd_context.hash(password)
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return _pwd_context.verify(plain, hashed)
+    except ValueError:
+        return False
 
 
 # ---------------------------------------------------------------------------
