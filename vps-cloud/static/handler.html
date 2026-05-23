@@ -1568,6 +1568,7 @@
     // ═══════════════════════════════════════════════════════════
 
     const JWT_KEY = 'handler_panel_jwt';
+    const AUTH_EXPIRED_ERROR = 'auth-expired';
 
     /**
      * device_id of the puppy currently shown in the detail panel.
@@ -1613,7 +1614,7 @@
     // ── API helpers ────────────────────────────────────
     async function apiGet(path) {
       const r = await fetch(path, { headers: authHeader() });
-      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }
@@ -1624,7 +1625,7 @@
         headers: Object.assign({}, authHeader(), { 'Content-Type': 'application/json' }),
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
-      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+      if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
       return r;
     }
 
@@ -1655,7 +1656,7 @@
       status.textContent = '';
       try {
         const r = await fetch('/api/handler/tpe/qr', { headers: authHeader() });
-        if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error('401'); }
+        if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
         let errText = '';
         if (!r.ok) {
           try {
@@ -1674,7 +1675,7 @@
         placeholder.style.display = 'none';
         status.textContent = 'Ready to scan.';
       } catch(e) {
-        if (e.message === '401') return;
+        if (e.message === AUTH_EXPIRED_ERROR) return;
         placeholder.textContent = 'Pairing QR unavailable.';
         status.textContent = e.message || 'Failed to load pairing QR.';
       }

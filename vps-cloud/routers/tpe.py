@@ -283,9 +283,8 @@ def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
     mqtt_broker_host = _resolve_setting(db, "MQTT_BROKER_HOST", "tpe_mqtt_broker_host", "")
     if mqtt_broker_host:
         mqtt_broker_port = _resolve_setting(db, "MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
-        mqtt_tls_enabled = _as_bool(
-            _resolve_setting(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
-        )
+        mqtt_tls_value = _resolve_setting(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
+        mqtt_tls_enabled = _as_bool(mqtt_tls_value)
         mqtt_username = _resolve_setting(db, "MQTT_USERNAME", "tpe_mqtt_username", "")
         mqtt_password = _resolve_setting(db, "MQTT_PASSWORD", "tpe_mqtt_password", "")
         mqtt_topic_template = _resolve_setting(
