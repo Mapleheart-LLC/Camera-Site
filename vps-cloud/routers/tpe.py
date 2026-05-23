@@ -92,6 +92,7 @@ _TPE_UPLOAD_PATH    = Path(os.environ.get("TPE_UPLOAD_PATH", "/app/data/tpe_uplo
 _MAX_AUDIT_VIDEO_BYTES  = 200 * 1024 * 1024  # 200 MB
 _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short recordings
 _CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
+_MQTT_COMMAND_TOPIC_SUFFIX = "/{device_id}/commands"
 
 # ---------------------------------------------------------------------------
 # MQTT dispatch
@@ -238,7 +239,7 @@ def _resolve_setting(
     return default
 
 
-def _as_bool(value: str) -> bool:
+def _parse_bool_string(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -284,7 +285,7 @@ def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
     if mqtt_broker_host:
         mqtt_broker_port = _resolve_setting(db, "MQTT_BROKER_PORT", "tpe_mqtt_broker_port", "1883")
         mqtt_tls_value = _resolve_setting(db, "MQTT_TLS_ENABLED", "tpe_mqtt_tls_enabled", "false")
-        mqtt_tls_enabled = _as_bool(mqtt_tls_value)
+        mqtt_tls_enabled = _parse_bool_string(mqtt_tls_value)
         mqtt_username = _resolve_setting(db, "MQTT_USERNAME", "tpe_mqtt_username", "")
         mqtt_password = _resolve_setting(db, "MQTT_PASSWORD", "tpe_mqtt_password", "")
         mqtt_topic_template = _resolve_setting(
@@ -293,7 +294,10 @@ def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
             "tpe_mqtt_command_topic_template",
             "tpeapp/device/{device_id}/commands",
         )
-        mqtt_topic_prefix = re.sub(r"/\{device_id\}/commands$", "", mqtt_topic_template).rstrip("/")
+        mqtt_topic_prefix = mqtt_topic_template
+        if mqtt_topic_prefix.endswith(_MQTT_COMMAND_TOPIC_SUFFIX):
+            mqtt_topic_prefix = mqtt_topic_prefix[: -len(_MQTT_COMMAND_TOPIC_SUFFIX)]
+        mqtt_topic_prefix = mqtt_topic_prefix.rstrip("/")
 
         mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
         qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"

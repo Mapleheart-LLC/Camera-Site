@@ -1663,7 +1663,7 @@
             const errData = await r.json();
             errText = errData.detail || '';
           } catch(e) {
-            // Ignore JSON parse errors and fall back to the HTTP status text path below.
+            // Ignore JSON parse errors and fall back to the generic HTTP error message below.
           }
           throw new Error(errText || ('HTTP ' + r.status));
         }
