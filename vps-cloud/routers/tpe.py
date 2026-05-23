@@ -92,7 +92,7 @@ _TPE_UPLOAD_PATH    = Path(os.environ.get("TPE_UPLOAD_PATH", "/app/data/tpe_uplo
 _MAX_AUDIT_VIDEO_BYTES  = 200 * 1024 * 1024  # 200 MB
 _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short recordings
 _CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
-_MQTT_COMMAND_TOPIC_SUFFIX = "/{device_id}/commands"
+_MQTT_COMMAND_TOPIC_SUFFIX_RE = re.compile(r"/\{device_id\}/commands/?$")
 
 # ---------------------------------------------------------------------------
 # MQTT dispatch
@@ -294,10 +294,7 @@ def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
             "tpe_mqtt_command_topic_template",
             "tpeapp/device/{device_id}/commands",
         )
-        mqtt_topic_prefix = mqtt_topic_template
-        if mqtt_topic_prefix.endswith(_MQTT_COMMAND_TOPIC_SUFFIX):
-            mqtt_topic_prefix = mqtt_topic_prefix[: -len(_MQTT_COMMAND_TOPIC_SUFFIX)]
-        mqtt_topic_prefix = mqtt_topic_prefix.rstrip("/")
+        mqtt_topic_prefix = _MQTT_COMMAND_TOPIC_SUFFIX_RE.sub("", mqtt_topic_template).rstrip("/")
 
         mqtt_scheme = "mqtts" if mqtt_tls_enabled else "mqtt"
         qr_payload["mqtt_broker_uri"] = f"{mqtt_scheme}://{mqtt_broker_host}:{mqtt_broker_port}"
