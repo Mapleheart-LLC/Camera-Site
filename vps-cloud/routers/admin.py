@@ -46,7 +46,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 
 from db import ensure_user_account_schema, get_db, get_db_connection, get_setting, set_setting
-from dependencies import get_admin_user
+from dependencies import enforce_bcrypt_password_limit, get_admin_user
 from routers.tpe import _send_fcm_to_all
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -1227,6 +1227,7 @@ def create_user(
             detail="Username already taken.",
         )
     user_id = secrets.token_hex(16)
+    enforce_bcrypt_password_limit(body.password)
     pw_hash = _pwd_context.hash(body.password)
     db.execute(
         "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, ?, ?)",
@@ -1251,6 +1252,7 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
     if body.password is not None:
+        enforce_bcrypt_password_limit(body.password)
         db.execute(
             "UPDATE users SET password_hash = ? WHERE id = ?",
             (_pwd_context.hash(body.password), user_id),

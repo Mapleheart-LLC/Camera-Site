@@ -32,6 +32,8 @@ from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
+    enforce_bcrypt_password_limit,
+    is_bcrypt_password_compatible,
     SECRET_KEY,
     ROLE_ACCESS_LEVEL,
     create_access_token,
@@ -83,11 +85,17 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _hash_password(password: str) -> str:
+    enforce_bcrypt_password_limit(password)
     return _pwd_context.hash(password)
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    if not is_bcrypt_password_compatible(plain):
+        return False
+    try:
+        return _pwd_context.verify(plain, hashed)
+    except ValueError:
+        return False
 
 
 # ---------------------------------------------------------------------------
