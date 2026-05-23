@@ -32,6 +32,8 @@ from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
+    enforce_bcrypt_password_limit,
+    is_bcrypt_password_compatible,
     SECRET_KEY,
     ROLE_ACCESS_LEVEL,
     create_access_token,
@@ -80,26 +82,16 @@ _ADMIN_USERNAME_LOWER: str = ADMIN_USERNAME.lower()
 # Password hashing
 # ---------------------------------------------------------------------------
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-BCRYPT_MAX_PASSWORD_BYTES = 72
-
-
-def _validate_bcrypt_password(password: str) -> None:
-    if len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Password must be {BCRYPT_MAX_PASSWORD_BYTES} bytes or fewer "
-                "for bcrypt compatibility."
-            ),
-        )
 
 
 def _hash_password(password: str) -> str:
-    _validate_bcrypt_password(password)
+    enforce_bcrypt_password_limit(password)
     return _pwd_context.hash(password)
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
+    if not is_bcrypt_password_compatible(plain):
+        return False
     try:
         return _pwd_context.verify(plain, hashed)
     except ValueError:

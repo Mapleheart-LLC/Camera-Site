@@ -98,6 +98,28 @@ ROLE_ACCESS_LEVEL: dict[str, int] = {
 }
 
 
+#
+# bcrypt only uses the first 72 bytes of a password. We reject longer values
+# explicitly so hashing/verification behavior is predictable.
+#
+BCRYPT_MAX_PASSWORD_BYTES: int = 72
+
+
+def is_bcrypt_password_compatible(password: str) -> bool:
+    return len(password.encode("utf-8")) <= BCRYPT_MAX_PASSWORD_BYTES
+
+
+def enforce_bcrypt_password_limit(password: str) -> None:
+    if not is_bcrypt_password_compatible(password):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Password must be {BCRYPT_MAX_PASSWORD_BYTES} bytes or fewer "
+                "for bcrypt compatibility."
+            ),
+        )
+
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Return a signed JWT encoding *data* with an expiry claim."""
     to_encode = data.copy()
@@ -299,4 +321,3 @@ def get_admin_user(
     if not (valid_username and valid_password):
         raise _ADMIN_AUTH_REQUIRED
     return credentials.username
-
