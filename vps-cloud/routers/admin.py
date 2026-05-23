@@ -1218,13 +1218,13 @@ def create_user(
     existing = db.execute(
         "SELECT id FROM users WHERE username = ?", (username_lower,)
     ).fetchone()
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already taken.",
-            )
-        user_id = secrets.token_hex(16)
-        pw_hash = hash_password(body.password)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken.",
+        )
+    user_id = secrets.token_hex(16)
+    pw_hash = hash_password(body.password)
     db.execute(
         "INSERT INTO users (id, username, password_hash, access_level, role) VALUES (?, ?, ?, ?, ?)",
         (user_id, username_lower, pw_hash, body.access_level, body.role),
