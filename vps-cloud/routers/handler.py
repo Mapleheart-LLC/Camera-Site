@@ -172,7 +172,8 @@ def _verify_ws_token(token: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 class DeviceStatusReport(BaseModel):
-    device_id: Optional[str] = Field(   # stable device identifier (non-empty; e.g. UUID or Android device ID)
+    # Device identifier in request body; optional here because endpoint also accepts X-Device-ID header fallback.
+    device_id: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("device_id", "deviceId"),
     )
@@ -193,7 +194,7 @@ class DeviceStatusReport(BaseModel):
     )
     lon: Optional[float] = Field(
         default=None,
-        validation_alias=AliasChoices("lon", "lng", "longitude", "long"),
+        validation_alias=AliasChoices("lon", "lng", "longitude"),
     )
     ai_alert: Optional[bool] = Field(
         default=None,
@@ -258,7 +259,9 @@ async def handler_device_status(
                 ),
             )
 
-    resolved_device_id = ((body.device_id or "").strip() or (x_device_id or "").strip())
+    body_device_id = (body.device_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    resolved_device_id = body_device_id or header_device_id
     if not resolved_device_id:
         logger.warning(
             "Rejected /api/handler/device-status from %s: missing device_id in body/header",
