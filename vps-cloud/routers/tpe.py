@@ -503,8 +503,9 @@ def tpe_pair(
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
     body_device_id = (body.device_id or "").strip()
+    mqtt_client_id = (body.mqtt_client_id or "").strip()
     header_device_id = (x_device_id or "").strip()
-    device_id = body_device_id or fcm_token or header_device_id
+    device_id = body_device_id or mqtt_client_id or header_device_id or fcm_token
     if not device_id:
         raise HTTPException(status_code=400, detail="Missing device identifier")
 
@@ -522,13 +523,15 @@ def tpe_pair(
     )
     db.execute(
         """
-        INSERT INTO handler_device_status (device_id, fcm_token, updated_at)
-        VALUES (?, ?, ?)
+        INSERT INTO handler_device_status (device_id, fcm_token, is_online, last_seen, updated_at)
+        VALUES (?, ?, 1, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
             fcm_token = excluded.fcm_token,
+            is_online = 1,
+            last_seen = excluded.last_seen,
             updated_at = excluded.updated_at
         """,
-        (device_id, fcm_token, now),
+        (device_id, fcm_token, now, now),
     )
     db.commit()
     row = db.execute(
