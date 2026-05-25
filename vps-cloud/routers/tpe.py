@@ -243,6 +243,13 @@ def _parse_bool_string(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _coalesce_str(*values: Optional[str]) -> str:
+    for value in values:
+        if value and value.strip():
+            return value.strip()
+    return ""
+
+
 def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
     pairing_token = _effective_pairing_token(db)
     if not pairing_token:
@@ -492,10 +499,11 @@ def tpe_pair(
     The Android app calls this after scanning the partner QR code.
     Body supports both snake_case and camelCase keys.
     """
-    fcm_token = (body.fcm_token or body.fcmToken or "").strip()
-    pairing_token = (body.pairing_token or body.pairingToken or "").strip()
-    body_device_id = (body.device_id or body.deviceId or "").strip()
-    mqtt_client_id = (body.mqtt_client_id or body.mqttClientId or "").strip()
+    # Snake_case takes precedence when both naming styles are sent.
+    fcm_token = _coalesce_str(body.fcm_token, body.fcmToken)
+    pairing_token = _coalesce_str(body.pairing_token, body.pairingToken)
+    body_device_id = _coalesce_str(body.device_id, body.deviceId)
+    mqtt_client_id = _coalesce_str(body.mqtt_client_id, body.mqttClientId)
 
     expected = _effective_pairing_token(db)
     if not expected:
