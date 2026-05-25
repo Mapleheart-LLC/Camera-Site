@@ -523,7 +523,7 @@ def tpe_pair(
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
     header_device_id = (x_device_id or "").strip()
-    device_id = body_device_id or mqtt_client_id or fcm_token or header_device_id
+    device_id = body_device_id or fcm_token or mqtt_client_id or header_device_id
     if not device_id:
         raise HTTPException(status_code=400, detail="Missing device identifier")
 
