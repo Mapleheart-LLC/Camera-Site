@@ -125,7 +125,7 @@ class _HandlerWSManager:
         # db connections are always created via get_db_connection() which sets
         # row_factory = sqlite3.Row, so dict-style column access is safe.
         handler_id: str = row["handler_id"]
-        ws = self._handler_sockets.get(handler_id)
+        ws, resolved_handler_id = self._resolve_handler_socket(db, handler_id)
         if ws is None:
             return False
 
@@ -133,11 +133,11 @@ class _HandlerWSManager:
             await asyncio.wait_for(ws.send_bytes(chunk), timeout=5.0)
             return True
         except asyncio.TimeoutError:
-            logger.warning("Audio relay timeout for handler %s; dropping chunk", handler_id)
+            logger.warning("Audio relay timeout for handler %s; dropping chunk", resolved_handler_id or handler_id)
             return False
         except Exception as exc:
-            logger.warning("Audio relay error for handler %s: %s", handler_id, exc)
-            self.disconnect(ws, handler_id)
+            logger.warning("Audio relay error for handler %s: %s", resolved_handler_id or handler_id, exc)
+            self.disconnect(ws, resolved_handler_id or handler_id)
             return False
 
     async def relay_audio_broadcast(self, chunk: bytes) -> None:
@@ -258,9 +258,13 @@ class _HandlerWSManager:
             return False
 
         handler_id: str = row["handler_id"]
-        ws = self._handler_sockets.get(handler_id)
+        ws, resolved_handler_id = self._resolve_handler_socket(db, handler_id)
         if ws is None:
-            logger.debug("Signaling relay from device %s failed: handler %s not connected", device_id, handler_id)
+            logger.debug(
+                "Signaling relay from device %s failed: handler %s not connected",
+                device_id,
+                handler_id,
+            )
             return False
 
         # Inject device_id so the handler panel can identify the peer.
@@ -269,12 +273,39 @@ class _HandlerWSManager:
             await asyncio.wait_for(ws.send_json(routed), timeout=5.0)
             return True
         except asyncio.TimeoutError:
-            logger.warning("Signaling relay timeout for handler %s; dropping frame", handler_id)
+            logger.warning(
+                "Signaling relay timeout for handler %s; dropping frame",
+                resolved_handler_id or handler_id,
+            )
             return False
         except Exception as exc:
-            logger.warning("Signaling relay error for handler %s: %s", handler_id, exc)
-            self.disconnect(ws, handler_id)
+            logger.warning(
+                "Signaling relay error for handler %s: %s",
+                resolved_handler_id or handler_id,
+                exc,
+            )
+            self.disconnect(ws, resolved_handler_id or handler_id)
             return False
+
+    def _resolve_handler_socket(
+        self,
+        db: sqlite3.Connection,
+        handler_key: str,
+    ) -> tuple[Optional[WebSocket], Optional[str]]:
+        """Resolve a handler assignment key (user_id or username) to a live socket."""
+        ws = self._handler_sockets.get(handler_key)
+        if ws is not None:
+            return ws, handler_key
+
+        row = db.execute(
+            "SELECT id FROM users WHERE username = ? COLLATE NOCASE LIMIT 1",
+            (handler_key,),
+        ).fetchone()
+        if not row:
+            return None, None
+
+        resolved_handler_id = row["id"]
+        return self._handler_sockets.get(resolved_handler_id), resolved_handler_id
 
 
 #: Singleton used by handler.py, vitals.py, and tpe.py.

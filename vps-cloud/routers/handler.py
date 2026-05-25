@@ -315,12 +315,44 @@ async def handler_device_status(
 # ---------------------------------------------------------------------------
 
 def _handler_allowed_devices(db: sqlite3.Connection, handler_id: str) -> list[str]:
-    """Return the list of device_ids assigned to a handler user."""
-    rows = db.execute(
-        "SELECT device_id FROM handler_device_assignments WHERE handler_id = ?",
+    """Return device_ids assigned to a handler by id or legacy username key."""
+    keys = [handler_id]
+    username_row = db.execute(
+        "SELECT username FROM users WHERE id = ? LIMIT 1",
         (handler_id,),
+    ).fetchone()
+    username = username_row["username"] if username_row else None
+    if username and username not in keys:
+        keys.append(username)
+    placeholders = ",".join("?" * len(keys))
+    rows = db.execute(
+        f"SELECT device_id FROM handler_device_assignments WHERE handler_id IN ({placeholders})",
+        keys,
     ).fetchall()
     return [r["device_id"] for r in rows]
+
+
+def _normalize_handler_assignment_id(db: sqlite3.Connection, raw_handler_id: str) -> str:
+    """Resolve assignment input to canonical user_id (accepts user_id or username)."""
+    candidate = (raw_handler_id or "").strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="handler_id is required.")
+
+    by_id = db.execute(
+        "SELECT id FROM users WHERE id = ? LIMIT 1",
+        (candidate,),
+    ).fetchone()
+    if by_id:
+        return by_id["id"]
+
+    by_username = db.execute(
+        "SELECT id FROM users WHERE username = ? COLLATE NOCASE LIMIT 1",
+        (candidate,),
+    ).fetchone()
+    if by_username:
+        return by_username["id"]
+
+    raise HTTPException(status_code=404, detail="Handler user not found.")
 
 
 def _fetch_devices_by_ids(
@@ -491,15 +523,16 @@ def handler_create_assignment(
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Assign a handler user to a device (admin only)."""
+    resolved_handler_id = _normalize_handler_assignment_id(db, body.handler_id)
     try:
         db.execute(
             "INSERT INTO handler_device_assignments (handler_id, device_id) VALUES (?, ?)",
-            (body.handler_id, body.device_id),
+            (resolved_handler_id, body.device_id),
         )
         db.commit()
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="Assignment already exists.")
-    return {"handler_id": body.handler_id, "device_id": body.device_id}
+    return {"handler_id": resolved_handler_id, "device_id": body.device_id}
 
 
 @router.delete("/api/handler/assignments")
@@ -510,12 +543,25 @@ def handler_delete_assignment(
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Remove a handler↔device assignment (admin only)."""
+    resolved_handler_id = _normalize_handler_assignment_id(db, handler_id)
     result = db.execute(
         "DELETE FROM handler_device_assignments WHERE handler_id = ? AND device_id = ?",
-        (handler_id, device_id),
+        (resolved_handler_id, device_id),
     )
+    deleted_count = result.rowcount
+    # Backward compatibility: also remove any legacy username-keyed row.
+    username_row = db.execute(
+        "SELECT username FROM users WHERE id = ? LIMIT 1",
+        (resolved_handler_id,),
+    ).fetchone()
+    if username_row:
+        legacy_result = db.execute(
+            "DELETE FROM handler_device_assignments WHERE handler_id = ? AND device_id = ?",
+            (username_row["username"], device_id),
+        )
+        deleted_count += legacy_result.rowcount
     db.commit()
-    if result.rowcount == 0:
+    if deleted_count == 0:
         raise HTTPException(status_code=404, detail="Assignment not found.")
     return {"deleted": True}
 
@@ -653,13 +699,7 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
             snapshot_notice = None
             known_total = len(rows)
         else:
-            assigned = [
-                r["device_id"]
-                for r in db.execute(
-                    "SELECT device_id FROM handler_device_assignments WHERE handler_id = ?",
-                    (user_id,),
-                ).fetchall()
-            ]
+            assigned = _handler_allowed_devices(db, user_id)
             rows = _fetch_devices_by_ids(db, assigned, full=True)
             known_total = db.execute("SELECT COUNT(*) AS n FROM handler_device_status").fetchone()["n"]
             snapshot_notice = "no-assignment" if known_total > 0 and len(rows) == 0 else None
