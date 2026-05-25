@@ -469,10 +469,14 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
 
 
 class PairRequest(BaseModel):
-    fcm_token: str
-    pairing_token: str
+    fcm_token: Optional[str] = None
+    fcmToken: Optional[str] = None
+    pairing_token: Optional[str] = None
+    pairingToken: Optional[str] = None
     device_id: Optional[str] = None
+    deviceId: Optional[str] = None
     mqtt_client_id: Optional[str] = None
+    mqttClientId: Optional[str] = None
 
 
 @device_router.post("/api/pair")
@@ -483,14 +487,15 @@ def tpe_pair(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Register a TPE device's FCM token.
+    Register a TPE device's pairing identity.
 
     The Android app calls this after scanning the partner QR code.
-    Body: ``{"fcm_token": "...", "pairing_token": "..."}``
+    Body supports both snake_case and camelCase keys.
     """
-    fcm_token = body.fcm_token.strip()
-    if not fcm_token:
-        raise HTTPException(status_code=400, detail="Missing or invalid fcm_token")
+    fcm_token = (body.fcm_token or body.fcmToken or "").strip()
+    pairing_token = (body.pairing_token or body.pairingToken or "").strip()
+    body_device_id = (body.device_id or body.deviceId or "").strip()
+    mqtt_client_id = (body.mqtt_client_id or body.mqttClientId or "").strip()
 
     expected = _effective_pairing_token(db)
     if not expected:
@@ -499,12 +504,14 @@ def tpe_pair(
             detail="TPE pairing is not configured. Set TPE_PAIRING_TOKEN.",
         )
 
-    if not secrets.compare_digest(body.pairing_token, expected):
+    if not pairing_token:
+        raise HTTPException(status_code=400, detail="Missing or invalid pairing_token")
+
+    if not secrets.compare_digest(pairing_token, expected):
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
-    body_device_id = (body.device_id or "").strip()
     header_device_id = (x_device_id or "").strip()
-    device_id = body_device_id or fcm_token or header_device_id
+    device_id = body_device_id or mqtt_client_id or fcm_token or header_device_id
     if not device_id:
         raise HTTPException(status_code=400, detail="Missing device identifier")
 
