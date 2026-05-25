@@ -12,7 +12,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from db import get_db
@@ -40,6 +40,8 @@ class PublicQuestion(BaseModel):
     text: str
     answer: str
     created_at: str
+    source_type: str
+    publication_tier: str
 
 
 # ---------------------------------------------------------------------------
@@ -57,8 +59,8 @@ async def submit_question(
     created_at = datetime.now(timezone.utc).isoformat()
     db.execute(
         """
-        INSERT INTO questions (id, text, answer, is_public, created_at)
-        VALUES (?, ?, NULL, 0, ?)
+        INSERT INTO questions (id, text, answer, is_public, created_at, source_type, publication_tier)
+        VALUES (?, ?, NULL, 0, ?, 'anon', 'safe')
         """,
         (question_id, payload.text, created_at),
     )
@@ -89,14 +91,40 @@ async def submit_question(
 
 
 @router.get("/public", response_model=list[PublicQuestion])
-def list_public_questions(db: sqlite3.Connection = Depends(get_db)):
-    """Return all answered questions that are marked as public."""
+def list_public_questions(
+    source: str | None = Query(None, description="Optional source filter: anon or limbo"),
+    tier: str | None = Query(None, description="Optional tier filter: safe, sensitive, or extreme"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return answered public questions, optionally filtered by source and tier."""
+    allowed_sources = {"anon", "limbo"}
+    allowed_tiers = {"safe", "sensitive", "extreme"}
+
+    clauses = ["is_public = 1", "answer IS NOT NULL"]
+    params: list[str] = []
+
+    if source is not None:
+        source_value = source.strip().lower()
+        if source_value not in allowed_sources:
+            raise HTTPException(status_code=400, detail="Invalid source filter")
+        clauses.append("LOWER(source_type) = ?")
+        params.append(source_value)
+
+    if tier is not None:
+        tier_value = tier.strip().lower()
+        if tier_value not in allowed_tiers:
+            raise HTTPException(status_code=400, detail="Invalid tier filter")
+        clauses.append("LOWER(publication_tier) = ?")
+        params.append(tier_value)
+
+    where_clause = " AND ".join(clauses)
     rows = db.execute(
-        """
-        SELECT id, text, answer, created_at
+        f"""
+        SELECT id, text, answer, created_at, source_type, publication_tier
         FROM questions
-        WHERE is_public = 1 AND answer IS NOT NULL
+        WHERE {where_clause}
         ORDER BY created_at DESC
-        """
+        """,
+        params,
     ).fetchall()
     return [dict(row) for row in rows]

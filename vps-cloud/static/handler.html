@@ -633,6 +633,10 @@
           <button class="nav-item" data-target="sec-vitals">💓 Vitals</button>
           <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
           <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
+          <button class="nav-item" data-target="sec-questions">💬 Questions</button>
+          <button class="nav-item" data-target="sec-limbo">🫧 Limbo Queue</button>
+          <button class="nav-item" data-target="sec-booking">📅 Booking Intake</button>
+          <button class="nav-item" data-target="sec-mail">📬 Puppy Mail</button>
           <button class="nav-item" data-target="sec-commands">📡 Commands</button>
           <button class="nav-item" data-target="sec-logs">📜 Logs</button>
           <button class="nav-item" data-target="sec-screenshare">📺 Screen Share</button>
@@ -809,6 +813,196 @@
                 <div class="ac-label">Delete Device</div>
                 <button class="btn-action danger-action" id="btn-delete-device" aria-label="Delete current device permanently">Delete Device</button>
                 <div class="ac-result" id="res-delete-device"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ QUESTIONS + PUBLIC STATUS ═══════════════ -->
+          <section id="sec-questions" class="handler-section">
+            <h2 class="section-heading">💬 Questions + Public Status</h2>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Public Status Counters</h2>
+                <button class="btn-action" id="public-status-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+              </div>
+              <div class="card-body">
+                <div class="cmd-group-body" style="padding:0">
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Days Caged Start Date</span>
+                    <div class="cmd-inputs">
+                      <input id="public-days-start" type="date" />
+                      <select id="public-days-paused">
+                        <option value="false">Running</option>
+                        <option value="true">Paused</option>
+                      </select>
+                      <input id="public-days-accum" type="number" min="0" placeholder="Accumulated days" />
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Public Mode + Counters</span>
+                    <div class="cmd-inputs">
+                      <input id="public-current-mode" placeholder="Current mode label" />
+                      <input id="public-tasks-completed" type="number" min="0" placeholder="Tasks completed" />
+                      <input id="public-confessions-posted" type="number" min="0" placeholder="Confessions posted" />
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+                  <button class="btn-action" id="public-status-save-btn" style="width:auto">Save Public Status</button>
+                  <span id="public-status-result" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Unanswered Questions</h2>
+                <button class="btn-action" id="questions-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+              </div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Question</th><th>Created</th><th>Answer</th><th>Actions</th></tr></thead>
+                  <tbody id="questions-unanswered-tbody">
+                    <tr class="empty-row"><td colspan="4">Open this tab to load questions.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h2>Answered Questions</h2></div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Question</th><th>Answer</th><th>Created</th><th>Actions</th></tr></thead>
+                  <tbody id="questions-answered-tbody">
+                    <tr class="empty-row"><td colspan="4">Open this tab to load answer history.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ LIMBO QUEUE ═══════════════ -->
+          <section id="sec-limbo" class="handler-section">
+            <h2 class="section-heading">🫧 Limbo Queue</h2>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Add Limbo Prompt</h2>
+              </div>
+              <div class="card-body">
+                <div class="cmd-group-body" style="padding:0">
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Prompt Text</span>
+                    <div class="cmd-inputs">
+                      <textarea id="limbo-create-text" placeholder="Add invasive prompt for queue..." style="min-height:54px"></textarea>
+                      <input id="limbo-create-source" placeholder="Source (default: handler)" />
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+                  <button class="btn-action" id="limbo-create-btn" style="width:auto">Add To Limbo</button>
+                  <button class="btn-action" id="limbo-reload-btn" style="width:auto">Reload</button>
+                  <span id="limbo-create-result" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h2>Pending Limbo Items</h2></div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Prompt</th><th>Source</th><th>Created</th><th>Answer</th><th>Governance</th><th>Actions</th></tr></thead>
+                  <tbody id="limbo-pending-tbody">
+                    <tr class="empty-row"><td colspan="6">Open this tab to load limbo queue.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h2>Resolved Limbo Items</h2></div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Status</th><th>Prompt</th><th>Resolution</th><th>Governance</th><th>Publish</th><th>When</th></tr></thead>
+                  <tbody id="limbo-resolved-tbody">
+                    <tr class="empty-row"><td colspan="6">Open this tab to load history.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ BOOKING INTAKE ═══════════════ -->
+          <section id="sec-booking" class="handler-section">
+            <h2 class="section-heading">📅 Booking Intake</h2>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Booking Queue</h2>
+                <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                  <select id="booking-status-filter" style="max-width:160px">
+                    <option value="all">All</option>
+                    <option value="new">New</option>
+                    <option value="qualified">Qualified</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="done">Done</option>
+                  </select>
+                  <button class="btn-action" id="booking-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+                </div>
+              </div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Contact</th><th>Availability</th><th>Intent + Location</th><th>Source</th><th>Status/Priority</th><th>Actions</th></tr></thead>
+                  <tbody id="booking-tbody">
+                    <tr class="empty-row"><td colspan="6">Open this tab to load booking intake.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <!-- ═══════════════ PUPPY MAIL ═══════════════ -->
+          <section id="sec-mail" class="handler-section">
+            <h2 class="section-heading">📬 Puppy Mail</h2>
+
+            <div class="card">
+              <div class="card-header">
+                <h2>Threads</h2>
+                <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                  <select id="mail-status-filter" style="max-width:160px">
+                    <option value="all">All</option>
+                    <option value="open">Open</option>
+                    <option value="resolved">Resolved</option>
+                  </select>
+                  <button class="btn-action" id="mail-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+                </div>
+              </div>
+              <div class="card-body" style="padding:0">
+                <table class="admin-table">
+                  <thead><tr><th>Sender</th><th>Latest</th><th>Source</th><th>Status</th><th>When</th><th>Actions</th></tr></thead>
+                  <tbody id="mail-threads-tbody">
+                    <tr class="empty-row"><td colspan="6">Open this tab to load puppy mail threads.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><h2>Selected Thread</h2></div>
+              <div class="card-body">
+                <div id="mail-thread-meta" style="font-size:.84rem;color:#9e7e82;min-height:1.2em">Select a thread to view messages.</div>
+                <div id="mail-thread-messages" style="margin-top:.8rem;display:grid;gap:.55rem"></div>
+                <div style="margin-top:1rem;display:grid;gap:.6rem">
+                  <textarea id="mail-reply-input" placeholder="Reply as m0chii's Handler..." style="min-height:72px"></textarea>
+                  <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+                    <button class="btn-action" id="mail-reply-btn" style="width:auto">Send Reply</button>
+                    <button class="btn-action" id="mail-mark-resolved-btn" style="width:auto">Mark Resolved</button>
+                    <button class="btn-action" id="mail-reopen-btn" style="width:auto">Reopen</button>
+                    <span id="mail-thread-result" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></span>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -1848,6 +2042,19 @@
         if (btn.dataset.target === 'sec-map') initDetailMap();
         if (btn.dataset.target === 'sec-logs') loadLogs();
         if (btn.dataset.target === 'sec-vitals') loadVitalsHistory();
+        if (btn.dataset.target === 'sec-questions') {
+          loadHandlerPublicStatus();
+          loadHandlerQuestions();
+        }
+        if (btn.dataset.target === 'sec-limbo') {
+          loadLimboItems();
+        }
+        if (btn.dataset.target === 'sec-booking') {
+          loadBookingQueue();
+        }
+        if (btn.dataset.target === 'sec-mail') {
+          loadMailThreads();
+        }
       });
     });
 
@@ -2488,6 +2695,645 @@
     }
 
     // ═══════════════════════════════════════════════════════════
+    // QUESTIONS + PUBLIC STATUS
+    // ═══════════════════════════════════════════════════════════
+
+    function _optIntInput(id) {
+      var raw = v(id);
+      if (!raw) return null;
+      var n = parseInt(raw, 10);
+      return Number.isNaN(n) ? null : n;
+    }
+
+    function _setInputValue(id, value) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.value = value == null ? '' : String(value);
+    }
+
+    async function loadHandlerPublicStatus() {
+      var statusEl = document.getElementById('public-status-result');
+      if (statusEl) statusEl.textContent = 'Loading...';
+      try {
+        var data = await apiGet('/api/handler/public-status');
+        _setInputValue('public-days-start', data.days_caged_start_date || '');
+        _setInputValue('public-days-paused', data.days_caged_paused ? 'true' : 'false');
+        _setInputValue('public-days-accum', data.days_caged_accumulated_days != null ? data.days_caged_accumulated_days : '0');
+        _setInputValue('public-current-mode', data.current_status_mode || '');
+        _setInputValue('public-tasks-completed', data.tasks_completed != null ? data.tasks_completed : '0');
+        _setInputValue('public-confessions-posted', data.confessions_posted != null ? data.confessions_posted : '0');
+        if (statusEl) statusEl.textContent = 'Loaded.';
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
+      }
+    }
+
+    async function saveHandlerPublicStatus() {
+      var btn = document.getElementById('public-status-save-btn');
+      var statusEl = document.getElementById('public-status-result');
+      var payload = {
+        days_caged_start_date: v('public-days-start') || null,
+        days_caged_paused: v('public-days-paused') === 'true',
+        days_caged_accumulated_days: _optIntInput('public-days-accum'),
+        current_status_mode: v('public-current-mode'),
+        tasks_completed: _optIntInput('public-tasks-completed'),
+        confessions_posted: _optIntInput('public-confessions-posted'),
+      };
+      btn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Saving...';
+      try {
+        var r = await apiPost('/api/handler/public-status', payload);
+        if (r.ok) {
+          if (statusEl) statusEl.textContent = 'Saved.';
+          showToast('✅ Public status updated.');
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Save failed.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function _bindQuestionRowActions() {
+      document.querySelectorAll('.q-answer-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          submitHandlerQuestionAnswer(btn.dataset.qid || '');
+        });
+      });
+      document.querySelectorAll('.q-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          deleteHandlerQuestion(btn.dataset.qid || '');
+        });
+      });
+    }
+
+    async function loadHandlerQuestions() {
+      var unEl = document.getElementById('questions-unanswered-tbody');
+      var anEl = document.getElementById('questions-answered-tbody');
+      unEl.innerHTML = '<tr class="empty-row"><td colspan="4">Loading...</td></tr>';
+      anEl.innerHTML = '<tr class="empty-row"><td colspan="4">Loading...</td></tr>';
+      try {
+        var results = await Promise.all([
+          apiGet('/api/handler/questions'),
+          apiGet('/api/handler/questions/answered'),
+        ]);
+        var unanswered = Array.isArray(results[0]) ? results[0] : [];
+        var answered = Array.isArray(results[1]) ? results[1] : [];
+
+        if (!unanswered.length) {
+          unEl.innerHTML = '<tr class="empty-row"><td colspan="4">No unanswered questions.</td></tr>';
+        } else {
+          unEl.innerHTML = unanswered.map(function(q) {
+            var qid = esc(q.id || '');
+            return '<tr>' +
+              '<td>' + esc(q.text || '') + '</td>' +
+              '<td class="ts-cell">' + esc(fmtDate(q.created_at)) + '</td>' +
+              '<td><textarea class="q-answer-input" data-qid="' + qid + '" placeholder="Write answer..." style="min-height:42px"></textarea></td>' +
+              '<td style="white-space:nowrap">' +
+                '<button class="btn-action q-answer-btn" data-qid="' + qid + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem">Answer</button>' +
+                '<button class="btn-action danger-action q-delete-btn" data-qid="' + qid + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem;margin-left:.35rem">Delete</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        }
+
+        if (!answered.length) {
+          anEl.innerHTML = '<tr class="empty-row"><td colspan="4">No answered questions yet.</td></tr>';
+        } else {
+          anEl.innerHTML = answered.map(function(q) {
+            var qid = esc(q.id || '');
+            return '<tr>' +
+              '<td>' + esc(q.text || '') + '</td>' +
+              '<td>' + esc(q.answer || '') + '</td>' +
+              '<td class="ts-cell">' + esc(fmtDate(q.created_at)) + '</td>' +
+              '<td><button class="btn-action danger-action q-delete-btn" data-qid="' + qid + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem">Delete</button></td>' +
+            '</tr>';
+          }).join('');
+        }
+
+        _bindQuestionRowActions();
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          unEl.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load questions.</td></tr>';
+          anEl.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load answers.</td></tr>';
+        }
+      }
+    }
+
+    async function submitHandlerQuestionAnswer(questionId) {
+      if (!questionId) return;
+      var input = document.querySelector('.q-answer-input[data-qid="' + CSS.escape(questionId) + '"]');
+      if (!input) return;
+      var answer = (input.value || '').trim();
+      if (!answer) {
+        showToast('⚠️ Answer cannot be empty.', true);
+        return;
+      }
+      try {
+        var r = await apiPost('/api/handler/questions/' + encodeURIComponent(questionId) + '/answer', { answer: answer });
+        if (r.ok) {
+          showToast('✅ Answer published.');
+          await loadHandlerQuestions();
+          await loadHandlerPublicStatus();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to answer question.', true);
+      }
+    }
+
+    async function deleteHandlerQuestion(questionId) {
+      if (!questionId) return;
+      if (!window.confirm('Delete this question permanently?')) return;
+      try {
+        var r = await apiDelete('/api/handler/questions/' + encodeURIComponent(questionId));
+        if (r.ok) {
+          showToast('🗑️ Question deleted.');
+          await loadHandlerQuestions();
+          await loadHandlerPublicStatus();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to delete question.', true);
+      }
+    }
+
+    document.getElementById('public-status-reload-btn').addEventListener('click', loadHandlerPublicStatus);
+    document.getElementById('public-status-save-btn').addEventListener('click', saveHandlerPublicStatus);
+    document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
+
+    // ═══════════════════════════════════════════════════════════
+    // LIMBO QUEUE
+    // ═══════════════════════════════════════════════════════════
+
+    function _bindLimboRowActions() {
+      document.querySelectorAll('.limbo-answer-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          answerLimboItem(parseInt(btn.dataset.limboId || '0', 10));
+        });
+      });
+      document.querySelectorAll('.limbo-dismiss-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          dismissLimboItem(parseInt(btn.dataset.limboId || '0', 10));
+        });
+      });
+      document.querySelectorAll('.limbo-gov-save-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          saveLimboGovernance(parseInt(btn.dataset.limboId || '0', 10));
+        });
+      });
+      document.querySelectorAll('.limbo-publish-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          publishLimboItem(parseInt(btn.dataset.limboId || '0', 10));
+        });
+      });
+    }
+
+    async function loadLimboItems() {
+      var pendingEl = document.getElementById('limbo-pending-tbody');
+      var resolvedEl = document.getElementById('limbo-resolved-tbody');
+      pendingEl.innerHTML = '<tr class="empty-row"><td colspan="6">Loading...</td></tr>';
+      resolvedEl.innerHTML = '<tr class="empty-row"><td colspan="6">Loading...</td></tr>';
+      try {
+        var results = await Promise.all([
+          apiGet('/api/handler/limbo?status=pending&limit=200'),
+          apiGet('/api/handler/limbo?status=all&limit=300'),
+        ]);
+        var pending = Array.isArray(results[0]) ? results[0] : [];
+        var all = Array.isArray(results[1]) ? results[1] : [];
+        var resolved = all.filter(function(item) { return item.status !== 'pending'; });
+
+        if (!pending.length) {
+          pendingEl.innerHTML = '<tr class="empty-row"><td colspan="6">No pending limbo items.</td></tr>';
+        } else {
+          pendingEl.innerHTML = pending.map(function(item) {
+            var id = Number(item.id || 0);
+            var tier = esc(item.publication_tier || 'sensitive');
+            var allowed = !!item.public_allowed;
+            return '<tr>' +
+              '<td>' + esc(item.prompt_text || '') + '</td>' +
+              '<td>' + esc(item.source || 'handler') + '</td>' +
+              '<td class="ts-cell">' + esc(fmtDate(item.created_at)) + '</td>' +
+              '<td><textarea class="limbo-answer-input" data-limbo-id="' + id + '" placeholder="Answer..." style="min-height:40px"></textarea></td>' +
+              '<td>' +
+                '<select class="limbo-tier-select" data-limbo-id="' + id + '" style="margin-bottom:.3rem;max-width:130px">' +
+                  '<option value="safe"' + (tier === 'safe' ? ' selected' : '') + '>safe</option>' +
+                  '<option value="sensitive"' + (tier === 'sensitive' ? ' selected' : '') + '>sensitive</option>' +
+                  '<option value="extreme"' + (tier === 'extreme' ? ' selected' : '') + '>extreme</option>' +
+                '</select>' +
+                '<label style="display:flex;align-items:center;gap:.35rem;font-size:.75rem;color:#9e7e82">' +
+                  '<input type="checkbox" class="limbo-public-allowed" data-limbo-id="' + id + '"' + (allowed ? ' checked' : '') + '> allow public' +
+                '</label>' +
+              '</td>' +
+              '<td style="white-space:nowrap">' +
+                '<button class="btn-action limbo-answer-btn" data-limbo-id="' + id + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem">Answer</button>' +
+                '<button class="btn-action danger-action limbo-dismiss-btn" data-limbo-id="' + id + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem;margin-left:.35rem">Dismiss</button>' +
+                '<button class="btn-action limbo-gov-save-btn" data-limbo-id="' + id + '" style="width:auto;padding:.35rem .75rem;font-size:.78rem;margin-left:.35rem">Save Rules</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        }
+
+        if (!resolved.length) {
+          resolvedEl.innerHTML = '<tr class="empty-row"><td colspan="6">No resolved limbo items.</td></tr>';
+        } else {
+          resolvedEl.innerHTML = resolved.map(function(item) {
+            var label = item.status === 'answered' ? '<span class="badge badge-ok">Answered</span>' : '<span class="badge badge-warn">Dismissed</span>';
+            var resolution = item.status === 'answered' ? (item.answer_text || '—') : (item.dismissed_reason || 'Dismissed');
+            var tier = esc(item.publication_tier || 'sensitive');
+            var allowed = !!item.public_allowed;
+            var publishCell = '—';
+            if (item.status === 'answered') {
+              if (item.published_question_id) {
+                publishCell = '<span class="badge badge-ok">Published</span>' +
+                  '<div style="margin-top:.35rem"><a href="/q/' + esc(item.published_question_id) + '" target="_blank" rel="noopener" style="font-size:.72rem;color:#c49a9f;text-decoration:none">Open Public ↗</a></div>';
+              } else {
+                publishCell = '<button class="btn-action limbo-publish-btn" data-limbo-id="' + Number(item.id || 0) + '" style="width:auto;padding:.3rem .65rem;font-size:.76rem">Publish Now</button>';
+              }
+            }
+            return '<tr>' +
+              '<td>' + label + '</td>' +
+              '<td>' + esc(item.prompt_text || '') + '</td>' +
+              '<td>' + esc(resolution) + '</td>' +
+              '<td>' +
+                '<div style="font-size:.75rem;color:#9e7e82;margin-bottom:.25rem">tier: ' + tier + '</div>' +
+                '<div style="font-size:.75rem;color:' + (allowed ? '#67d399' : '#f0b040') + '">' + (allowed ? 'public allowed' : 'public blocked') + '</div>' +
+                '<button class="btn-action limbo-gov-save-btn" data-limbo-id="' + Number(item.id || 0) + '" style="width:auto;padding:.25rem .5rem;font-size:.72rem;margin-top:.35rem">Update</button>' +
+                '<div style="display:none">' +
+                  '<select class="limbo-tier-select" data-limbo-id="' + Number(item.id || 0) + '">' +
+                    '<option value="safe"' + (tier === 'safe' ? ' selected' : '') + '>safe</option>' +
+                    '<option value="sensitive"' + (tier === 'sensitive' ? ' selected' : '') + '>sensitive</option>' +
+                    '<option value="extreme"' + (tier === 'extreme' ? ' selected' : '') + '>extreme</option>' +
+                  '</select>' +
+                  '<input type="checkbox" class="limbo-public-allowed" data-limbo-id="' + Number(item.id || 0) + '"' + (allowed ? ' checked' : '') + '>' +
+                '</div>' +
+              '</td>' +
+              '<td>' + publishCell + '</td>' +
+              '<td class="ts-cell">' + esc(fmtDate(item.answered_at || item.created_at)) + '</td>' +
+            '</tr>';
+          }).join('');
+        }
+
+        _bindLimboRowActions();
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          pendingEl.innerHTML = '<tr class="empty-row"><td colspan="6">Failed to load pending limbo.</td></tr>';
+          resolvedEl.innerHTML = '<tr class="empty-row"><td colspan="6">Failed to load limbo history.</td></tr>';
+        }
+      }
+    }
+
+    async function saveLimboGovernance(itemId) {
+      if (!itemId) return;
+      var tierEl = document.querySelector('.limbo-tier-select[data-limbo-id="' + itemId + '"]');
+      var allowedEl = document.querySelector('.limbo-public-allowed[data-limbo-id="' + itemId + '"]');
+      var payload = {
+        publication_tier: tierEl ? tierEl.value : null,
+        public_allowed: allowedEl ? !!allowedEl.checked : null,
+      };
+      try {
+        var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/governance', payload);
+        if (r.ok) {
+          showToast('✅ Limbo governance updated.');
+          await loadLimboItems();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update governance.', true);
+      }
+    }
+
+    async function createLimboItem() {
+      var btn = document.getElementById('limbo-create-btn');
+      var statusEl = document.getElementById('limbo-create-result');
+      var prompt = v('limbo-create-text');
+      if (!prompt) {
+        statusEl.textContent = 'Prompt text is required.';
+        return;
+      }
+      btn.disabled = true;
+      statusEl.textContent = 'Saving...';
+      try {
+        var r = await apiPost('/api/handler/limbo', {
+          prompt_text: prompt,
+          source: v('limbo-create-source') || 'handler',
+        });
+        if (r.ok) {
+          document.getElementById('limbo-create-text').value = '';
+          statusEl.textContent = 'Added to limbo.';
+          showToast('✅ Limbo item added.');
+          await loadLimboItems();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) statusEl.textContent = '❌ Failed to add limbo item.';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function answerLimboItem(itemId) {
+      if (!itemId) return;
+      var input = document.querySelector('.limbo-answer-input[data-limbo-id="' + itemId + '"]');
+      var answer = input ? (input.value || '').trim() : '';
+      if (!answer) {
+        showToast('⚠️ Limbo answer cannot be empty.', true);
+        return;
+      }
+      try {
+        var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/answer', { answer_text: answer });
+        if (r.ok) {
+          showToast('✅ Limbo item answered.');
+          await loadLimboItems();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to answer limbo item.', true);
+      }
+    }
+
+    async function dismissLimboItem(itemId) {
+      if (!itemId) return;
+      var reason = window.prompt('Dismiss reason (optional):', '') || '';
+      try {
+        var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/dismiss', { reason: reason });
+        if (r.ok) {
+          showToast('🗑️ Limbo item dismissed.');
+          await loadLimboItems();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to dismiss limbo item.', true);
+      }
+    }
+
+    async function publishLimboItem(itemId) {
+      if (!itemId) return;
+      try {
+        var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/publish', {});
+        if (r.ok) {
+          var b = await r.json().catch(function() { return {}; });
+          if (b.already_published) showToast('ℹ️ Limbo item already published.');
+          else showToast('✅ Limbo item published to public feed.');
+          await loadLimboItems();
+          await loadHandlerQuestions();
+          await loadHandlerPublicStatus();
+        } else {
+          var err = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (err.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch(e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to publish limbo item.', true);
+      }
+    }
+
+    document.getElementById('limbo-create-btn').addEventListener('click', createLimboItem);
+    document.getElementById('limbo-reload-btn').addEventListener('click', loadLimboItems);
+
+    // ═══════════════════════════════════════════════════════════
+    // BOOKING INTAKE
+    // ═══════════════════════════════════════════════════════════
+
+    function _bookingActionCell(item) {
+      var id = Number(item.id || 0);
+      var status = String(item.status || 'new');
+      var priority = String(item.priority || 'normal');
+      return '<div style="display:grid;gap:.35rem;min-width:190px">' +
+        '<select class="booking-status-select" data-booking-id="' + id + '">' +
+          '<option value="new"' + (status === 'new' ? ' selected' : '') + '>new</option>' +
+          '<option value="qualified"' + (status === 'qualified' ? ' selected' : '') + '>qualified</option>' +
+          '<option value="scheduled"' + (status === 'scheduled' ? ' selected' : '') + '>scheduled</option>' +
+          '<option value="done"' + (status === 'done' ? ' selected' : '') + '>done</option>' +
+        '</select>' +
+        '<select class="booking-priority-select" data-booking-id="' + id + '">' +
+          '<option value="low"' + (priority === 'low' ? ' selected' : '') + '>low</option>' +
+          '<option value="normal"' + (priority === 'normal' ? ' selected' : '') + '>normal</option>' +
+          '<option value="high"' + (priority === 'high' ? ' selected' : '') + '>high</option>' +
+        '</select>' +
+        '<button class="btn-action booking-save-btn" data-booking-id="' + id + '" style="width:auto;padding:.3rem .7rem;font-size:.76rem">Save</button>' +
+      '</div>';
+    }
+
+    function _bindBookingActions() {
+      document.querySelectorAll('.booking-save-btn').forEach(function(btn) {
+        btn.addEventListener('click', async function() {
+          var id = parseInt(btn.dataset.bookingId || '0', 10);
+          if (!id) return;
+          var statusEl = document.querySelector('.booking-status-select[data-booking-id="' + id + '"]');
+          var priorityEl = document.querySelector('.booking-priority-select[data-booking-id="' + id + '"]');
+          try {
+            var r = await apiPost('/api/handler/booking/' + encodeURIComponent(String(id)) + '/status', {
+              status: statusEl ? statusEl.value : 'new',
+              priority: priorityEl ? priorityEl.value : 'normal'
+            });
+            if (r.ok) {
+              showToast('✅ Booking updated.');
+              await loadBookingQueue();
+            } else {
+              var b = await r.json().catch(function() { return {}; });
+              showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+            }
+          } catch (e) {
+            if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update booking.', true);
+          }
+        });
+      });
+    }
+
+    async function loadBookingQueue() {
+      var tbody = document.getElementById('booking-tbody');
+      var filter = document.getElementById('booking-status-filter');
+      var statusValue = filter ? filter.value : 'all';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Loading...</td></tr>';
+      try {
+        var data = await apiGet('/api/handler/booking?status=' + encodeURIComponent(statusValue) + '&limit=200');
+        if (!Array.isArray(data) || !data.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No booking items in this filter.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(function(item) {
+          return '<tr>' +
+            '<td>' + esc(item.contact_handle || '—') + '</td>' +
+            '<td>' + esc(item.availability_window || '—') + '</td>' +
+            '<td><div>' + esc(item.session_intent || '—') + '</div><div style="margin-top:.25rem;color:#9e7e82;font-size:.75rem">' + esc(item.location_text || '—') + '</div></td>' +
+            '<td>' + esc(item.source || 'public') + '</td>' +
+            '<td><span class="badge badge-warn">' + esc(item.status || 'new') + '</span> <span style="font-size:.72rem;color:#9e7e82">' + esc(item.priority || 'normal') + '</span></td>' +
+            '<td>' + _bookingActionCell(item) + '</td>' +
+          '</tr>';
+        }).join('');
+        _bindBookingActions();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Failed to load booking queue.</td></tr>';
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PUPPY MAIL
+    // ═══════════════════════════════════════════════════════════
+
+    function _renderMailThreadMessages(messages) {
+      var host = document.getElementById('mail-thread-messages');
+      if (!host) return;
+      if (!Array.isArray(messages) || !messages.length) {
+        host.innerHTML = '<div style="color:#9e7e82;font-size:.84rem">No messages in this thread.</div>';
+        return;
+      }
+      host.innerHTML = messages.map(function(m) {
+        return '<div style="border:1px solid #3d2a2e;border-radius:10px;padding:.65rem .8rem;background:#1b1b1b">' +
+          '<div style="display:flex;justify-content:space-between;gap:.75rem;font-size:.74rem;color:#9e7e82;margin-bottom:.35rem">' +
+            '<span>' + esc(m.author || 'unknown') + '</span>' +
+            '<span class="ts-cell">' + esc(fmtDate(m.created_at)) + '</span>' +
+          '</div>' +
+          '<div style="white-space:pre-wrap;line-height:1.45">' + esc(m.body || '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function _bindMailThreadActions() {
+      document.querySelectorAll('.mail-open-thread-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var id = parseInt(btn.dataset.threadId || '0', 10);
+          if (!id) return;
+          loadMailThread(id);
+        });
+      });
+    }
+
+    async function loadMailThreads() {
+      var tbody = document.getElementById('mail-threads-tbody');
+      var filter = document.getElementById('mail-status-filter');
+      var statusValue = filter ? filter.value : 'all';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Loading...</td></tr>';
+      try {
+        var data = await apiGet('/api/handler/puppy-mail/threads?status=' + encodeURIComponent(statusValue) + '&limit=200');
+        if (!Array.isArray(data) || !data.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No puppy mail threads in this filter.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(function(t) {
+          var sender = (t.sender_name || 'Anonymous') + (t.sender_contact ? (' (' + t.sender_contact + ')') : '');
+          return '<tr>' +
+            '<td>' + esc(sender) + '</td>' +
+            '<td>' + esc(t.latest_message || '—') + '</td>' +
+            '<td>' + esc(t.source || 'web') + '</td>' +
+            '<td><span class="badge ' + (t.status === 'resolved' ? 'badge-ok' : 'badge-warn') + '">' + esc(t.status || 'open') + '</span></td>' +
+            '<td class="ts-cell">' + esc(fmtDate(t.latest_message_at || t.updated_at || t.created_at)) + '</td>' +
+            '<td><button class="btn-action mail-open-thread-btn" data-thread-id="' + Number(t.id || 0) + '" style="width:auto;padding:.3rem .7rem;font-size:.76rem">Open</button></td>' +
+          '</tr>';
+        }).join('');
+        _bindMailThreadActions();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="6">Failed to load puppy mail threads.</td></tr>';
+        }
+      }
+    }
+
+    async function loadMailThread(threadId) {
+      var metaEl = document.getElementById('mail-thread-meta');
+      var resultEl = document.getElementById('mail-thread-result');
+      _selectedMailThreadId = threadId;
+      if (resultEl) resultEl.textContent = '';
+      if (metaEl) metaEl.textContent = 'Loading thread...';
+      try {
+        var data = await apiGet('/api/handler/puppy-mail/threads/' + encodeURIComponent(String(threadId)));
+        var thread = data.thread || {};
+        if (metaEl) {
+          metaEl.textContent = 'Thread #' + String(thread.id || threadId) + ' • ' +
+            String(thread.status || 'open') + ' • ' +
+            String(thread.sender_name || 'Anonymous') +
+            (thread.sender_contact ? (' (' + thread.sender_contact + ')') : '');
+        }
+        _renderMailThreadMessages(data.messages || []);
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          if (metaEl) metaEl.textContent = 'Failed to load thread.';
+          _renderMailThreadMessages([]);
+        }
+      }
+    }
+
+    async function sendMailReply() {
+      var input = document.getElementById('mail-reply-input');
+      var resultEl = document.getElementById('mail-thread-result');
+      if (!_selectedMailThreadId) {
+        if (resultEl) resultEl.textContent = 'Select a thread first.';
+        return;
+      }
+      var body = input ? input.value.trim() : '';
+      if (!body) {
+        if (resultEl) resultEl.textContent = 'Reply body cannot be empty.';
+        return;
+      }
+      if (resultEl) resultEl.textContent = 'Sending...';
+      try {
+        var r = await apiPost('/api/handler/puppy-mail/threads/' + encodeURIComponent(String(_selectedMailThreadId)) + '/reply', { body: body });
+        if (r.ok) {
+          if (input) input.value = '';
+          if (resultEl) resultEl.textContent = 'Reply sent.';
+          showToast('✅ Puppy mail reply sent.');
+          await loadMailThread(_selectedMailThreadId);
+          await loadMailThreads();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          if (resultEl) resultEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to send reply.';
+      }
+    }
+
+    async function updateMailThreadStatus(nextStatus) {
+      var resultEl = document.getElementById('mail-thread-result');
+      if (!_selectedMailThreadId) {
+        if (resultEl) resultEl.textContent = 'Select a thread first.';
+        return;
+      }
+      if (resultEl) resultEl.textContent = 'Saving...';
+      try {
+        var r = await apiPost('/api/handler/puppy-mail/threads/' + encodeURIComponent(String(_selectedMailThreadId)) + '/status', {
+          status: nextStatus
+        });
+        if (r.ok) {
+          if (resultEl) resultEl.textContent = 'Status updated.';
+          showToast('✅ Thread marked ' + nextStatus + '.');
+          await loadMailThread(_selectedMailThreadId);
+          await loadMailThreads();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          if (resultEl) resultEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to update status.';
+      }
+    }
+
+    document.getElementById('booking-reload-btn').addEventListener('click', loadBookingQueue);
+    document.getElementById('booking-status-filter').addEventListener('change', loadBookingQueue);
+    document.getElementById('mail-reload-btn').addEventListener('click', loadMailThreads);
+    document.getElementById('mail-status-filter').addEventListener('change', loadMailThreads);
+    document.getElementById('mail-reply-btn').addEventListener('click', sendMailReply);
+    document.getElementById('mail-mark-resolved-btn').addEventListener('click', function() { updateMailThreadStatus('resolved'); });
+    document.getElementById('mail-reopen-btn').addEventListener('click', function() { updateMailThreadStatus('open'); });
+
+    // ═══════════════════════════════════════════════════════════
     // LOGS
     // ═══════════════════════════════════════════════════════════
 
@@ -2532,6 +3378,7 @@
     var _vitalsBaseline  = null;   // current resting baseline (number or null)
     var _vitalsAlertStatus = null; // string or null
     var _vitalsFlashTimer = null;
+    var _selectedMailThreadId = null;
 
     /**
      * Show or hide the alert banner and flash effect.

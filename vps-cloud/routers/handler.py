@@ -32,6 +32,7 @@ import json
 import logging
 import secrets
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -39,7 +40,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from pydantic import AliasChoices, BaseModel, Field
 
 import jwt as _jwt
-from db import get_db, get_db_connection
+from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import SECRET_KEY, ALGORITHM, role_required
 from mqtt_client import mqtt_client as _mqtt_client
 from routers.tpe import (
@@ -91,6 +92,90 @@ _CREATE_TABLE_SQL = """
 """
 
 
+def _ensure_limbo_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS limbo_items (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            prompt_text      TEXT NOT NULL,
+            source           TEXT NOT NULL DEFAULT 'handler',
+            status           TEXT NOT NULL DEFAULT 'pending',
+            answer_text      TEXT,
+            dismissed_reason TEXT,
+            created_at       TEXT NOT NULL,
+            answered_at      TEXT,
+            answered_by      TEXT,
+            publication_tier TEXT NOT NULL DEFAULT 'sensitive',
+            public_allowed   INTEGER NOT NULL DEFAULT 0,
+            published_at     TEXT,
+            published_question_id TEXT
+        )
+        """
+    )
+
+
+def _ensure_limbo_columns(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(limbo_items)").fetchall()}
+    if "publication_tier" not in cols:
+        conn.execute("ALTER TABLE limbo_items ADD COLUMN publication_tier TEXT NOT NULL DEFAULT 'sensitive'")
+    if "public_allowed" not in cols:
+        conn.execute("ALTER TABLE limbo_items ADD COLUMN public_allowed INTEGER NOT NULL DEFAULT 0")
+    if "published_at" not in cols:
+        conn.execute("ALTER TABLE limbo_items ADD COLUMN published_at TEXT")
+    if "published_question_id" not in cols:
+        conn.execute("ALTER TABLE limbo_items ADD COLUMN published_question_id TEXT")
+
+
+def _ensure_booking_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS booking_intake (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_handle      TEXT NOT NULL,
+            availability_window TEXT NOT NULL,
+            session_intent      TEXT NOT NULL,
+            location_text       TEXT NOT NULL,
+            source              TEXT NOT NULL DEFAULT 'public',
+            priority            TEXT NOT NULL DEFAULT 'normal',
+            status              TEXT NOT NULL DEFAULT 'new',
+            notes               TEXT,
+            created_at          TEXT NOT NULL,
+            updated_at          TEXT NOT NULL,
+            resolved_at         TEXT
+        )
+        """
+    )
+
+
+def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS puppy_mail_threads (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_name    TEXT,
+            sender_contact TEXT,
+            source         TEXT NOT NULL DEFAULT 'web',
+            status         TEXT NOT NULL DEFAULT 'open',
+            created_at     TEXT NOT NULL,
+            updated_at     TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS puppy_mail_messages (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id       INTEGER NOT NULL,
+            author          TEXT NOT NULL,
+            body            TEXT NOT NULL,
+            delivery_status TEXT,
+            created_at      TEXT NOT NULL,
+            FOREIGN KEY(thread_id) REFERENCES puppy_mail_threads(id)
+        )
+        """
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -103,6 +188,10 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     if not info:
         # Fresh install – create directly.
         conn.execute(_CREATE_TABLE_SQL)
+        _ensure_limbo_table(conn)
+        _ensure_limbo_columns(conn)
+        _ensure_booking_table(conn)
+        _ensure_puppy_mail_tables(conn)
         conn.commit()
         return
 
@@ -138,10 +227,19 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
                 ),
             )
         conn.execute("DROP TABLE _handler_device_status_v1")
+        _ensure_limbo_table(conn)
+        _ensure_limbo_columns(conn)
+        _ensure_booking_table(conn)
+        _ensure_puppy_mail_tables(conn)
         conn.commit()
         return
 
-    # Schema is current – nothing to do.
+    # Schema is current – ensure auxiliary tables exist.
+    _ensure_limbo_table(conn)
+    _ensure_limbo_columns(conn)
+    _ensure_booking_table(conn)
+    _ensure_puppy_mail_tables(conn)
+    conn.commit()
 
 
 def _now_iso() -> str:
@@ -217,6 +315,67 @@ class LockRequest(BaseModel):
 class AssignmentRequest(BaseModel):
     handler_id: str
     device_id: str
+
+
+class HandlerAnswerPayload(BaseModel):
+    answer: str
+
+
+class PublicStatusUpdateRequest(BaseModel):
+    days_caged_start_date: Optional[str] = None
+    days_caged_paused: Optional[bool] = None
+    days_caged_accumulated_days: Optional[int] = None
+    current_status_mode: Optional[str] = None
+    tasks_completed: Optional[int] = None
+    confessions_posted: Optional[int] = None
+
+
+class LimboCreateRequest(BaseModel):
+    prompt_text: str
+    source: Optional[str] = "handler"
+
+
+class LimboAnswerRequest(BaseModel):
+    answer_text: str
+
+
+class LimboDismissRequest(BaseModel):
+    reason: Optional[str] = ""
+
+
+class LimboGovernanceUpdateRequest(BaseModel):
+    publication_tier: Optional[str] = None
+    public_allowed: Optional[bool] = None
+
+
+class BookingCreateRequest(BaseModel):
+    contact_handle: str
+    availability_window: str
+    session_intent: str
+    location_text: str
+    source: Optional[str] = "public"
+
+
+class BookingStatusUpdateRequest(BaseModel):
+    status: str
+    priority: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class PuppyMailCreateRequest(BaseModel):
+    sender_name: Optional[str] = None
+    sender_contact: Optional[str] = None
+    message: str
+    source: Optional[str] = "web"
+
+
+class PuppyMailReplyRequest(BaseModel):
+    body: str
+    author: Optional[str] = "m0chii's Handler"
+
+
+class PuppyMailStatusUpdateRequest(BaseModel):
+    status: str
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +467,89 @@ async def handler_device_status(
     ).fetchone()
     await _handler_ws.broadcast({"type": "status_update", **dict(row)})
     return {"status": "received", "device_id": resolved_device_id}
+
+
+# ---------------------------------------------------------------------------
+# Public intake endpoints (booking + puppy mail)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/booking", status_code=201)
+def create_booking_intake(
+    payload: BookingCreateRequest,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Public booking intake endpoint used by retained public surfaces."""
+    contact_handle = (payload.contact_handle or "").strip()
+    availability_window = (payload.availability_window or "").strip()
+    session_intent = (payload.session_intent or "").strip()
+    location_text = (payload.location_text or "").strip()
+    source = (payload.source or "public").strip() or "public"
+
+    if not contact_handle:
+        raise HTTPException(status_code=400, detail="contact_handle is required")
+    if not availability_window:
+        raise HTTPException(status_code=400, detail="availability_window is required")
+    if not session_intent:
+        raise HTTPException(status_code=400, detail="session_intent is required")
+    if not location_text:
+        raise HTTPException(status_code=400, detail="location_text is required")
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO booking_intake
+            (contact_handle, availability_window, session_intent, location_text,
+             source, priority, status, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'normal', 'new', '', ?, ?)
+        """,
+        (
+            contact_handle,
+            availability_window,
+            session_intent,
+            location_text,
+            source,
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    return {"id": cur.lastrowid, "status": "new"}
+
+
+@router.post("/api/puppy-mail", status_code=201)
+def create_puppy_mail_thread(
+    payload: PuppyMailCreateRequest,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Public puppy-mail intake endpoint for message widget/page submissions."""
+    body = (payload.message or "").strip()
+    sender_name = (payload.sender_name or "").strip() or "Anonymous"
+    sender_contact = (payload.sender_contact or "").strip()
+    source = (payload.source or "web").strip() or "web"
+    if not body:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    now = _now_iso()
+    thread_cur = db.execute(
+        """
+        INSERT INTO puppy_mail_threads
+            (sender_name, sender_contact, source, status, created_at, updated_at)
+        VALUES (?, ?, ?, 'open', ?, ?)
+        """,
+        (sender_name, sender_contact, source, now, now),
+    )
+    thread_id = int(thread_cur.lastrowid)
+    db.execute(
+        """
+        INSERT INTO puppy_mail_messages
+            (thread_id, author, body, delivery_status, created_at)
+        VALUES (?, ?, ?, 'received', ?)
+        """,
+        (thread_id, sender_name, body, now),
+    )
+    db.commit()
+    return {"thread_id": thread_id, "status": "open"}
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +801,589 @@ def handler_delete_assignment(
     if delete_result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Assignment not found.")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Booking + Puppy Mail queue APIs (JWT Bearer, role 'handler' or 'admin')
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/handler/booking")
+def handler_list_booking_queue(
+    status_filter: str = Query(default="all", alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    allowed = {"all", "new", "qualified", "scheduled", "done"}
+    sf = (status_filter or "all").strip().lower()
+    if sf not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid booking status filter")
+    if sf == "all":
+        rows = db.execute(
+            """
+            SELECT id, contact_handle, availability_window, session_intent, location_text,
+                   source, priority, status, notes, created_at, updated_at, resolved_at
+            FROM booking_intake
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT id, contact_handle, availability_window, session_intent, location_text,
+                   source, priority, status, notes, created_at, updated_at, resolved_at
+            FROM booking_intake
+            WHERE status = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (sf, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/handler/booking/{booking_id}/status")
+def handler_update_booking_status(
+    booking_id: int,
+    payload: BookingStatusUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute("SELECT id FROM booking_intake WHERE id = ?", (booking_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Booking item not found")
+
+    status_value = (payload.status or "").strip().lower()
+    if status_value not in {"new", "qualified", "scheduled", "done"}:
+        raise HTTPException(status_code=400, detail="status must be new, qualified, scheduled, or done")
+    priority_value = None
+    if payload.priority is not None:
+        priority_value = payload.priority.strip().lower()
+        if priority_value not in {"low", "normal", "high"}:
+            raise HTTPException(status_code=400, detail="priority must be low, normal, or high")
+
+    updates = ["status = ?", "updated_at = ?"]
+    values: list = [status_value, _now_iso()]
+    if priority_value is not None:
+        updates.append("priority = ?")
+        values.append(priority_value)
+    if payload.notes is not None:
+        updates.append("notes = ?")
+        values.append(payload.notes.strip())
+    if status_value == "done":
+        updates.append("resolved_at = ?")
+        values.append(_now_iso())
+    values.append(booking_id)
+
+    db.execute(f"UPDATE booking_intake SET {', '.join(updates)} WHERE id = ?", values)
+    db.commit()
+    return {"updated": True, "id": booking_id, "status": status_value}
+
+
+@router.get("/api/handler/puppy-mail/threads")
+def handler_list_puppy_mail_threads(
+    status_filter: str = Query(default="all", alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    allowed = {"all", "open", "resolved"}
+    sf = (status_filter or "all").strip().lower()
+    if sf not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid puppy-mail status filter")
+
+    where_clause = ""
+    params: list = []
+    if sf != "all":
+        where_clause = "WHERE t.status = ?"
+        params.append(sf)
+    params.append(limit)
+
+    rows = db.execute(
+        f"""
+        SELECT t.id, t.sender_name, t.sender_contact, t.source, t.status,
+               t.created_at, t.updated_at,
+               (
+                 SELECT m.body
+                 FROM puppy_mail_messages m
+                 WHERE m.thread_id = t.id
+                 ORDER BY m.id DESC
+                 LIMIT 1
+               ) AS latest_message,
+               (
+                 SELECT m.created_at
+                 FROM puppy_mail_messages m
+                 WHERE m.thread_id = t.id
+                 ORDER BY m.id DESC
+                 LIMIT 1
+               ) AS latest_message_at,
+               (
+                 SELECT COUNT(*)
+                 FROM puppy_mail_messages m
+                 WHERE m.thread_id = t.id
+               ) AS message_count
+        FROM puppy_mail_threads t
+        {where_clause}
+        ORDER BY t.updated_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/api/handler/puppy-mail/threads/{thread_id}")
+def handler_get_puppy_mail_thread(
+    thread_id: int,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    thread = db.execute(
+        """
+        SELECT id, sender_name, sender_contact, source, status, created_at, updated_at
+        FROM puppy_mail_threads
+        WHERE id = ?
+        """,
+        (thread_id,),
+    ).fetchone()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Puppy-mail thread not found")
+
+    messages = db.execute(
+        """
+        SELECT id, thread_id, author, body, delivery_status, created_at
+        FROM puppy_mail_messages
+        WHERE thread_id = ?
+        ORDER BY id ASC
+        """,
+        (thread_id,),
+    ).fetchall()
+    return {"thread": dict(thread), "messages": [dict(m) for m in messages]}
+
+
+@router.post("/api/handler/puppy-mail/threads/{thread_id}/reply")
+def handler_reply_puppy_mail_thread(
+    thread_id: int,
+    payload: PuppyMailReplyRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute("SELECT id FROM puppy_mail_threads WHERE id = ?", (thread_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Puppy-mail thread not found")
+
+    body = (payload.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="body is required")
+    author = (payload.author or "m0chii's Handler").strip() or "m0chii's Handler"
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO puppy_mail_messages
+            (thread_id, author, body, delivery_status, created_at)
+        VALUES (?, ?, ?, 'sent', ?)
+        """,
+        (thread_id, author, body, now),
+    )
+    db.execute(
+        "UPDATE puppy_mail_threads SET updated_at = ?, status = 'open' WHERE id = ?",
+        (now, thread_id),
+    )
+    db.commit()
+    return {"id": cur.lastrowid, "thread_id": thread_id, "author": author, "created_at": now}
+
+
+@router.post("/api/handler/puppy-mail/threads/{thread_id}/status")
+def handler_update_puppy_mail_thread_status(
+    thread_id: int,
+    payload: PuppyMailStatusUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute("SELECT id FROM puppy_mail_threads WHERE id = ?", (thread_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Puppy-mail thread not found")
+    status_value = (payload.status or "").strip().lower()
+    if status_value not in {"open", "resolved"}:
+        raise HTTPException(status_code=400, detail="status must be open or resolved")
+    now = _now_iso()
+    db.execute(
+        "UPDATE puppy_mail_threads SET status = ?, updated_at = ? WHERE id = ?",
+        (status_value, now, thread_id),
+    )
+    db.commit()
+    return {"updated": True, "id": thread_id, "status": status_value}
+
+
+# ---------------------------------------------------------------------------
+# Handler-native Questions APIs (JWT Bearer, role 'handler' or 'admin')
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/handler/questions")
+def handler_list_unanswered_questions(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """Return unanswered questions for handler workflows."""
+    rows = db.execute(
+        """
+        SELECT id, text, created_at
+        FROM questions
+        WHERE answer IS NULL
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.get("/api/handler/questions/answered")
+def handler_list_answered_questions(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """Return answered questions for handler review/history UI."""
+    rows = db.execute(
+        """
+        SELECT id, text, answer, is_public, created_at
+        FROM questions
+        WHERE answer IS NOT NULL
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@router.post("/api/handler/questions/{question_id}/answer")
+def handler_answer_question(
+    question_id: str,
+    payload: HandlerAnswerPayload,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Answer a question and publish it immediately (always-public policy)."""
+    row = db.execute(
+        "SELECT id FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Question not found.")
+
+    db.execute(
+        "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
+        (payload.answer, question_id),
+    )
+    db.commit()
+    return {
+        "id": question_id,
+        "message": "Answer saved and question is now public.",
+    }
+
+
+@router.delete("/api/handler/questions/{question_id}", status_code=204)
+def handler_delete_question(
+    question_id: str,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> None:
+    """Delete a question (handler/admin)."""
+    row = db.execute(
+        "SELECT id FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    db.execute("DELETE FROM questions WHERE id = ?", (question_id,))
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Public status settings (JWT Bearer, role 'handler' or 'admin')
+# ---------------------------------------------------------------------------
+
+
+def _safe_int(value: Optional[str], default: int = 0) -> int:
+    try:
+        return int(value) if value is not None else default
+    except ValueError:
+        return default
+
+
+def _safe_bool(value: Optional[str], default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() == "true"
+
+
+@router.get("/api/handler/public-status")
+def handler_get_public_status(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Return editable public status settings used by public pages."""
+    return {
+        "days_caged_start_date": get_setting(db, "days_caged_start_date", ""),
+        "days_caged_paused": _safe_bool(get_setting(db, "days_caged_paused", "false")),
+        "days_caged_accumulated_days": _safe_int(get_setting(db, "days_caged_accumulated_days", "0")),
+        "current_status_mode": get_setting(db, "current_status_mode", ""),
+        "tasks_completed": _safe_int(get_setting(db, "public_tasks_completed", "0")),
+        "confessions_posted": _safe_int(get_setting(db, "public_confessions_posted", "0")),
+    }
+
+
+@router.post("/api/handler/public-status")
+def handler_update_public_status(
+    payload: PublicStatusUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Update public status/counter settings consumed by the public UI."""
+    if payload.days_caged_start_date is not None:
+        set_setting(db, "days_caged_start_date", payload.days_caged_start_date.strip())
+    if payload.days_caged_paused is not None:
+        set_setting(db, "days_caged_paused", "true" if payload.days_caged_paused else "false")
+    if payload.days_caged_accumulated_days is not None:
+        if payload.days_caged_accumulated_days < 0:
+            raise HTTPException(status_code=400, detail="days_caged_accumulated_days must be >= 0")
+        set_setting(db, "days_caged_accumulated_days", str(payload.days_caged_accumulated_days))
+    if payload.current_status_mode is not None:
+        set_setting(db, "current_status_mode", payload.current_status_mode.strip())
+    if payload.tasks_completed is not None:
+        if payload.tasks_completed < 0:
+            raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")
+        set_setting(db, "public_tasks_completed", str(payload.tasks_completed))
+    if payload.confessions_posted is not None:
+        if payload.confessions_posted < 0:
+            raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
+        set_setting(db, "public_confessions_posted", str(payload.confessions_posted))
+
+    return {"updated": True}
+
+
+# ---------------------------------------------------------------------------
+# Limbo queue (JWT Bearer, role 'handler' or 'admin')
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/handler/limbo")
+def handler_list_limbo_items(
+    status_filter: str = Query(default="pending", alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """List limbo queue items for handler workflow."""
+    allowed_statuses = {"pending", "answered", "dismissed", "all"}
+    sf = (status_filter or "pending").strip().lower()
+    if sf not in allowed_statuses:
+        raise HTTPException(status_code=400, detail="Invalid limbo status filter")
+
+    if sf == "all":
+        rows = db.execute(
+            """
+             SELECT id, prompt_text, source, status, answer_text, dismissed_reason,
+                 created_at, answered_at, answered_by,
+                 publication_tier, public_allowed, published_at, published_question_id
+            FROM limbo_items
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+             SELECT id, prompt_text, source, status, answer_text, dismissed_reason,
+                 created_at, answered_at, answered_by,
+                 publication_tier, public_allowed, published_at, published_question_id
+            FROM limbo_items
+            WHERE status = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (sf, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.post("/api/handler/limbo", status_code=201)
+def handler_create_limbo_item(
+    payload: LimboCreateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Create a new pending limbo prompt."""
+    prompt = (payload.prompt_text or "").strip()
+    source = (payload.source or "handler").strip() or "handler"
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt_text is required")
+
+    created_at = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO limbo_items (prompt_text, source, status, created_at)
+        VALUES (?, ?, 'pending', ?)
+        """,
+        (prompt, source, created_at),
+    )
+    db.commit()
+    return {
+        "id": cur.lastrowid,
+        "prompt_text": prompt,
+        "source": source,
+        "status": "pending",
+        "created_at": created_at,
+    }
+
+
+@router.post("/api/handler/limbo/{item_id}/answer")
+def handler_answer_limbo_item(
+    item_id: int,
+    payload: LimboAnswerRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Resolve a limbo prompt by answering it."""
+    answer = (payload.answer_text or "").strip()
+    if not answer:
+        raise HTTPException(status_code=400, detail="answer_text is required")
+
+    row = db.execute(
+        "SELECT id FROM limbo_items WHERE id = ?",
+        (item_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Limbo item not found")
+
+    answered_at = _now_iso()
+    db.execute(
+        """
+        UPDATE limbo_items
+        SET status = 'answered', answer_text = ?, dismissed_reason = NULL,
+            answered_at = ?, answered_by = ?
+        WHERE id = ?
+        """,
+        (answer, answered_at, current_user.get("user_id", ""), item_id),
+    )
+    db.commit()
+    return {"id": item_id, "status": "answered", "answered_at": answered_at}
+
+
+@router.post("/api/handler/limbo/{item_id}/dismiss")
+def handler_dismiss_limbo_item(
+    item_id: int,
+    payload: LimboDismissRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Dismiss a limbo prompt without answering."""
+    row = db.execute(
+        "SELECT id FROM limbo_items WHERE id = ?",
+        (item_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Limbo item not found")
+
+    answered_at = _now_iso()
+    dismissed_reason = (payload.reason or "").strip()
+    db.execute(
+        """
+        UPDATE limbo_items
+        SET status = 'dismissed', dismissed_reason = ?, answer_text = NULL,
+            answered_at = ?, answered_by = ?
+        WHERE id = ?
+        """,
+        (dismissed_reason, answered_at, current_user.get("user_id", ""), item_id),
+    )
+    db.commit()
+    return {"id": item_id, "status": "dismissed", "answered_at": answered_at}
+
+
+@router.post("/api/handler/limbo/{item_id}/governance")
+def handler_update_limbo_governance(
+    item_id: int,
+    payload: LimboGovernanceUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Update publication governance flags for a limbo item."""
+    row = db.execute("SELECT id FROM limbo_items WHERE id = ?", (item_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Limbo item not found")
+
+    updates = []
+    values: list = []
+    if payload.publication_tier is not None:
+        tier = payload.publication_tier.strip().lower()
+        if tier not in {"safe", "sensitive", "extreme"}:
+            raise HTTPException(status_code=400, detail="publication_tier must be safe, sensitive, or extreme")
+        updates.append("publication_tier = ?")
+        values.append(tier)
+    if payload.public_allowed is not None:
+        updates.append("public_allowed = ?")
+        values.append(1 if payload.public_allowed else 0)
+
+    if not updates:
+        return {"updated": False}
+
+    values.append(item_id)
+    db.execute(f"UPDATE limbo_items SET {', '.join(updates)} WHERE id = ?", values)
+    db.commit()
+    return {"updated": True, "id": item_id}
+
+
+@router.post("/api/handler/limbo/{item_id}/publish")
+def handler_publish_limbo_item(
+    item_id: int,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Publish an answered limbo item to the public questions feed."""
+    row = db.execute(
+        """
+        SELECT id, prompt_text, answer_text, status, public_allowed, published_question_id, publication_tier
+        FROM limbo_items
+        WHERE id = ?
+        """,
+        (item_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Limbo item not found")
+    if row["status"] != "answered":
+        raise HTTPException(status_code=409, detail="Limbo item must be answered before publishing")
+    if not bool(row["public_allowed"]):
+        raise HTTPException(status_code=409, detail="Public publish is blocked by governance")
+    if row["published_question_id"]:
+        return {"published": True, "question_id": row["published_question_id"], "already_published": True}
+
+    question_id = str(uuid.uuid4())
+    now = _now_iso()
+    db.execute(
+        """
+        INSERT INTO questions (id, text, answer, is_public, created_at, source_type, publication_tier)
+        VALUES (?, ?, ?, 1, ?, 'limbo', ?)
+        """,
+        (question_id, row["prompt_text"], row["answer_text"], now, row["publication_tier"]),
+    )
+    db.execute(
+        "UPDATE limbo_items SET published_at = ?, published_question_id = ? WHERE id = ?",
+        (now, question_id, item_id),
+    )
+
+    confessions_raw = get_setting(db, "public_confessions_posted")
+    if confessions_raw is not None:
+        try:
+            confessions_val = int(confessions_raw)
+            if confessions_val >= 0:
+                set_setting(db, "public_confessions_posted", str(confessions_val + 1))
+        except ValueError:
+            pass
+
+    db.commit()
+    return {"published": True, "question_id": question_id, "already_published": False}
 
 
 # ---------------------------------------------------------------------------

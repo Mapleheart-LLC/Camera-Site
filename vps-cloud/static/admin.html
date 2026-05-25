@@ -807,7 +807,6 @@
               <div class="card-header">
                 <h2>Products</h2>
                 <div style="display:flex;gap:.5rem;align-items:center">
-                  <a class="btn-sm btn-edit" href="/store.html" target="_blank" rel="noopener" style="text-decoration:none;font-size:.78rem">🔗 View Store</a>
                   <button id="add-product-btn" class="btn-sm btn-edit">+ Add Product</button>
                 </div>
               </div>
@@ -1430,6 +1429,7 @@
     function showAdminPanel() {
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
+      applySetupOnlyScope();
       loadAll();
     }
     function showLoginPanel(msg) {
@@ -1522,6 +1522,35 @@
     });
 
     // ── Sidebar navigation ─────────────────────────────
+    const SETUP_ONLY_TARGETS = new Set(['s-drool', 's-spotify']);
+
+    function applySetupOnlyScope() {
+      document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
+        const target = btn.dataset.target;
+        if (!SETUP_ONLY_TARGETS.has(target)) {
+          btn.remove();
+        }
+      });
+
+      document.querySelectorAll('.admin-section').forEach(section => {
+        if (!SETUP_ONLY_TARGETS.has(section.id)) {
+          section.classList.remove('active');
+          section.style.display = 'none';
+        }
+      });
+
+      const sideLabels = document.querySelectorAll('.sidebar-section-label');
+      if (sideLabels.length > 0) {
+        sideLabels.forEach((label, idx) => {
+          if (idx > 0) {
+            label.remove();
+          }
+        });
+      }
+
+      navigate('s-drool');
+    }
+
     function navigate(targetId) {
       document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
@@ -1554,10 +1583,8 @@
     // ── Load everything ────────────────────────────────
     async function loadAll() {
       await Promise.all([
-        loadStats(), loadCameras(), loadQuestions(), loadAnsweredQuestions(),
-        loadSettings(), loadCameraLogs(), loadLinks(), loadProducts(), loadOrders(),
-        loadDroolCredentials(), loadDroolArchive(), loadAnalytics(), loadCloudflareAnalytics(),
-        loadDiscordSettings(), loadUsersAdmin(),
+        loadDroolCredentials(),
+        loadDroolArchive(),
       ]);
     }
 

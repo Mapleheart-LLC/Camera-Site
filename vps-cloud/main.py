@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Optional
 from urllib.parse import urlparse, quote as _url_quote
 
 import httpx
@@ -46,8 +46,6 @@ from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.questions import router as questions_router
 from routers.links import router as links_router
-from routers.store import router as store_router
-from routers.discord_interactions import router as discord_interactions_router
 from routers.drool import router as drool_router, limiter as drool_limiter
 from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
@@ -61,7 +59,6 @@ from routers.tpe import (
 )
 from routers.handler import router as handler_router, migrate_handler
 from routers.vitals import router as vitals_router, migrate_vitals
-from routers.public_control import router as public_control_router, migrate_public_control
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -142,8 +139,10 @@ FLUTTER_FRONTEND_URL: str = os.environ.get("FLUTTER_FRONTEND_URL", "").rstrip("/
 #   page is served.  Defaults to false so existing deployments are unaffected
 #   until the operator explicitly opts in.
 # ---------------------------------------------------------------------------
-_age_gate_raw = os.environ.get("AGE_GATE_ENABLED", "false")
-AGE_GATE_ENABLED: bool = _age_gate_raw.lower() == "true"
+# Cutover policy: keep age-gate middleware disabled for retained public flows.
+# The age-gate router remains mounted so the verification surface can still be
+# reached directly when needed.
+AGE_GATE_ENABLED: bool = False
 
 # Paths that are always accessible without age verification.
 # Anything starting with one of these prefixes is exempt.
@@ -171,7 +170,7 @@ _AGE_GATE_EXEMPT_PREFIXES = (
 #   (e.g. ".mochii.live" — note the leading dot which enables sub-domain sharing).
 # ---------------------------------------------------------------------------
 
-_SUBDOMAIN_PREFIXES = ("anon", "links", "shop", "drool")
+_SUBDOMAIN_PREFIXES = ("anon", "links", "drool")
 
 
 def _build_allowed_origins() -> list[str]:
@@ -282,6 +281,11 @@ def init_db() -> None:
         )
         """
     )
+    question_cols = {row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()}
+    if "source_type" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN source_type TEXT NOT NULL DEFAULT 'anon'")
+    if "publication_tier" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN publication_tier TEXT NOT NULL DEFAULT 'safe'")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS settings (
@@ -769,7 +773,6 @@ async def lifespan(app: FastAPI):
     migrate_tpe(get_db_connection())
     migrate_handler(get_db_connection())
     migrate_vitals(get_db_connection())
-    migrate_public_control(get_db_connection())
     mqtt_db = get_db_connection()
     try:
         initialize_mqtt(mqtt_db)
@@ -1141,8 +1144,6 @@ app.include_router(interactive_router)
 app.include_router(admin_router)
 app.include_router(questions_router)
 app.include_router(links_router)
-app.include_router(store_router)
-app.include_router(discord_interactions_router)
 app.include_router(drool_router)
 app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
@@ -1152,7 +1153,6 @@ app.include_router(tpe_device_router)
 app.include_router(tpe_admin_router)
 app.include_router(handler_router)
 app.include_router(vitals_router)
-app.include_router(public_control_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
@@ -1166,7 +1166,6 @@ async def subdomain_routing(request: Request, call_next):
 
     anon.mochii.live/   → serves /anon content    (URL in browser unchanged)
     links.mochii.live/  → serves /links content   (URL in browser unchanged)
-    shop.mochii.live/   → serves /store.html      (URL in browser unchanged)
     drool.mochii.live/  → serves /drool.html      (URL in browser unchanged)
 
     Only GET requests to exactly "/" are rewritten so that the correct HTML
@@ -1179,7 +1178,6 @@ async def subdomain_routing(request: Request, call_next):
         _subdomain_map = {
             "anon.":   "/anon",
             "links.":  "/links",
-            "shop.":   "/store.html",
             "drool.":  "/drool.html",
         }
         for prefix, target_path in _subdomain_map.items():
@@ -1328,6 +1326,33 @@ def spotify_page():
 def age_gate_page():
     """Serve the age verification landing page."""
     return FileResponse("static/age-gate.html")
+
+
+def _redirect_retired_page_to_home() -> RedirectResponse:
+    """Canonical cutover behavior for retired public pages."""
+    return RedirectResponse(url="/", status_code=302)
+
+
+_RETIRED_PUBLIC_PATHS = (
+    "/store",
+    "/store.html",
+    "/checkout",
+    "/checkout.html",
+    "/vault",
+    "/vault.html",
+    "/vods",
+    "/vods.html",
+    "/chat",
+    "/chat.html",
+)
+
+for _retired_path in _RETIRED_PUBLIC_PATHS:
+    app.add_api_route(
+        _retired_path,
+        _redirect_retired_page_to_home,
+        methods=["GET", "HEAD"],
+        include_in_schema=False,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1935,6 +1960,39 @@ def anon_page(request: Request):
     }}
     .back-link:hover {{ border-color: #c49a9f; color: #e8aeb7; }}
 
+        .status-strip {{
+            width: 100%;
+            max-width: 560px;
+            margin-bottom: 1rem;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .55rem;
+        }}
+
+        .status-tile {{
+            background: #242424;
+            border: 1px solid #3d2a2e;
+            border-radius: 12px;
+            padding: .65rem .5rem;
+            text-align: center;
+        }}
+
+        .status-value {{
+            font-size: 1rem;
+            font-weight: 800;
+            color: #e8aeb7;
+            line-height: 1;
+            margin-bottom: .25rem;
+        }}
+
+        .status-label {{
+            font-size: .62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #9e7e82;
+        }}
+
     .card {{
       width: 100%;
       max-width: 560px;
@@ -2025,6 +2083,59 @@ def anon_page(request: Request):
       margin-bottom: 1rem;
     }}
 
+        .feed-toolbar {{
+            display: grid;
+            gap: .55rem;
+            margin-bottom: 1rem;
+        }}
+
+        .filter-row {{
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            flex-wrap: wrap;
+        }}
+
+        .filter-label {{
+            font-size: .65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #9e7e82;
+            min-width: 52px;
+        }}
+
+        .filter-group {{
+            display: flex;
+            gap: .35rem;
+            flex-wrap: wrap;
+        }}
+
+        .filter-btn {{
+            border: 1px solid #4a3a3d;
+            background: #1f1f1f;
+            color: #bca9ac;
+            border-radius: 999px;
+            padding: .25rem .65rem;
+            font-size: .66rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            cursor: pointer;
+            transition: border-color .15s, color .15s, background .15s;
+        }}
+
+        .filter-btn:hover {{
+            border-color: #c49a9f;
+            color: #e8aeb7;
+        }}
+
+        .filter-btn.is-active {{
+            border-color: #e8aeb7;
+            color: #e8aeb7;
+            background: #3d2028;
+        }}
+
     .qa-item {{
       margin-bottom: 1rem;
     }}
@@ -2070,6 +2181,52 @@ def anon_page(request: Request):
       margin-bottom: .4rem;
     }}
 
+        .qa-meta {{
+            display: flex;
+            gap: .35rem;
+            flex-wrap: wrap;
+            margin: -.1rem 0 .4rem;
+        }}
+
+        .qa-chip {{
+            display: inline-flex;
+            align-items: center;
+            gap: .25rem;
+            font-size: .62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            border-radius: 999px;
+            padding: .14rem .45rem;
+            border: 1px solid #4a4a4a;
+            background: #2b2b2b;
+            color: #bca9ac;
+        }}
+
+        .qa-chip.source-limbo {{
+            border-color: #e8aeb7;
+            color: #e8aeb7;
+            background: #3d2028;
+        }}
+
+        .qa-chip.tier-safe {{
+            border-color: #67d399;
+            color: #67d399;
+            background: rgba(27, 78, 56, .35);
+        }}
+
+        .qa-chip.tier-sensitive {{
+            border-color: #f0b040;
+            color: #f0b040;
+            background: rgba(96, 69, 27, .35);
+        }}
+
+        .qa-chip.tier-extreme {{
+            border-color: #f87171;
+            color: #f87171;
+            background: rgba(100, 36, 42, .35);
+        }}
+
     .share-link {{
       display: inline-block;
       margin-top: .3rem;
@@ -2095,6 +2252,12 @@ def anon_page(request: Request):
       text-align: center;
       padding: 1rem 0;
     }}
+
+        @media (max-width: 560px) {{
+            .status-strip {{
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }}
+        }}
   </style>
 </head>
 <body>
@@ -2102,6 +2265,25 @@ def anon_page(request: Request):
     <h1>🐾 Puppy Pouch</h1>
     <a class="back-link" href="{_html_escape(canonical)}">← Back to mochii.live</a>
   </div>
+
+    <div class="status-strip" aria-label="Public status">
+        <div class="status-tile">
+            <div class="status-value" id="anon-days-caged">--</div>
+            <div class="status-label">Days Caged</div>
+        </div>
+        <div class="status-tile">
+            <div class="status-value" id="anon-tasks-completed">--</div>
+            <div class="status-label">Tasks</div>
+        </div>
+        <div class="status-tile">
+            <div class="status-value" id="anon-confessions-posted">--</div>
+            <div class="status-label">Confessions</div>
+        </div>
+        <div class="status-tile">
+            <div class="status-value" id="anon-current-mode">--</div>
+            <div class="status-label">Current Mode</div>
+        </div>
+    </div>
 
   <!-- Submit form -->
   <div class="card">
@@ -2118,6 +2300,25 @@ def anon_page(request: Request):
   <!-- Answered Q&A feed -->
   <div class="card">
     <p class="feed-header">Answered Notes 🐾</p>
+        <div class="feed-toolbar" aria-label="Answered note filters">
+            <div class="filter-row">
+                <span class="filter-label">Source</span>
+                <div class="filter-group" role="group" aria-label="Filter by source">
+                    <button type="button" class="filter-btn is-active" data-filter-kind="source" data-filter-value="all" aria-pressed="true">All</button>
+                    <button type="button" class="filter-btn" data-filter-kind="source" data-filter-value="limbo" aria-pressed="false">Limbo</button>
+                    <button type="button" class="filter-btn" data-filter-kind="source" data-filter-value="anon" aria-pressed="false">Anon</button>
+                </div>
+            </div>
+            <div class="filter-row">
+                <span class="filter-label">Tier</span>
+                <div class="filter-group" role="group" aria-label="Filter by tier">
+                    <button type="button" class="filter-btn is-active" data-filter-kind="tier" data-filter-value="all" aria-pressed="true">All</button>
+                    <button type="button" class="filter-btn" data-filter-kind="tier" data-filter-value="safe" aria-pressed="false">Safe</button>
+                    <button type="button" class="filter-btn" data-filter-kind="tier" data-filter-value="sensitive" aria-pressed="false">Sensitive</button>
+                    <button type="button" class="filter-btn" data-filter-kind="tier" data-filter-value="extreme" aria-pressed="false">Extreme</button>
+                </div>
+            </div>
+        </div>
     <p id="feed-loading">Loading… 🐾</p>
     <p id="empty-feed">No answered notes yet – be the first to ask! 🐾</p>
     <div id="qa-list"></div>
@@ -2175,30 +2376,133 @@ def anon_page(request: Request):
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }}
 
-    (async function loadFeed() {{
+        const activeFilters = {{ source: 'all', tier: 'all' }};
+        const qaList = document.getElementById('qa-list');
+        const emptyFeed = document.getElementById('empty-feed');
+        const feedLoading = document.getElementById('feed-loading');
+        let allQuestions = [];
+
+        function normalizedSource(source) {{
+            const s = String(source || 'anon').toLowerCase();
+            return s === 'limbo' ? 'limbo' : 'anon';
+        }}
+
+        function normalizedTier(tier) {{
+            const t = String(tier || 'safe').toLowerCase();
+            if (t === 'extreme') return 'extreme';
+            if (t === 'sensitive') return 'sensitive';
+            return 'safe';
+        }}
+
+        function tierClass(tier) {{
+            const t = normalizedTier(tier);
+            if (t === 'extreme') return 'tier-extreme';
+            if (t === 'sensitive') return 'tier-sensitive';
+            return 'tier-safe';
+        }}
+
+        function sourceLabel(source) {{
+            const s = normalizedSource(source);
+            if (s === 'limbo') return 'Limbo';
+            return 'Anon';
+        }}
+
+        function applyFilters(items) {{
+            return items.filter((q) => {{
+                const source = normalizedSource(q.source_type);
+                const tier = normalizedTier(q.publication_tier);
+                const sourceOk = activeFilters.source === 'all' || activeFilters.source === source;
+                const tierOk = activeFilters.tier === 'all' || activeFilters.tier === tier;
+                return sourceOk && tierOk;
+            }});
+        }}
+
+        function updateFilterButtons() {{
+            document.querySelectorAll('.filter-btn').forEach((btn) => {{
+                const kind = btn.dataset.filterKind;
+                const value = btn.dataset.filterValue;
+                const active = activeFilters[kind] === value;
+                btn.classList.toggle('is-active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            }});
+        }}
+
+        function renderFeed() {{
+            qaList.innerHTML = '';
+            const filtered = applyFilters(allQuestions);
+
+            if (!allQuestions.length) {{
+                emptyFeed.textContent = 'No answered notes yet – be the first to ask! 🐾';
+                emptyFeed.style.display = 'block';
+                return;
+            }}
+
+            if (!filtered.length) {{
+                emptyFeed.textContent = 'No answered notes match these filters yet. 🐾';
+                emptyFeed.style.display = 'block';
+                return;
+            }}
+
+            emptyFeed.style.display = 'none';
+            filtered.forEach((q) => {{
+                const tier = normalizedTier(q.publication_tier);
+                const source = normalizedSource(q.source_type);
+                const metaHtml =
+                    `<div class="qa-meta">` +
+                        `<span class="qa-chip source-${{source === 'limbo' ? 'limbo' : 'anon'}}">${{esc(sourceLabel(source))}}</span>` +
+                        `<span class="qa-chip ${{esc(tierClass(tier))}}">${{esc(tier)}}</span>` +
+                    `</div>`;
+                const div = document.createElement('div');
+                div.className = 'qa-item';
+                div.innerHTML =
+                    `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
+                    `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
+                    metaHtml +
+                    `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
+                qaList.appendChild(div);
+            }});
+        }}
+
+        document.querySelectorAll('.filter-btn').forEach((btn) => {{
+            btn.addEventListener('click', () => {{
+                const kind = btn.dataset.filterKind;
+                const value = btn.dataset.filterValue;
+                if (!kind || !value) return;
+                activeFilters[kind] = value;
+                updateFilterButtons();
+                renderFeed();
+            }});
+        }});
+
+        async function loadPublicStatus() {{
+            try {{
+                const resp = await fetch('/api/public/status');
+                if (!resp.ok) return;
+                const s = await resp.json();
+                document.getElementById('anon-days-caged').textContent = String(s.days_caged ?? '--');
+                document.getElementById('anon-tasks-completed').textContent = String(s.tasks_completed ?? '--');
+                document.getElementById('anon-confessions-posted').textContent = String(s.confessions_posted ?? '--');
+                document.getElementById('anon-current-mode').textContent = String(s.current_mode || '--');
+            }} catch {{
+                // Keep placeholders when unavailable.
+            }}
+        }}
+
+        (async function loadFeed() {{
       try {{
         const resp = await fetch('/api/questions/public');
-        document.getElementById('feed-loading').style.display = 'none';
+                feedLoading.style.display = 'none';
         if (!resp.ok) return;
-        const qs = await resp.json();
-        if (!qs.length) {{
-          document.getElementById('empty-feed').style.display = 'block';
-          return;
-        }}
-        const list = document.getElementById('qa-list');
-        qs.forEach(q => {{
-          const div = document.createElement('div');
-          div.className = 'qa-item';
-          div.innerHTML =
-            `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
-            `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
-            `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
-          list.appendChild(div);
-        }});
+                allQuestions = await resp.json();
+                renderFeed();
       }} catch {{
-        document.getElementById('feed-loading').textContent = 'Could not load notes.';
+                feedLoading.textContent = 'Could not load notes.';
       }}
     }})();
+
+                updateFilterButtons();
+        loadPublicStatus();
+        setInterval(loadPublicStatus, 60000);
   </script>
 </body>
 </html>"""
@@ -2225,8 +2529,6 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
         ORDER BY sort_order ASC, id ASC
         """
     ).fetchall()
-
-    product_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
 
     link_items_html = ""
     for row in rows:
@@ -2365,7 +2667,6 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
   <div class="container" role="main">
     <p class="site-name">🐾 mochii.live</p>
     <p class="tagline">All the links in one place.</p>
-    {'<a class="link-btn shop-link" href="https://shop.mochii.live" target="_blank" rel="noopener noreferrer">🛒 The Pack Shop</a>' if product_count else ''}
     {link_items_html}
     <p class="page-footer"><a href="{_html_escape(canonical)}">← Back to mochii.live</a></p>
   </div>
@@ -2429,6 +2730,73 @@ async def get_stream_status(db: sqlite3.Connection = Depends(get_db)):
                 pass
 
     return JSONResponse({"streams": result})
+
+
+def _safe_int_setting(db: sqlite3.Connection, key: str, default: int = 0) -> int:
+    raw = get_setting(db, key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _safe_bool_setting(db: sqlite3.Connection, key: str, default: bool = False) -> bool:
+    raw = get_setting(db, key)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() == "true"
+
+
+def _safe_date_setting(db: sqlite3.Connection, key: str) -> Optional[datetime]:
+    raw = (get_setting(db, key, "") or "").strip()
+    if not raw:
+        return None
+    try:
+        if len(raw) == 10:
+            return datetime.strptime(raw, "%Y-%m-%d")
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+@app.get("/api/public/status")
+def get_public_status(db: sqlite3.Connection = Depends(get_db)):
+    """Return public-facing counters and status metadata for landing pages."""
+    now_utc = datetime.now(timezone.utc)
+    start_dt = _safe_date_setting(db, "days_caged_start_date")
+    paused = _safe_bool_setting(db, "days_caged_paused", default=False)
+    accumulated = max(0, _safe_int_setting(db, "days_caged_accumulated_days", default=0))
+
+    if start_dt is None:
+        days_caged = accumulated
+    else:
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        elapsed_days = max(0, (now_utc.date() - start_dt.date()).days)
+        days_caged = accumulated if paused else accumulated + elapsed_days
+
+    tasks_completed = max(0, _safe_int_setting(db, "public_tasks_completed", default=0))
+    confessions_setting = _safe_int_setting(db, "public_confessions_posted", default=-1)
+    if confessions_setting >= 0:
+        confessions_posted = confessions_setting
+    else:
+        row = db.execute(
+            "SELECT COUNT(*) AS n FROM questions WHERE answer IS NOT NULL"
+        ).fetchone()
+        confessions_posted = int(row["n"]) if row else 0
+
+    current_mode = (get_setting(db, "current_status_mode", "") or "Service").strip() or "Service"
+
+    return {
+        "days_caged": days_caged,
+        "tasks_completed": tasks_completed,
+        "confessions_posted": confessions_posted,
+        "current_mode": current_mode,
+        "is_paused": paused,
+        "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2501,149 +2869,8 @@ def get_schedule(db: sqlite3.Connection = Depends(get_db)):
     return JSONResponse({"schedule": []})
 
 
-# ---------------------------------------------------------------------------
-# File vault
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/vault")
-def get_vault(
-    current_user: dict = Depends(get_current_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    access_level = current_user["access_level"]
-    rows = db.execute(
-        """SELECT id, title, description, file_url, minimum_access_level, sort_order, created_at
-           FROM content_drops
-           WHERE is_active = 1 AND minimum_access_level <= ?
-           ORDER BY sort_order, id DESC""",
-        (access_level,),
-    ).fetchall()
-    return JSONResponse([dict(r) for r in rows])
-
-
-# ---------------------------------------------------------------------------
-# VOD gallery
-# ---------------------------------------------------------------------------
-
-
-@app.get("/api/vods")
-def get_vods(
-    current_user: dict = Depends(get_current_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    access_level = current_user["access_level"]
-    rows = db.execute(
-        """SELECT id, title, description, file_url, thumbnail_url, minimum_access_level, duration_seconds, created_at
-           FROM vods WHERE is_active = 1 AND minimum_access_level <= ?
-           ORDER BY id DESC""",
-        (access_level,),
-    ).fetchall()
-    return JSONResponse([dict(r) for r in rows])
-
-
-# ---------------------------------------------------------------------------
-# Subscriber chat WebSocket
-# ---------------------------------------------------------------------------
-
-
-class _ChatManager:
-    def __init__(self) -> None:
-        self._connections: List[WebSocket] = []
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        self._connections.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        try:
-            self._connections.remove(ws)
-        except ValueError:
-            pass
-
-    async def broadcast(self, data: dict) -> None:
-        dead: List[WebSocket] = []
-        for ws in list(self._connections):
-            try:
-                await ws.send_json(data)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
-
-
-_chat_manager = _ChatManager()
-_CHAT_MAX_MESSAGES = 200
-
-
-@app.get("/api/chat/messages")
-def get_chat_messages(
-    current_user: dict = Depends(get_current_user),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    rows = db.execute(
-        "SELECT id, username, message, created_at FROM chat_messages ORDER BY id DESC LIMIT 50"
-    ).fetchall()
-    return JSONResponse([dict(r) for r in reversed(rows)])
-
-
-@app.websocket("/ws/chat")
-async def chat_ws(websocket: WebSocket, token: str = ""):
-    import jwt as _pyjwt
-    try:
-        payload = _pyjwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("sub")
-        access_level = payload.get("access_level", 0)
-    except Exception:
-        await websocket.close(code=4001)
-        return
-
-    if not user_id or access_level < 1:
-        await websocket.close(code=4001)
-        return
-
-    db = get_db_connection()
-    try:
-        row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not row:
-            await websocket.close(code=4001)
-            return
-        username = row["username"]
-
-        await _chat_manager.connect(websocket)
-        recent = db.execute(
-            "SELECT id, username, message, created_at FROM chat_messages ORDER BY id DESC LIMIT 50"
-        ).fetchall()
-        await websocket.send_json({"type": "history", "messages": [dict(r) for r in reversed(recent)]})
-
-        try:
-            while True:
-                data = await websocket.receive_text()
-                msg_text = data.strip()[:500]
-                if not msg_text:
-                    continue
-                now = datetime.now(timezone.utc).isoformat()
-                cur = db.execute(
-                    "INSERT INTO chat_messages (user_id, username, message, created_at) VALUES (?, ?, ?, ?)",
-                    (user_id, username, msg_text, now),
-                )
-                db.commit()
-                db.execute(
-                    "DELETE FROM chat_messages WHERE id NOT IN (SELECT id FROM chat_messages ORDER BY id DESC LIMIT ?)",
-                    (_CHAT_MAX_MESSAGES,),
-                )
-                db.commit()
-                await _chat_manager.broadcast({
-                    "type": "message",
-                    "id": cur.lastrowid,
-                    "username": username,
-                    "message": msg_text,
-                    "created_at": now,
-                })
-        except WebSocketDisconnect:
-            _chat_manager.disconnect(websocket)
-    finally:
-        db.close()
+# Retired surface APIs (vault, vods, chat) intentionally removed from active
+# exposure during retained-surface cutover.
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

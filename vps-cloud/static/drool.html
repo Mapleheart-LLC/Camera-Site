@@ -132,6 +132,31 @@
       color: #e8aeb7;
     }
 
+    .public-status-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin: .75rem 0 0;
+    }
+
+    .public-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      background: #24171b;
+      border: 1px solid #3d2a2e;
+      border-radius: 999px;
+      padding: .3rem .7rem;
+      font-size: .74rem;
+      color: #c49a9f;
+      white-space: nowrap;
+    }
+
+    .public-pill strong {
+      color: #e8aeb7;
+      font-weight: 800;
+    }
+
     /* ── Post card ───────────────────────────────────── */
     .post-card {
       background: #242424;
@@ -529,6 +554,12 @@
     <p style="font-size: .9rem; color: #9e7e82; margin-bottom: 1.25rem;">
       She liked this. She saved this. She thought no one would find out. <em>She was wrong.</em>
     </p>
+    <div class="public-status-pills" aria-label="Public status counters">
+      <span class="public-pill">Days Caged: <strong id="drool-days-caged">--</strong></span>
+      <span class="public-pill">Tasks: <strong id="drool-tasks-completed">--</strong></span>
+      <span class="public-pill">Confessions: <strong id="drool-confessions-posted">--</strong></span>
+      <span class="public-pill">Mode: <strong id="drool-current-mode">--</strong></span>
+    </div>
   </div>
 
   <main style="max-width: 1200px; margin: 0 auto; padding: 0 1.25rem 4rem; width: 100%;">
@@ -1102,7 +1133,23 @@
       }
     }
 
+    async function loadPublicStatusPills() {
+      try {
+        const r = await fetch('/api/public/status');
+        if (!r.ok) return;
+        const data = await r.json();
+        document.getElementById('drool-days-caged').textContent = String(data.days_caged ?? '--');
+        document.getElementById('drool-tasks-completed').textContent = String(data.tasks_completed ?? '--');
+        document.getElementById('drool-confessions-posted').textContent = String(data.confessions_posted ?? '--');
+        document.getElementById('drool-current-mode').textContent = String(data.current_mode || '--');
+      } catch (_) {
+        // Keep fallback placeholders when unavailable.
+      }
+    }
+
     // ── Init ─────────────────────────────────────────────
+    loadPublicStatusPills();
+    setInterval(loadPublicStatusPills, 60000);
     loadFeed();
   </script>
 
