@@ -2102,7 +2102,7 @@
         if (msg.type === 'snapshot') {
           if (!Array.isArray(msg.devices)) return;
           if (msg.notice === 'no-assignment') {
-            _handlerNoAssignmentHint = { knownTotal: Number(msg.known_total || 0) || 0 };
+            _handlerNoAssignmentHint = { knownTotal: Number(msg.known_total || 0) };
           }
           msg.devices.forEach(function(d) {
             _deviceCache[d.device_id] = d;
@@ -2870,7 +2870,7 @@
         var notice = resp.headers.get('X-Handler-Devices-Notice');
         var knownTotalRaw = resp.headers.get('X-Handler-Devices-Known-Total');
         if (notice === 'no-assignment') {
-          _handlerNoAssignmentHint = { knownTotal: Number(knownTotalRaw || 0) || 0 };
+          _handlerNoAssignmentHint = { knownTotal: Number(knownTotalRaw || 0) };
         }
         return resp.json();
       }).then(function(devices) {
