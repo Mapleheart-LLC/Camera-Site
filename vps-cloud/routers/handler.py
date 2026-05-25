@@ -363,7 +363,7 @@ def handler_list_devices(
         known_total = db.execute(
             "SELECT COUNT(*) AS n FROM handler_device_status"
         ).fetchone()["n"]
-        if response is not None and known_total > 0 and len(rows) == 0:
+        if known_total > 0 and len(rows) == 0:
             response.headers["X-Handler-Devices-Notice"] = "no-assignment"
             response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
     return [dict(r) for r in rows]

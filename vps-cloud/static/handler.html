@@ -1918,10 +1918,7 @@
       }
       emptyEl.style.display = 'block';
       if (currentUserRole === 'handler' && _handlerNoAssignmentHint && _handlerNoAssignmentHint.knownTotal > 0) {
-        emptyEl.textContent =
-          'No devices are assigned to your handler account yet (' +
-          _handlerNoAssignmentHint.knownTotal +
-          ' paired on system). Ask an admin to assign one.';
+        emptyEl.textContent = `No devices are assigned to your handler account yet (${_handlerNoAssignmentHint.knownTotal} paired on system). Ask an admin to assign one.`;
       } else {
         emptyEl.textContent = 'No devices have checked in yet.';
       }
