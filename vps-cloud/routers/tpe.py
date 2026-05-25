@@ -245,8 +245,10 @@ def _parse_bool_string(value: str) -> bool:
 
 def _coalesce_str(*values: Optional[str]) -> str:
     for value in values:
-        if value and value.strip():
-            return value.strip()
+        if value:
+            stripped = value.strip()
+            if stripped:
+                return stripped
     return ""
 
 
@@ -476,6 +478,8 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
 
 
 class PairRequest(BaseModel):
+    """Accept both snake_case and camelCase fields; snake_case wins when both are provided."""
+
     fcm_token: Optional[str] = None
     fcmToken: Optional[str] = None
     pairing_token: Optional[str] = None
