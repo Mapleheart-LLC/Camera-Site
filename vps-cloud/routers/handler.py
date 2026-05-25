@@ -35,8 +35,8 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from pydantic import AliasChoices, BaseModel, Field
 
 import jwt as _jwt
 from db import get_db, get_db_connection
@@ -172,14 +172,41 @@ def _verify_ws_token(token: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 class DeviceStatusReport(BaseModel):
-    device_id: str                      # stable device identifier (non-empty; e.g. UUID or Android device ID)
+    device_id: Optional[str] = Field(   # stable device identifier (non-empty; e.g. UUID or Android device ID)
+        default=None,
+        validation_alias=AliasChoices("device_id", "deviceId"),
+    )
     fcm_token: Optional[str] = None     # FCM registration token (stored for targeted pushes; append-only)
-    battery_pct: Optional[int] = None   # 0–100
-    lat: Optional[float] = None
-    lon: Optional[float] = None
-    ai_alert: Optional[bool] = None
-    ai_label: Optional[str] = None
-    ai_score: Optional[float] = None
+    battery_pct: Optional[int] = Field( # 0–100
+        default=None,
+        validation_alias=AliasChoices(
+            "battery_pct",
+            "battery",
+            "battery_level",
+            "batteryPercent",
+            "battery_percentage",
+        ),
+    )
+    lat: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("lat", "latitude"),
+    )
+    lon: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("lon", "lng", "longitude", "long"),
+    )
+    ai_alert: Optional[bool] = Field(
+        default=None,
+        validation_alias=AliasChoices("ai_alert", "aiAlert", "ai_filter_hit", "alert"),
+    )
+    ai_label: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("ai_label", "aiLabel", "label"),
+    )
+    ai_score: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices("ai_score", "aiScore", "score"),
+    )
 
 
 class LockRequest(BaseModel):
@@ -198,7 +225,9 @@ class AssignmentRequest(BaseModel):
 @router.post("/api/handler/device-status")
 async def handler_device_status(
     body: DeviceStatusReport,
+    request: Request,
     authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """
@@ -216,9 +245,25 @@ async def handler_device_status(
         if authorization and authorization.startswith("Bearer "):
             provided = authorization[len("Bearer "):].strip()
         if not secrets.compare_digest(provided, expected):
-            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+            logger.warning(
+                "Rejected /api/handler/device-status from %s: invalid webhook secret (device_id=%r)",
+                (request.client.host if request and request.client else "unknown"),
+                (body.device_id or x_device_id),
+            )
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Invalid webhook secret. "
+                    "Send Authorization: Bearer <tpe_webhook_secret>."
+                ),
+            )
 
-    if not body.device_id.strip():
+    resolved_device_id = ((body.device_id or "").strip() or (x_device_id or "").strip())
+    if not resolved_device_id:
+        logger.warning(
+            "Rejected /api/handler/device-status from %s: missing device_id in body/header",
+            (request.client.host if request and request.client else "unknown"),
+        )
         raise HTTPException(status_code=400, detail="device_id must not be empty")
 
     now = _now_iso()
@@ -241,7 +286,7 @@ async def handler_device_status(
             updated_at  = excluded.updated_at
         """,
         (
-            body.device_id,
+            resolved_device_id,
             body.fcm_token,
             body.battery_pct,
             body.lat,
@@ -256,10 +301,10 @@ async def handler_device_status(
     db.commit()
 
     row = db.execute(
-        "SELECT * FROM handler_device_status WHERE device_id = ?", (body.device_id,)
+        "SELECT * FROM handler_device_status WHERE device_id = ?", (resolved_device_id,)
     ).fetchone()
     await _handler_ws.broadcast({"type": "status_update", **dict(row)})
-    return {"status": "received"}
+    return {"status": "received", "device_id": resolved_device_id}
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +341,7 @@ def _fetch_devices_by_ids(
 
 @router.get("/api/handler/devices")
 def handler_list_devices(
+    response: Response,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> list:
@@ -311,6 +357,12 @@ def handler_list_devices(
     else:
         assigned = _handler_allowed_devices(db, current_user["user_id"])
         rows = _fetch_devices_by_ids(db, assigned)
+        known_total = db.execute(
+            "SELECT COUNT(*) AS n FROM handler_device_status"
+        ).fetchone()["n"]
+        if response is not None and known_total > 0 and len(rows) == 0:
+            response.headers["X-Handler-Devices-Notice"] = "no-assignment"
+            response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
     return [dict(r) for r in rows]
 
 
@@ -331,7 +383,10 @@ def handler_get_status(
     if current_user["role"] != "admin":
         assigned = _handler_allowed_devices(db, current_user["user_id"])
         if device_id not in assigned:
-            raise HTTPException(status_code=403, detail="Access denied to this device.")
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied to this device. Ask an admin to assign this device to your handler account.",
+            )
 
     row = db.execute(
         "SELECT * FROM handler_device_status WHERE device_id = ?", (device_id,)
@@ -592,6 +647,8 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
 
         if role == "admin":
             rows = db.execute("SELECT * FROM handler_device_status").fetchall()
+            snapshot_notice = None
+            known_total = len(rows)
         else:
             assigned = [
                 r["device_id"]
@@ -601,11 +658,17 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
                 ).fetchall()
             ]
             rows = _fetch_devices_by_ids(db, assigned, full=True)
+            known_total = db.execute("SELECT COUNT(*) AS n FROM handler_device_status").fetchone()["n"]
+            snapshot_notice = "no-assignment" if known_total > 0 and len(rows) == 0 else None
 
-        await websocket.send_json({
+        snapshot_payload = {
             "type": "snapshot",
             "devices": [dict(r) for r in rows],
-        })
+        }
+        if snapshot_notice:
+            snapshot_payload["notice"] = snapshot_notice
+            snapshot_payload["known_total"] = known_total
+        await websocket.send_json(snapshot_payload)
 
         # Keep-alive: send a ping every 30 s from a background task so that
         # the main receive loop is never interrupted by a timeout-cancel, which

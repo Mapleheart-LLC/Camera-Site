@@ -1590,6 +1590,7 @@
      */
     const _deviceCache = {};
     let _pairingQrObjectUrl = null;
+    let _handlerNoAssignmentHint = null;
 
     // ── Credential storage ─────────────────────────────
     function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
@@ -1712,6 +1713,7 @@
       disconnectWS();
       viewingDeviceId = null;
       currentUserRole = null;
+      _handlerNoAssignmentHint = null;
       updateDeleteDeviceActionAccess();
     }
 
@@ -1910,7 +1912,19 @@
       var emptyEl = document.getElementById('kennel-empty');
       if (!grid || !emptyEl) return;
       var hasCards = !!grid.querySelector('.kennel-card');
-      emptyEl.style.display = hasCards ? 'none' : 'block';
+      if (hasCards) {
+        emptyEl.style.display = 'none';
+        return;
+      }
+      emptyEl.style.display = 'block';
+      if (currentUserRole === 'handler' && _handlerNoAssignmentHint && _handlerNoAssignmentHint.knownTotal > 0) {
+        emptyEl.textContent =
+          'No devices are assigned to your handler account yet (' +
+          _handlerNoAssignmentHint.knownTotal +
+          ' paired on system). Ask an admin to assign one.';
+      } else {
+        emptyEl.textContent = 'No devices have checked in yet.';
+      }
     }
 
     function removeDeviceFromUi(deviceId) {
@@ -2087,6 +2101,9 @@
         // ── Snapshot: initial device list sent on WS connect ──────────
         if (msg.type === 'snapshot') {
           if (!Array.isArray(msg.devices)) return;
+          if (msg.notice === 'no-assignment') {
+            _handlerNoAssignmentHint = { knownTotal: Number(msg.known_total || 0) || 0 };
+          }
           msg.devices.forEach(function(d) {
             _deviceCache[d.device_id] = d;
             buildOrUpdateKennelCard(d);   // always update overview
@@ -2096,6 +2113,7 @@
           if (viewingDeviceId && _deviceCache[viewingDeviceId]) {
             renderStatus(_deviceCache[viewingDeviceId]);
           }
+          _refreshKennelEmptyState();
           return;
         }
 
@@ -2839,13 +2857,23 @@
     }
 
     function initPanel() {
+      _handlerNoAssignmentHint = null;
       connectWS();
       showKennelOverview();
       loadPairingQr();
       updateDeleteDeviceActionAccess();
 
       // Eagerly populate kennel cards before the first WS push
-      apiGet('/api/handler/devices').then(function(devices) {
+      fetch('/api/handler/devices', { headers: authHeader() }).then(function(resp) {
+        if (resp.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var notice = resp.headers.get('X-Handler-Devices-Notice');
+        var knownTotalRaw = resp.headers.get('X-Handler-Devices-Known-Total');
+        if (notice === 'no-assignment') {
+          _handlerNoAssignmentHint = { knownTotal: Number(knownTotalRaw || 0) || 0 };
+        }
+        return resp.json();
+      }).then(function(devices) {
         devices.forEach(function(d) {
           var existing = _deviceCache[d.device_id] || {};
           _deviceCache[d.device_id] = Object.assign({}, existing, d);
