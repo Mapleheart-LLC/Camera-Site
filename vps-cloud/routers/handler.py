@@ -316,18 +316,14 @@ async def handler_device_status(
 
 def _handler_allowed_devices(db: sqlite3.Connection, handler_id: str) -> list[str]:
     """Return device_ids assigned to a handler by id or legacy username key."""
-    keys = [handler_id]
     username_row = db.execute(
         "SELECT username FROM users WHERE id = ? LIMIT 1",
         (handler_id,),
     ).fetchone()
-    username = username_row["username"] if username_row else None
-    if username and username not in keys:
-        keys.append(username)
-    placeholders = ",".join("?" * len(keys))
+    username = username_row["username"] if username_row else handler_id
     rows = db.execute(
-        f"SELECT device_id FROM handler_device_assignments WHERE handler_id IN ({placeholders})",
-        keys,
+        "SELECT device_id FROM handler_device_assignments WHERE handler_id IN (?, ?)",
+        (handler_id, username),
     ).fetchall()
     return [r["device_id"] for r in rows]
 
@@ -336,7 +332,7 @@ def _normalize_handler_assignment_id(db: sqlite3.Connection, raw_handler_id: str
     """Resolve assignment input to canonical user_id (accepts user_id or username)."""
     candidate = (raw_handler_id or "").strip()
     if not candidate:
-        raise HTTPException(status_code=400, detail="handler_id is required.")
+        raise HTTPException(status_code=400, detail="handler_id (user ID or username) is required.")
 
     by_id = db.execute(
         "SELECT id FROM users WHERE id = ? LIMIT 1",
@@ -352,7 +348,10 @@ def _normalize_handler_assignment_id(db: sqlite3.Connection, raw_handler_id: str
     if by_username:
         return by_username["id"]
 
-    raise HTTPException(status_code=404, detail="Handler user not found.")
+    raise HTTPException(
+        status_code=404,
+        detail="Handler user not found for the provided ID or username.",
+    )
 
 
 def _fetch_devices_by_ids(
@@ -544,24 +543,20 @@ def handler_delete_assignment(
 ) -> dict:
     """Remove a handler↔device assignment (admin only)."""
     resolved_handler_id = _normalize_handler_assignment_id(db, handler_id)
-    result = db.execute(
-        "DELETE FROM handler_device_assignments WHERE handler_id = ? AND device_id = ?",
-        (resolved_handler_id, device_id),
-    )
-    deleted_count = result.rowcount
-    # Backward compatibility: also remove any legacy username-keyed row.
     username_row = db.execute(
         "SELECT username FROM users WHERE id = ? LIMIT 1",
         (resolved_handler_id,),
     ).fetchone()
-    if username_row:
-        legacy_result = db.execute(
-            "DELETE FROM handler_device_assignments WHERE handler_id = ? AND device_id = ?",
-            (username_row["username"], device_id),
-        )
-        deleted_count += legacy_result.rowcount
+    username = username_row["username"] if username_row else resolved_handler_id
+    delete_result = db.execute(
+        """
+        DELETE FROM handler_device_assignments
+        WHERE device_id = ? AND handler_id IN (?, ?)
+        """,
+        (device_id, resolved_handler_id, username),
+    )
     db.commit()
-    if deleted_count == 0:
+    if delete_result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Assignment not found.")
     return {"deleted": True}
 

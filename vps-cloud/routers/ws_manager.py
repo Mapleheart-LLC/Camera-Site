@@ -61,6 +61,8 @@ class _HandlerWSManager:
         self._device_sockets: Dict[str, WebSocket] = {}
         # device_id → WebSocket for WebRTC signaling relay (/ws/device-audio/{device_id}).
         self._signaling_sockets: Dict[str, WebSocket] = {}
+        # legacy handler_key (e.g., username) -> canonical user_id
+        self._handler_key_cache: Dict[str, Optional[str]] = {}
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -297,14 +299,23 @@ class _HandlerWSManager:
         if ws is not None:
             return ws, handler_key
 
+        cached_handler_id = self._handler_key_cache.get(handler_key)
+        if cached_handler_id:
+            return self._handler_sockets.get(cached_handler_id), cached_handler_id
+        # Negative-cache miss from a previous username lookup; skip another DB hit.
+        if handler_key in self._handler_key_cache and cached_handler_id is None:
+            return None, None
+
         row = db.execute(
             "SELECT id FROM users WHERE username = ? COLLATE NOCASE LIMIT 1",
             (handler_key,),
         ).fetchone()
         if not row:
+            self._handler_key_cache[handler_key] = None
             return None, None
 
         resolved_handler_id = row["id"]
+        self._handler_key_cache[handler_key] = resolved_handler_id
         return self._handler_sockets.get(resolved_handler_id), resolved_handler_id
 
 
