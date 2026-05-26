@@ -848,19 +848,9 @@
                     <div class="cmd-inputs">
                       <select id="public-tasks-label">
                         <option value="Edges">Edges</option>
-                        <option value="Denials">Denials</option>
-                        <option value="Teases">Teases</option>
-                        <option value="Punishments">Punishments</option>
-                        <option value="Obedience Points">Obedience Points</option>
-                        <option value="Strikes">Strikes</option>
                       </select>
                       <select id="public-confessions-label">
                         <option value="Orgasms">Orgasms</option>
-                        <option value="Allowed Releases">Allowed Releases</option>
-                        <option value="Ruined Orgasms">Ruined Orgasms</option>
-                        <option value="Relapses">Relapses</option>
-                        <option value="Reward Claims">Reward Claims</option>
-                        <option value="Completion Count">Completion Count</option>
                       </select>
                     </div>
                   </div>
@@ -869,13 +859,6 @@
                     <div class="cmd-inputs">
                       <select id="public-current-mode">
                         <option value="Service">Service</option>
-                        <option value="Training">Training</option>
-                        <option value="Locked">Locked</option>
-                        <option value="Tease Protocol">Tease Protocol</option>
-                        <option value="Discipline">Discipline</option>
-                        <option value="Recovery">Recovery</option>
-                        <option value="Maintenance">Maintenance</option>
-                        <option value="Free Day">Free Day</option>
                       </select>
                     </div>
                   </div>
@@ -2788,15 +2771,18 @@
       }
     }
 
+    var PUBLIC_DEFAULT_TASKS_LABEL = 'Edges';
+    var PUBLIC_DEFAULT_CONFESSIONS_LABEL = 'Orgasms';
+    var PUBLIC_DEFAULT_MODE = 'Service';
     var _publicStatusPresets = {};
 
     function applyPublicStatusPreset(presetName) {
       var statusEl = document.getElementById('public-status-result');
       var preset = _publicStatusPresets[presetName];
       if (!preset) return;
-      _setInputValue('public-tasks-label', preset.tasks_label || 'Edges');
-      _setInputValue('public-confessions-label', preset.confessions_label || 'Orgasms');
-      _setInputValue('public-current-mode', preset.current_status_mode || 'Service');
+      _setInputValue('public-tasks-label', preset.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
+      _setInputValue('public-confessions-label', preset.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
+      _setInputValue('public-current-mode', preset.current_status_mode || PUBLIC_DEFAULT_MODE);
       if (statusEl) statusEl.textContent = 'Preset applied. Click Save Public Status.';
     }
 
@@ -2813,9 +2799,9 @@
         _setInputValue('public-days-paused', data.days_caged_paused ? 'true' : 'false');
         _setInputValue('public-days-accum', data.days_caged_accumulated_days != null ? data.days_caged_accumulated_days : '0');
         _setInputValue('public-days-goal', data.days_locked_goal_days != null ? data.days_locked_goal_days : '0');
-        _setInputValue('public-tasks-label', data.tasks_label || 'Edges');
-        _setInputValue('public-confessions-label', data.confessions_label || 'Orgasms');
-        _setInputValue('public-current-mode', data.current_status_mode || 'Service');
+        _setInputValue('public-tasks-label', data.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
+        _setInputValue('public-confessions-label', data.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
+        _setInputValue('public-current-mode', data.current_status_mode || PUBLIC_DEFAULT_MODE);
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
