@@ -550,6 +550,9 @@
     <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
     <div id="kennel-overview">
       <h2 class="kennel-overview-heading">🏠 Kennel Overview</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.85rem">
+        <button class="btn-action" id="open-global-controls-btn" style="width:auto">Open Global Controls</button>
+      </div>
 
       <div class="card pairing-card">
         <div class="card-header">
@@ -823,13 +826,13 @@
 
             <div class="card">
               <div class="card-header">
-                <h2>Public Status Counters</h2>
+                <h2>Days Locked Controls</h2>
                 <button class="btn-action" id="public-status-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
               </div>
               <div class="card-body">
                 <div class="cmd-group-body" style="padding:0">
                   <div class="cmd-row" style="padding:0 0 .75rem 0">
-                    <span class="cmd-row-label">Days Caged Start Date</span>
+                    <span class="cmd-row-label">Days Locked Counter</span>
                     <div class="cmd-inputs">
                       <input id="public-days-start" type="date" />
                       <select id="public-days-paused">
@@ -837,14 +840,7 @@
                         <option value="true">Paused</option>
                       </select>
                       <input id="public-days-accum" type="number" min="0" placeholder="Accumulated days" />
-                    </div>
-                  </div>
-                  <div class="cmd-row" style="padding:0 0 .75rem 0">
-                    <span class="cmd-row-label">Public Mode + Counters</span>
-                    <div class="cmd-inputs">
-                      <input id="public-current-mode" placeholder="Current mode label" />
-                      <input id="public-tasks-completed" type="number" min="0" placeholder="Tasks completed" />
-                      <input id="public-confessions-posted" type="number" min="0" placeholder="Confessions posted" />
+                      <input id="public-days-goal" type="number" min="0" placeholder="Goal days (0 disables goal)" />
                     </div>
                   </div>
                 </div>
@@ -1962,6 +1958,25 @@
       updateDeleteDeviceActionAccess();
     }
 
+    function showGlobalControls() {
+      if (_micActive) sendMicStop();
+      stopScreenShare();
+      viewingDeviceId = null;
+      document.getElementById('kennel-overview').style.display = 'none';
+      document.getElementById('puppy-detail').style.display = 'block';
+      document.getElementById('back-to-kennel-btn').style.display = 'flex';
+      setText('sb-device-name', 'Global Controls');
+      renderStatus({});
+      document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById('sec-questions').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
+      var qNav = document.querySelector('.nav-item[data-target="sec-questions"]');
+      if (qNav) qNav.classList.add('active');
+      loadHandlerPublicStatus();
+      loadHandlerQuestions();
+      updateDeleteDeviceActionAccess();
+    }
+
     function updateDeleteDeviceActionAccess() {
       const btn = document.getElementById('btn-delete-device');
       const res = document.getElementById('res-delete-device');
@@ -2030,6 +2045,7 @@
 
     // ── Back to Kennel ─────────────────────────────────
     document.getElementById('back-to-kennel-btn').addEventListener('click', showKennelOverview);
+    document.getElementById('open-global-controls-btn').addEventListener('click', showGlobalControls);
 
     // ── Sidebar navigation ─────────────────────────────
     document.querySelectorAll('.nav-item[data-target]').forEach(function(btn) {
@@ -2719,9 +2735,7 @@
         _setInputValue('public-days-start', data.days_caged_start_date || '');
         _setInputValue('public-days-paused', data.days_caged_paused ? 'true' : 'false');
         _setInputValue('public-days-accum', data.days_caged_accumulated_days != null ? data.days_caged_accumulated_days : '0');
-        _setInputValue('public-current-mode', data.current_status_mode || '');
-        _setInputValue('public-tasks-completed', data.tasks_completed != null ? data.tasks_completed : '0');
-        _setInputValue('public-confessions-posted', data.confessions_posted != null ? data.confessions_posted : '0');
+        _setInputValue('public-days-goal', data.days_locked_goal_days != null ? data.days_locked_goal_days : '0');
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
@@ -2735,9 +2749,7 @@
         days_caged_start_date: v('public-days-start') || null,
         days_caged_paused: v('public-days-paused') === 'true',
         days_caged_accumulated_days: _optIntInput('public-days-accum'),
-        current_status_mode: v('public-current-mode'),
-        tasks_completed: _optIntInput('public-tasks-completed'),
-        confessions_posted: _optIntInput('public-confessions-posted'),
+        days_locked_goal_days: _optIntInput('public-days-goal'),
       };
       btn.disabled = true;
       if (statusEl) statusEl.textContent = 'Saving...';
@@ -2745,7 +2757,7 @@
         var r = await apiPost('/api/handler/public-status', payload);
         if (r.ok) {
           if (statusEl) statusEl.textContent = 'Saved.';
-          showToast('✅ Public status updated.');
+          showToast('✅ Days locked settings updated.');
         } else {
           var b = await r.json().catch(function() { return {}; });
           if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));

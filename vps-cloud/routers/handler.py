@@ -325,6 +325,7 @@ class PublicStatusUpdateRequest(BaseModel):
     days_caged_start_date: Optional[str] = None
     days_caged_paused: Optional[bool] = None
     days_caged_accumulated_days: Optional[int] = None
+    days_locked_goal_days: Optional[int] = None
     current_status_mode: Optional[str] = None
     tasks_completed: Optional[int] = None
     confessions_posted: Optional[int] = None
@@ -1128,6 +1129,7 @@ def handler_get_public_status(
         "days_caged_start_date": get_setting(db, "days_caged_start_date", ""),
         "days_caged_paused": _safe_bool(get_setting(db, "days_caged_paused", "false")),
         "days_caged_accumulated_days": _safe_int(get_setting(db, "days_caged_accumulated_days", "0")),
+        "days_locked_goal_days": _safe_int(get_setting(db, "days_locked_goal_days", "0")),
         "current_status_mode": get_setting(db, "current_status_mode", ""),
         "tasks_completed": _safe_int(get_setting(db, "public_tasks_completed", "0")),
         "confessions_posted": _safe_int(get_setting(db, "public_confessions_posted", "0")),
@@ -1149,6 +1151,10 @@ def handler_update_public_status(
         if payload.days_caged_accumulated_days < 0:
             raise HTTPException(status_code=400, detail="days_caged_accumulated_days must be >= 0")
         set_setting(db, "days_caged_accumulated_days", str(payload.days_caged_accumulated_days))
+    if payload.days_locked_goal_days is not None:
+        if payload.days_locked_goal_days < 0:
+            raise HTTPException(status_code=400, detail="days_locked_goal_days must be >= 0")
+        set_setting(db, "days_locked_goal_days", str(payload.days_locked_goal_days))
     if payload.current_status_mode is not None:
         set_setting(db, "current_status_mode", payload.current_status_mode.strip())
     if payload.tasks_completed is not None:

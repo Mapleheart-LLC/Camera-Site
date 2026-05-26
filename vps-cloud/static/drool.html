@@ -555,7 +555,7 @@
       She liked this. She saved this. She thought no one would find out. <em>She was wrong.</em>
     </p>
     <div class="public-status-pills" aria-label="Public status counters">
-      <span class="public-pill">Days Caged: <strong id="drool-days-caged">--</strong></span>
+      <span class="public-pill">Days Locked: <strong id="drool-days-locked">--</strong></span>
       <span class="public-pill">Tasks: <strong id="drool-tasks-completed">--</strong></span>
       <span class="public-pill">Confessions: <strong id="drool-confessions-posted">--</strong></span>
       <span class="public-pill">Mode: <strong id="drool-current-mode">--</strong></span>
@@ -1138,7 +1138,7 @@
         const r = await fetch('/api/public/status');
         if (!r.ok) return;
         const data = await r.json();
-        document.getElementById('drool-days-caged').textContent = String(data.days_caged ?? '--');
+        document.getElementById('drool-days-locked').textContent = String((data.days_locked ?? data.days_caged) ?? '--');
         document.getElementById('drool-tasks-completed').textContent = String(data.tasks_completed ?? '--');
         document.getElementById('drool-confessions-posted').textContent = String(data.confessions_posted ?? '--');
         document.getElementById('drool-current-mode').textContent = String(data.current_mode || '--');

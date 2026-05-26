@@ -1965,7 +1965,7 @@ def anon_page(request: Request):
             max-width: 560px;
             margin-bottom: 1rem;
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: minmax(0, 1fr);
             gap: .55rem;
         }}
 
@@ -1991,6 +1991,12 @@ def anon_page(request: Request):
             text-transform: uppercase;
             letter-spacing: .08em;
             color: #9e7e82;
+        }}
+
+        .status-sub {{
+            margin-top: .35rem;
+            font-size: .78rem;
+            color: #c49a9f;
         }}
 
     .card {{
@@ -2255,7 +2261,7 @@ def anon_page(request: Request):
 
         @media (max-width: 560px) {{
             .status-strip {{
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: minmax(0, 1fr);
             }}
         }}
   </style>
@@ -2268,20 +2274,13 @@ def anon_page(request: Request):
 
     <div class="status-strip" aria-label="Public status">
         <div class="status-tile">
-            <div class="status-value" id="anon-days-caged">--</div>
-            <div class="status-label">Days Caged</div>
-        </div>
-        <div class="status-tile">
-            <div class="status-value" id="anon-tasks-completed">--</div>
-            <div class="status-label">Tasks</div>
-        </div>
-        <div class="status-tile">
-            <div class="status-value" id="anon-confessions-posted">--</div>
-            <div class="status-label">Confessions</div>
-        </div>
-        <div class="status-tile">
-            <div class="status-value" id="anon-current-mode">--</div>
-            <div class="status-label">Current Mode</div>
+            <div class="status-value" id="anon-days-locked">--</div>
+            <div class="status-label">Days Locked</div>
+            <div class="status-sub" id="anon-days-locked-goal">Goal: --</div>
+            <div style="display:flex;justify-content:center;gap:.45rem;margin-top:.55rem">
+                <button type="button" id="anon-days-remove" style="padding:.3rem .55rem;border-radius:8px;border:1px solid #5a3a3e;background:#22161a;color:#f6d5db;font-weight:700;cursor:pointer">−1 day</button>
+                <button type="button" id="anon-days-add" style="padding:.3rem .55rem;border-radius:8px;border:1px solid #5a3a3e;background:#22161a;color:#f6d5db;font-weight:700;cursor:pointer">+1 day</button>
+            </div>
         </div>
     </div>
 
@@ -2479,12 +2478,36 @@ def anon_page(request: Request):
                 const resp = await fetch('/api/public/status');
                 if (!resp.ok) return;
                 const s = await resp.json();
-                document.getElementById('anon-days-caged').textContent = String(s.days_caged ?? '--');
-                document.getElementById('anon-tasks-completed').textContent = String(s.tasks_completed ?? '--');
-                document.getElementById('anon-confessions-posted').textContent = String(s.confessions_posted ?? '--');
-                document.getElementById('anon-current-mode').textContent = String(s.current_mode || '--');
+                const daysLocked = s.days_locked ?? s.days_caged;
+                const goalDays = s.days_locked_goal_days ?? 0;
+                document.getElementById('anon-days-locked').textContent = String(daysLocked ?? '--');
+                document.getElementById('anon-days-locked-goal').textContent =
+                    goalDays > 0 && daysLocked != null
+                        ? `Goal: ${{daysLocked}}/${{goalDays}} days`
+                        : `Goal: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
             }} catch {{
                 // Keep placeholders when unavailable.
+            }}
+        }}
+
+        async function adjustPublicDaysLocked(deltaDays) {{
+            const addBtn = document.getElementById('anon-days-add');
+            const removeBtn = document.getElementById('anon-days-remove');
+            addBtn.disabled = true;
+            removeBtn.disabled = true;
+            try {{
+                const resp = await fetch('/api/public/days-locked/adjust', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ delta_days: deltaDays }}),
+                }});
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                await loadPublicStatus();
+            }} catch {{
+                // Keep existing values on failure.
+            }} finally {{
+                addBtn.disabled = false;
+                removeBtn.disabled = false;
             }}
         }}
 
@@ -2501,6 +2524,8 @@ def anon_page(request: Request):
     }})();
 
                 updateFilterButtons();
+        document.getElementById('anon-days-add').addEventListener('click', () => adjustPublicDaysLocked(1));
+        document.getElementById('anon-days-remove').addEventListener('click', () => adjustPublicDaysLocked(-1));
         loadPublicStatus();
         setInterval(loadPublicStatus, 60000);
   </script>
@@ -2761,6 +2786,10 @@ def _safe_date_setting(db: sqlite3.Connection, key: str) -> Optional[datetime]:
         return None
 
 
+class PublicDaysLockedAdjustRequest(BaseModel):
+    delta_days: int = Field(..., ge=-30, le=30)
+
+
 @app.get("/api/public/status")
 def get_public_status(db: sqlite3.Connection = Depends(get_db)):
     """Return public-facing counters and status metadata for landing pages."""
@@ -2788,15 +2817,31 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         confessions_posted = int(row["n"]) if row else 0
 
     current_mode = (get_setting(db, "current_status_mode", "") or "Service").strip() or "Service"
+    days_locked_goal = max(0, _safe_int_setting(db, "days_locked_goal_days", default=0))
 
     return {
+        "days_locked": days_caged,
         "days_caged": days_caged,
+        "days_locked_goal_days": days_locked_goal,
         "tasks_completed": tasks_completed,
         "confessions_posted": confessions_posted,
         "current_mode": current_mode,
         "is_paused": paused,
         "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
     }
+
+
+@app.post("/api/public/days-locked/adjust")
+def adjust_public_days_locked(
+    payload: PublicDaysLockedAdjustRequest,
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Allow guests to adjust the public days-locked counter by whole days."""
+    current = max(0, _safe_int_setting(db, "days_caged_accumulated_days", default=0))
+    updated = max(0, current + payload.delta_days)
+    set_setting(db, "days_caged_accumulated_days", str(updated))
+    db.commit()
+    return {"ok": True, "days_caged_accumulated_days": updated, "delta_days": payload.delta_days}
 
 
 # ---------------------------------------------------------------------------
