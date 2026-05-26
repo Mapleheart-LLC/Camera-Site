@@ -843,6 +843,51 @@
                       <input id="public-days-goal" type="number" min="0" placeholder="Goal days (0 disables goal)" />
                     </div>
                   </div>
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Counter Labels</span>
+                    <div class="cmd-inputs">
+                      <select id="public-tasks-label">
+                        <option value="Edges">Edges</option>
+                        <option value="Denials">Denials</option>
+                        <option value="Teases">Teases</option>
+                        <option value="Punishments">Punishments</option>
+                        <option value="Obedience Points">Obedience Points</option>
+                        <option value="Strikes">Strikes</option>
+                      </select>
+                      <select id="public-confessions-label">
+                        <option value="Orgasms">Orgasms</option>
+                        <option value="Allowed Releases">Allowed Releases</option>
+                        <option value="Ruined Orgasms">Ruined Orgasms</option>
+                        <option value="Relapses">Relapses</option>
+                        <option value="Reward Claims">Reward Claims</option>
+                        <option value="Completion Count">Completion Count</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Mode Label</span>
+                    <div class="cmd-inputs">
+                      <select id="public-current-mode">
+                        <option value="Service">Service</option>
+                        <option value="Training">Training</option>
+                        <option value="Locked">Locked</option>
+                        <option value="Tease Protocol">Tease Protocol</option>
+                        <option value="Discipline">Discipline</option>
+                        <option value="Recovery">Recovery</option>
+                        <option value="Maintenance">Maintenance</option>
+                        <option value="Free Day">Free Day</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:0">
+                    <span class="cmd-row-label">Quick Presets</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.45rem;flex-wrap:wrap">
+                      <button type="button" class="btn-action" id="public-preset-strict" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Strict</button>
+                      <button type="button" class="btn-action" id="public-preset-tease" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Tease</button>
+                      <button type="button" class="btn-action" id="public-preset-progress" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Progress</button>
+                      <button type="button" class="btn-action" id="public-preset-punishment" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Punishment</button>
+                    </div>
+                  </div>
                 </div>
                 <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
                   <button class="btn-action" id="public-status-save-btn" style="width:auto">Save Public Status</button>
@@ -2727,15 +2772,50 @@
       el.value = value == null ? '' : String(value);
     }
 
+    function _setSelectOptions(id, options) {
+      var el = document.getElementById(id);
+      if (!el || !Array.isArray(options) || options.length === 0) return;
+      var current = String(el.value || '');
+      el.innerHTML = '';
+      options.forEach(function(opt) {
+        var optionEl = document.createElement('option');
+        optionEl.value = String(opt);
+        optionEl.textContent = String(opt);
+        el.appendChild(optionEl);
+      });
+      if (options.indexOf(current) !== -1) {
+        el.value = current;
+      }
+    }
+
+    var _publicStatusPresets = {};
+
+    function applyPublicStatusPreset(presetName) {
+      var statusEl = document.getElementById('public-status-result');
+      var preset = _publicStatusPresets[presetName];
+      if (!preset) return;
+      _setInputValue('public-tasks-label', preset.tasks_label || 'Edges');
+      _setInputValue('public-confessions-label', preset.confessions_label || 'Orgasms');
+      _setInputValue('public-current-mode', preset.current_status_mode || 'Service');
+      if (statusEl) statusEl.textContent = 'Preset applied. Click Save Public Status.';
+    }
+
     async function loadHandlerPublicStatus() {
       var statusEl = document.getElementById('public-status-result');
       if (statusEl) statusEl.textContent = 'Loading...';
       try {
         var data = await apiGet('/api/handler/public-status');
+        _setSelectOptions('public-tasks-label', data.counter_one_options);
+        _setSelectOptions('public-confessions-label', data.counter_two_options);
+        _setSelectOptions('public-current-mode', data.mode_options);
+        _publicStatusPresets = (data && data.presets && typeof data.presets === 'object') ? data.presets : {};
         _setInputValue('public-days-start', data.days_caged_start_date || '');
         _setInputValue('public-days-paused', data.days_caged_paused ? 'true' : 'false');
         _setInputValue('public-days-accum', data.days_caged_accumulated_days != null ? data.days_caged_accumulated_days : '0');
         _setInputValue('public-days-goal', data.days_locked_goal_days != null ? data.days_locked_goal_days : '0');
+        _setInputValue('public-tasks-label', data.tasks_label || 'Edges');
+        _setInputValue('public-confessions-label', data.confessions_label || 'Orgasms');
+        _setInputValue('public-current-mode', data.current_status_mode || 'Service');
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
@@ -2750,6 +2830,9 @@
         days_caged_paused: v('public-days-paused') === 'true',
         days_caged_accumulated_days: _optIntInput('public-days-accum'),
         days_locked_goal_days: _optIntInput('public-days-goal'),
+        tasks_label: v('public-tasks-label') || null,
+        confessions_label: v('public-confessions-label') || null,
+        current_status_mode: v('public-current-mode') || null,
       };
       btn.disabled = true;
       if (statusEl) statusEl.textContent = 'Saving...';
@@ -2757,7 +2840,7 @@
         var r = await apiPost('/api/handler/public-status', payload);
         if (r.ok) {
           if (statusEl) statusEl.textContent = 'Saved.';
-          showToast('✅ Days locked settings updated.');
+          showToast('✅ Public status settings updated.');
         } else {
           var b = await r.json().catch(function() { return {}; });
           if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
@@ -2879,6 +2962,10 @@
 
     document.getElementById('public-status-reload-btn').addEventListener('click', loadHandlerPublicStatus);
     document.getElementById('public-status-save-btn').addEventListener('click', saveHandlerPublicStatus);
+    document.getElementById('public-preset-strict').addEventListener('click', function() { applyPublicStatusPreset('strict'); });
+    document.getElementById('public-preset-tease').addEventListener('click', function() { applyPublicStatusPreset('tease'); });
+    document.getElementById('public-preset-progress').addEventListener('click', function() { applyPublicStatusPreset('progress'); });
+    document.getElementById('public-preset-punishment').addEventListener('click', function() { applyPublicStatusPreset('punishment'); });
     document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
 
     // ═══════════════════════════════════════════════════════════

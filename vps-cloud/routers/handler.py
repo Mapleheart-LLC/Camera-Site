@@ -58,6 +58,55 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["handler"])
 
+PUBLIC_COUNTER_ONE_LABEL_OPTIONS = [
+    "Edges",
+    "Denials",
+    "Teases",
+    "Punishments",
+    "Obedience Points",
+    "Strikes",
+]
+PUBLIC_COUNTER_TWO_LABEL_OPTIONS = [
+    "Orgasms",
+    "Allowed Releases",
+    "Ruined Orgasms",
+    "Relapses",
+    "Reward Claims",
+    "Completion Count",
+]
+PUBLIC_MODE_OPTIONS = [
+    "Service",
+    "Training",
+    "Locked",
+    "Tease Protocol",
+    "Discipline",
+    "Recovery",
+    "Maintenance",
+    "Free Day",
+]
+PUBLIC_STATUS_PRESETS = {
+    "strict": {
+        "tasks_label": "Denials",
+        "confessions_label": "Allowed Releases",
+        "current_status_mode": "Discipline",
+    },
+    "tease": {
+        "tasks_label": "Edges",
+        "confessions_label": "Ruined Orgasms",
+        "current_status_mode": "Tease Protocol",
+    },
+    "progress": {
+        "tasks_label": "Obedience Points",
+        "confessions_label": "Reward Claims",
+        "current_status_mode": "Training",
+    },
+    "punishment": {
+        "tasks_label": "Strikes",
+        "confessions_label": "Relapses",
+        "current_status_mode": "Locked",
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # DB migration
@@ -327,6 +376,8 @@ class PublicStatusUpdateRequest(BaseModel):
     days_caged_accumulated_days: Optional[int] = None
     days_locked_goal_days: Optional[int] = None
     current_status_mode: Optional[str] = None
+    tasks_label: Optional[str] = None
+    confessions_label: Optional[str] = None
     tasks_completed: Optional[int] = None
     confessions_posted: Optional[int] = None
 
@@ -1119,18 +1170,44 @@ def _safe_bool(value: Optional[str], default: bool = False) -> bool:
     return value.strip().lower() == "true"
 
 
+def _safe_choice(value: Optional[str], allowed: List[str], default: str) -> str:
+    raw = (value or "").strip()
+    return raw if raw in allowed else default
+
+
 @router.get("/api/handler/public-status")
 def handler_get_public_status(
     _current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Return editable public status settings used by public pages."""
+    tasks_label = _safe_choice(
+        get_setting(db, "public_tasks_label", "Edges"),
+        PUBLIC_COUNTER_ONE_LABEL_OPTIONS,
+        "Edges",
+    )
+    confessions_label = _safe_choice(
+        get_setting(db, "public_confessions_label", "Orgasms"),
+        PUBLIC_COUNTER_TWO_LABEL_OPTIONS,
+        "Orgasms",
+    )
+    current_mode = _safe_choice(
+        get_setting(db, "current_status_mode", "Service"),
+        PUBLIC_MODE_OPTIONS,
+        "Service",
+    )
     return {
         "days_caged_start_date": get_setting(db, "days_caged_start_date", ""),
         "days_caged_paused": _safe_bool(get_setting(db, "days_caged_paused", "false")),
         "days_caged_accumulated_days": _safe_int(get_setting(db, "days_caged_accumulated_days", "0")),
         "days_locked_goal_days": _safe_int(get_setting(db, "days_locked_goal_days", "0")),
-        "current_status_mode": get_setting(db, "current_status_mode", ""),
+        "current_status_mode": current_mode,
+        "tasks_label": tasks_label,
+        "confessions_label": confessions_label,
+        "counter_one_options": PUBLIC_COUNTER_ONE_LABEL_OPTIONS,
+        "counter_two_options": PUBLIC_COUNTER_TWO_LABEL_OPTIONS,
+        "mode_options": PUBLIC_MODE_OPTIONS,
+        "presets": PUBLIC_STATUS_PRESETS,
         "tasks_completed": _safe_int(get_setting(db, "public_tasks_completed", "0")),
         "confessions_posted": _safe_int(get_setting(db, "public_confessions_posted", "0")),
     }
@@ -1155,8 +1232,21 @@ def handler_update_public_status(
         if payload.days_locked_goal_days < 0:
             raise HTTPException(status_code=400, detail="days_locked_goal_days must be >= 0")
         set_setting(db, "days_locked_goal_days", str(payload.days_locked_goal_days))
+    if payload.tasks_label is not None:
+        tasks_label = payload.tasks_label.strip()
+        if tasks_label not in PUBLIC_COUNTER_ONE_LABEL_OPTIONS:
+            raise HTTPException(status_code=400, detail="tasks_label is not a valid option")
+        set_setting(db, "public_tasks_label", tasks_label)
+    if payload.confessions_label is not None:
+        confessions_label = payload.confessions_label.strip()
+        if confessions_label not in PUBLIC_COUNTER_TWO_LABEL_OPTIONS:
+            raise HTTPException(status_code=400, detail="confessions_label is not a valid option")
+        set_setting(db, "public_confessions_label", confessions_label)
     if payload.current_status_mode is not None:
-        set_setting(db, "current_status_mode", payload.current_status_mode.strip())
+        current_mode = payload.current_status_mode.strip()
+        if current_mode not in PUBLIC_MODE_OPTIONS:
+            raise HTTPException(status_code=400, detail="current_status_mode is not a valid option")
+        set_setting(db, "current_status_mode", current_mode)
     if payload.tasks_completed is not None:
         if payload.tasks_completed < 0:
             raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")

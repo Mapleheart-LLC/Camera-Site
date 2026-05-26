@@ -2786,6 +2786,44 @@ def _safe_date_setting(db: sqlite3.Connection, key: str) -> Optional[datetime]:
         return None
 
 
+PUBLIC_COUNTER_ONE_LABEL_OPTIONS = (
+    "Edges",
+    "Denials",
+    "Teases",
+    "Punishments",
+    "Obedience Points",
+    "Strikes",
+)
+PUBLIC_COUNTER_TWO_LABEL_OPTIONS = (
+    "Orgasms",
+    "Allowed Releases",
+    "Ruined Orgasms",
+    "Relapses",
+    "Reward Claims",
+    "Completion Count",
+)
+PUBLIC_MODE_OPTIONS = (
+    "Service",
+    "Training",
+    "Locked",
+    "Tease Protocol",
+    "Discipline",
+    "Recovery",
+    "Maintenance",
+    "Free Day",
+)
+
+
+def _safe_choice_setting(
+    db: sqlite3.Connection,
+    key: str,
+    allowed: tuple[str, ...],
+    default: str,
+) -> str:
+    raw = (get_setting(db, key, default) or "").strip()
+    return raw if raw in allowed else default
+
+
 class PublicDaysLockedAdjustRequest(BaseModel):
     delta_days: int = Field(..., ge=-30, le=30)
 
@@ -2816,7 +2854,15 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         ).fetchone()
         confessions_posted = int(row["n"]) if row else 0
 
-    current_mode = (get_setting(db, "current_status_mode", "") or "Service").strip() or "Service"
+    tasks_label = _safe_choice_setting(
+        db, "public_tasks_label", PUBLIC_COUNTER_ONE_LABEL_OPTIONS, "Edges"
+    )
+    confessions_label = _safe_choice_setting(
+        db, "public_confessions_label", PUBLIC_COUNTER_TWO_LABEL_OPTIONS, "Orgasms"
+    )
+    current_mode = _safe_choice_setting(
+        db, "current_status_mode", PUBLIC_MODE_OPTIONS, "Service"
+    )
     days_locked_goal = max(0, _safe_int_setting(db, "days_locked_goal_days", default=0))
 
     return {
@@ -2824,7 +2870,9 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         "days_caged": days_caged,
         "days_locked_goal_days": days_locked_goal,
         "tasks_completed": tasks_completed,
+        "tasks_label": tasks_label,
         "confessions_posted": confessions_posted,
+        "confessions_label": confessions_label,
         "current_mode": current_mode,
         "is_paused": paused,
         "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
