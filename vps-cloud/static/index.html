@@ -1278,11 +1278,14 @@
         const data = await r.json();
         const daysLocked = data.days_locked ?? data.days_caged;
         const goalDays = data.days_locked_goal_days ?? 0;
-        document.getElementById('pub-days-locked').textContent = String(daysLocked ?? '--');
+        const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
+        document.getElementById('pub-days-locked').textContent = goalMet ? '🔓 Unlocked' : String(daysLocked ?? '--');
         document.getElementById('pub-days-locked-goal').textContent =
-          goalDays > 0 && daysLocked != null
-            ? `Goal: ${daysLocked}/${goalDays} days`
-            : `Goal: ${goalDays > 0 ? goalDays + ' days' : 'not set'}`;
+          goalMet
+            ? `Goal met! (${daysLocked}/${goalDays} days)`
+            : goalDays > 0 && daysLocked != null
+              ? `Goal: ${daysLocked}/${goalDays} days`
+              : `Goal: ${goalDays > 0 ? goalDays + ' days' : 'not set'}`;
         document.getElementById('pub-status-note').textContent = data.is_paused ? 'Days locked counter is currently paused.' : '';
       } catch (_) {
         setPublicStatusFallback();
@@ -1304,7 +1307,7 @@
         });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         await loadPublicStatus();
-        noteEl.textContent = deltaDays > 0 ? 'Added 1 day to the lock.' : 'Removed 1 day from the lock.';
+        noteEl.textContent = deltaDays > 0 ? 'Added 1 day to the goal.' : 'Removed 1 day from the goal.';
       } catch (_) {
         noteEl.textContent = 'Could not update days locked right now.';
       } finally {
