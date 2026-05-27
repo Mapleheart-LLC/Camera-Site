@@ -2480,11 +2480,14 @@ def anon_page(request: Request):
                 const s = await resp.json();
                 const daysLocked = s.days_locked ?? s.days_caged;
                 const goalDays = s.days_locked_goal_days ?? 0;
-                document.getElementById('anon-days-locked').textContent = String(daysLocked ?? '--');
+                const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
+                document.getElementById('anon-days-locked').textContent = goalMet ? '🔓 Unlocked' : String(daysLocked ?? '--');
                 document.getElementById('anon-days-locked-goal').textContent =
-                    goalDays > 0 && daysLocked != null
-                        ? `Goal: ${{daysLocked}}/${{goalDays}} days`
-                        : `Goal: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
+                    goalMet
+                        ? `Goal met! (${{daysLocked}}/${{goalDays}} days)`
+                        : goalDays > 0 && daysLocked != null
+                            ? `Goal: ${{daysLocked}}/${{goalDays}} days`
+                            : `Goal: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
             }} catch {{
                 // Keep placeholders when unavailable.
             }}
