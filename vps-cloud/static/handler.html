@@ -550,6 +550,9 @@
     <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
     <div id="kennel-overview">
       <h2 class="kennel-overview-heading">🏠 Kennel Overview</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.85rem">
+        <button class="btn-action" id="open-global-controls-btn" style="width:auto">Open Global Controls</button>
+      </div>
 
       <div class="card pairing-card">
         <div class="card-header">
@@ -823,13 +826,13 @@
 
             <div class="card">
               <div class="card-header">
-                <h2>Public Status Counters</h2>
+                <h2>Days Locked Controls</h2>
                 <button class="btn-action" id="public-status-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
               </div>
               <div class="card-body">
                 <div class="cmd-group-body" style="padding:0">
                   <div class="cmd-row" style="padding:0 0 .75rem 0">
-                    <span class="cmd-row-label">Days Caged Start Date</span>
+                    <span class="cmd-row-label">Days Locked Counter</span>
                     <div class="cmd-inputs">
                       <input id="public-days-start" type="date" />
                       <select id="public-days-paused">
@@ -837,14 +840,35 @@
                         <option value="true">Paused</option>
                       </select>
                       <input id="public-days-accum" type="number" min="0" placeholder="Accumulated days" />
+                      <input id="public-days-goal" type="number" min="0" placeholder="Goal days (0 disables goal)" />
                     </div>
                   </div>
                   <div class="cmd-row" style="padding:0 0 .75rem 0">
-                    <span class="cmd-row-label">Public Mode + Counters</span>
+                    <span class="cmd-row-label">Counter Labels</span>
                     <div class="cmd-inputs">
-                      <input id="public-current-mode" placeholder="Current mode label" />
-                      <input id="public-tasks-completed" type="number" min="0" placeholder="Tasks completed" />
-                      <input id="public-confessions-posted" type="number" min="0" placeholder="Confessions posted" />
+                      <select id="public-tasks-label">
+                        <option value="Edges">Edges</option>
+                      </select>
+                      <select id="public-confessions-label">
+                        <option value="Orgasms">Orgasms</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:0 0 .75rem 0">
+                    <span class="cmd-row-label">Mode Label</span>
+                    <div class="cmd-inputs">
+                      <select id="public-current-mode">
+                        <option value="Service">Service</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:0">
+                    <span class="cmd-row-label">Quick Presets</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.45rem;flex-wrap:wrap">
+                      <button type="button" class="btn-action" id="public-preset-strict" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Strict</button>
+                      <button type="button" class="btn-action" id="public-preset-tease" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Tease</button>
+                      <button type="button" class="btn-action" id="public-preset-progress" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Progress</button>
+                      <button type="button" class="btn-action" id="public-preset-punishment" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Punishment</button>
                     </div>
                   </div>
                 </div>
@@ -1962,6 +1986,25 @@
       updateDeleteDeviceActionAccess();
     }
 
+    function showGlobalControls() {
+      if (_micActive) sendMicStop();
+      stopScreenShare();
+      viewingDeviceId = null;
+      document.getElementById('kennel-overview').style.display = 'none';
+      document.getElementById('puppy-detail').style.display = 'block';
+      document.getElementById('back-to-kennel-btn').style.display = 'flex';
+      setText('sb-device-name', 'Global Controls');
+      renderStatus({});
+      document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById('sec-questions').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
+      var qNav = document.querySelector('.nav-item[data-target="sec-questions"]');
+      if (qNav) qNav.classList.add('active');
+      loadHandlerPublicStatus();
+      loadHandlerQuestions();
+      updateDeleteDeviceActionAccess();
+    }
+
     function updateDeleteDeviceActionAccess() {
       const btn = document.getElementById('btn-delete-device');
       const res = document.getElementById('res-delete-device');
@@ -2030,6 +2073,7 @@
 
     // ── Back to Kennel ─────────────────────────────────
     document.getElementById('back-to-kennel-btn').addEventListener('click', showKennelOverview);
+    document.getElementById('open-global-controls-btn').addEventListener('click', showGlobalControls);
 
     // ── Sidebar navigation ─────────────────────────────
     document.querySelectorAll('.nav-item[data-target]').forEach(function(btn) {
@@ -2711,17 +2755,53 @@
       el.value = value == null ? '' : String(value);
     }
 
+    function _setSelectOptions(id, options) {
+      var el = document.getElementById(id);
+      if (!el || !Array.isArray(options) || options.length === 0) return;
+      var current = String(el.value || '');
+      el.innerHTML = '';
+      options.forEach(function(opt) {
+        var optionEl = document.createElement('option');
+        optionEl.value = String(opt);
+        optionEl.textContent = String(opt);
+        el.appendChild(optionEl);
+      });
+      if (options.indexOf(current) !== -1) {
+        el.value = current;
+      }
+    }
+
+    var PUBLIC_DEFAULT_TASKS_LABEL = 'Edges';
+    var PUBLIC_DEFAULT_CONFESSIONS_LABEL = 'Orgasms';
+    var PUBLIC_DEFAULT_MODE = 'Service';
+    var _publicStatusPresets = {};
+
+    function applyPublicStatusPreset(presetName) {
+      var statusEl = document.getElementById('public-status-result');
+      var preset = _publicStatusPresets[presetName];
+      if (!preset) return;
+      _setInputValue('public-tasks-label', preset.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
+      _setInputValue('public-confessions-label', preset.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
+      _setInputValue('public-current-mode', preset.current_status_mode || PUBLIC_DEFAULT_MODE);
+      if (statusEl) statusEl.textContent = 'Preset applied. Click Save Public Status.';
+    }
+
     async function loadHandlerPublicStatus() {
       var statusEl = document.getElementById('public-status-result');
       if (statusEl) statusEl.textContent = 'Loading...';
       try {
         var data = await apiGet('/api/handler/public-status');
+        _setSelectOptions('public-tasks-label', data.counter_one_options);
+        _setSelectOptions('public-confessions-label', data.counter_two_options);
+        _setSelectOptions('public-current-mode', data.mode_options);
+        _publicStatusPresets = (data && data.presets && typeof data.presets === 'object') ? data.presets : {};
         _setInputValue('public-days-start', data.days_caged_start_date || '');
         _setInputValue('public-days-paused', data.days_caged_paused ? 'true' : 'false');
         _setInputValue('public-days-accum', data.days_caged_accumulated_days != null ? data.days_caged_accumulated_days : '0');
-        _setInputValue('public-current-mode', data.current_status_mode || '');
-        _setInputValue('public-tasks-completed', data.tasks_completed != null ? data.tasks_completed : '0');
-        _setInputValue('public-confessions-posted', data.confessions_posted != null ? data.confessions_posted : '0');
+        _setInputValue('public-days-goal', data.days_locked_goal_days != null ? data.days_locked_goal_days : '0');
+        _setInputValue('public-tasks-label', data.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
+        _setInputValue('public-confessions-label', data.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
+        _setInputValue('public-current-mode', data.current_status_mode || PUBLIC_DEFAULT_MODE);
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
@@ -2735,9 +2815,10 @@
         days_caged_start_date: v('public-days-start') || null,
         days_caged_paused: v('public-days-paused') === 'true',
         days_caged_accumulated_days: _optIntInput('public-days-accum'),
-        current_status_mode: v('public-current-mode'),
-        tasks_completed: _optIntInput('public-tasks-completed'),
-        confessions_posted: _optIntInput('public-confessions-posted'),
+        days_locked_goal_days: _optIntInput('public-days-goal'),
+        tasks_label: v('public-tasks-label') || null,
+        confessions_label: v('public-confessions-label') || null,
+        current_status_mode: v('public-current-mode') || null,
       };
       btn.disabled = true;
       if (statusEl) statusEl.textContent = 'Saving...';
@@ -2745,7 +2826,7 @@
         var r = await apiPost('/api/handler/public-status', payload);
         if (r.ok) {
           if (statusEl) statusEl.textContent = 'Saved.';
-          showToast('✅ Public status updated.');
+          showToast('✅ Public status settings updated.');
         } else {
           var b = await r.json().catch(function() { return {}; });
           if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
@@ -2867,6 +2948,10 @@
 
     document.getElementById('public-status-reload-btn').addEventListener('click', loadHandlerPublicStatus);
     document.getElementById('public-status-save-btn').addEventListener('click', saveHandlerPublicStatus);
+    document.getElementById('public-preset-strict').addEventListener('click', function() { applyPublicStatusPreset('strict'); });
+    document.getElementById('public-preset-tease').addEventListener('click', function() { applyPublicStatusPreset('tease'); });
+    document.getElementById('public-preset-progress').addEventListener('click', function() { applyPublicStatusPreset('progress'); });
+    document.getElementById('public-preset-punishment').addEventListener('click', function() { applyPublicStatusPreset('punishment'); });
     document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
 
     // ═══════════════════════════════════════════════════════════

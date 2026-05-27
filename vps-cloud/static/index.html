@@ -266,7 +266,7 @@
 
     .public-status-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      grid-template-columns: minmax(220px, 1fr);
       gap: .6rem;
     }
 
@@ -293,6 +293,12 @@
       text-transform: uppercase;
       color: #9e7e82;
       line-height: 1.15;
+    }
+
+    .public-status-sub {
+      margin-top: .35rem;
+      font-size: .78rem;
+      color: #c49a9f;
     }
 
     .public-status-note {
@@ -1029,7 +1035,7 @@
       }
 
       .public-status-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
       }
 
       #viewer-title {
@@ -1099,20 +1105,13 @@
     <div class="public-status-strip" aria-label="Public status">
       <div class="public-status-grid">
         <div class="public-status-tile">
-          <div class="public-status-value" id="pub-days-caged">--</div>
-          <div class="public-status-label">Days Caged</div>
-        </div>
-        <div class="public-status-tile">
-          <div class="public-status-value" id="pub-tasks-completed">--</div>
-          <div class="public-status-label">Tasks Completed</div>
-        </div>
-        <div class="public-status-tile">
-          <div class="public-status-value" id="pub-confessions-posted">--</div>
-          <div class="public-status-label">Confessions Posted</div>
-        </div>
-        <div class="public-status-tile">
-          <div class="public-status-value" id="pub-current-mode">--</div>
-          <div class="public-status-label">Current Mode</div>
+          <div class="public-status-value" id="pub-days-locked">--</div>
+          <div class="public-status-label">Days Locked</div>
+          <div class="public-status-sub" id="pub-days-locked-goal">Goal: --</div>
+          <div style="display:flex;gap:.5rem;justify-content:center;margin-top:.6rem">
+            <button id="pub-days-remove" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">−1 day</button>
+            <button id="pub-days-add" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">+1 day</button>
+          </div>
         </div>
       </div>
       <p class="public-status-note" id="pub-status-note"></p>
@@ -1267,10 +1266,8 @@
     }
 
     function setPublicStatusFallback() {
-      document.getElementById('pub-days-caged').textContent = '--';
-      document.getElementById('pub-tasks-completed').textContent = '--';
-      document.getElementById('pub-confessions-posted').textContent = '--';
-      document.getElementById('pub-current-mode').textContent = '--';
+      document.getElementById('pub-days-locked').textContent = '--';
+      document.getElementById('pub-days-locked-goal').textContent = 'Goal: --';
       document.getElementById('pub-status-note').textContent = 'Public status temporarily unavailable.';
     }
 
@@ -1279,13 +1276,40 @@
         const r = await fetch('/api/public/status');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const data = await r.json();
-        document.getElementById('pub-days-caged').textContent = String(data.days_caged ?? '--');
-        document.getElementById('pub-tasks-completed').textContent = String(data.tasks_completed ?? '--');
-        document.getElementById('pub-confessions-posted').textContent = String(data.confessions_posted ?? '--');
-        document.getElementById('pub-current-mode').textContent = String(data.current_mode || '--');
-        document.getElementById('pub-status-note').textContent = data.is_paused ? 'Days caged counter is currently paused.' : '';
+        const daysLocked = data.days_locked ?? data.days_caged;
+        const goalDays = data.days_locked_goal_days ?? 0;
+        document.getElementById('pub-days-locked').textContent = String(daysLocked ?? '--');
+        document.getElementById('pub-days-locked-goal').textContent =
+          goalDays > 0 && daysLocked != null
+            ? `Goal: ${daysLocked}/${goalDays} days`
+            : `Goal: ${goalDays > 0 ? goalDays + ' days' : 'not set'}`;
+        document.getElementById('pub-status-note').textContent = data.is_paused ? 'Days locked counter is currently paused.' : '';
       } catch (_) {
         setPublicStatusFallback();
+      }
+    }
+
+    async function adjustPublicDaysLocked(deltaDays) {
+      const noteEl = document.getElementById('pub-status-note');
+      const addBtn = document.getElementById('pub-days-add');
+      const removeBtn = document.getElementById('pub-days-remove');
+      addBtn.disabled = true;
+      removeBtn.disabled = true;
+      noteEl.textContent = 'Updating days locked...';
+      try {
+        const r = await fetch('/api/public/days-locked/adjust', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delta_days: deltaDays }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        await loadPublicStatus();
+        noteEl.textContent = deltaDays > 0 ? 'Added 1 day to the lock.' : 'Removed 1 day from the lock.';
+      } catch (_) {
+        noteEl.textContent = 'Could not update days locked right now.';
+      } finally {
+        addBtn.disabled = false;
+        removeBtn.disabled = false;
       }
     }
 
@@ -1901,6 +1925,8 @@
     document.getElementById('auth-modal-backdrop').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeAuthModal();
     });
+    document.getElementById('pub-days-add').addEventListener('click', () => adjustPublicDaysLocked(1));
+    document.getElementById('pub-days-remove').addEventListener('click', () => adjustPublicDaysLocked(-1));
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
     });
@@ -2011,4 +2037,3 @@
   </div>
 </body>
 </html>
-
