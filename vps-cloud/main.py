@@ -2884,12 +2884,30 @@ def adjust_public_days_locked(
     payload: PublicDaysLockedAdjustRequest,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Allow guests to adjust the public days-locked counter by whole days."""
-    current = max(0, _safe_int_setting(db, "days_caged_accumulated_days", default=0))
-    updated = max(0, current + payload.delta_days)
-    set_setting(db, "days_caged_accumulated_days", str(updated))
+    """Allow guests to adjust the days-locked goal by whole days.
+
+    If no goal is currently set (0), the goal is initialised to current + 1
+    before applying the requested delta.
+    """
+    current_goal = max(0, _safe_int_setting(db, "days_locked_goal_days", default=0))
+    if current_goal == 0:
+        # Compute the live current days so we can seed a sensible default goal.
+        now_utc = datetime.now(timezone.utc)
+        start_dt = _safe_date_setting(db, "days_caged_start_date")
+        paused = _safe_bool_setting(db, "days_caged_paused", default=False)
+        accumulated = max(0, _safe_int_setting(db, "days_caged_accumulated_days", default=0))
+        if start_dt is None:
+            days_caged = accumulated
+        else:
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            elapsed_days = max(0, (now_utc.date() - start_dt.date()).days)
+            days_caged = accumulated if paused else accumulated + elapsed_days
+        current_goal = days_caged + 1
+    updated_goal = max(0, current_goal + payload.delta_days)
+    set_setting(db, "days_locked_goal_days", str(updated_goal))
     db.commit()
-    return {"ok": True, "days_caged_accumulated_days": updated, "delta_days": payload.delta_days}
+    return {"ok": True, "days_locked_goal_days": updated_goal, "delta_days": payload.delta_days}
 
 
 # ---------------------------------------------------------------------------
