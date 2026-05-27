@@ -228,6 +228,79 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_rule_engine_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_rule_engine_rules (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT NOT NULL,
+            enabled         INTEGER NOT NULL DEFAULT 1,
+            scope_device_id TEXT,
+            trigger_type    TEXT NOT NULL,
+            threshold_value TEXT,
+            action_type     TEXT NOT NULL,
+            action_payload  TEXT,
+            cooldown_sec    INTEGER NOT NULL DEFAULT 1800,
+            last_fired_at   TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_rule_engine_events (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_id          INTEGER,
+            device_id        TEXT NOT NULL,
+            trigger_snapshot TEXT,
+            action_sent      INTEGER NOT NULL DEFAULT 0,
+            result_json      TEXT,
+            created_at       TEXT NOT NULL,
+            FOREIGN KEY(rule_id) REFERENCES handler_rule_engine_rules(id)
+        )
+        """
+    )
+
+
+def _ensure_evidence_vault_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_evidence_vault (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id          TEXT,
+            category           TEXT NOT NULL,
+            severity           TEXT NOT NULL DEFAULT 'medium',
+            title              TEXT NOT NULL,
+            summary            TEXT,
+            consequence_action TEXT,
+            source_event_id    INTEGER,
+            source_audit_id    INTEGER,
+            source_upload_id   INTEGER,
+            metadata_json      TEXT,
+            public_visible     INTEGER NOT NULL DEFAULT 0,
+            created_by         TEXT,
+            created_at         TEXT NOT NULL,
+            updated_at         TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_evidence_attachments (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            evidence_id  INTEGER NOT NULL,
+            kind         TEXT NOT NULL DEFAULT 'url',
+            label        TEXT,
+            url          TEXT,
+            metadata_json TEXT,
+            created_at   TEXT NOT NULL,
+            FOREIGN KEY(evidence_id) REFERENCES handler_evidence_vault(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -244,6 +317,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_limbo_columns(conn)
         _ensure_booking_table(conn)
         _ensure_puppy_mail_tables(conn)
+        _ensure_rule_engine_tables(conn)
+        _ensure_evidence_vault_tables(conn)
         conn.commit()
         return
 
@@ -283,6 +358,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_limbo_columns(conn)
         _ensure_booking_table(conn)
         _ensure_puppy_mail_tables(conn)
+        _ensure_rule_engine_tables(conn)
+        _ensure_evidence_vault_tables(conn)
         conn.commit()
         return
 
@@ -294,6 +371,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_limbo_columns(conn)
     _ensure_booking_table(conn)
     _ensure_puppy_mail_tables(conn)
+    _ensure_rule_engine_tables(conn)
+    _ensure_evidence_vault_tables(conn)
     conn.commit()
 
 
@@ -369,6 +448,62 @@ class DeviceStatusReport(BaseModel):
 
 class LockRequest(BaseModel):
     device_id: str
+
+
+class RuleEngineRuleCreateRequest(BaseModel):
+    name: str
+    enabled: bool = True
+    scope_device_id: Optional[str] = None
+    trigger_type: str
+    threshold_value: Optional[str] = None
+    action_type: str
+    action_payload: Optional[dict] = None
+    cooldown_sec: int = 1800
+
+
+class RuleEngineRuleUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    enabled: Optional[bool] = None
+    scope_device_id: Optional[str] = None
+    trigger_type: Optional[str] = None
+    threshold_value: Optional[str] = None
+    action_type: Optional[str] = None
+    action_payload: Optional[dict] = None
+    cooldown_sec: Optional[int] = None
+
+
+class RuleEngineEvaluateRequest(BaseModel):
+    device_id: str
+
+
+class EvidenceCreateRequest(BaseModel):
+    device_id: Optional[str] = None
+    category: str = "consequence"
+    severity: str = "medium"
+    title: str
+    summary: Optional[str] = None
+    consequence_action: Optional[str] = None
+    source_event_id: Optional[int] = None
+    source_audit_id: Optional[int] = None
+    source_upload_id: Optional[int] = None
+    metadata: Optional[dict] = None
+    public_visible: bool = False
+
+
+class EvidenceAttachmentCreateRequest(BaseModel):
+    kind: str = "url"
+    label: Optional[str] = None
+    url: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class EvidencePromoteRequest(BaseModel):
+    device_id: Optional[str] = None
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    severity: str = "medium"
+    consequence_action: Optional[str] = None
+    public_visible: bool = False
 
 
 class VaultAddEntryRequest(BaseModel):
@@ -686,6 +821,252 @@ def _assert_handler_device_access(
         raise HTTPException(status_code=403, detail="Access denied to this device.")
 
 
+_RULE_TRIGGER_TYPES = {
+    "battery_below",
+    "ai_alert_true",
+    "offline_for_minutes",
+}
+
+_RULE_ACTION_TYPES = {
+    "lock_device",
+    "vault_lock_all",
+    "show_overlay",
+    "set_sub_status",
+    "set_change_block",
+}
+
+_EVIDENCE_SEVERITIES = {"low", "medium", "high", "critical"}
+_EVIDENCE_CATEGORIES = {
+    "consequence",
+    "proof",
+    "compliance",
+    "violation",
+    "system",
+}
+
+
+def _parse_iso_utc(raw: Optional[str]) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _should_fire_rule(rule: sqlite3.Row, device_status: sqlite3.Row, now: datetime) -> tuple[bool, dict]:
+    trigger = str(rule["trigger_type"] or "").strip()
+    threshold = str(rule["threshold_value"] or "").strip()
+    snapshot: dict[str, object] = {
+        "trigger_type": trigger,
+        "threshold": threshold,
+    }
+
+    if trigger == "battery_below":
+        threshold_int = int(threshold or "0")
+        battery = int(device_status["battery_pct"] or 0)
+        snapshot["battery_pct"] = battery
+        return battery <= threshold_int, snapshot
+
+    if trigger == "ai_alert_true":
+        ai_alert = int(device_status["ai_alert"] or 0) == 1
+        snapshot["ai_alert"] = ai_alert
+        return ai_alert, snapshot
+
+    if trigger == "offline_for_minutes":
+        mins = int(threshold or "0")
+        last_seen = _parse_iso_utc(device_status["last_seen"])
+        if last_seen is None:
+            snapshot["last_seen_missing"] = True
+            return False, snapshot
+        delta_mins = int((now - last_seen).total_seconds() // 60)
+        snapshot["offline_minutes"] = delta_mins
+        return delta_mins >= mins, snapshot
+
+    snapshot["unsupported_trigger"] = True
+    return False, snapshot
+
+
+def _dispatch_rule_action(
+    db: sqlite3.Connection,
+    device_id: str,
+    action_type: str,
+    action_payload_raw: Optional[str],
+) -> dict:
+    payload: dict[str, str] = {}
+    if action_payload_raw:
+        try:
+            decoded = json.loads(action_payload_raw)
+            if isinstance(decoded, dict):
+                payload = {str(k): str(v) for k, v in decoded.items() if v is not None}
+        except json.JSONDecodeError:
+            payload = {}
+
+    if action_type == "lock_device":
+        return _send_mqtt_to_device(db, device_id, {"action": "LOCK_DEVICE"})
+
+    if action_type == "vault_lock_all":
+        minutes = payload.get("duration_minutes", "60")
+        return _send_mqtt_to_device(
+            db,
+            device_id,
+            {
+                "action": "VAULT_LOCK_ALL",
+                "duration_minutes": minutes,
+            },
+        )
+
+    if action_type == "show_overlay":
+        return _send_mqtt_to_device(
+            db,
+            device_id,
+            {
+                "action": "SHOW_OVERLAY",
+                "title": payload.get("title", "Handler Notice"),
+                "message": payload.get("message", "Immediate compliance required."),
+                "image_url": payload.get("image_url", ""),
+            },
+        )
+
+    if action_type == "set_sub_status":
+        return _send_mqtt_to_device(
+            db,
+            device_id,
+            {
+                "action": "SET_SUB_STATUS",
+                "status": payload.get("status", "discipline"),
+            },
+        )
+
+    if action_type == "set_change_block":
+        enabled = payload.get("enabled", "true").lower() in {"1", "true", "yes", "on"}
+        return _send_mqtt_to_device(
+            db,
+            device_id,
+            {
+                "action": "VAULT_SET_CHANGE_BLOCK",
+                "enabled": "true" if enabled else "false",
+            },
+        )
+
+    return {"sent": 0, "failed": 1}
+
+
+def _evaluate_rule_engine_for_device(db: sqlite3.Connection, device_id: str) -> dict:
+    status_row = db.execute(
+        "SELECT * FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not status_row:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    now = datetime.now(timezone.utc)
+    rules = db.execute(
+        "SELECT * FROM handler_rule_engine_rules WHERE enabled = 1"
+    ).fetchall()
+
+    fired = 0
+    skipped_cooldown = 0
+    checked = 0
+
+    for rule in rules:
+        scope = str(rule["scope_device_id"] or "").strip()
+        if scope and scope != device_id:
+            continue
+        checked += 1
+
+        cooldown_sec = max(0, int(rule["cooldown_sec"] or 0))
+        last_fired_at = _parse_iso_utc(rule["last_fired_at"])
+        if last_fired_at and cooldown_sec > 0:
+            elapsed = (now - last_fired_at).total_seconds()
+            if elapsed < cooldown_sec:
+                skipped_cooldown += 1
+                continue
+
+        should_fire, snapshot = _should_fire_rule(rule, status_row, now)
+        if not should_fire:
+            continue
+
+        action_type = str(rule["action_type"] or "")
+        action_result = _dispatch_rule_action(
+            db,
+            device_id,
+            action_type,
+            rule["action_payload"],
+        )
+        fired += 1
+
+        now_iso = _now_iso()
+        db.execute(
+            "UPDATE handler_rule_engine_rules SET last_fired_at = ?, updated_at = ? WHERE id = ?",
+            (now_iso, now_iso, rule["id"]),
+        )
+        db.execute(
+            """
+            INSERT INTO handler_rule_engine_events
+                (rule_id, device_id, trigger_snapshot, action_sent, result_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                rule["id"],
+                device_id,
+                json.dumps(snapshot),
+                1 if int(action_result.get("sent", 0)) > 0 else 0,
+                json.dumps(action_result),
+                now_iso,
+            ),
+        )
+
+    db.commit()
+    return {
+        "device_id": device_id,
+        "checked": checked,
+        "fired": fired,
+        "skipped_cooldown": skipped_cooldown,
+    }
+
+
+def _extract_device_from_payload_json(payload_json: Optional[str]) -> Optional[str]:
+    if not payload_json:
+        return None
+    try:
+        obj = json.loads(payload_json)
+        if isinstance(obj, dict):
+            raw = obj.get("device_id") or obj.get("deviceId")
+            if raw is not None:
+                device_id = str(raw).strip()
+                return device_id or None
+    except Exception:
+        return None
+    return None
+
+
+def _evidence_with_attachments(db: sqlite3.Connection, evidence_row: sqlite3.Row) -> dict:
+    item = dict(evidence_row)
+    attachments = db.execute(
+        "SELECT id, evidence_id, kind, label, url, metadata_json, created_at "
+        "FROM handler_evidence_attachments WHERE evidence_id = ? ORDER BY id ASC",
+        (item["id"],),
+    ).fetchall()
+    item["attachments"] = [dict(a) for a in attachments]
+    return item
+
+
+def _assert_evidence_access(
+    db: sqlite3.Connection,
+    current_user: Optional[dict],
+    device_id: Optional[str],
+) -> None:
+    if current_user is None or current_user.get("role") == "admin":
+        return
+    if not device_id:
+        return
+    _assert_handler_device_access(db, current_user, device_id)
+
+
 def _normalize_handler_assignment_id(db: sqlite3.Connection, raw_handler_id: str) -> str:
     """Resolve assignment input to canonical user_id (accepts user_id or username)."""
     candidate = (raw_handler_id or "").strip()
@@ -745,6 +1126,7 @@ def handler_list_devices(
         rows = db.execute(
             "SELECT device_id, device_name, is_online, is_locked, battery_pct, last_seen "
             "FROM handler_device_status ORDER BY last_seen DESC"
+        _evaluate_rule_engine_for_device(db, resolved_device_id)
         ).fetchall()
     else:
         assigned = _handler_allowed_devices(db, current_user["user_id"])
@@ -1557,6 +1939,195 @@ class _CheckinRequestBody(BaseModel):
     device_id: Optional[str] = None
 
 
+@router.get("/api/handler/tpe/rule-engine/rules")
+def handler_rule_engine_list_rules(
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    rows = db.execute(
+        "SELECT * FROM handler_rule_engine_rules ORDER BY id DESC"
+    ).fetchall()
+    rules = [dict(r) for r in rows]
+    if current_user.get("role") == "admin":
+        return rules
+    assigned = set(_handler_allowed_devices(db, current_user["user_id"]))
+    return [r for r in rules if not r.get("scope_device_id") or r.get("scope_device_id") in assigned]
+
+
+@router.post("/api/handler/tpe/rule-engine/rules")
+def handler_rule_engine_create_rule(
+    body: RuleEngineRuleCreateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    trigger_type = body.trigger_type.strip()
+    action_type = body.action_type.strip()
+    if trigger_type not in _RULE_TRIGGER_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported trigger_type '{trigger_type}'")
+    if action_type not in _RULE_ACTION_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported action_type '{action_type}'")
+
+    scope_device_id = (body.scope_device_id or "").strip() or None
+    if scope_device_id:
+        _assert_handler_device_access(db, current_user, scope_device_id)
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO handler_rule_engine_rules
+            (name, enabled, scope_device_id, trigger_type, threshold_value,
+             action_type, action_payload, cooldown_sec, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            body.name.strip(),
+            1 if body.enabled else 0,
+            scope_device_id,
+            trigger_type,
+            body.threshold_value,
+            action_type,
+            json.dumps(body.action_payload or {}),
+            max(0, min(body.cooldown_sec, 7 * 24 * 60 * 60)),
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    rule_id = int(cur.lastrowid)
+    row = db.execute(
+        "SELECT * FROM handler_rule_engine_rules WHERE id = ?",
+        (rule_id,),
+    ).fetchone()
+    return dict(row)
+
+
+@router.patch("/api/handler/tpe/rule-engine/rules/{rule_id}")
+def handler_rule_engine_update_rule(
+    rule_id: int,
+    body: RuleEngineRuleUpdateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT * FROM handler_rule_engine_rules WHERE id = ?",
+        (rule_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    if row["scope_device_id"]:
+        _assert_handler_device_access(db, current_user, row["scope_device_id"])
+
+    updates: dict[str, object] = {}
+    if body.name is not None:
+        updates["name"] = body.name.strip()
+    if body.enabled is not None:
+        updates["enabled"] = 1 if body.enabled else 0
+    if body.scope_device_id is not None:
+        scope = body.scope_device_id.strip() or None
+        if scope:
+            _assert_handler_device_access(db, current_user, scope)
+        updates["scope_device_id"] = scope
+    if body.trigger_type is not None:
+        trigger_type = body.trigger_type.strip()
+        if trigger_type not in _RULE_TRIGGER_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported trigger_type '{trigger_type}'")
+        updates["trigger_type"] = trigger_type
+    if body.threshold_value is not None:
+        updates["threshold_value"] = body.threshold_value
+    if body.action_type is not None:
+        action_type = body.action_type.strip()
+        if action_type not in _RULE_ACTION_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported action_type '{action_type}'")
+        updates["action_type"] = action_type
+    if body.action_payload is not None:
+        updates["action_payload"] = json.dumps(body.action_payload)
+    if body.cooldown_sec is not None:
+        updates["cooldown_sec"] = max(0, min(body.cooldown_sec, 7 * 24 * 60 * 60))
+
+    if not updates:
+        return dict(row)
+
+    updates["updated_at"] = _now_iso()
+    set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+    params = list(updates.values()) + [rule_id]
+    db.execute(
+        f"UPDATE handler_rule_engine_rules SET {set_clause} WHERE id = ?",
+        params,
+    )
+    db.commit()
+    updated = db.execute(
+        "SELECT * FROM handler_rule_engine_rules WHERE id = ?",
+        (rule_id,),
+    ).fetchone()
+    return dict(updated)
+
+
+@router.delete("/api/handler/tpe/rule-engine/rules/{rule_id}")
+def handler_rule_engine_delete_rule(
+    rule_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT * FROM handler_rule_engine_rules WHERE id = ?",
+        (rule_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    if row["scope_device_id"]:
+        _assert_handler_device_access(db, current_user, row["scope_device_id"])
+    db.execute("DELETE FROM handler_rule_engine_rules WHERE id = ?", (rule_id,))
+    db.commit()
+    return {"deleted": True, "rule_id": rule_id}
+
+
+@router.post("/api/handler/tpe/rule-engine/evaluate")
+def handler_rule_engine_evaluate(
+    body: RuleEngineEvaluateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    return _evaluate_rule_engine_for_device(db, body.device_id)
+
+
+@router.get("/api/handler/tpe/rule-engine/events")
+def handler_rule_engine_events(
+    device_id: Optional[str] = None,
+    limit: int = 100,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    capped_limit = max(1, min(limit, 500))
+    if device_id:
+        _assert_handler_device_access(db, current_user, device_id)
+        rows = db.execute(
+            "SELECT * FROM handler_rule_engine_events WHERE device_id = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (device_id, capped_limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    if current_user.get("role") == "admin":
+        rows = db.execute(
+            "SELECT * FROM handler_rule_engine_events ORDER BY id DESC LIMIT ?",
+            (capped_limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    assigned = _handler_allowed_devices(db, current_user["user_id"])
+    if not assigned:
+        return []
+    placeholders = ",".join("?" for _ in assigned)
+    rows = db.execute(
+        f"SELECT * FROM handler_rule_engine_events WHERE device_id IN ({placeholders}) "
+        "ORDER BY id DESC LIMIT ?",
+        [*assigned, capped_limit],
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 @router.post("/api/handler/tpe/vault/entry/add")
 def handler_tpe_vault_add_entry(
     body: VaultAddEntryRequest,
@@ -1731,6 +2302,393 @@ def handler_tpe_vault_events(
         ((device_id, min(limit, 500)) if device_id else (min(limit, 500),)),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.post("/api/handler/tpe/evidence")
+def handler_tpe_evidence_create(
+    body: EvidenceCreateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    category = body.category.strip().lower()
+    severity = body.severity.strip().lower()
+    if category not in _EVIDENCE_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Unsupported category '{category}'")
+    if severity not in _EVIDENCE_SEVERITIES:
+        raise HTTPException(status_code=400, detail=f"Unsupported severity '{severity}'")
+
+    device_id = (body.device_id or "").strip() or None
+    _assert_evidence_access(db, current_user, device_id)
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO handler_evidence_vault
+            (device_id, category, severity, title, summary, consequence_action,
+             source_event_id, source_audit_id, source_upload_id, metadata_json,
+             public_visible, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            category,
+            severity,
+            body.title.strip(),
+            body.summary,
+            body.consequence_action,
+            body.source_event_id,
+            body.source_audit_id,
+            body.source_upload_id,
+            json.dumps(body.metadata or {}),
+            0,
+            str(current_user.get("user_id") or current_user.get("username") or "handler"),
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    evidence_id = int(cur.lastrowid)
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    return _evidence_with_attachments(db, row)
+
+
+@router.get("/api/handler/tpe/evidence")
+def handler_tpe_evidence_list(
+    device_id: Optional[str] = None,
+    category: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 100,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    capped_limit = max(1, min(limit, 500))
+    filters = []
+    params: list[object] = []
+
+    device_id_norm = (device_id or "").strip() or None
+    if device_id_norm:
+        _assert_evidence_access(db, current_user, device_id_norm)
+        filters.append("device_id = ?")
+        params.append(device_id_norm)
+    elif current_user.get("role") != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if assigned:
+            placeholders = ",".join("?" for _ in assigned)
+            filters.append(f"(device_id IS NULL OR device_id IN ({placeholders}))")
+            params.extend(assigned)
+        else:
+            filters.append("device_id IS NULL")
+
+    if category:
+        filters.append("category = ?")
+        params.append(category.strip().lower())
+    if severity:
+        filters.append("severity = ?")
+        params.append(severity.strip().lower())
+
+    sql = "SELECT * FROM handler_evidence_vault"
+    if filters:
+        sql += " WHERE " + " AND ".join(filters)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(capped_limit)
+
+    rows = db.execute(sql, params).fetchall()
+    return [_evidence_with_attachments(db, r) for r in rows]
+
+
+@router.get("/api/handler/tpe/evidence/{evidence_id}")
+def handler_tpe_evidence_get(
+    evidence_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Evidence item not found")
+    _assert_evidence_access(db, current_user, row["device_id"])
+    return _evidence_with_attachments(db, row)
+
+
+@router.post("/api/handler/tpe/evidence/{evidence_id}/attachments")
+def handler_tpe_evidence_add_attachment(
+    evidence_id: int,
+    body: EvidenceAttachmentCreateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    evidence_row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    if not evidence_row:
+        raise HTTPException(status_code=404, detail="Evidence item not found")
+    _assert_evidence_access(db, current_user, evidence_row["device_id"])
+
+    now = _now_iso()
+    db.execute(
+        """
+        INSERT INTO handler_evidence_attachments
+            (evidence_id, kind, label, url, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            evidence_id,
+            (body.kind or "url").strip().lower(),
+            body.label,
+            body.url,
+            json.dumps(body.metadata or {}),
+            now,
+        ),
+    )
+    db.execute(
+        "UPDATE handler_evidence_vault SET updated_at = ? WHERE id = ?",
+        (now, evidence_id),
+    )
+    db.commit()
+
+    refreshed = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    return _evidence_with_attachments(db, refreshed)
+
+
+@router.post("/api/handler/tpe/evidence/promote/event/{event_id}")
+def handler_tpe_evidence_promote_event(
+    event_id: int,
+    body: EvidencePromoteRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    event_row = db.execute(
+        "SELECT * FROM tpe_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if not event_row:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    device_id = (body.device_id or "").strip() or _extract_device_from_payload_json(event_row["payload_json"])
+    _assert_evidence_access(db, current_user, device_id)
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO handler_evidence_vault
+            (device_id, category, severity, title, summary, consequence_action,
+             source_event_id, metadata_json, public_visible, created_by, created_at, updated_at)
+        VALUES (?, 'consequence', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            body.severity.strip().lower(),
+            (body.title or f"Event: {event_row['event']}").strip(),
+            body.summary or event_row["reason"],
+            body.consequence_action,
+            event_id,
+            event_row["payload_json"] or json.dumps({}),
+            0,
+            str(current_user.get("user_id") or current_user.get("username") or "handler"),
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (int(cur.lastrowid),),
+    ).fetchone()
+    return _evidence_with_attachments(db, row)
+
+
+@router.post("/api/handler/tpe/evidence/promote/audit/{audit_id}")
+def handler_tpe_evidence_promote_audit(
+    audit_id: int,
+    body: EvidencePromoteRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    audit_row = db.execute(
+        "SELECT * FROM tpe_audit_logs WHERE id = ?",
+        (audit_id,),
+    ).fetchone()
+    if not audit_row:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+
+    device_id = (body.device_id or "").strip() or None
+    _assert_evidence_access(db, current_user, device_id)
+
+    metadata = {
+        "detection_ratio": audit_row["detection_ratio"],
+        "last_label": audit_row["last_label"],
+        "last_score": audit_row["last_score"],
+        "session_ts": audit_row["session_ts"],
+        "video_filename": audit_row["video_filename"],
+    }
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO handler_evidence_vault
+            (device_id, category, severity, title, summary, consequence_action,
+             source_audit_id, metadata_json, public_visible, created_by, created_at, updated_at)
+        VALUES (?, 'proof', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            body.severity.strip().lower(),
+            (body.title or f"Audit proof #{audit_id}").strip(),
+            body.summary or "Adherence audit promoted to evidence vault.",
+            body.consequence_action,
+            audit_id,
+            json.dumps(metadata),
+            0,
+            str(current_user.get("user_id") or current_user.get("username") or "handler"),
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (int(cur.lastrowid),),
+    ).fetchone()
+    return _evidence_with_attachments(db, row)
+
+
+@router.post("/api/handler/tpe/evidence/promote/upload/{upload_id}")
+def handler_tpe_evidence_promote_upload(
+    upload_id: int,
+    body: EvidencePromoteRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    upload_row = db.execute(
+        "SELECT * FROM tpe_uploads WHERE id = ?",
+        (upload_id,),
+    ).fetchone()
+    if not upload_row:
+        raise HTTPException(status_code=404, detail="Upload record not found")
+
+    device_id = (body.device_id or "").strip() or None
+    _assert_evidence_access(db, current_user, device_id)
+
+    now = _now_iso()
+    cur = db.execute(
+        """
+        INSERT INTO handler_evidence_vault
+            (device_id, category, severity, title, summary, consequence_action,
+             source_upload_id, metadata_json, public_visible, created_by, created_at, updated_at)
+        VALUES (?, 'proof', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            body.severity.strip().lower(),
+            (body.title or f"Upload proof #{upload_id}").strip(),
+            body.summary or "Device upload promoted to evidence vault.",
+            body.consequence_action,
+            upload_id,
+            json.dumps({
+                "filename": upload_row["filename"],
+                "content_type": upload_row["content_type"],
+                "size_bytes": upload_row["size_bytes"],
+            }),
+            0,
+            str(current_user.get("user_id") or current_user.get("username") or "handler"),
+            now,
+            now,
+        ),
+    )
+    db.commit()
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (int(cur.lastrowid),),
+    ).fetchone()
+    return _evidence_with_attachments(db, row)
+
+
+@router.post("/api/handler/tpe/evidence/{evidence_id}/publish")
+def handler_tpe_evidence_publish(
+    evidence_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Evidence item not found")
+    _assert_evidence_access(db, current_user, row["device_id"])
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE handler_evidence_vault SET public_visible = 1, updated_at = ? WHERE id = ?",
+        (now, evidence_id),
+    )
+    db.commit()
+    refreshed = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    return _evidence_with_attachments(db, refreshed)
+
+
+@router.post("/api/handler/tpe/evidence/{evidence_id}/unpublish")
+def handler_tpe_evidence_unpublish(
+    evidence_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Evidence item not found")
+    _assert_evidence_access(db, current_user, row["device_id"])
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE handler_evidence_vault SET public_visible = 0, updated_at = ? WHERE id = ?",
+        (now, evidence_id),
+    )
+    db.commit()
+    refreshed = db.execute(
+        "SELECT * FROM handler_evidence_vault WHERE id = ?",
+        (evidence_id,),
+    ).fetchone()
+    return _evidence_with_attachments(db, refreshed)
+
+
+@router.get("/api/public/tpe/evidence")
+def public_tpe_evidence_feed(
+    limit: int = 50,
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    capped_limit = max(1, min(limit, 200))
+    rows = db.execute(
+        "SELECT id, device_id, category, severity, title, summary, consequence_action, created_at "
+        "FROM handler_evidence_vault WHERE public_visible = 1 "
+        "ORDER BY id DESC LIMIT ?",
+        (capped_limit,),
+    ).fetchall()
+    result = []
+    for r in rows:
+        item = dict(r)
+        attachments = db.execute(
+            "SELECT kind, label, url, created_at FROM handler_evidence_attachments "
+            "WHERE evidence_id = ? ORDER BY id ASC",
+            (item["id"],),
+        ).fetchall()
+        item["attachments"] = [dict(a) for a in attachments]
+        result.append(item)
+    return result
 
 
 @router.post("/api/handler/tpe/push")

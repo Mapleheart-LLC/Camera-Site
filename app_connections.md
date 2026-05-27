@@ -306,6 +306,64 @@ Notes:
 - These routes dispatch existing app VAULT_* MQTT actions.
 - Vault state visibility is currently event/timeline-driven via /api/handler/tpe/vault/events and /api/handler/tpe/events.
 
+### 6.2 Automatic Consequence Rule Engine (website)
+
+Handler/admin website can define strict auto-enforcement policies:
+
+- GET /api/handler/tpe/rule-engine/rules
+- POST /api/handler/tpe/rule-engine/rules
+- PATCH /api/handler/tpe/rule-engine/rules/{rule_id}
+- DELETE /api/handler/tpe/rule-engine/rules/{rule_id}
+- POST /api/handler/tpe/rule-engine/evaluate
+- GET /api/handler/tpe/rule-engine/events
+
+Supported trigger_type values:
+
+- battery_below          (threshold_value is integer percent)
+- ai_alert_true          (threshold_value ignored)
+- offline_for_minutes    (threshold_value is integer minutes)
+
+Supported action_type values:
+
+- lock_device
+- vault_lock_all
+- show_overlay
+- set_sub_status
+- set_change_block
+
+Notes:
+
+- Device status heartbeat now automatically evaluates enabled rules for that device.
+- cooldown_sec prevents rapid repeated punishment dispatches.
+- Handlers are restricted to assigned devices; admins can manage all rules/devices.
+
+### 6.3 Evidence Vault (website + public feed)
+
+Handler/admin evidence APIs:
+
+- POST /api/handler/tpe/evidence
+- GET /api/handler/tpe/evidence
+- GET /api/handler/tpe/evidence/{evidence_id}
+- POST /api/handler/tpe/evidence/{evidence_id}/attachments
+- POST /api/handler/tpe/evidence/promote/event/{event_id}
+- POST /api/handler/tpe/evidence/promote/audit/{audit_id}
+- POST /api/handler/tpe/evidence/promote/upload/{upload_id}
+- POST /api/handler/tpe/evidence/{evidence_id}/publish
+- POST /api/handler/tpe/evidence/{evidence_id}/unpublish
+
+Public-facing evidence feed:
+
+- GET /api/public/tpe/evidence
+
+Notes:
+
+- Evidence records can link consequences to proof artifacts in a single item.
+- Promotion endpoints let website convert existing tpe_events, tpe_audit_logs, or tpe_uploads rows into curated evidence entries.
+- All new evidence is private by default.
+- Public feed exposure only happens after explicit handler/admin publish action.
+- Unpublish immediately removes an item from the public feed endpoint.
+- Handler role remains restricted to assigned devices; admin can manage all.
+
 ## 7) Optional App-Integrated Queue Endpoints
 
 If Android app includes queue/inbox modules, these endpoints are available:
