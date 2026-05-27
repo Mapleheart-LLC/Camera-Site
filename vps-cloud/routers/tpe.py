@@ -65,7 +65,7 @@ import re
 import secrets
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -93,6 +93,7 @@ _MAX_AUDIT_VIDEO_BYTES  = 200 * 1024 * 1024  # 200 MB
 _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short recordings
 _CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
 _MQTT_COMMAND_TOPIC_SUFFIX_RE = re.compile(r"/\{device_id\}/commands/?$")
+_PAIRING_CODE_TTL_SECONDS = int(os.environ.get("TPE_PAIRING_CODE_TTL_SECONDS", "600"))
 
 # ---------------------------------------------------------------------------
 # MQTT dispatch
@@ -336,6 +337,56 @@ def _render_tpe_pairing_qr_png(db: sqlite3.Connection) -> Response:
     return Response(content=buf.getvalue(), media_type="image/png")
 
 
+def _cleanup_expired_pairing_codes(db: sqlite3.Connection) -> None:
+    db.execute(
+        "DELETE FROM tpe_pairing_codes WHERE used_at IS NULL AND expires_at <= ?",
+        (_now_iso(),),
+    )
+
+
+def _generate_pairing_code(length: int = 6) -> str:
+    alphabet = "23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def _create_tpe_pairing_code(db: sqlite3.Connection) -> dict:
+    _cleanup_expired_pairing_codes(db)
+
+    payload = _build_tpe_pairing_payload(db)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=max(_PAIRING_CODE_TTL_SECONDS, 60))
+    now_iso = now.isoformat()
+    expires_iso = expires_at.isoformat()
+
+    code = ""
+    for _ in range(20):
+        candidate = _generate_pairing_code()
+        row = db.execute(
+            "SELECT 1 FROM tpe_pairing_codes WHERE code = ? AND used_at IS NULL AND expires_at > ?",
+            (candidate, now_iso),
+        ).fetchone()
+        if not row:
+            code = candidate
+            break
+    if not code:
+        raise HTTPException(status_code=500, detail="Failed to allocate pairing code")
+
+    db.execute(
+        "INSERT INTO tpe_pairing_codes (code, payload_json, expires_at, created_at, used_at) VALUES (?, ?, ?, ?, NULL)",
+        (code, json.dumps(payload), expires_iso, now_iso),
+    )
+    db.commit()
+
+    # Never expose pairing token in code-generation responses.
+    response_payload = {k: v for k, v in payload.items() if k != "pairing_token"}
+    return {
+        "pairing_code": code,
+        "expires_at": expires_iso,
+        "ttl_seconds": max(_PAIRING_CODE_TTL_SECONDS, 60),
+        "payload": response_payload,
+    }
+
+
 def _effective_webhook_secret(db: sqlite3.Connection) -> str:
     row = db.execute(
         "SELECT value FROM settings WHERE key = 'tpe_webhook_secret'"
@@ -460,6 +511,17 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_pairing_codes (
+            code        TEXT PRIMARY KEY,
+            payload_json TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            created_at  TEXT NOT NULL,
+            used_at     TEXT
+        )
+        """
+    )
     conn.commit()
 
 
@@ -472,6 +534,15 @@ class PairRequest(BaseModel):
     fcm_token: str
     pairing_token: str
     device_id: Optional[str] = None
+    device_name: Optional[str] = None
+    mqtt_client_id: Optional[str] = None
+
+
+class PairCodeRequest(BaseModel):
+    fcm_token: str
+    pairing_code: str
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
     mqtt_client_id: Optional[str] = None
 
 
@@ -503,6 +574,7 @@ def tpe_pair(
         raise HTTPException(status_code=403, detail="Invalid pairing_token")
 
     body_device_id = (body.device_id or "").strip()
+    device_name = (body.device_name or "").strip() or None
     mqtt_client_id = (body.mqtt_client_id or "").strip()
     header_device_id = (x_device_id or "").strip()
     device_id = body_device_id or mqtt_client_id or header_device_id or fcm_token
@@ -523,15 +595,16 @@ def tpe_pair(
     )
     db.execute(
         """
-        INSERT INTO handler_device_status (device_id, fcm_token, is_online, last_seen, updated_at)
-        VALUES (?, ?, 1, ?, ?)
+        INSERT INTO handler_device_status (device_id, device_name, fcm_token, is_online, last_seen, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
+            device_name = COALESCE(excluded.device_name, device_name),
             fcm_token = excluded.fcm_token,
             is_online = 1,
             last_seen = excluded.last_seen,
             updated_at = excluded.updated_at
         """,
-        (device_id, fcm_token, now, now),
+        (device_id, device_name, fcm_token, now, now),
     )
     db.commit()
     row = db.execute(
@@ -542,6 +615,110 @@ def tpe_pair(
         background_tasks.add_task(_handler_ws.broadcast, {"type": "status_update", **dict(row)})
     logger.info("TPE device paired/refreshed: %s…", device_id[:16])
     return {"status": "paired"}
+
+
+@device_router.post("/api/pair/code")
+def tpe_pair_with_code(
+    body: PairCodeRequest,
+    background_tasks: BackgroundTasks,
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Pair a device using a short-lived one-time pairing code."""
+    fcm_token = body.fcm_token.strip()
+    if not fcm_token:
+        raise HTTPException(status_code=400, detail="Missing or invalid fcm_token")
+
+    pairing_code = (body.pairing_code or "").strip().upper()
+    if not re.fullmatch(r"[2-9]{6}", pairing_code):
+        raise HTTPException(status_code=400, detail="pairing_code must be a 6-digit code")
+
+    _cleanup_expired_pairing_codes(db)
+    row = db.execute(
+        "SELECT payload_json, expires_at, used_at FROM tpe_pairing_codes WHERE code = ?",
+        (pairing_code,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=403, detail="Invalid or expired pairing_code")
+    if row["used_at"]:
+        raise HTTPException(status_code=409, detail="pairing_code already used")
+
+    now_iso = _now_iso()
+    if str(row["expires_at"]) <= now_iso:
+        db.execute("DELETE FROM tpe_pairing_codes WHERE code = ?", (pairing_code,))
+        db.commit()
+        raise HTTPException(status_code=410, detail="pairing_code expired")
+
+    payload: dict[str, Any]
+    try:
+        payload = json.loads(row["payload_json"] or "{}")
+    except Exception:
+        payload = {}
+
+    token_from_code = str(payload.get("pairing_token") or "").strip()
+    expected = _effective_pairing_token(db)
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="TPE pairing is not configured. Set TPE_PAIRING_TOKEN.",
+        )
+    if not token_from_code or not secrets.compare_digest(token_from_code, expected):
+        raise HTTPException(status_code=409, detail="pairing_code is no longer valid")
+
+    body_device_id = (body.device_id or "").strip()
+    device_name = (body.device_name or "").strip() or None
+    mqtt_client_id = (body.mqtt_client_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    device_id = body_device_id or mqtt_client_id or header_device_id or fcm_token
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Missing device identifier")
+
+    now = _now_iso()
+    db.execute(
+        """
+        INSERT INTO tpe_paired_devices (fcm_token, paired_at, last_seen)
+        VALUES (?, ?, ?)
+        ON CONFLICT(fcm_token) DO UPDATE SET last_seen = excluded.last_seen
+        """,
+        (device_id, now, now),
+    )
+    db.execute(
+        """
+        INSERT INTO handler_device_status (device_id, device_name, fcm_token, is_online, last_seen, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+        ON CONFLICT(device_id) DO UPDATE SET
+            device_name = COALESCE(excluded.device_name, device_name),
+            fcm_token = excluded.fcm_token,
+            is_online = 1,
+            last_seen = excluded.last_seen,
+            updated_at = excluded.updated_at
+        """,
+        (device_id, device_name, fcm_token, now, now),
+    )
+    db.execute(
+        "UPDATE tpe_pairing_codes SET used_at = ? WHERE code = ?",
+        (now, pairing_code),
+    )
+    db.commit()
+
+    status_row = db.execute(
+        "SELECT * FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if status_row:
+        background_tasks.add_task(_handler_ws.broadcast, {"type": "status_update", **dict(status_row)})
+
+    logger.info("TPE device paired via code: %s…", device_id[:16])
+    return {
+        "status": "paired",
+        "endpoint": payload.get("endpoint", ""),
+        "webhook_secret": payload.get("webhook_secret", ""),
+        "mqtt_broker_uri": payload.get("mqtt_broker_uri", ""),
+        "mqtt_username": payload.get("mqtt_username", ""),
+        "mqtt_password": payload.get("mqtt_password", ""),
+        "mqtt_topic_prefix": payload.get("mqtt_topic_prefix", ""),
+        "signaling_url": payload.get("signaling_url", ""),
+    }
 
 
 @device_router.post("/api/audit/upload")
@@ -828,6 +1005,15 @@ def tpe_update_settings(
     return response
 
 
+@admin_router.post("/pairing-code")
+def tpe_create_pairing_code(
+    _admin: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Generate a short-lived one-time pairing code for manual app pairing."""
+    return _create_tpe_pairing_code(db)
+
+
 class TpePushRequest(BaseModel):
     """
     Flexible FCM push payload.  ``action`` maps to the FCM ``data.action`` field
@@ -930,6 +1116,9 @@ class TpePushRequest(BaseModel):
     # NEW_QUESTION
     question_id: Optional[str] = None
     question_preview: Optional[str] = None
+
+    # Generic identifier (used by id-addressed actions such as VAULT_*)
+    id: Optional[str] = None
 
     # RULE_REMINDER
     rule_id: Optional[str] = None
@@ -1097,6 +1286,13 @@ _VALID_TPE_ACTIONS = {
     "SET_HANDLER_API_KEY",
     "SET_HANDLER_ENDPOINT",
     "SET_HANDLER_MODEL",
+    # Password vault
+    "VAULT_ADD_ENTRY",
+    "VAULT_UPDATE_ENTRY",
+    "VAULT_DELETE_ENTRY",
+    "VAULT_LOCK_ENTRY",
+    "VAULT_LOCK_ALL",
+    "VAULT_SET_CHANGE_BLOCK",
     # Lovense toy control
     "LOVENSE_COMMAND",
     "SET_LOVENSE_SCHEDULES",
@@ -1126,6 +1322,7 @@ _VALID_TPE_ACTIONS = {
     "SET_VOLUME",
     "SET_RINGER_MODE",
     "PLAY_AUDIO",
+    "STOP_AUDIO",
     "SPEAK_TEXT",
     # Lock screen & access
     "LOCK_DEVICE",
@@ -1178,6 +1375,8 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         # NEW_QUESTION
         "question_id":        body.question_id,
         "question_preview":   body.question_preview,
+        # Generic identifier (VAULT_* and similar)
+        "id":                 body.id,
         # RULE_REMINDER
         "rule_id":            body.rule_id,
         "rule_text":          body.rule_text,

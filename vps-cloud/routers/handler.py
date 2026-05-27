@@ -51,6 +51,7 @@ from routers.tpe import (
     _VALID_TPE_ACTIONS,
     _build_tpe_payload,
     _render_tpe_pairing_qr_png,
+    _create_tpe_pairing_code,
 )
 from routers.ws_manager import handler_ws as _handler_ws
 
@@ -126,6 +127,7 @@ def _publish_signaling_fallback(device_id: str, payload: dict) -> None:
 _CREATE_TABLE_SQL = """
     CREATE TABLE IF NOT EXISTS handler_device_status (
         device_id   TEXT PRIMARY KEY,
+        device_name TEXT,
         fcm_token   TEXT,
         battery_pct INTEGER,
         lat         REAL,
@@ -283,7 +285,10 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         conn.commit()
         return
 
-    # Schema is current – ensure auxiliary tables exist.
+    # Schema is current – ensure required columns + auxiliary tables exist.
+    if "device_name" not in col_names:
+        conn.execute("ALTER TABLE handler_device_status ADD COLUMN device_name TEXT")
+
     _ensure_limbo_table(conn)
     _ensure_limbo_columns(conn)
     _ensure_booking_table(conn)
@@ -323,6 +328,10 @@ class DeviceStatusReport(BaseModel):
     device_id: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("device_id", "deviceId"),
+    )
+    device_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("device_name", "deviceName", "name"),
     )
     fcm_token: Optional[str] = None     # FCM registration token (stored for targeted pushes; append-only)
     battery_pct: Optional[int] = Field( # 0–100
@@ -480,14 +489,17 @@ async def handler_device_status(
         )
         raise HTTPException(status_code=400, detail="device_id must not be empty")
 
+    resolved_device_name = (body.device_name or "").strip() or None
+
     now = _now_iso()
     db.execute(
         """
         INSERT INTO handler_device_status
-            (device_id, fcm_token, battery_pct, lat, lon, ai_alert, ai_label, ai_score,
+            (device_id, device_name, fcm_token, battery_pct, lat, lon, ai_alert, ai_label, ai_score,
              is_locked, is_online, last_seen, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
+            device_name = COALESCE(excluded.device_name, device_name),
             fcm_token   = COALESCE(excluded.fcm_token,   fcm_token),
             battery_pct = COALESCE(excluded.battery_pct, battery_pct),
             lat         = COALESCE(excluded.lat,         lat),
@@ -501,6 +513,7 @@ async def handler_device_status(
         """,
         (
             resolved_device_id,
+            resolved_device_name,
             body.fcm_token,
             body.battery_pct,
             body.lat,
@@ -659,7 +672,7 @@ def _fetch_devices_by_ids(
     if not device_ids:
         return []
     placeholders = ",".join("?" * len(device_ids))
-    cols = "*" if full else "device_id, is_online, is_locked, battery_pct, last_seen"
+    cols = "*" if full else "device_id, device_name, is_online, is_locked, battery_pct, last_seen"
     return db.execute(
         f"SELECT {cols} FROM handler_device_status "
         f"WHERE device_id IN ({placeholders}) ORDER BY last_seen DESC",
@@ -679,7 +692,7 @@ def handler_list_devices(
     """
     if current_user["role"] == "admin":
         rows = db.execute(
-            "SELECT device_id, is_online, is_locked, battery_pct, last_seen "
+            "SELECT device_id, device_name, is_online, is_locked, battery_pct, last_seen "
             "FROM handler_device_status ORDER BY last_seen DESC"
         ).fetchall()
     else:
@@ -1573,6 +1586,15 @@ def handler_tpe_pairing_qr(
 ):
     """Serve the TPE pairing QR for the JWT-authenticated handler panel."""
     return _render_tpe_pairing_qr_png(db)
+
+
+@router.post("/api/handler/tpe/pairing-code")
+def handler_tpe_pairing_code(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Generate a one-time pairing code for manual app pairing in handler panel."""
+    return _create_tpe_pairing_code(db)
 
 
 # ---------------------------------------------------------------------------

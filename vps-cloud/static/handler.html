@@ -448,6 +448,85 @@
       background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
       margin-bottom: .85rem; overflow: hidden;
     }
+    .cmd-toolbar {
+      background: linear-gradient(180deg, #22181c 0%, #1d1418 100%);
+      border: 1px solid #3d2a2e;
+      border-radius: 12px;
+      padding: .85rem;
+      margin-bottom: .9rem;
+    }
+    .cmd-toolbar-top {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      flex-wrap: wrap;
+    }
+    .cmd-toolbar-search {
+      flex: 1;
+      min-width: 180px;
+      background: #171113;
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .84rem;
+      padding: .45rem .7rem;
+      outline: none;
+    }
+    .cmd-toolbar-search:focus { border-color: #e8aeb7; }
+    .cmd-toolbar-actions {
+      display: flex;
+      gap: .4rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn-cmd-secondary {
+      padding: .36rem .7rem;
+      border-radius: 8px;
+      border: 1px solid #5a3a3e;
+      background: #27191d;
+      color: #d6a3ab;
+      cursor: pointer;
+      font-size: .76rem;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .btn-cmd-secondary:hover { background: #342126; color: #f0d6db; }
+    .cmd-filter-count {
+      color: #9e7e82;
+      font-size: .76rem;
+      margin-left: .25rem;
+    }
+    .cmd-quick-grid {
+      margin-top: .7rem;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: .45rem;
+    }
+    .btn-cmd-quick {
+      padding: .46rem .55rem;
+      border-radius: 9px;
+      border: 1px solid #4a3036;
+      background: #2b1a20;
+      color: #e8aeb7;
+      cursor: pointer;
+      font-size: .76rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .btn-cmd-quick:hover { background: #e8aeb7; color: #1a1a1a; }
+    .btn-cmd-quick.danger {
+      border-color: #f87171;
+      color: #f87171;
+      background: rgba(248,113,113,.08);
+    }
+    .btn-cmd-quick.danger:hover { background: #f87171; color: #1a1a1a; }
+    .cmd-toolbar-result {
+      margin-top: .55rem;
+      color: #9e7e82;
+      font-size: .76rem;
+      min-height: 1.1em;
+    }
     .cmd-group summary {
       font-size: .82rem; font-weight: 800; color: #e8aeb7;
       text-transform: uppercase; letter-spacing: .06em;
@@ -508,6 +587,7 @@
       .handler-main { padding: 1rem; }
       .stats-row { grid-template-columns: 1fr 1fr; }
       .action-grid { grid-template-columns: 1fr 1fr; }
+      .cmd-quick-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
     }
     @media (max-width: 480px) {
       #kennel-grid { grid-template-columns: 1fr; }
@@ -557,7 +637,10 @@
       <div class="card pairing-card">
         <div class="card-header">
           <h2>🔗 Pair tpeapp</h2>
-          <button class="btn-action pairing-qr-refresh-btn" id="pairing-qr-refresh-btn">Refresh QR</button>
+          <div style="display:flex;gap:.45rem;flex-wrap:wrap">
+            <button class="btn-action pairing-qr-refresh-btn" id="pairing-qr-refresh-btn">Refresh QR</button>
+            <button class="btn-action pairing-qr-refresh-btn" id="pairing-code-refresh-btn">Generate Code</button>
+          </div>
         </div>
         <div class="card-body">
           <div class="pairing-qr-wrap">
@@ -571,6 +654,10 @@
               <li>Scan this QR code.</li>
               <li>Keep the app open until the device finishes pairing.</li>
             </ol>
+            <div style="margin:.5rem 0;color:#9e7e82;font-size:.85rem;font-weight:700">No camera? Use pairing code:</div>
+            <div id="pairing-code-value" style="font-size:1.3rem;letter-spacing:.25rem;font-weight:800">------</div>
+            <div id="pairing-code-expiry" style="font-size:.82rem;color:#9e7e82;margin-top:.15rem"></div>
+            <div style="font-size:.82rem;color:#9e7e82">In the app, choose code pairing, enter this code and the site endpoint.</div>
             <div id="pairing-qr-status"></div>
           </div>
         </div>
@@ -1034,6 +1121,32 @@
           <!-- ═══════════════ REMOTE COMMANDS ═══════════════ -->
           <section id="sec-commands" class="handler-section">
             <h2 class="section-heading">📡 Remote Commands</h2>
+
+            <div class="cmd-toolbar" aria-label="Command center tools">
+              <div class="cmd-toolbar-top">
+                <input
+                  id="cmd-search"
+                  class="cmd-toolbar-search"
+                  type="search"
+                  placeholder="Search commands, actions, or fields (Ctrl/Cmd + K)"
+                  autocomplete="off"
+                />
+                <div class="cmd-toolbar-actions">
+                  <button type="button" class="btn-cmd-secondary" id="cmd-expand-all">Expand All</button>
+                  <button type="button" class="btn-cmd-secondary" id="cmd-collapse-all">Collapse All</button>
+                  <button type="button" class="btn-cmd-secondary" id="cmd-reset-filter">Reset</button>
+                  <span class="cmd-filter-count" id="cmd-filter-count"></span>
+                </div>
+              </div>
+              <div class="cmd-quick-grid" id="cmd-quick-grid">
+                <button type="button" class="btn-cmd-quick" data-quick-action="REQUEST_CHECKIN">Request Check-in</button>
+                <button type="button" class="btn-cmd-quick" data-quick-action="CLEAR_NOTIFICATIONS">Clear Notifications</button>
+                <button type="button" class="btn-cmd-quick" data-quick-action="SCREEN_ON">Screen On</button>
+                <button type="button" class="btn-cmd-quick danger" data-quick-action="SCREEN_OFF" data-confirm="Turn screen off now?">Screen Off</button>
+                <button type="button" class="btn-cmd-quick danger" data-quick-action="LOCK_DEVICE" data-confirm="Lock device immediately?">Lock Device</button>
+              </div>
+              <div class="cmd-toolbar-result" id="cmd-toolbar-result"></div>
+            </div>
 
             <!-- ── Notifications & Messaging ── -->
             <details class="cmd-group" open>
@@ -1809,6 +1922,7 @@
     const _deviceCache = {};
     let _pairingQrObjectUrl = null;
     let _handlerNoAssignmentHint = null;
+    const DEVICE_ONLINE_STALE_MS = 5 * 60 * 1000;
 
     // ── Credential storage ─────────────────────────────
     function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
@@ -1875,10 +1989,29 @@
       try { return new Date(iso).toLocaleString(); } catch(e) { return iso; }
     }
 
+    function _toMs(iso) {
+      if (!iso) return null;
+      var ms = Date.parse(iso);
+      return Number.isNaN(ms) ? null : ms;
+    }
+
+    function isDeviceOnline(status) {
+      if (!status || !status.is_online) return false;
+      var lastSeenMs = _toMs(status.last_seen);
+      if (lastSeenMs === null) return !!status.is_online;
+      return (Date.now() - lastSeenMs) <= DEVICE_ONLINE_STALE_MS;
+    }
+
     function battLevel(pct) {
       if (pct >= 60) return '🟢 Good';
       if (pct >= 20) return '🟡 Low';
       return '🔴 Critical';
+    }
+
+    function deviceLabel(device) {
+      if (!device) return '';
+      var name = (device.device_name || '').trim();
+      return name || String(device.device_id || '').trim();
     }
 
     async function loadPairingQr() {
@@ -1914,6 +2047,28 @@
         if (e.message === AUTH_EXPIRED_ERROR) return;
         placeholder.textContent = 'Pairing QR unavailable.';
         status.textContent = e.message || 'Failed to load pairing QR.';
+      }
+    }
+
+    async function loadPairingCode() {
+      const codeEl = document.getElementById('pairing-code-value');
+      const expiryEl = document.getElementById('pairing-code-expiry');
+      const status = document.getElementById('pairing-qr-status');
+      if (!codeEl || !expiryEl || !status) return;
+
+      codeEl.textContent = '------';
+      expiryEl.textContent = '';
+      status.textContent = 'Generating one-time pairing code…';
+      try {
+        const r = await apiPost('/api/handler/tpe/pairing-code', {});
+        const code = (r.pairing_code || '').toString();
+        codeEl.textContent = code || '------';
+        if (r.expires_at) {
+          expiryEl.textContent = 'Expires: ' + fmtDate(r.expires_at);
+        }
+        status.textContent = code ? 'Pairing code ready.' : 'Pairing code unavailable.';
+      } catch (e) {
+        status.textContent = (e && e.message) ? e.message : 'Failed to create pairing code.';
       }
     }
 
@@ -1966,7 +2121,8 @@
       document.getElementById('puppy-detail').style.display        = 'block';
       document.getElementById('back-to-kennel-btn').style.display  = 'flex';
 
-      setText('sb-device-name', deviceId);
+      var cached = _deviceCache[deviceId] || {};
+      setText('sb-device-name', deviceLabel(cached) || deviceId);
 
       // Reset to overview section
       document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
@@ -1976,7 +2132,7 @@
       if (overviewNav) overviewNav.classList.add('active');
 
       // Render immediately from cache, or fetch
-      var cached = _deviceCache[deviceId];
+      cached = _deviceCache[deviceId];
       if (cached) {
         renderStatus(cached);
       } else {
@@ -2133,9 +2289,10 @@
 
     /** Render (or re-render) the inner content of a kennel summary card. */
     function _renderKennelCard(card, device) {
-      var online  = !!device.is_online;
+      var online  = isDeviceOnline(device);
       var locked  = !!device.is_locked;
       var aiAlert = !!device.ai_alert;
+      var label   = deviceLabel(device) || device.device_id;
       var batt    = device.battery_pct;
       var battStr = (batt !== null && batt !== undefined) ? batt + '%' : '—';
       var battIcon = '🟢';
@@ -2145,7 +2302,7 @@
       }
       card.innerHTML =
         '<div class="kc-header">' +
-          '<span class="kc-id" title="' + esc(device.device_id) + '">' + esc(device.device_id) + '</span>' +
+          '<span class="kc-id" title="' + esc(device.device_id) + '">' + esc(label) + '</span>' +
           '<span class="kc-dot ' + (online ? 'online' : 'offline') + '" title="' + (online ? 'Online' : 'Offline') + '"></span>' +
         '</div>' +
         '<div class="kc-stats">' +
@@ -2224,12 +2381,14 @@
       var lat = +device.lat;
       var lon = +device.lon;
       var did = device.device_id;
+      var label = deviceLabel(device) || did;
       if (_masterMarkers[did]) {
         _masterMarkers[did].setLatLng([lat, lon]);
+        _masterMarkers[did].setPopupContent('📍 ' + esc(label));
       } else {
         _masterMarkers[did] = L.marker([lat, lon])
           .addTo(_masterMap)
-          .bindPopup('📍 ' + esc(did))
+          .bindPopup('📍 ' + esc(label))
           .on('click', function() { showPuppyDetail(did); });
       }
     }
@@ -2242,7 +2401,16 @@
       if (!s || !s.updated_at) {
         ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
          'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
-         'ov-online','ov-online-sub','sb-online','sb-lock','det-last-seen'].forEach(function(id) { setText(id, '—'); });
+         'ov-online','sb-lock'].forEach(function(id) { setText(id, '—'); });
+        if (!viewingDeviceId) {
+          setText('ov-online-sub', 'No device selected');
+          setText('sb-online', '⚪ No device selected');
+          setText('det-last-seen', '—');
+        } else {
+          setText('ov-online-sub', 'No recent check-in');
+          setText('sb-online', '⚪ Awaiting status');
+          setText('det-last-seen', 'No data yet');
+        }
         updateBatteryBar(0);
         document.getElementById('ai-alert-banner').classList.remove('visible');
         document.getElementById('det-lock').textContent = '—';
@@ -2278,11 +2446,11 @@
         banner.classList.remove('visible');
       }
 
-      var online = !!s.is_online;
+      var online = isDeviceOnline(s);
       var locked = !!s.is_locked;
       setText('ov-online',     online ? '🟢' : '🔴');
-      setText('ov-online-sub', online ? 'Online' : 'Offline');
-      setText('sb-online',     online ? '🟢 Online' : '🔴 Offline');
+      setText('ov-online-sub', online ? 'Connected' : 'Disconnected');
+      setText('sb-online',     online ? '🟢 Connected' : '🔴 Disconnected');
       setText('sb-lock',       locked ? '🔒 Locked' : '🔓 Open');
       document.getElementById('det-lock').innerHTML = locked
         ? '<span class="badge badge-error">Locked</span>'
@@ -2314,7 +2482,7 @@
 
     function setWsDot(state) {
       WS_DOT.className = state;
-      var labels = { connected: 'Live', error: 'Disconnected', '': 'Connecting…' };
+      var labels = { connected: 'WS Connected', error: 'WS Disconnected', '': 'WS Connecting…' };
       WS_LABEL.textContent = labels[state] !== undefined ? labels[state] : 'Connecting…';
     }
 
@@ -2736,6 +2904,116 @@
       } catch(e) {
         if (e.message !== '401' && res) res.textContent = '❌ Request failed.';
       }
+    }
+
+    function _allCommandGroups() {
+      return Array.from(document.querySelectorAll('#sec-commands .cmd-group'));
+    }
+
+    function _allCommandRows() {
+      return Array.from(document.querySelectorAll('#sec-commands .cmd-row'));
+    }
+
+    function setCommandGroupsOpen(open) {
+      _allCommandGroups().forEach(function(group) {
+        group.open = !!open;
+      });
+    }
+
+    function filterCommandRows() {
+      var searchEl = document.getElementById('cmd-search');
+      if (!searchEl) return;
+      var q = String(searchEl.value || '').trim().toLowerCase();
+      var groups = _allCommandGroups();
+      var visibleRowCount = 0;
+      var visibleGroupCount = 0;
+
+      groups.forEach(function(group) {
+        var summaryEl = group.querySelector('summary');
+        var summaryText = (summaryEl ? summaryEl.textContent : '').toLowerCase();
+        var rows = Array.from(group.querySelectorAll('.cmd-row'));
+        var groupHasVisible = false;
+
+        rows.forEach(function(row) {
+          if (!q) {
+            row.style.display = '';
+            groupHasVisible = true;
+            visibleRowCount += 1;
+            return;
+          }
+
+          var haystack = row.textContent.toLowerCase();
+          var hit = haystack.indexOf(q) !== -1 || summaryText.indexOf(q) !== -1;
+          row.style.display = hit ? '' : 'none';
+          if (hit) {
+            groupHasVisible = true;
+            visibleRowCount += 1;
+          }
+        });
+
+        group.style.display = groupHasVisible ? '' : 'none';
+        if (groupHasVisible) visibleGroupCount += 1;
+        if (q) group.open = groupHasVisible;
+      });
+
+      var countEl = document.getElementById('cmd-filter-count');
+      if (countEl) {
+        countEl.textContent = q
+          ? (visibleRowCount + ' matches in ' + visibleGroupCount + ' groups')
+          : '';
+      }
+    }
+
+    function resetCommandFilter() {
+      var searchEl = document.getElementById('cmd-search');
+      if (!searchEl) return;
+      searchEl.value = '';
+      filterCommandRows();
+    }
+
+    function initCommandCenter() {
+      var sec = document.getElementById('sec-commands');
+      if (!sec || sec.dataset.cmdCenterInit === '1') return;
+      sec.dataset.cmdCenterInit = '1';
+
+      var searchEl = document.getElementById('cmd-search');
+      var expandBtn = document.getElementById('cmd-expand-all');
+      var collapseBtn = document.getElementById('cmd-collapse-all');
+      var resetBtn = document.getElementById('cmd-reset-filter');
+
+      if (searchEl) {
+        searchEl.addEventListener('input', filterCommandRows);
+      }
+      if (expandBtn) {
+        expandBtn.addEventListener('click', function() { setCommandGroupsOpen(true); });
+      }
+      if (collapseBtn) {
+        collapseBtn.addEventListener('click', function() { setCommandGroupsOpen(false); });
+      }
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+          resetCommandFilter();
+          setCommandGroupsOpen(true);
+        });
+      }
+
+      sec.querySelectorAll('[data-quick-action]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var action = btn.getAttribute('data-quick-action');
+          var confirmText = btn.getAttribute('data-confirm');
+          if (confirmText && !window.confirm(confirmText)) return;
+          sendFcm(action, {}, 'cmd-toolbar-result');
+        });
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') {
+          var commandsVisible = sec.classList.contains('active');
+          if (!commandsVisible) return;
+          e.preventDefault();
+          if (searchEl) searchEl.focus();
+        }
+      });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3787,9 +4065,11 @@
 
     function initPanel() {
       _handlerNoAssignmentHint = null;
+      initCommandCenter();
       connectWS();
       showKennelOverview();
       loadPairingQr();
+      loadPairingCode();
       updateDeleteDeviceActionAccess();
 
       // Eagerly populate kennel cards before the first WS push
@@ -3815,6 +4095,9 @@
 
     document.getElementById('pairing-qr-refresh-btn').addEventListener('click', function() {
       loadPairingQr();
+    });
+    document.getElementById('pairing-code-refresh-btn').addEventListener('click', function() {
+      loadPairingCode();
     });
   </script>
 </body>
