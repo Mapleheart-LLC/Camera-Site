@@ -287,6 +287,25 @@ These backend endpoints trigger outbound app commands via MQTT/FCM bridge:
 - POST /api/handler/tpe/checkins/request (JWT handler/admin)
 - POST /api/admin/tpe/push (HTTP Basic admin)
 
+### 6.1 Handler Vault Control Endpoints (website)
+
+Handler/admin website can control vault over JWT-authenticated helper routes:
+
+- POST /api/handler/tpe/vault/entry/add
+- PATCH /api/handler/tpe/vault/entry/{entry_id}
+- DELETE /api/handler/tpe/vault/entry/{entry_id}?device_id=<device_id>
+- POST /api/handler/tpe/vault/entry/{entry_id}/lock
+- POST /api/handler/tpe/vault/lock-all
+- POST /api/handler/tpe/vault/change-block
+- POST /api/handler/tpe/vault/import
+- GET /api/handler/tpe/vault/events
+
+Notes:
+
+- Handlers are restricted to assigned devices; admins can target any device.
+- These routes dispatch existing app VAULT_* MQTT actions.
+- Vault state visibility is currently event/timeline-driven via /api/handler/tpe/vault/events and /api/handler/tpe/events.
+
 ## 7) Optional App-Integrated Queue Endpoints
 
 If Android app includes queue/inbox modules, these endpoints are available:

@@ -11,6 +11,7 @@ Handler/Admin-facing (JWT Bearer auth – role 'handler' or 'admin'):
   GET  /api/handler/devices        – List devices (handlers see only assigned ones).
   GET  /api/handler/status         – Latest status snapshot for a specific device.
   POST /api/handler/lock           – Send LOCK_DEVICE FCM to a specific device.
+    POST /api/handler/tpe/vault/*    – Vault controls routed to assigned device.
   DELETE /api/handler/devices/{device_id} – Delete device records (admin only).
 
 Admin-only (JWT Bearer auth – role 'admin'):
@@ -370,6 +371,44 @@ class LockRequest(BaseModel):
     device_id: str
 
 
+class VaultAddEntryRequest(BaseModel):
+    device_id: str
+    site: Optional[str] = ""
+    username: Optional[str] = ""
+    password: str
+    notes: Optional[str] = ""
+
+
+class VaultUpdateEntryRequest(BaseModel):
+    device_id: str
+    site: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VaultLockRequest(BaseModel):
+    device_id: str
+    duration_minutes: int = 60
+
+
+class VaultChangeBlockRequest(BaseModel):
+    device_id: str
+    enabled: bool
+
+
+class VaultImportEntryRequest(BaseModel):
+    site: Optional[str] = ""
+    username: Optional[str] = ""
+    password: str
+    notes: Optional[str] = ""
+
+
+class VaultImportRequest(BaseModel):
+    device_id: str
+    entries: List[VaultImportEntryRequest]
+
+
 class AssignmentRequest(BaseModel):
     handler_id: str
     device_id: str
@@ -633,6 +672,18 @@ def _handler_allowed_devices(db: sqlite3.Connection, handler_id: str) -> list[st
         (handler_id, username),
     ).fetchall()
     return [r["device_id"] for r in rows]
+
+
+def _assert_handler_device_access(
+    db: sqlite3.Connection,
+    current_user: dict,
+    device_id: str,
+) -> None:
+    if current_user.get("role") == "admin":
+        return
+    assigned = _handler_allowed_devices(db, current_user["user_id"])
+    if device_id not in assigned:
+        raise HTTPException(status_code=403, detail="Access denied to this device.")
 
 
 def _normalize_handler_assignment_id(db: sqlite3.Connection, raw_handler_id: str) -> str:
@@ -1504,6 +1555,182 @@ def handler_publish_limbo_item(
 
 class _CheckinRequestBody(BaseModel):
     device_id: Optional[str] = None
+
+
+@router.post("/api/handler/tpe/vault/entry/add")
+def handler_tpe_vault_add_entry(
+    body: VaultAddEntryRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    payload = {
+        "action": "VAULT_ADD_ENTRY",
+        "site": body.site or "",
+        "username": body.username or "",
+        "password": body.password,
+        "notes": body.notes or "",
+    }
+    mqtt = _send_mqtt_to_device(db, body.device_id, payload)
+    return {"status": "vault_add_sent", "mqtt": mqtt}
+
+
+@router.patch("/api/handler/tpe/vault/entry/{entry_id}")
+def handler_tpe_vault_update_entry(
+    entry_id: str,
+    body: VaultUpdateEntryRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    payload = {
+        "action": "VAULT_UPDATE_ENTRY",
+        "id": entry_id,
+        **({"site": body.site} if body.site is not None else {}),
+        **({"username": body.username} if body.username is not None else {}),
+        **({"password": body.password} if body.password is not None else {}),
+        **({"notes": body.notes} if body.notes is not None else {}),
+    }
+    mqtt = _send_mqtt_to_device(db, body.device_id, payload)
+    return {"status": "vault_update_sent", "entry_id": entry_id, "mqtt": mqtt}
+
+
+@router.delete("/api/handler/tpe/vault/entry/{entry_id}")
+def handler_tpe_vault_delete_entry(
+    entry_id: str,
+    device_id: str,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, device_id)
+    mqtt = _send_mqtt_to_device(
+        db,
+        device_id,
+        {"action": "VAULT_DELETE_ENTRY", "id": entry_id},
+    )
+    return {"status": "vault_delete_sent", "entry_id": entry_id, "mqtt": mqtt}
+
+
+@router.post("/api/handler/tpe/vault/entry/{entry_id}/lock")
+def handler_tpe_vault_lock_entry(
+    entry_id: str,
+    body: VaultLockRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    minutes = max(1, min(int(body.duration_minutes), 43200))
+    mqtt = _send_mqtt_to_device(
+        db,
+        body.device_id,
+        {
+            "action": "VAULT_LOCK_ENTRY",
+            "id": entry_id,
+            "duration_minutes": str(minutes),
+        },
+    )
+    return {
+        "status": "vault_lock_entry_sent",
+        "entry_id": entry_id,
+        "duration_minutes": minutes,
+        "mqtt": mqtt,
+    }
+
+
+@router.post("/api/handler/tpe/vault/lock-all")
+def handler_tpe_vault_lock_all(
+    body: VaultLockRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    minutes = max(1, min(int(body.duration_minutes), 43200))
+    mqtt = _send_mqtt_to_device(
+        db,
+        body.device_id,
+        {"action": "VAULT_LOCK_ALL", "duration_minutes": str(minutes)},
+    )
+    return {
+        "status": "vault_lock_all_sent",
+        "duration_minutes": minutes,
+        "mqtt": mqtt,
+    }
+
+
+@router.post("/api/handler/tpe/vault/change-block")
+def handler_tpe_vault_change_block(
+    body: VaultChangeBlockRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+    mqtt = _send_mqtt_to_device(
+        db,
+        body.device_id,
+        {
+            "action": "VAULT_SET_CHANGE_BLOCK",
+            "enabled": "true" if body.enabled else "false",
+        },
+    )
+    return {"status": "vault_change_block_sent", "enabled": body.enabled, "mqtt": mqtt}
+
+
+@router.post("/api/handler/tpe/vault/import")
+def handler_tpe_vault_import(
+    body: VaultImportRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _assert_handler_device_access(db, current_user, body.device_id)
+
+    if not body.entries:
+        raise HTTPException(status_code=400, detail="entries is required")
+    if len(body.entries) > 500:
+        raise HTTPException(status_code=400, detail="entries exceeds max batch size (500)")
+
+    sent = 0
+    failed = 0
+    for entry in body.entries:
+        if not entry.password.strip():
+            failed += 1
+            continue
+        payload = {
+            "action": "VAULT_ADD_ENTRY",
+            "site": entry.site or "",
+            "username": entry.username or "",
+            "password": entry.password,
+            "notes": entry.notes or "",
+        }
+        result = _send_mqtt_to_device(db, body.device_id, payload)
+        sent += int(result.get("sent", 0))
+        failed += int(result.get("failed", 0))
+
+    return {
+        "status": "vault_import_dispatched",
+        "requested": len(body.entries),
+        "sent": sent,
+        "failed": failed,
+    }
+
+
+@router.get("/api/handler/tpe/vault/events")
+def handler_tpe_vault_events(
+    device_id: Optional[str] = None,
+    limit: int = 100,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    if device_id:
+        _assert_handler_device_access(db, current_user, device_id)
+
+    rows = db.execute(
+        "SELECT id, event, reason, session_ts, payload_json, received_at "
+        "FROM tpe_events WHERE lower(event) LIKE 'vault_%' "
+        + ("AND json_extract(payload_json, '$.device_id') = ? " if device_id else "")
+        + "ORDER BY id DESC LIMIT ?",
+        ((device_id, min(limit, 500)) if device_id else (min(limit, 500),)),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.post("/api/handler/tpe/push")
