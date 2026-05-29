@@ -2915,6 +2915,11 @@ def handler_tpe_behavior_insights(
     social_action_counter: Counter[str] = Counter()
     social_platform_counter: Counter[str] = Counter()
     phone_event_counter: Counter[str] = Counter()
+    typing_session_count = 0
+    typing_total_chars = 0
+    typing_total_backspaces = 0
+    typing_duration_ms_total = 0
+    typing_correction_samples: list[float] = []
 
     for row in event_rows:
         payload = {}
@@ -2979,6 +2984,30 @@ def handler_tpe_behavior_insights(
         }:
             phone_event_counter[event_name] += 1
 
+        if event_name == "typing_session_metrics":
+            try:
+                total_chars = int(payload.get("total_characters") or 0)
+            except Exception:
+                total_chars = 0
+            try:
+                backspaces = int(payload.get("backspace_count") or 0)
+            except Exception:
+                backspaces = 0
+            try:
+                duration_ms = int(payload.get("duration_ms") or 0)
+            except Exception:
+                duration_ms = 0
+            try:
+                correction_rate = float(payload.get("correction_rate") or 0.0)
+            except Exception:
+                correction_rate = 0.0
+
+            typing_session_count += 1
+            typing_total_chars += max(0, total_chars)
+            typing_total_backspaces += max(0, backspaces)
+            typing_duration_ms_total += max(0, duration_ms)
+            typing_correction_samples.append(max(0.0, correction_rate))
+
         reason = (row["reason"] or "").strip()
         if reason:
             reason_counter[reason] += 1
@@ -3038,6 +3067,16 @@ def handler_tpe_behavior_insights(
         {"platform": platform, "count": cnt}
         for platform, cnt in social_platform_counter.most_common(8)
     ]
+    typing_avg_correction_rate = (
+        round(sum(typing_correction_samples) / len(typing_correction_samples), 4)
+        if typing_correction_samples
+        else None
+    )
+    typing_avg_duration_ms = (
+        round(typing_duration_ms_total / typing_session_count, 1)
+        if typing_session_count > 0
+        else None
+    )
 
     learning_signals: list[dict] = []
     if mood_delta is not None:
@@ -3192,6 +3231,21 @@ def handler_tpe_behavior_insights(
                 "detail": f"Observed {top_phone_count} times in window",
             }
         )
+    if typing_session_count > 0:
+        learning_signals.append(
+            {
+                "title": "Typing correction pattern",
+                "value": (
+                    f"{typing_avg_correction_rate:.4f}"
+                    if typing_avg_correction_rate is not None
+                    else "0.0000"
+                ),
+                "detail": (
+                    f"{typing_total_backspaces} backspaces across {typing_total_chars} chars "
+                    f"in {typing_session_count} sessions"
+                ),
+            }
+        )
     if top_social_actions:
         top_social = top_social_actions[0]
         learning_signals.append(
@@ -3234,6 +3288,11 @@ def handler_tpe_behavior_insights(
             {"event": ev, "count": cnt}
             for ev, cnt in phone_event_counter.most_common(8)
         ],
+        "typing_session_count": typing_session_count,
+        "typing_total_characters": typing_total_chars,
+        "typing_backspace_count": typing_total_backspaces,
+        "typing_avg_correction_rate": typing_avg_correction_rate,
+        "typing_avg_duration_ms": typing_avg_duration_ms,
         "hourly_activity": hourly_hist,
         "vitals_sample_count": len(vital_filtered),
         "avg_heart_rate": avg_heart_rate,
