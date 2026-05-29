@@ -166,6 +166,14 @@ class _HandlerWSManager:
         self._device_sockets[device_id] = ws
         logger.debug("Hot-mic device connected: %s (total: %d)", device_id, len(self._device_sockets))
 
+    def connected_device_ids(self) -> list[str]:
+        """Return current hot-mic/device websocket IDs."""
+        return list(self._device_sockets.keys())
+
+    def connected_device_count(self) -> int:
+        """Return current number of hot-mic/device websockets."""
+        return len(self._device_sockets)
+
     def disconnect_device(self, device_id: str, ws: WebSocket) -> None:
         """Remove a TPE device WebSocket from the registry."""
         if self._device_sockets.get(device_id) is ws:

@@ -755,6 +755,56 @@ def _bridge_ai_warden_mqtt_message(topic: str, payload_raw: str) -> None:
 _mqtt_client.add_message_listener(_bridge_ai_warden_mqtt_message)
 
 
+async def _send_command_with_ws_fallback(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    ws_fallback_sent = 0
+    ws_broadcast_fallback_sent = 0
+    mqtt_error = ""
+    try:
+        mqtt = _send_mqtt_to_device(db, device_id, payload)
+    except HTTPException as exc:
+        mqtt = {"sent": 0, "failed": 1}
+        mqtt_error = str(exc.detail)
+
+    if int(mqtt.get("sent", 0)) == 0:
+        ws_fallback_sent = await _handler_ws.send_device_payload(payload, device_id=device_id)
+
+    if int(mqtt.get("sent", 0)) == 0 and ws_fallback_sent == 0:
+        connected_count = _handler_ws.connected_device_count()
+        if connected_count == 1:
+            ws_broadcast_fallback_sent = await _handler_ws.send_device_payload(payload)
+            if ws_broadcast_fallback_sent > 0:
+                logger.warning(
+                    "Targeted WS fallback missed device_id=%s; delivered via single-device broadcast. connected_ids=%s",
+                    device_id,
+                    _handler_ws.connected_device_ids(),
+                )
+
+    if int(mqtt.get("sent", 0)) == 0 and ws_fallback_sent == 0 and ws_broadcast_fallback_sent == 0:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Command transport unavailable. "
+                f"mqtt_error={mqtt_error or 'publish_failed'}"
+            ),
+        )
+
+    return {
+        "mqtt": mqtt,
+        "ws_fallback": {"sent": ws_fallback_sent},
+        "ws_broadcast_fallback": {"sent": ws_broadcast_fallback_sent},
+        "transport": (
+            "mqtt"
+            if int(mqtt.get("sent", 0)) > 0
+            else ("ws_fallback" if ws_fallback_sent > 0 else "ws_broadcast_fallback")
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -3807,7 +3857,7 @@ def handler_rule_engine_events(
 
 
 @router.post("/api/handler/tpe/vault/entry/add")
-def handler_tpe_vault_add_entry(
+async def handler_tpe_vault_add_entry(
     body: VaultAddEntryRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
@@ -3820,12 +3870,12 @@ def handler_tpe_vault_add_entry(
         "password": body.password,
         "notes": body.notes or "",
     }
-    mqtt = _send_mqtt_to_device(db, body.device_id, payload)
-    return {"status": "vault_add_sent", "mqtt": mqtt}
+    transport = await _send_command_with_ws_fallback(db, device_id=body.device_id, payload=payload)
+    return {"status": "vault_add_sent", **transport}
 
 
 @router.patch("/api/handler/tpe/vault/entry/{entry_id}")
-def handler_tpe_vault_update_entry(
+async def handler_tpe_vault_update_entry(
     entry_id: str,
     body: VaultUpdateEntryRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
@@ -3840,28 +3890,28 @@ def handler_tpe_vault_update_entry(
         **({"password": body.password} if body.password is not None else {}),
         **({"notes": body.notes} if body.notes is not None else {}),
     }
-    mqtt = _send_mqtt_to_device(db, body.device_id, payload)
-    return {"status": "vault_update_sent", "entry_id": entry_id, "mqtt": mqtt}
+    transport = await _send_command_with_ws_fallback(db, device_id=body.device_id, payload=payload)
+    return {"status": "vault_update_sent", "entry_id": entry_id, **transport}
 
 
 @router.delete("/api/handler/tpe/vault/entry/{entry_id}")
-def handler_tpe_vault_delete_entry(
+async def handler_tpe_vault_delete_entry(
     entry_id: str,
     device_id: str,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     _assert_handler_device_access(db, current_user, device_id)
-    mqtt = _send_mqtt_to_device(
+    transport = await _send_command_with_ws_fallback(
         db,
-        device_id,
-        {"action": "VAULT_DELETE_ENTRY", "id": entry_id},
+        device_id=device_id,
+        payload={"action": "VAULT_DELETE_ENTRY", "id": entry_id},
     )
-    return {"status": "vault_delete_sent", "entry_id": entry_id, "mqtt": mqtt}
+    return {"status": "vault_delete_sent", "entry_id": entry_id, **transport}
 
 
 @router.post("/api/handler/tpe/vault/entry/{entry_id}/lock")
-def handler_tpe_vault_lock_entry(
+async def handler_tpe_vault_lock_entry(
     entry_id: str,
     body: VaultLockRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
@@ -3869,10 +3919,10 @@ def handler_tpe_vault_lock_entry(
 ) -> dict:
     _assert_handler_device_access(db, current_user, body.device_id)
     minutes = max(1, min(int(body.duration_minutes), 43200))
-    mqtt = _send_mqtt_to_device(
+    transport = await _send_command_with_ws_fallback(
         db,
-        body.device_id,
-        {
+        device_id=body.device_id,
+        payload={
             "action": "VAULT_LOCK_ENTRY",
             "id": entry_id,
             "duration_minutes": str(minutes),
@@ -3882,46 +3932,46 @@ def handler_tpe_vault_lock_entry(
         "status": "vault_lock_entry_sent",
         "entry_id": entry_id,
         "duration_minutes": minutes,
-        "mqtt": mqtt,
+        **transport,
     }
 
 
 @router.post("/api/handler/tpe/vault/lock-all")
-def handler_tpe_vault_lock_all(
+async def handler_tpe_vault_lock_all(
     body: VaultLockRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     _assert_handler_device_access(db, current_user, body.device_id)
     minutes = max(1, min(int(body.duration_minutes), 43200))
-    mqtt = _send_mqtt_to_device(
+    transport = await _send_command_with_ws_fallback(
         db,
-        body.device_id,
-        {"action": "VAULT_LOCK_ALL", "duration_minutes": str(minutes)},
+        device_id=body.device_id,
+        payload={"action": "VAULT_LOCK_ALL", "duration_minutes": str(minutes)},
     )
     return {
         "status": "vault_lock_all_sent",
         "duration_minutes": minutes,
-        "mqtt": mqtt,
+        **transport,
     }
 
 
 @router.post("/api/handler/tpe/vault/change-block")
-def handler_tpe_vault_change_block(
+async def handler_tpe_vault_change_block(
     body: VaultChangeBlockRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     _assert_handler_device_access(db, current_user, body.device_id)
-    mqtt = _send_mqtt_to_device(
+    transport = await _send_command_with_ws_fallback(
         db,
-        body.device_id,
-        {
+        device_id=body.device_id,
+        payload={
             "action": "VAULT_SET_CHANGE_BLOCK",
             "enabled": "true" if body.enabled else "false",
         },
     )
-    return {"status": "vault_change_block_sent", "enabled": body.enabled, "mqtt": mqtt}
+    return {"status": "vault_change_block_sent", "enabled": body.enabled, **transport}
 
 
 @router.post("/api/handler/tpe/vault/import")
