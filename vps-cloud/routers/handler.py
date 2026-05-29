@@ -37,7 +37,7 @@ import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from pydantic import AliasChoices, BaseModel, Field
@@ -640,6 +640,116 @@ def _verify_ws_token(token: str) -> Optional[dict]:
         return payload
     except (_jwt.ExpiredSignatureError, _jwt.InvalidTokenError):
         return None
+
+
+def _extract_target_device_id(payload: dict[str, Any]) -> Optional[str]:
+    for key in ("device_id", "deviceId", "target_device", "targetDevice"):
+        value = payload.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _is_tpe_telemetry_packet(topic: str, payload: Any) -> bool:
+    topic_text = (topic or "").strip().lower()
+    if "telemetry" in topic_text:
+        return True
+    if isinstance(payload, dict):
+        for key in ("event", "type", "action", "packet_type"):
+            value = str(payload.get(key) or "").strip().upper()
+            if value == "TPE_TELEMETRY":
+                return True
+    return False
+
+
+class _AiWardenTunnel:
+    def __init__(self) -> None:
+        self._ws: Optional[WebSocket] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._queue: Optional[asyncio.Queue[dict[str, Any]]] = None
+
+    async def attach(self, ws: WebSocket) -> None:
+        previous = self._ws
+        if previous is not None and previous is not ws:
+            try:
+                await previous.close(code=1012)
+            except Exception:
+                pass
+        self._ws = ws
+        self._loop = asyncio.get_running_loop()
+        self._queue = asyncio.Queue(maxsize=2000)
+
+    async def detach(self, ws: WebSocket) -> None:
+        if self._ws is not ws:
+            return
+        self._ws = None
+        self._loop = None
+        self._queue = None
+
+    async def telemetry_forward_loop(self, ws: WebSocket) -> None:
+        while self._ws is ws:
+            queue = self._queue
+            if queue is None:
+                return
+            payload = await queue.get()
+            await ws.send_json(payload)
+
+    def enqueue_mqtt_telemetry(self, topic: str, payload_raw: str) -> None:
+        ws = self._ws
+        loop = self._loop
+        queue = self._queue
+        if ws is None or loop is None or queue is None:
+            return
+
+        parsed: Any = payload_raw
+        if payload_raw:
+            try:
+                parsed = json.loads(payload_raw)
+            except Exception:
+                parsed = payload_raw
+
+        if not _is_tpe_telemetry_packet(topic, parsed):
+            return
+
+        envelope = {
+            "type": "tpe_telemetry",
+            "topic": topic,
+            "payload": parsed,
+            "received_at": _now_iso(),
+        }
+
+        def _enqueue() -> None:
+            if self._ws is not ws or self._queue is not queue:
+                return
+            try:
+                queue.put_nowait(envelope)
+            except asyncio.QueueFull:
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    return
+                try:
+                    queue.put_nowait(envelope)
+                except asyncio.QueueFull:
+                    return
+
+        try:
+            loop.call_soon_threadsafe(_enqueue)
+        except RuntimeError:
+            return
+
+
+_ai_warden_tunnel = _AiWardenTunnel()
+
+
+def _bridge_ai_warden_mqtt_message(topic: str, payload_raw: str) -> None:
+    _ai_warden_tunnel.enqueue_mqtt_telemetry(topic, payload_raw)
+
+
+_mqtt_client.add_message_listener(_bridge_ai_warden_mqtt_message)
 
 
 # ---------------------------------------------------------------------------
@@ -5700,4 +5810,111 @@ async def device_audio_ws_endpoint(
         finally:
             _handler_ws.disconnect_signaling_device(device_id, websocket)
     finally:
+        db.close()
+
+
+@router.websocket("/ws/ai-warden")
+async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
+    db = get_db_connection()
+    connected = False
+    try:
+        expected = _effective_webhook_secret(db)
+        if expected and not secrets.compare_digest(secret, expected):
+            await websocket.close(code=4001)
+            return
+
+        await websocket.accept()
+        connected = True
+        await _ai_warden_tunnel.attach(websocket)
+        await _handler_ws.broadcast(
+            {
+                "type": "ai_warden_status",
+                "status": "connected",
+                "priority": "high",
+                "message": "AI Warden tunnel connected.",
+            }
+        )
+
+        async def _heartbeat_loop() -> None:
+            while True:
+                await asyncio.sleep(20)
+                await websocket.send_json({"type": "heartbeat", "ts": _now_iso()})
+
+        heartbeat_task = asyncio.create_task(_heartbeat_loop())
+        forward_task = asyncio.create_task(_ai_warden_tunnel.telemetry_forward_loop(websocket))
+
+        try:
+            while True:
+                message = await websocket.receive()
+                message_type = message.get("type")
+                if message_type == "websocket.disconnect":
+                    break
+                if message_type != "websocket.receive":
+                    continue
+                text = message.get("text")
+                if not text:
+                    continue
+
+                try:
+                    payload = json.loads(text)
+                except Exception:
+                    await websocket.send_json({"type": "error", "detail": "Invalid JSON payload."})
+                    continue
+
+                if not isinstance(payload, dict):
+                    await websocket.send_json({"type": "error", "detail": "Payload must be a JSON object."})
+                    continue
+
+                frame_type = str(payload.get("type") or "").strip().lower()
+                if frame_type in {"heartbeat", "heartbeat_ack", "pong"}:
+                    continue
+
+                target_device_id = _extract_target_device_id(payload)
+                if not target_device_id:
+                    await websocket.send_json({"type": "error", "detail": "target device_id is required."})
+                    continue
+
+                _mqtt_client.start(db)
+                if not _mqtt_client.enabled:
+                    await websocket.send_json({"type": "error", "detail": "MQTT is not configured."})
+                    continue
+
+                sent = _mqtt_client.publish_json(
+                    _mqtt_client.topic_for_device_command(target_device_id),
+                    payload,
+                    qos=1,
+                )
+                if not sent:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "detail": f"Failed to dispatch command for {target_device_id}.",
+                        }
+                    )
+                    continue
+
+                await websocket.send_json(
+                    {
+                        "type": "ack",
+                        "status": "dispatched",
+                        "device_id": target_device_id,
+                        "dispatched_at": _now_iso(),
+                    }
+                )
+        finally:
+            heartbeat_task.cancel()
+            forward_task.cancel()
+            await _ai_warden_tunnel.detach(websocket)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if connected:
+            await _handler_ws.broadcast(
+                {
+                    "type": "ai_warden_alert",
+                    "status": "disconnected",
+                    "priority": "high",
+                    "message": "AI Warden tunnel disconnected.",
+                }
+            )
         db.close()

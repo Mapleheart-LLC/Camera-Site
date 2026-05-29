@@ -2918,6 +2918,14 @@
         var msg;
         try { msg = JSON.parse(evt.data); } catch(e) { return; }
         if (msg.type === 'ping') return;
+        if (msg.type === 'ai_warden_alert') {
+          showToast('🚨 ' + (msg.message || 'AI Warden tunnel disconnected.'), true);
+          return;
+        }
+        if (msg.type === 'ai_warden_status') {
+          showToast('🤖 ' + (msg.message || ('AI Warden ' + (msg.status || 'status'))));
+          return;
+        }
 
         // ── WebRTC signaling: answer / ICE candidates relayed from device ─
         if (msg.type === 'webrtc_answer' || msg.type === 'webrtc_ice_candidate') {
@@ -5315,5 +5323,4 @@
   </script>
 </body>
 </html>
-
 
