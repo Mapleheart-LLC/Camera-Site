@@ -541,6 +541,20 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_ai_social_drafts (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform            TEXT NOT NULL,
+            content             TEXT NOT NULL,
+            status              TEXT NOT NULL DEFAULT 'pending',
+            prompt_context      TEXT,
+            posted_results_json TEXT,
+            created_at          TEXT NOT NULL,
+            reviewed_at         TEXT
+        )
+        """
+    )
     conn.commit()
 
 
@@ -1870,6 +1884,62 @@ def ai_execute_device_command(
         ),
         prompt_context=body.prompt_context,
     )
+
+
+# ---------------------------------------------------------------------------
+# AI tool: post_social_update (draft queue – requires handler approval)
+# ---------------------------------------------------------------------------
+
+_VALID_SOCIAL_PLATFORMS = {"twitter", "bluesky", "both"}
+
+
+class DraftSocialPostRequest(BaseModel):
+    platform: str
+    content: str
+    prompt_context: Optional[str] = None
+
+
+@admin_router.post("/ai/draft-social-post", status_code=201)
+def ai_draft_social_post(
+    body: DraftSocialPostRequest,
+    _admin: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Queue a social media post draft proposed by the AI Warden for handler review.
+
+    The draft is stored with status 'pending' and is NOT published.  A handler
+    must approve it via ``POST /api/handler/social-post-drafts/{draft_id}/approve``
+    before any content goes live.
+    """
+    platform = (body.platform or "").strip().lower()
+    if platform not in _VALID_SOCIAL_PLATFORMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid platform '{platform}'. Must be one of: {sorted(_VALID_SOCIAL_PLATFORMS)}",
+        )
+
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content must not be empty.")
+
+    cursor = db.execute(
+        """
+        INSERT INTO tpe_ai_social_drafts (platform, content, status, prompt_context, created_at)
+        VALUES (?, ?, 'pending', ?, datetime('now'))
+        """,
+        (platform, content, body.prompt_context),
+    )
+    db.commit()
+    draft_id = cursor.lastrowid
+    return {
+        "status": "pending_approval",
+        "draft_id": draft_id,
+        "platform": platform,
+        "message": (
+            "Draft queued for handler review.  No content has been posted. "
+            "A handler must approve this draft before it goes live."
+        ),
+    }
 
 
 @admin_router.get("/events")

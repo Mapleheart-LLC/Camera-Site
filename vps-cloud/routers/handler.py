@@ -5629,6 +5629,107 @@ def handler_tpe_pairing_code(
 
 
 # ---------------------------------------------------------------------------
+# AI Warden social post draft review
+# ---------------------------------------------------------------------------
+
+
+@router.get("/api/handler/social-post-drafts")
+def handler_list_social_post_drafts(
+    status: Optional[str] = None,
+    limit: int = 50,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """List AI-proposed social post drafts.
+
+    Query params:
+    - ``status``: filter by status (``pending``, ``approved``, ``rejected``, ``failed``).
+      Omit to return all statuses.
+    - ``limit``: max rows returned (default 50, max 200).
+    """
+    limit = max(1, min(limit, 200))
+    if status:
+        rows = db.execute(
+            "SELECT * FROM tpe_ai_social_drafts WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT * FROM tpe_ai_social_drafts ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return {"drafts": [dict(r) for r in rows]}
+
+
+@router.post("/api/handler/social-post-drafts/{draft_id}/approve")
+def handler_approve_social_post_draft(
+    draft_id: int,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Approve and immediately publish an AI-proposed social post draft.
+
+    Calls the configured Twitter and/or Bluesky APIs.  The draft's ``status``
+    is updated to ``'approved'`` (or ``'failed'`` if all platforms error).
+    """
+    from services.mcp_server import execute_post_social_update  # noqa: PLC0415
+
+    row = db.execute(
+        "SELECT * FROM tpe_ai_social_drafts WHERE id = ?", (draft_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Social post draft not found.")
+    if row["status"] != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Draft is already '{row['status']}' and cannot be approved again.",
+        )
+
+    result = execute_post_social_update(platform=row["platform"], content=row["content"])
+    new_status = "failed" if result.get("any_error") else "approved"
+
+    db.execute(
+        """
+        UPDATE tpe_ai_social_drafts
+        SET status = ?, posted_results_json = ?, reviewed_at = datetime('now')
+        WHERE id = ?
+        """,
+        (new_status, json.dumps(result, ensure_ascii=False), draft_id),
+    )
+    db.commit()
+    return {"draft_id": draft_id, "status": new_status, "result": result}
+
+
+@router.delete("/api/handler/social-post-drafts/{draft_id}", status_code=200)
+def handler_reject_social_post_draft(
+    draft_id: int,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Reject (soft-delete) an AI-proposed social post draft without publishing it."""
+    row = db.execute(
+        "SELECT id, status FROM tpe_ai_social_drafts WHERE id = ?", (draft_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Social post draft not found.")
+    if row["status"] != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Draft is already '{row['status']}' and cannot be rejected.",
+        )
+    db.execute(
+        """
+        UPDATE tpe_ai_social_drafts
+        SET status = 'rejected', reviewed_at = datetime('now')
+        WHERE id = ?
+        """,
+        (draft_id,),
+    )
+    db.commit()
+    return {"draft_id": draft_id, "status": "rejected"}
+
+
+# ---------------------------------------------------------------------------
 # WebSocket
 # ---------------------------------------------------------------------------
 
