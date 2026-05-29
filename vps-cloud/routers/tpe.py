@@ -112,6 +112,11 @@ def _ensure_mqtt_ready(db: sqlite3.Connection) -> None:
                 "Set MQTT_BROKER_HOST (or tpe_mqtt_broker_host in settings)."
             ),
         )
+    if not _mqtt_client.wait_until_connected(timeout=5.0):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MQTT broker is enabled but not connected yet. Try again in a few seconds.",
+        )
 
 
 def _known_device_ids(db: sqlite3.Connection) -> list[str]:

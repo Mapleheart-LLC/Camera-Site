@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _PRESENCE_QUEUE_MAX_SIZE = 10000
 _PRESENCE_QUEUE_TIMEOUT_SECONDS = 1.0
+_MQTT_CONNECT_WAIT_SECONDS = 5.0
 
 
 def _as_bool(value: str) -> bool:
@@ -34,6 +35,7 @@ class _MqttClientService:
         self._connected = False
         self._started = False
         self._enabled = False
+        self._connected_event = threading.Event()
 
         self._command_topic_template = "tpeapp/device/{device_id}/commands"
         self._signaling_topic_template = "tpeapp/signaling/{session_id}"
@@ -78,6 +80,11 @@ class _MqttClientService:
     @property
     def connected(self) -> bool:
         return self._connected
+
+    def wait_until_connected(self, timeout: float = _MQTT_CONNECT_WAIT_SECONDS) -> bool:
+        if self._connected:
+            return True
+        return self._connected_event.wait(timeout)
 
     def start(self, db) -> None:
         with self._lock:
@@ -199,6 +206,7 @@ class _MqttClientService:
                 client.connect_async(host=host, port=port, keepalive=keepalive)
                 client.loop_start()
                 self._presence_stop.clear()
+                self._connected_event.clear()
                 self._presence_worker = threading.Thread(
                     target=self._presence_worker_loop,
                     name="mqtt-presence-worker",
@@ -227,6 +235,7 @@ class _MqttClientService:
             self._connected = False
             self._enabled = False
             self._started = False
+            self._connected_event.clear()
             self._presence_stop.set()
             worker = self._presence_worker
             self._presence_worker = None
@@ -254,6 +263,7 @@ class _MqttClientService:
         if rc != 0:
             logger.warning("MQTT connect failed with rc=%s", rc)
             return
+        self._connected_event.set()
         logger.info("MQTT connected.")
         if self._presence_enabled:
             try:
@@ -272,6 +282,7 @@ class _MqttClientService:
 
     def _on_disconnect(self, client, userdata, rc, properties=None):
         self._connected = False
+        self._connected_event.clear()
         if rc != 0:
             logger.warning("MQTT disconnected unexpectedly (rc=%s)", rc)
         else:
