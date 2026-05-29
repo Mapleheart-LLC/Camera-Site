@@ -36,6 +36,8 @@ class _MqttClientService:
         self._started = False
         self._enabled = False
         self._connected_event = threading.Event()
+        self._last_connect_rc: Optional[int] = None
+        self._last_connect_error: str = ""
 
         self._command_topic_template = "tpeapp/device/{device_id}/commands"
         self._signaling_topic_template = "tpeapp/signaling/{session_id}"
@@ -80,6 +82,14 @@ class _MqttClientService:
     @property
     def connected(self) -> bool:
         return self._connected
+
+    @property
+    def last_connect_rc(self) -> Optional[int]:
+        return self._last_connect_rc
+
+    @property
+    def last_connect_error(self) -> str:
+        return self._last_connect_error
 
     def wait_until_connected(self, timeout: float = _MQTT_CONNECT_WAIT_SECONDS) -> bool:
         if self._connected:
@@ -207,6 +217,8 @@ class _MqttClientService:
                 client.loop_start()
                 self._presence_stop.clear()
                 self._connected_event.clear()
+                self._last_connect_rc = None
+                self._last_connect_error = ""
                 self._presence_worker = threading.Thread(
                     target=self._presence_worker_loop,
                     name="mqtt-presence-worker",
@@ -236,6 +248,8 @@ class _MqttClientService:
             self._enabled = False
             self._started = False
             self._connected_event.clear()
+            self._last_connect_rc = None
+            self._last_connect_error = ""
             self._presence_stop.set()
             worker = self._presence_worker
             self._presence_worker = None
@@ -260,10 +274,13 @@ class _MqttClientService:
 
     def _on_connect(self, client, userdata, flags, rc, properties=None):
         self._connected = rc == 0
+        self._last_connect_rc = int(rc)
         if rc != 0:
+            self._last_connect_error = f"connect_failed_rc={rc}"
             logger.warning("MQTT connect failed with rc=%s", rc)
             return
         self._connected_event.set()
+        self._last_connect_error = ""
         logger.info("MQTT connected.")
         if self._presence_enabled:
             try:
@@ -283,6 +300,9 @@ class _MqttClientService:
     def _on_disconnect(self, client, userdata, rc, properties=None):
         self._connected = False
         self._connected_event.clear()
+        if rc != 0:
+            self._last_connect_error = f"disconnected_rc={rc}"
+        self._last_connect_rc = int(rc)
         if rc != 0:
             logger.warning("MQTT disconnected unexpectedly (rc=%s)", rc)
         else:

@@ -113,9 +113,14 @@ def _ensure_mqtt_ready(db: sqlite3.Connection) -> None:
             ),
         )
     if not _mqtt_client.wait_until_connected(timeout=5.0):
+        detail = "MQTT broker is enabled but not connected yet. Try again in a few seconds."
+        if _mqtt_client.last_connect_rc is not None:
+            detail += f" last_rc={_mqtt_client.last_connect_rc}"
+        if _mqtt_client.last_connect_error:
+            detail += f" last_error={_mqtt_client.last_connect_error}"
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="MQTT broker is enabled but not connected yet. Try again in a few seconds.",
+            detail=detail,
         )
 
 

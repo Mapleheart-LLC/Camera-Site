@@ -2572,7 +2572,28 @@ async def handler_lock(
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Device not found.")
-    result = _send_mqtt_to_device(db, body.device_id, {"action": "LOCK_DEVICE"})
+    ws_fallback_sent = 0
+    mqtt_error = ""
+    try:
+        result = _send_mqtt_to_device(db, body.device_id, {"action": "LOCK_DEVICE"})
+    except HTTPException as exc:
+        result = {"sent": 0, "failed": 1}
+        mqtt_error = str(exc.detail)
+
+    if int(result.get("sent", 0)) == 0:
+        ws_fallback_sent = await _handler_ws.send_device_payload(
+            {"action": "LOCK_DEVICE"},
+            device_id=body.device_id,
+        )
+
+    if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Command transport unavailable. "
+                f"mqtt_error={mqtt_error or 'publish_failed'}"
+            ),
+        )
 
     now = _now_iso()
     db.execute(
@@ -2586,7 +2607,12 @@ async def handler_lock(
     db.commit()
 
     await _handler_ws.broadcast({"type": "lock", "device_id": body.device_id, "is_locked": 1})
-    return {"status": "lock_sent", "mqtt": result}
+    return {
+        "status": "lock_sent",
+        "mqtt": result,
+        "ws_fallback": {"sent": ws_fallback_sent},
+        "transport": "mqtt" if int(result.get("sent", 0)) > 0 else "ws_fallback",
+    }
 
 
 @router.delete("/api/handler/devices/{device_id}")
@@ -4424,7 +4450,7 @@ def handler_tpe_evidence_hide_all(
 
 
 @router.post("/api/handler/tpe/push")
-def handler_tpe_push(
+async def handler_tpe_push(
     body: TpePushRequest,
     current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
@@ -4448,7 +4474,28 @@ def handler_tpe_push(
             raise HTTPException(status_code=403, detail="Access denied to this device.")
 
     payload = _build_tpe_payload(body)
-    result = _send_mqtt_to_device(db, body.device_id, payload)
+    ws_fallback_sent = 0
+    mqtt_error = ""
+    try:
+        result = _send_mqtt_to_device(db, body.device_id, payload)
+    except HTTPException as exc:
+        result = {"sent": 0, "failed": 1}
+        mqtt_error = str(exc.detail)
+
+    if int(result.get("sent", 0)) == 0:
+        ws_fallback_sent = await _handler_ws.send_device_payload(
+            payload,
+            device_id=body.device_id,
+        )
+
+    if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Command transport unavailable. "
+                f"mqtt_error={mqtt_error or 'publish_failed'}"
+            ),
+        )
 
     db.execute(
         """
@@ -4463,7 +4510,11 @@ def handler_tpe_push(
         ),
     )
     db.commit()
-    return result
+    return {
+        **result,
+        "ws_fallback": {"sent": ws_fallback_sent},
+        "transport": "mqtt" if int(result.get("sent", 0)) > 0 else "ws_fallback",
+    }
 
 
 @router.get("/api/handler/tpe/toy-share-links")

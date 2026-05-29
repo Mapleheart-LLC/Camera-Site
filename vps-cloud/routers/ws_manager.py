@@ -195,6 +195,26 @@ class _HandlerWSManager:
             self._device_sockets.pop(did, None)
         return sent
 
+    async def send_device_payload(self, payload: dict, device_id: Optional[str] = None) -> int:
+        """Send an arbitrary JSON payload frame to one or all connected devices.
+
+        Used as a transport fallback when MQTT publish is unavailable but the
+        device still maintains a live ``/ws`` session.
+        """
+        sent = 0
+        dead_ids: List[str] = []
+        for did, ws in list(self._device_sockets.items()):
+            if device_id is not None and did != device_id:
+                continue
+            try:
+                await asyncio.wait_for(ws.send_json(payload), timeout=5.0)
+                sent += 1
+            except Exception:
+                dead_ids.append(did)
+        for did in dead_ids:
+            self._device_sockets.pop(did, None)
+        return sent
+
     # ------------------------------------------------------------------
     # WebRTC signaling relay
     # ------------------------------------------------------------------

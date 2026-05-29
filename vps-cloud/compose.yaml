@@ -195,6 +195,23 @@ services:
       # Public MQTT broker the TPE Android app and backend both use.
       - MQTT_BROKER_HOST=${MQTT_BROKER_HOST:-mqtt.mochii.live}
       - MQTT_BROKER_PORT=${MQTT_BROKER_PORT:-1883}
+      # Optional MQTT auth/TLS and topic tuning (needed for locked-down brokers).
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
+      - MQTT_CLIENT_ID=${MQTT_CLIENT_ID:-mochii-backend}
+      - MQTT_KEEPALIVE=${MQTT_KEEPALIVE:-60}
+      - MQTT_TLS_ENABLED=${MQTT_TLS_ENABLED:-false}
+      - MQTT_TLS_CA_CERT=${MQTT_TLS_CA_CERT:-}
+      - MQTT_TLS_CLIENT_CERT=${MQTT_TLS_CLIENT_CERT:-}
+      - MQTT_TLS_CLIENT_KEY=${MQTT_TLS_CLIENT_KEY:-}
+      - MQTT_TLS_INSECURE=${MQTT_TLS_INSECURE:-false}
+      - MQTT_COMMAND_TOPIC_TEMPLATE=${MQTT_COMMAND_TOPIC_TEMPLATE:-tpeapp/device/{device_id}/commands}
+      - MQTT_SIGNALING_TOPIC_TEMPLATE=${MQTT_SIGNALING_TOPIC_TEMPLATE:-tpeapp/signaling/{session_id}}
+      - MQTT_DEVICE_SIGNALING_TOPIC_TEMPLATE=${MQTT_DEVICE_SIGNALING_TOPIC_TEMPLATE:-tpeapp/device/{device_id}/signaling}
+      - MQTT_PRESENCE_ENABLED=${MQTT_PRESENCE_ENABLED:-true}
+      - MQTT_PRESENCE_HEARTBEAT_TOPIC=${MQTT_PRESENCE_HEARTBEAT_TOPIC:-tpeapp/device/+/heartbeat}
+      - MQTT_PRESENCE_STATUS_TOPIC=${MQTT_PRESENCE_STATUS_TOPIC:-tpeapp/device/+/status}
+      - MQTT_TELEMETRY_TOPIC=${MQTT_TELEMETRY_TOPIC:-tpeapp/device/+/telemetry}
       # Directory where audit videos are stored (default: /app/data/tpe_audits)
       - TPE_AUDIT_PATH=${TPE_AUDIT_PATH:-/app/data/tpe_audits}
       # Path to a Firebase service-account JSON file for FCM push delivery.
