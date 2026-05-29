@@ -145,8 +145,6 @@ _DEFAULT_TONE_RULES: list[dict] = [
     {"pattern": r"\bfyi\b",          "replacement": "for your information"},
     {"pattern": r"\basap\b",         "replacement": "as soon as possible"},
     {"pattern": r"\bnp\b",           "replacement": "no problem"},
-    {"pattern": r"\bok\b",           "replacement": "understood"},
-    {"pattern": r"\bokay\b",         "replacement": "understood"},
     {"pattern": r"\byep\b",          "replacement": "yes"},
     {"pattern": r"\byeah\b",         "replacement": "yes"},
     {"pattern": r"\bnope\b",         "replacement": "no"},
@@ -157,7 +155,6 @@ _DEFAULT_TONE_RULES: list[dict] = [
     {"pattern": r"\bbrb\b",          "replacement": "I will be right back"},
     {"pattern": r"\bbbl\b",          "replacement": "I will be back later"},
     {"pattern": r"\bidk\b",          "replacement": "I do not know"},
-    {"pattern": r"\bsmh\b",          "replacement": "I am disappointed"},
     {"pattern": r"\bkinda\b",        "replacement": "somewhat"},
     {"pattern": r"\bsorta\b",        "replacement": "somewhat"},
     {"pattern": r"\bdunno\b",        "replacement": "I do not know"},
@@ -337,7 +334,7 @@ def _publish_incoming_proxy_sms(
             "from_number": from_number,
             "to_number": to_number,
             "body": body,
-            "media_urls": json.dumps(media_urls),
+            "media_urls": media_urls,
             "thread_id": thread_id,
             "message_id": message_id,
             "received_at": _now_iso(),
@@ -438,8 +435,8 @@ async def twilio_inbound_webhook(
         raise HTTPException(status_code=403, detail="Invalid Twilio signature.")
 
     from_number: str = str(params.get("From", "")).strip()
-    to_number:   str = str(params.get("To",   "")).strip()
-    body:        str = str(params.get("Body",  "")).strip()
+    to_number: str = str(params.get("To", "")).strip()
+    body: str = str(params.get("Body", "")).strip()
 
     if not from_number:
         raise HTTPException(status_code=400, detail="Missing 'From' parameter.")
@@ -549,7 +546,8 @@ async def agent_reply(
     rewritten_body = apply_tone_compliance(original_body, rules)
 
     queue_id = uuid.uuid4().hex
-    agent_user_id = str(current_user.get("user_id", current_user.get("username", "unknown")))
+    uid = current_user.get("user_id")
+    agent_user_id = str(uid) if uid is not None else str(current_user.get("username", "unknown"))
 
     db.execute(
         """

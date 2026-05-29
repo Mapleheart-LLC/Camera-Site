@@ -3757,41 +3757,49 @@
             ${item.queue_status === 'pending' ? `
             <div style="margin-bottom:.5rem">
               <label style="font-size:.78rem;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em">Edit Before Sending (optional)</label>
-              <textarea id="sms-edit-${escHtml(item.queue_id)}" rows="2" style="width:100%;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:6px;color:#f0e6e8;font-family:inherit;font-size:.9rem;padding:.4rem .6rem;resize:vertical;margin-top:.25rem">${escHtml(item.rewritten_body)}</textarea>
+              <textarea class="sms-edit-area" data-queue-id="${escHtml(item.queue_id)}" rows="2" style="width:100%;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:6px;color:#f0e6e8;font-family:inherit;font-size:.9rem;padding:.4rem .6rem;resize:vertical;margin-top:.25rem">${escHtml(item.rewritten_body)}</textarea>
             </div>
             <div style="display:flex;gap:.5rem">
-              <button class="btn-sm btn-edit" onclick="smsApprove('${escHtml(item.queue_id)}')">✅ Approve &amp; Send</button>
-              <button class="btn-sm btn-delete" onclick="smsReject('${escHtml(item.queue_id)}')">🚫 Reject</button>
+              <button class="btn-sm btn-edit sms-approve-btn" data-queue-id="${escHtml(item.queue_id)}">✅ Approve &amp; Send</button>
+              <button class="btn-sm btn-delete sms-reject-btn" data-queue-id="${escHtml(item.queue_id)}">🚫 Reject</button>
             </div>
             ` : item.final_body ? `<div style="font-size:.8rem;color:#9e7e82">Sent: ${escHtml(item.final_body)}</div>` : ''}
           </div>
         `).join('');
+        // Attach event listeners after rendering to avoid inline onclick XSS
+        listEl.querySelectorAll('.sms-approve-btn').forEach(btn => {
+          btn.addEventListener('click', () => _smsApprove(btn.dataset.queueId));
+        });
+        listEl.querySelectorAll('.sms-reject-btn').forEach(btn => {
+          btn.addEventListener('click', () => _smsReject(btn.dataset.queueId));
+        });
       } catch (err) {
         if (err.message !== '401') listEl.innerHTML = '<p style="color:#f87171">Failed to load queue.</p>';
       }
     }
 
-    window.smsApprove = async function(queueId) {
-      const editEl = document.getElementById(`sms-edit-${queueId}`);
+    async function _smsApprove(queueId) {
+      const listEl = document.getElementById('sms-queue-list');
+      const editEl = listEl ? listEl.querySelector(`.sms-edit-area[data-queue-id="${CSS.escape(queueId)}"]`) : null;
       const finalBody = editEl ? editEl.value.trim() : '';
       try {
-        const resp = await apiPost(`/api/admin/sms/queue/${queueId}/approve`, { final_body: finalBody || null });
+        const resp = await apiPost(`/api/admin/sms/queue/${encodeURIComponent(queueId)}/approve`, { final_body: finalBody || null });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) { showToast('Approve failed: ' + (data.detail || resp.status)); return; }
         showToast('✅ Message approved and sent.');
         loadSmsQueue();
       } catch { showToast('Approve failed.'); }
-    };
+    }
 
-    window.smsReject = async function(queueId) {
+    async function _smsReject(queueId) {
       try {
-        const resp = await apiPost(`/api/admin/sms/queue/${queueId}/reject`);
+        const resp = await apiPost(`/api/admin/sms/queue/${encodeURIComponent(queueId)}/reject`);
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) { showToast('Reject failed: ' + (data.detail || resp.status)); return; }
         showToast('🚫 Message rejected.');
         loadSmsQueue();
       } catch { showToast('Reject failed.'); }
-    };
+    }
 
     async function loadSmsThreads() {
       const tbody = document.getElementById('sms-threads-body');
@@ -3807,15 +3815,18 @@
             <td>${escHtml(t.from_number)}</td>
             <td>${escHtml(t.to_number)}</td>
             <td class="ts-cell">${escHtml(ts)}</td>
-            <td><button class="btn-sm btn-edit" onclick="viewThread('${escHtml(t.thread_id)}', '${escHtml(t.from_number)}')">View 💬</button></td>
+            <td><button class="btn-sm btn-edit sms-view-thread-btn" data-thread-id="${escHtml(t.thread_id)}" data-from="${escHtml(t.from_number)}">View 💬</button></td>
           </tr>`;
         }).join('');
+        tbody.querySelectorAll('.sms-view-thread-btn').forEach(btn => {
+          btn.addEventListener('click', () => _viewThread(btn.dataset.threadId, btn.dataset.from));
+        });
       } catch (err) {
         if (err.message !== '401') tbody.innerHTML = '<tr class="empty-row"><td colspan="4" style="color:#f87171">Failed to load threads.</td></tr>';
       }
     }
 
-    window.viewThread = async function(threadId, fromNumber) {
+    async function _viewThread(threadId, fromNumber) {
       const detail = document.getElementById('sms-thread-detail');
       const title  = document.getElementById('sms-thread-detail-title');
       const body   = document.getElementById('sms-thread-messages');
@@ -3843,7 +3854,7 @@
       } catch (err) {
         if (err.message !== '401') body.innerHTML = '<p style="color:#f87171">Failed to load messages.</p>';
       }
-    };
+    }
 
     document.getElementById('sms-thread-detail-close').addEventListener('click', () => {
       document.getElementById('sms-thread-detail').style.display = 'none';
