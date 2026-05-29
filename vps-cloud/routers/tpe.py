@@ -1189,6 +1189,8 @@ class TpePushRequest(BaseModel):
       SET_NFC                      enabled (bool str)
       SET_FONT_SIZE                scale (float str, e.g. "1.15")
       START_REVIEW                 session_id, signaling_url
+            toy.live.control             toy_mode, toy_command, toy_level, toy_pattern (opt),
+                                                                     toy_duration_ms (opt), toy_sequence (opt JSON)
     device.file.read            path, as_base64 (opt), max_bytes (opt)
     device.file.write           path, content or content_base64, append (opt)
     device.file.delete          path
@@ -1295,6 +1297,12 @@ class TpePushRequest(BaseModel):
     # LOVENSE_COMMAND
     toy_command: Optional[str] = None
     toy_level: Optional[str] = None
+
+    # toy.live.control
+    toy_mode: Optional[str] = None
+    toy_pattern: Optional[str] = None
+    toy_duration_ms: Optional[str] = None
+    toy_sequence: Optional[str] = None
 
     # SET_LOVENSE_SCHEDULES
     schedules: Optional[str] = None
@@ -1464,6 +1472,8 @@ _VALID_TPE_ACTIONS = {
     "device.file.read",
     "device.file.write",
     "device.file.delete",
+    # Live toy sessions (non-Pavlok)
+    "toy.live.control",
 }
 
 
@@ -1543,6 +1553,11 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         # LOVENSE_COMMAND
         "toy_command":        body.toy_command,
         "toy_level":          body.toy_level,
+        # toy.live.control
+        "toy_mode":           body.toy_mode,
+        "toy_pattern":        body.toy_pattern,
+        "toy_duration_ms":    body.toy_duration_ms,
+        "toy_sequence":       body.toy_sequence,
         # SET_LOVENSE_SCHEDULES
         "schedules":          body.schedules,
         # PAVLOK_COMMAND

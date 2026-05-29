@@ -103,6 +103,75 @@
     }
     #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
+    #mode-toggle-btn {
+      background: rgba(232,174,183,.1);
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      color: #e8aeb7;
+      padding: .35rem .75rem;
+      font-family: inherit;
+      font-size: .79rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+      white-space: nowrap;
+    }
+    #mode-toggle-btn:hover { background: rgba(232,174,183,.18); border-color: #e8aeb7; }
+
+    #helper-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .7rem;
+      background: #24171c;
+      border-bottom: 1px solid #3d2a2e;
+      padding: .6rem 1.25rem;
+      font-size: .82rem;
+      color: #d7bac0;
+    }
+    #helper-strip strong { color: #f0e6e8; }
+
+    .section-help {
+      margin-top: -.2rem;
+      margin-bottom: .8rem;
+      color: #b79ca2;
+      font-size: .84rem;
+    }
+
+    .onboarding-grid {
+      display: grid;
+      gap: .6rem;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+    .onboarding-step {
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      background: #24191d;
+      padding: .65rem;
+    }
+    .onboarding-step h3 {
+      font-size: .83rem;
+      color: #e8aeb7;
+      margin-bottom: .28rem;
+      letter-spacing: .03em;
+    }
+    .onboarding-step p {
+      font-size: .77rem;
+      color: #b79ca2;
+      line-height: 1.4;
+      margin-bottom: .45rem;
+    }
+    .onboarding-step button {
+      width: auto;
+      padding: .3rem .65rem;
+      font-size: .76rem;
+    }
+
+    body.simple-mode .nav-item[data-advanced="true"],
+    body.simple-mode .handler-section[data-advanced="true"] {
+      display: none !important;
+    }
+
     /* ── Kennel overview ──────────────────────────────── */
     #kennel-overview { padding: 1.75rem 2rem; }
 
@@ -948,6 +1017,39 @@
                       <button type="button" class="btn-action" id="public-preset-punishment" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Punishment</button>
                     </div>
                   </div>
+                  <div class="cmd-row" style="padding:.75rem 0 0 0">
+                    <span class="cmd-row-label">Public Exposure Controls</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.55rem;flex-wrap:wrap;align-items:center">
+                      <select id="public-exposure-level" style="max-width:180px">
+                        <option value="private">private</option>
+                        <option value="controlled">controlled</option>
+                        <option value="amplified">amplified</option>
+                        <option value="full_public">full_public</option>
+                      </select>
+                      <label style="display:flex;align-items:center;gap:.35rem;font-size:.77rem;color:#9e7e82"><input id="public-profile-enabled" type="checkbox" checked> Public profile visible</label>
+                      <label style="display:flex;align-items:center;gap:.35rem;font-size:.77rem;color:#9e7e82"><input id="public-evidence-feed-enabled" type="checkbox" checked> Public evidence feed</label>
+                      <label style="display:flex;align-items:center;gap:.35rem;font-size:.77rem;color:#9e7e82"><input id="public-auto-publish-evidence" type="checkbox"> Auto-publish evidence</label>
+                      <label style="display:flex;align-items:center;gap:.35rem;font-size:.77rem;color:#9e7e82"><input id="public-toy-control-enabled" type="checkbox" checked> Public toy controls</label>
+                      <input id="public-toy-queue-cooldown" type="number" min="0" max="600" value="30" placeholder="Queue cooldown sec" style="max-width:170px" />
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:.55rem 0 0 0">
+                    <span class="cmd-row-label">Exposure Profiles</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.45rem;flex-wrap:wrap">
+                      <button type="button" class="btn-action" id="public-profile-private" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Private Lockdown</button>
+                      <button type="button" class="btn-action" id="public-profile-controlled" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Controlled</button>
+                      <button type="button" class="btn-action" id="public-profile-amplified" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Amplified</button>
+                      <button type="button" class="btn-action" id="public-profile-full" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Full Public</button>
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:.55rem 0 0 0">
+                    <span class="cmd-row-label">Evidence Blast Controls</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.45rem;flex-wrap:wrap;align-items:center">
+                      <input id="public-evidence-hours" type="number" min="1" max="720" value="24" style="max-width:130px" placeholder="Hours" />
+                      <button type="button" class="btn-action" id="public-evidence-publish-recent" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Publish Recent</button>
+                      <button type="button" class="btn-action danger-action" id="public-evidence-hide-all" style="width:auto;padding:.25rem .6rem;font-size:.76rem">Hide All</button>
+                    </div>
+                  </div>
                 </div>
                 <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
                   <button class="btn-action" id="public-status-save-btn" style="width:auto">Save Public Status</button>
@@ -1505,6 +1607,73 @@
                   </div>
                   <button class="btn-cmd" onclick="sendFcm('SET_LOVENSE_SCHEDULES',{schedules:v('cmd-lovense-sched')},'res-cmd-lovense-sched')">Send</button>
                   <span class="cmd-result" id="res-cmd-lovense-sched"></span>
+                </div>
+              </div>
+            </details>
+
+            <!-- ── Live Toy Sessions + Share Links (Non-Pavlok) ── -->
+            <details class="cmd-group">
+              <summary>🔗 Live Toy Sessions + Share Links</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Live Session</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-toy-mode"><option value="lovense">Lovense</option><option value="intiface">Buttplug / Intiface</option></select>
+                    <input id="cmd-toy-level" type="number" min="0" max="20" placeholder="Level (0-20)" style="max-width:130px" />
+                    <select id="cmd-toy-pattern"><option value="">Steady</option><option value="pulse">Pulse</option><option value="wave">Wave</option><option value="tease">Tease</option></select>
+                    <input id="cmd-toy-duration" type="number" min="0" max="1200000" placeholder="Duration ms (0=manual)" style="max-width:170px" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('toy.live.control',{toy_mode:v('cmd-toy-mode'),toy_command:'vibrate',toy_level:v('cmd-toy-level')||'10',toy_pattern:v('cmd-toy-pattern'),toy_duration_ms:v('cmd-toy-duration')},'res-cmd-toy-live')">Start</button>
+                  <button class="btn-cmd danger" onclick="sendFcm('toy.live.control',{toy_mode:v('cmd-toy-mode'),toy_command:'stop',toy_level:'0'},'res-cmd-toy-live')" style="margin-left:.35rem">Stop</button>
+                  <span class="cmd-result" id="res-cmd-toy-live"></span>
+                </div>
+
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Create Share Link</span>
+                  <div class="cmd-inputs">
+                    <input id="toy-share-label" placeholder="Label (optional)" style="max-width:210px" />
+                    <input id="toy-share-exp" type="number" min="5" max="20160" value="120" placeholder="Expires in minutes" style="max-width:170px" />
+                    <input id="toy-share-max" type="number" min="0" max="20" value="12" placeholder="Max level" style="max-width:120px" />
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-lovense" type="checkbox" checked />Lovense</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-intiface" type="checkbox" checked />Intiface</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-notifications" type="checkbox" checked />Notifications</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-overlay" type="checkbox" checked />Overlay</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-audio" type="checkbox" checked />Audio</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-screen" type="checkbox" checked />Screen</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-device" type="checkbox" checked />Device</label>
+                    <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-app" type="checkbox" checked />Apps</label>
+                  </div>
+                  <button class="btn-cmd" onclick="createToyShareLink()">Create</button>
+                  <span class="cmd-result" id="res-toy-share-create"></span>
+                </div>
+
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Latest Link</span>
+                  <div class="cmd-inputs">
+                    <input id="toy-share-url" readonly placeholder="Create a link to populate" />
+                  </div>
+                  <button class="btn-cmd" onclick="copyToyShareLink()">Copy</button>
+                  <span class="cmd-result" id="res-toy-share-copy"></span>
+                </div>
+
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Active Links</span>
+                  <div class="cmd-inputs">
+                    <div id="toy-share-links" style="width:100%;font-size:.8rem;color:#c9bec0"></div>
+                  </div>
+                  <button class="btn-cmd" onclick="loadToyShareLinks()">Refresh</button>
+                  <span class="cmd-result" id="res-toy-share-list"></span>
+                </div>
+
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Queue Monitor</span>
+                  <div class="cmd-inputs">
+                    <input id="toy-queue-link-id" type="number" min="1" placeholder="Share link id" style="max-width:140px" />
+                    <div id="toy-queue-monitor" style="width:100%;font-size:.8rem;color:#c9bec0">Pick a link id and refresh queue.</div>
+                  </div>
+                  <button class="btn-cmd" onclick="loadToyQueueMonitor()">Refresh Queue</button>
+                  <button class="btn-cmd danger" onclick="skipToyQueueActive()" style="margin-left:.35rem">Skip Active</button>
+                  <span class="cmd-result" id="res-toy-queue"></span>
                 </div>
               </div>
             </details>
@@ -2991,6 +3160,216 @@
       }
     }
 
+    async function createToyShareLink() {
+      var res = document.getElementById('res-toy-share-create');
+      if (!viewingDeviceId) {
+        if (res) res.textContent = '⚠️ No device selected.';
+        return;
+      }
+      if (res) res.textContent = 'Creating…';
+      try {
+        var payload = {
+          device_id: viewingDeviceId,
+          label: v('toy-share-label') || null,
+          expires_in_minutes: Number(v('toy-share-exp') || '120'),
+          max_level: Number(v('toy-share-max') || '12'),
+          allow_lovense: document.getElementById('toy-share-lovense').checked,
+          allow_intiface: document.getElementById('toy-share-intiface').checked,
+          allow_notifications: document.getElementById('toy-share-notifications').checked,
+          allow_overlay: document.getElementById('toy-share-overlay').checked,
+          allow_audio: document.getElementById('toy-share-audio').checked,
+          allow_screen: document.getElementById('toy-share-screen').checked,
+          allow_device_controls: document.getElementById('toy-share-device').checked,
+          allow_app_controls: document.getElementById('toy-share-app').checked,
+        };
+        var r = await apiPost('/api/handler/tpe/toy-share-links', payload);
+        var b = await r.json().catch(function() { return {}; });
+        if (!r.ok) {
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        document.getElementById('toy-share-url').value = b.control_url || '';
+        if (res) res.textContent = '✅ Link created.';
+        showToast('✅ Share link created.');
+        await loadToyShareLinks();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && res) res.textContent = '❌ Request failed.';
+      }
+    }
+
+    async function loadToyShareLinks() {
+      var res = document.getElementById('res-toy-share-list');
+      var host = document.getElementById('toy-share-links');
+      if (!host) return;
+      if (!viewingDeviceId) {
+        host.innerHTML = 'Select a device to load share links.';
+        if (res) res.textContent = '';
+        return;
+      }
+      host.innerHTML = 'Loading…';
+      try {
+        var data = await apiGet('/api/handler/tpe/toy-share-links?device_id=' + encodeURIComponent(viewingDeviceId));
+        if (!Array.isArray(data) || data.length === 0) {
+          host.innerHTML = 'No share links yet.';
+          if (res) res.textContent = '';
+          return;
+        }
+        host.innerHTML = data.map(function(link) {
+          var disabled = !link.enabled;
+          var exp = link.expires_at ? fmtDate(link.expires_at) : '—';
+          var scope = [
+            link.allow_lovense ? 'Lovense' : null,
+            link.allow_intiface ? 'Intiface' : null,
+            link.allow_notifications ? 'Notif' : null,
+            link.allow_overlay ? 'Overlay' : null,
+            link.allow_audio ? 'Audio' : null,
+            link.allow_screen ? 'Screen' : null,
+            link.allow_device_controls ? 'Device' : null,
+            link.allow_app_controls ? 'Apps' : null,
+          ].filter(Boolean).join(' + ');
+          var label = esc(link.label || ('Link #' + link.id));
+          var queueBtn = '<button class="btn-cmd" style="padding:.18rem .5rem;margin-right:.35rem" onclick="selectToyQueueLink(' + Number(link.id) + ')">Queue</button>';
+          var btn = disabled
+            ? '<span style="opacity:.7">disabled</span>'
+            : '<button class="btn-cmd danger" style="padding:.18rem .5rem" onclick="disableToyShareLink(' + Number(link.id) + ')">Disable</button>';
+          return '<div style="padding:.35rem .45rem;border:1px solid #3a2f30;border-radius:8px;margin-bottom:.28rem;display:flex;justify-content:space-between;gap:.45rem">'
+            + '<div><strong>' + label + '</strong> • ' + esc(scope || 'No scope')
+            + ' • max ' + Number(link.max_level || 0)
+            + ' • expires ' + esc(exp)
+            + ' • used ' + Number(link.use_count || 0) + 'x</div>'
+            + '<div>' + queueBtn + btn + '</div></div>';
+        }).join('');
+        if (res) res.textContent = '✅ Loaded.';
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          host.innerHTML = 'Failed to load links.';
+          if (res) res.textContent = '❌ Failed.';
+        }
+      }
+    }
+
+    async function disableToyShareLink(linkId) {
+      var res = document.getElementById('res-toy-share-list');
+      if (res) res.textContent = 'Disabling…';
+      try {
+        var r = await apiPost('/api/handler/tpe/toy-share-links/' + encodeURIComponent(String(linkId)) + '/disable', {});
+        if (!r.ok) {
+          var b = await r.json().catch(function() { return {}; });
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        if (res) res.textContent = '✅ Disabled.';
+        await loadToyShareLinks();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && res) res.textContent = '❌ Request failed.';
+      }
+    }
+
+    async function copyToyShareLink() {
+      var res = document.getElementById('res-toy-share-copy');
+      var url = (document.getElementById('toy-share-url').value || '').trim();
+      if (!url) {
+        if (res) res.textContent = '⚠️ No link to copy.';
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        if (res) res.textContent = '✅ Copied.';
+      } catch (_) {
+        if (res) res.textContent = '❌ Clipboard denied.';
+      }
+    }
+
+    function _currentToyQueueLinkId() {
+      var raw = parseInt(v('toy-queue-link-id') || '0', 10);
+      return Number.isNaN(raw) ? 0 : raw;
+    }
+
+    function selectToyQueueLink(linkId) {
+      _setInputValue('toy-queue-link-id', String(linkId));
+      loadToyQueueMonitor();
+    }
+
+    async function loadToyQueueMonitor() {
+      var res = document.getElementById('res-toy-queue');
+      var host = document.getElementById('toy-queue-monitor');
+      var linkId = _currentToyQueueLinkId();
+      if (!host) return;
+      if (!linkId) {
+        host.innerHTML = 'Pick a link id and refresh queue.';
+        if (res) res.textContent = '';
+        return;
+      }
+      host.innerHTML = 'Loading queue...';
+      try {
+        var data = await apiGet('/api/handler/tpe/toy-share-links/' + encodeURIComponent(String(linkId)) + '/queue');
+        var active = data && data.active ? data.active : null;
+        var pending = Array.isArray(data && data.pending) ? data.pending : [];
+        var activeHtml = active
+          ? '<div><strong>Active:</strong> #' + Number(active.id || 0) + ' • ' + esc(active.participant_id || 'anon')
+            + ' • ' + esc(active.mode || '') + '/' + esc(active.command || '')
+            + ' • ends ' + esc(active.expires_at ? fmtDate(active.expires_at) : 'soon') + '</div>'
+          : '<div><strong>Active:</strong> none</div>';
+        var pendingHtml = pending.length
+          ? pending.map(function(row) {
+              return '<div style="margin-top:.2rem;border-top:1px dotted #3a2f30;padding-top:.2rem">'
+                + '<span>#' + Number(row.id || 0) + '</span> • '
+                + esc(row.participant_id || 'anon') + ' • '
+                + esc(row.mode || '') + '/' + esc(row.command || '')
+                + ' • req ' + esc(fmtDate(row.requested_at))
+                + ' <button class="btn-cmd danger" style="padding:.14rem .45rem;margin-left:.35rem" onclick="removeToyQueueEntry(' + linkId + ',' + Number(row.id || 0) + ')">Remove</button>'
+                + '</div>';
+            }).join('')
+          : '<div style="margin-top:.2rem">Pending: none</div>';
+        host.innerHTML = activeHtml + pendingHtml;
+        if (res) res.textContent = '✅ Queue loaded.';
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          host.innerHTML = 'Failed to load queue.';
+          if (res) res.textContent = '❌ Failed.';
+        }
+      }
+    }
+
+    async function skipToyQueueActive() {
+      var res = document.getElementById('res-toy-queue');
+      var linkId = _currentToyQueueLinkId();
+      if (!linkId) {
+        if (res) res.textContent = '⚠️ Set a link id first.';
+        return;
+      }
+      if (res) res.textContent = 'Skipping active...';
+      try {
+        var r = await apiPost('/api/handler/tpe/toy-share-links/' + encodeURIComponent(String(linkId)) + '/queue/skip-active', {});
+        if (!r.ok) {
+          var b = await r.json().catch(function() { return {}; });
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        if (res) res.textContent = '✅ Active skipped.';
+        await loadToyQueueMonitor();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && res) res.textContent = '❌ Request failed.';
+      }
+    }
+
+    async function removeToyQueueEntry(linkId, queueId) {
+      var res = document.getElementById('res-toy-queue');
+      if (res) res.textContent = 'Removing queue entry...';
+      try {
+        var r = await apiPost('/api/handler/tpe/toy-share-links/' + encodeURIComponent(String(linkId)) + '/queue/remove/' + encodeURIComponent(String(queueId)), {});
+        if (!r.ok) {
+          var b = await r.json().catch(function() { return {}; });
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        if (res) res.textContent = '✅ Queue entry removed.';
+        await loadToyQueueMonitor();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && res) res.textContent = '❌ Request failed.';
+      }
+    }
+
     function _allCommandGroups() {
       return Array.from(document.querySelectorAll('#sec-commands .cmd-group'));
     }
@@ -3118,6 +3497,12 @@
       el.value = value == null ? '' : String(value);
     }
 
+    function _setCheckboxValue(id, value) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.checked = !!value;
+    }
+
     function _setSelectOptions(id, options) {
       var el = document.getElementById(id);
       if (!el || !Array.isArray(options) || options.length === 0) return;
@@ -3165,6 +3550,13 @@
         _setInputValue('public-tasks-label', data.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
         _setInputValue('public-confessions-label', data.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
         _setInputValue('public-current-mode', data.current_status_mode || PUBLIC_DEFAULT_MODE);
+        _setSelectOptions('public-exposure-level', data.public_exposure_options);
+        _setInputValue('public-exposure-level', data.public_exposure_level || 'controlled');
+        _setCheckboxValue('public-profile-enabled', data.public_profile_enabled !== false);
+        _setCheckboxValue('public-evidence-feed-enabled', data.public_evidence_feed_enabled !== false);
+        _setCheckboxValue('public-auto-publish-evidence', !!data.public_auto_publish_evidence);
+        _setCheckboxValue('public-toy-control-enabled', data.public_toy_control_enabled !== false);
+        _setInputValue('public-toy-queue-cooldown', data.public_toy_queue_cooldown_sec != null ? data.public_toy_queue_cooldown_sec : '30');
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
@@ -3182,6 +3574,12 @@
         tasks_label: v('public-tasks-label') || null,
         confessions_label: v('public-confessions-label') || null,
         current_status_mode: v('public-current-mode') || null,
+        public_exposure_level: v('public-exposure-level') || null,
+        public_profile_enabled: document.getElementById('public-profile-enabled').checked,
+        public_evidence_feed_enabled: document.getElementById('public-evidence-feed-enabled').checked,
+        public_auto_publish_evidence: document.getElementById('public-auto-publish-evidence').checked,
+        public_toy_control_enabled: document.getElementById('public-toy-control-enabled').checked,
+        public_toy_queue_cooldown_sec: _optIntInput('public-toy-queue-cooldown'),
       };
       btn.disabled = true;
       if (statusEl) statusEl.textContent = 'Saving...';
@@ -3198,6 +3596,60 @@
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Save failed.';
       } finally {
         btn.disabled = false;
+      }
+    }
+
+    async function applyPublicExposureProfile(profile) {
+      var statusEl = document.getElementById('public-status-result');
+      if (statusEl) statusEl.textContent = 'Applying profile...';
+      try {
+        var r = await apiPost('/api/handler/public-status/exposure-profile', { profile: profile });
+        if (!r.ok) {
+          var b = await r.json().catch(function() { return {}; });
+          if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        await loadHandlerPublicStatus();
+        showToast('✅ Exposure profile applied: ' + profile + '.');
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Failed to apply profile.';
+      }
+    }
+
+    async function publishRecentEvidence() {
+      var statusEl = document.getElementById('public-status-result');
+      var hoursRaw = parseInt(v('public-evidence-hours') || '24', 10);
+      var hours = Number.isNaN(hoursRaw) ? 24 : Math.max(1, Math.min(720, hoursRaw));
+      if (statusEl) statusEl.textContent = 'Publishing recent evidence...';
+      try {
+        var r = await apiPost('/api/handler/tpe/evidence/publish-recent?hours=' + encodeURIComponent(String(hours)), {});
+        var b = await r.json().catch(function() { return {}; });
+        if (!r.ok) {
+          if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        if (statusEl) statusEl.textContent = 'Published ' + Number(b.published_count || 0) + ' evidence items.';
+        showToast('✅ Evidence pushed public.');
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Failed to publish evidence.';
+      }
+    }
+
+    async function hideAllPublicEvidence() {
+      var statusEl = document.getElementById('public-status-result');
+      if (!window.confirm('Hide all currently public evidence?')) return;
+      if (statusEl) statusEl.textContent = 'Hiding public evidence...';
+      try {
+        var r = await apiPost('/api/handler/tpe/evidence/hide-all', {});
+        var b = await r.json().catch(function() { return {}; });
+        if (!r.ok) {
+          if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+          return;
+        }
+        if (statusEl) statusEl.textContent = 'Hidden ' + Number(b.hidden_count || 0) + ' evidence items.';
+        showToast('✅ Public evidence hidden.');
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Failed to hide evidence.';
       }
     }
 
@@ -3315,6 +3767,12 @@
     document.getElementById('public-preset-tease').addEventListener('click', function() { applyPublicStatusPreset('tease'); });
     document.getElementById('public-preset-progress').addEventListener('click', function() { applyPublicStatusPreset('progress'); });
     document.getElementById('public-preset-punishment').addEventListener('click', function() { applyPublicStatusPreset('punishment'); });
+    document.getElementById('public-profile-private').addEventListener('click', function() { applyPublicExposureProfile('private'); });
+    document.getElementById('public-profile-controlled').addEventListener('click', function() { applyPublicExposureProfile('controlled'); });
+    document.getElementById('public-profile-amplified').addEventListener('click', function() { applyPublicExposureProfile('amplified'); });
+    document.getElementById('public-profile-full').addEventListener('click', function() { applyPublicExposureProfile('full_public'); });
+    document.getElementById('public-evidence-publish-recent').addEventListener('click', publishRecentEvidence);
+    document.getElementById('public-evidence-hide-all').addEventListener('click', hideAllPublicEvidence);
     document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
 
     // ═══════════════════════════════════════════════════════════
@@ -3872,6 +4330,12 @@
         var qs = '?days=' + encodeURIComponent(days);
         if (viewingDeviceId) qs += '&device_id=' + encodeURIComponent(viewingDeviceId);
         var data = await apiGet('/api/handler/tpe/behavior-insights' + qs);
+        var publicIntel = null;
+        try {
+          publicIntel = await apiGet('/api/handler/public-intelligence?days=' + encodeURIComponent(days));
+        } catch (_) {
+          publicIntel = null;
+        }
 
         var kpis = [
           { label: 'Events', value: data.event_count != null ? String(data.event_count) : '—' },
@@ -3892,6 +4356,17 @@
           { label: 'Avg Heart Rate', value: data.avg_heart_rate != null ? String(data.avg_heart_rate) + ' bpm' : '—' },
           { label: 'Logged Steps', value: data.step_total != null ? String(data.step_total) : '—' },
         ];
+        if (publicIntel) {
+          kpis.push(
+            { label: 'Public Page Views', value: publicIntel.page_views != null ? String(publicIntel.page_views) : '—' },
+            { label: 'Booking Starts', value: publicIntel.booking_starts != null ? String(publicIntel.booking_starts) : '—' },
+            { label: 'Booking Submits', value: publicIntel.booking_submits != null ? String(publicIntel.booking_submits) : '—' },
+            { label: 'Booking Conv.', value: publicIntel.booking_conversion_rate != null ? String(publicIntel.booking_conversion_rate) + '%' : '—' },
+            { label: 'Mail Starts', value: publicIntel.mail_starts != null ? String(publicIntel.mail_starts) : '—' },
+            { label: 'Mail Submits', value: publicIntel.mail_submits != null ? String(publicIntel.mail_submits) : '—' },
+            { label: 'Mail Conv.', value: publicIntel.mail_conversion_rate != null ? String(publicIntel.mail_conversion_rate) + '%' : '—' },
+          );
+        }
 
         if (kpisEl) {
           kpisEl.innerHTML = kpis.map(function(k) {

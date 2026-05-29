@@ -2894,6 +2894,11 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
     )
     days_locked_goal = max(0, _safe_int_setting(db, "days_locked_goal_days", default=0))
     public_booking_enabled = _safe_bool_setting(db, "public_booking_enabled", default=False)
+    public_profile_enabled = _safe_bool_setting(db, "public_profile_enabled", default=True)
+    public_evidence_feed_enabled = _safe_bool_setting(db, "public_evidence_feed_enabled", default=True)
+    public_screen_share_approved = _safe_bool_setting(db, "public_screen_share_approved", default=False)
+    public_toy_control_enabled = _safe_bool_setting(db, "public_toy_control_enabled", default=True)
+    public_exposure_level = (get_setting(db, "public_exposure_level", "controlled") or "controlled").strip().lower()
 
     return {
         "days_locked": days_caged,
@@ -2905,6 +2910,11 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         "confessions_label": confessions_label,
         "current_mode": current_mode,
         "public_booking_enabled": public_booking_enabled,
+        "public_profile_enabled": public_profile_enabled,
+        "public_evidence_feed_enabled": public_evidence_feed_enabled,
+        "public_screen_share_approved": public_screen_share_approved,
+        "public_toy_control_enabled": public_toy_control_enabled,
+        "public_exposure_level": public_exposure_level,
         "is_paused": paused,
         "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
     }

@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shared Control Arcade</title>
+  <style>
+    :root {
+      --bg: #090708;
+      --panel: #1b1014;
+      --panel-2: #26151b;
+      --line: #4b2f39;
+      --text: #f6edf0;
+      --muted: #c8a9b3;
+      --hot: #ff5e87;
+      --amber: #ffbd6d;
+      --ok: #7be9b5;
+      --err: #ff8d8d;
+      --font: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: var(--font);
+      background:
+        radial-gradient(1100px 700px at 8% -8%, #46202d 0%, transparent 54%),
+        radial-gradient(900px 600px at 95% 112%, #443021 0%, transparent 55%),
+        linear-gradient(160deg, #110b0e, #090708 62%);
+      padding: 1rem;
+    }
+
+    .wrap {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: .9rem;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(44,24,31,.9), rgba(23,14,18,.92));
+      padding: .95rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: .7rem;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2.4vw, 2rem);
+      letter-spacing: .02em;
+    }
+
+    .chips { display: flex; gap: .45rem; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .27rem .58rem;
+      color: var(--muted);
+      font-size: .76rem;
+      background: rgba(255,255,255,.03);
+    }
+
+    .grid {
+      display: grid;
+      gap: .8rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      padding: .75rem;
+    }
+
+    .card h2 {
+      margin: 0 0 .55rem;
+      font-size: .92rem;
+      text-transform: uppercase;
+      letter-spacing: .09em;
+      color: #f4d7df;
+    }
+
+    label {
+      display: block;
+      margin: .15rem 0 .22rem;
+      font-size: .74rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: .53rem .62rem;
+      font: inherit;
+    }
+
+    textarea { min-height: 76px; resize: vertical; }
+
+    .row {
+      display: grid;
+      gap: .45rem;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    }
+
+    .btns { display: flex; gap: .45rem; flex-wrap: wrap; margin-top: .48rem; }
+    button {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: .56rem .82rem;
+      background: linear-gradient(130deg, var(--hot), var(--amber));
+      color: #1d1014;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+    button.alt {
+      border-color: var(--line);
+      background: #2a171f;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .hint {
+      margin-top: .35rem;
+      font-size: .76rem;
+      color: var(--muted);
+      line-height: 1.44;
+    }
+
+    .status {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(0,0,0,.25);
+      color: var(--muted);
+      min-height: 2.1rem;
+      padding: .53rem .64rem;
+      font-size: .86rem;
+    }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+
+    .scope-grid {
+      display: grid;
+      gap: .35rem;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    }
+    .scope-pill {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: .34rem .45rem;
+      font-size: .74rem;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .scope-pill.on { color: var(--ok); border-color: #2f5c4a; }
+
+    @media (max-width: 620px) {
+      .hero { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <h1 id="title">Shared Control Arcade</h1>
+        <div class="hint" id="subtitle">Token-scoped controls are loading...</div>
+      </div>
+      <div class="chips">
+        <span class="chip" id="chip-exposure">Exposure: --</span>
+        <span class="chip" id="chip-turn">Turn: --</span>
+        <span class="chip" id="chip-token">Token: --</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Enabled Scopes</h2>
+      <div class="scope-grid" id="scope-grid"></div>
+    </section>
+
+    <section class="grid">
+      <article class="card" id="card-toy">
+        <h2>Toy Control Queue</h2>
+        <div class="row">
+          <div>
+            <label for="toy-mode">Mode</label>
+            <select id="toy-mode">
+              <option value="lovense">Lovense</option>
+              <option value="intiface">Buttplug / Intiface</option>
+            </select>
+          </div>
+          <div>
+            <label for="toy-pattern">Pattern</label>
+            <select id="toy-pattern">
+              <option value="">Steady</option>
+              <option value="pulse">Pulse</option>
+              <option value="wave">Wave</option>
+              <option value="tease">Tease</option>
+            </select>
+          </div>
+          <div>
+            <label for="toy-duration">Duration (ms)</label>
+            <input id="toy-duration" type="number" min="0" max="1200000" value="0" />
+          </div>
+        </div>
+        <label for="toy-level">Intensity (0-20)</label>
+        <div class="row" style="grid-template-columns:1fr 90px">
+          <input id="toy-level" type="range" min="0" max="20" value="8" />
+          <input id="toy-level-box" type="number" min="0" max="20" value="8" />
+        </div>
+        <div class="btns">
+          <button id="btn-toy-start">Join / Start</button>
+          <button class="alt" id="btn-toy-stop">Stop / Leave</button>
+        </div>
+        <div class="hint" id="toy-queue-meta">Queue idle.</div>
+      </article>
+
+      <article class="card" id="card-screen">
+        <h2>Screen</h2>
+        <div class="row">
+          <button id="btn-screen-on">Screen On</button>
+          <button class="alt" id="btn-screen-off">Screen Off</button>
+        </div>
+        <label for="screen-brightness">Brightness (0-255)</label>
+        <div class="row">
+          <input id="screen-brightness" type="number" min="0" max="255" value="180" />
+          <button id="btn-screen-brightness">Set Brightness</button>
+        </div>
+      </article>
+
+      <article class="card" id="card-audio">
+        <h2>Audio + Voice</h2>
+        <label for="audio-level">Volume</label>
+        <div class="row">
+          <select id="audio-stream"><option value="music">Music</option><option value="ring">Ring</option><option value="alarm">Alarm</option></select>
+          <input id="audio-level" type="number" min="0" max="100" value="55" />
+          <button id="btn-audio-volume">Set Volume</button>
+        </div>
+        <label for="audio-tts">Speak Text</label>
+        <div class="row">
+          <input id="audio-tts" placeholder="Say something fun..." />
+          <button id="btn-audio-tts">Speak</button>
+        </div>
+        <label for="audio-url">Play Audio URL</label>
+        <div class="row">
+          <input id="audio-url" placeholder="https://..." />
+          <button id="btn-audio-play">Play</button>
+        </div>
+      </article>
+
+      <article class="card" id="card-overlay">
+        <h2>Overlay + Notifications</h2>
+        <label for="overlay-title">Overlay</label>
+        <div class="row">
+          <input id="overlay-title" placeholder="Title" />
+          <input id="overlay-message" placeholder="Message" />
+        </div>
+        <div class="btns">
+          <button id="btn-overlay-show">Show Overlay</button>
+        </div>
+        <label for="notif-title">Notification</label>
+        <div class="row">
+          <input id="notif-title" placeholder="Notification title" />
+          <input id="notif-body" placeholder="Notification body" />
+        </div>
+        <div class="btns">
+          <button id="btn-notif-send">Send Notification</button>
+        </div>
+      </article>
+
+      <article class="card" id="card-device">
+        <h2>Device Controls</h2>
+        <div class="row">
+          <button id="btn-device-checkin">Request Check-In</button>
+          <button class="alt" id="btn-device-lock">Lock Device</button>
+        </div>
+        <div class="row">
+          <select id="device-flash"><option value="true">Flashlight On</option><option value="false">Flashlight Off</option></select>
+          <button id="btn-device-flash">Set Flashlight</button>
+        </div>
+        <div class="row">
+          <select id="device-dnd"><option value="all">DND Off</option><option value="priority">Priority</option><option value="alarms_only">Alarms Only</option><option value="total_silence">Total Silence</option></select>
+          <button id="btn-device-dnd">Set DND</button>
+        </div>
+        <div class="row">
+          <input id="device-url" placeholder="Open URL https://..." />
+          <button id="btn-device-url">Open URL</button>
+        </div>
+      </article>
+
+      <article class="card" id="card-apps">
+        <h2>App Controls</h2>
+        <label for="app-name">App Name</label>
+        <div class="row">
+          <input id="app-name" placeholder="Instagram" />
+          <button id="btn-app-open">Open App</button>
+          <button class="alt" id="btn-app-stop">Force Stop</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="status" class="status">Ready.</section>
+  </main>
+
+  <script>
+    var token = new URLSearchParams(location.search).get('token') || '';
+    var statusEl = document.getElementById('status');
+    var queueMetaEl = document.getElementById('toy-queue-meta');
+
+    var CLIENT_ID_KEY = 'shared_control_participant_id';
+    function participantId() {
+      var existing = localStorage.getItem(CLIENT_ID_KEY);
+      if (existing && existing.trim()) return existing.trim();
+      var id = 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+      localStorage.setItem(CLIENT_ID_KEY, id);
+      return id;
+    }
+    var pid = participantId();
+
+    var meta = null;
+    var queuePollTimer = null;
+    var liveActive = false;
+    var waitingQueue = false;
+
+    function setStatus(msg, kind) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    function setQueueMeta(msg) {
+      queueMetaEl.textContent = msg;
+    }
+
+    function num(id, fallback) {
+      var v = parseInt(document.getElementById(id).value || '', 10);
+      return Number.isNaN(v) ? fallback : v;
+    }
+
+    async function api(url, options) {
+      var resp = await fetch(url, options || {});
+      var body = await resp.json().catch(function() { return {}; });
+      if (!resp.ok) {
+        var msg = body.detail || ('HTTP ' + resp.status);
+        var err = new Error(msg);
+        err.status = resp.status;
+        throw err;
+      }
+      return body;
+    }
+
+    function renderScopes(m) {
+      var scopes = [
+        ['Toy: Lovense', !!m.allow_lovense],
+        ['Toy: Intiface', !!m.allow_intiface],
+        ['Notifications', !!m.allow_notifications],
+        ['Overlay', !!m.allow_overlay],
+        ['Audio', !!m.allow_audio],
+        ['Screen', !!m.allow_screen],
+        ['Device', !!m.allow_device_controls],
+        ['Apps', !!m.allow_app_controls],
+      ];
+      var grid = document.getElementById('scope-grid');
+      grid.innerHTML = scopes.map(function(s) {
+        return '<div class="scope-pill ' + (s[1] ? 'on' : '') + '">' + s[0] + ': ' + (s[1] ? 'ON' : 'OFF') + '</div>';
+      }).join('');
+
+      document.getElementById('card-toy').style.display = (m.allow_lovense || m.allow_intiface) ? '' : 'none';
+      document.getElementById('card-overlay').style.display = (m.allow_overlay || m.allow_notifications) ? '' : 'none';
+      document.getElementById('card-audio').style.display = m.allow_audio ? '' : 'none';
+      document.getElementById('card-screen').style.display = m.allow_screen ? '' : 'none';
+      document.getElementById('card-device').style.display = m.allow_device_controls ? '' : 'none';
+      document.getElementById('card-apps').style.display = m.allow_app_controls ? '' : 'none';
+    }
+
+    async function loadMeta() {
+      if (!token) {
+        setStatus('Missing token in URL.', 'err');
+        document.getElementById('chip-token').textContent = 'Token: missing';
+        return false;
+      }
+      try {
+        meta = await api('/api/public/control/' + encodeURIComponent(token) + '/meta');
+        document.getElementById('title').textContent = meta.label || 'Shared Control Arcade';
+        document.getElementById('subtitle').textContent = 'Device ' + (meta.device_id || '--') + ' • expires ' + (meta.expires_at || '--');
+        document.getElementById('chip-exposure').textContent = 'Exposure: ' + (meta.public_exposure_level || '--');
+        document.getElementById('chip-token').textContent = 'Token: active';
+        renderScopes(meta);
+        return true;
+      } catch (e) {
+        setStatus('Unable to load shared control: ' + e.message, 'err');
+        document.getElementById('chip-token').textContent = 'Token: invalid';
+        return false;
+      }
+    }
+
+    async function sendPublicCommand(action, params) {
+      if (!meta && !(await loadMeta())) return;
+      try {
+        var body = await api('/api/public/control/' + encodeURIComponent(token) + '/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: action, params: params || {} }),
+        });
+        setStatus('Sent: ' + action, 'ok');
+        return body;
+      } catch (e) {
+        setStatus('Command failed: ' + e.message, 'err');
+        return null;
+      }
+    }
+
+    async function sendToyControl(commandOverride) {
+      if (!meta && !(await loadMeta())) return;
+      var payload = {
+        mode: document.getElementById('toy-mode').value,
+        command: commandOverride || 'vibrate',
+        level: num('toy-level-box', 8),
+        duration_ms: Math.max(0, num('toy-duration', 0)),
+        participant_id: pid,
+      };
+      var pattern = (document.getElementById('toy-pattern').value || '').trim();
+      if (pattern) payload.pattern = pattern;
+
+      try {
+        var body = await api('/api/public/toy-share/' + encodeURIComponent(token) + '/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (body.full_public_queue) {
+          if (body.status === 'released') {
+            liveActive = false;
+            waitingQueue = false;
+            stopQueuePoll();
+            setQueueMeta('Turn released.');
+            document.getElementById('chip-turn').textContent = 'Turn: released';
+            setStatus('Turn released.', 'ok');
+            return;
+          }
+          waitingQueue = !body.active;
+          liveActive = !!body.active;
+          if (body.active) {
+            document.getElementById('chip-turn').textContent = 'Turn: active';
+            setQueueMeta('Your turn is active now.');
+            stopQueuePoll();
+            setStatus('Your turn is live. Have fun.', 'ok');
+          } else {
+            document.getElementById('chip-turn').textContent = 'Turn: queued';
+            setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / pending ' + (body.pending_total != null ? body.pending_total : '?'));
+            setStatus('You are queued. Keep this tab open.', 'ok');
+            startQueuePoll();
+          }
+          return;
+        }
+
+        setStatus('Toy command sent.', 'ok');
+      } catch (e) {
+        setStatus('Toy command failed: ' + e.message, 'err');
+      }
+    }
+
+    async function pollQueue() {
+      try {
+        var body = await api('/api/public/toy-share/' + encodeURIComponent(token) + '/queue/status?participant_id=' + encodeURIComponent(pid));
+        if (body.active_for_you) {
+          waitingQueue = false;
+          liveActive = true;
+          stopQueuePoll();
+          document.getElementById('chip-turn').textContent = 'Turn: active';
+          setQueueMeta('Your turn is active now.');
+          setStatus('Queue advanced. You are live.', 'ok');
+        } else {
+          waitingQueue = true;
+          document.getElementById('chip-turn').textContent = 'Turn: queued';
+          setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / pending ' + (body.pending_total != null ? body.pending_total : '?') + ' • slot ' + Number(body.turn_seconds || 20) + 's');
+        }
+      } catch (_) {
+        // Queue polling is best-effort.
+      }
+    }
+
+    function startQueuePoll() {
+      if (queuePollTimer) return;
+      queuePollTimer = setInterval(pollQueue, 2500);
+      pollQueue();
+    }
+
+    function stopQueuePoll() {
+      if (!queuePollTimer) return;
+      clearInterval(queuePollTimer);
+      queuePollTimer = null;
+    }
+
+    async function leaveQueue() {
+      if (!waitingQueue) return;
+      try {
+        await api('/api/public/toy-share/' + encodeURIComponent(token) + '/queue/leave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participant_id: pid }),
+        });
+      } catch (_) {
+        // Best effort.
+      }
+      waitingQueue = false;
+      liveActive = false;
+      stopQueuePoll();
+      document.getElementById('chip-turn').textContent = 'Turn: idle';
+      setQueueMeta('You left the queue.');
+    }
+
+    function bindControls() {
+      var level = document.getElementById('toy-level');
+      var box = document.getElementById('toy-level-box');
+      level.addEventListener('input', function() { box.value = level.value; });
+      box.addEventListener('input', function() {
+        var n = Math.max(0, Math.min(20, Number(box.value || 0)));
+        level.value = String(n);
+        box.value = String(n);
+      });
+
+      document.getElementById('btn-toy-start').addEventListener('click', function() { sendToyControl('vibrate'); });
+      document.getElementById('btn-toy-stop').addEventListener('click', async function() {
+        if (waitingQueue) {
+          await leaveQueue();
+          setStatus('Left queue.', 'ok');
+          return;
+        }
+        sendToyControl('stop');
+      });
+
+      document.getElementById('btn-screen-on').addEventListener('click', function() { sendPublicCommand('screen_on'); });
+      document.getElementById('btn-screen-off').addEventListener('click', function() { sendPublicCommand('screen_off'); });
+      document.getElementById('btn-screen-brightness').addEventListener('click', function() {
+        sendPublicCommand('set_brightness', { value: String(Math.max(0, Math.min(255, num('screen-brightness', 180)))) });
+      });
+
+      document.getElementById('btn-audio-volume').addEventListener('click', function() {
+        sendPublicCommand('set_volume', {
+          level: String(Math.max(0, Math.min(100, num('audio-level', 55)))),
+          stream: document.getElementById('audio-stream').value,
+        });
+      });
+      document.getElementById('btn-audio-tts').addEventListener('click', function() {
+        sendPublicCommand('speak_text', { text: document.getElementById('audio-tts').value || '' });
+      });
+      document.getElementById('btn-audio-play').addEventListener('click', function() {
+        sendPublicCommand('play_audio', { url: document.getElementById('audio-url').value || '' });
+      });
+
+      document.getElementById('btn-overlay-show').addEventListener('click', function() {
+        sendPublicCommand('show_overlay', {
+          title: document.getElementById('overlay-title').value || 'Notice',
+          message: document.getElementById('overlay-message').value || 'Shared control active.',
+        });
+      });
+      document.getElementById('btn-notif-send').addEventListener('click', function() {
+        sendPublicCommand('send_notification', {
+          title: document.getElementById('notif-title').value || 'Heads up',
+          body: document.getElementById('notif-body').value || 'You have a new handler command.',
+        });
+      });
+
+      document.getElementById('btn-device-checkin').addEventListener('click', function() { sendPublicCommand('request_checkin'); });
+      document.getElementById('btn-device-lock').addEventListener('click', function() { sendPublicCommand('lock_device'); });
+      document.getElementById('btn-device-flash').addEventListener('click', function() {
+        sendPublicCommand('set_flashlight', { enabled: document.getElementById('device-flash').value });
+      });
+      document.getElementById('btn-device-dnd').addEventListener('click', function() {
+        sendPublicCommand('set_dnd', { policy: document.getElementById('device-dnd').value });
+      });
+      document.getElementById('btn-device-url').addEventListener('click', function() {
+        sendPublicCommand('open_url', { url: document.getElementById('device-url').value || '' });
+      });
+
+      document.getElementById('btn-app-open').addEventListener('click', function() {
+        sendPublicCommand('open_app', { app_name: document.getElementById('app-name').value || '' });
+      });
+      document.getElementById('btn-app-stop').addEventListener('click', function() {
+        sendPublicCommand('force_stop_app', { app_name: document.getElementById('app-name').value || '' });
+      });
+    }
+
+    (async function boot() {
+      bindControls();
+      document.getElementById('chip-turn').textContent = 'Turn: idle';
+      if (await loadMeta()) {
+        setStatus('Shared control ready. Pick a section and play.', 'ok');
+      }
+    })();
+  </script>
+</body>
+</html>

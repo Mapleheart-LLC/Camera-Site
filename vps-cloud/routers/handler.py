@@ -87,6 +87,12 @@ PUBLIC_MODE_OPTIONS = [
     "Maintenance",
     "Free Day",
 ]
+PUBLIC_EXPOSURE_LEVEL_OPTIONS = [
+    "private",
+    "controlled",
+    "amplified",
+    "full_public",
+]
 PUBLIC_STATUS_PRESETS = {
     "strict": {
         "tasks_label": "Denials",
@@ -324,6 +330,108 @@ def _ensure_behavior_log_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_public_intelligence_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS public_intelligence_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_name   TEXT NOT NULL,
+            page         TEXT,
+            session_id   TEXT,
+            referrer     TEXT,
+            user_agent   TEXT,
+            metadata_json TEXT,
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_intel_created_at ON public_intelligence_events(created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_intel_event_name ON public_intelligence_events(event_name)"
+    )
+
+
+def _ensure_toy_share_links_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_toy_share_links (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            token          TEXT NOT NULL UNIQUE,
+            device_id      TEXT NOT NULL,
+            created_by     TEXT,
+            label          TEXT,
+            allow_lovense  INTEGER NOT NULL DEFAULT 1,
+            allow_intiface INTEGER NOT NULL DEFAULT 1,
+            allow_notifications INTEGER NOT NULL DEFAULT 1,
+            allow_overlay   INTEGER NOT NULL DEFAULT 1,
+            allow_audio     INTEGER NOT NULL DEFAULT 1,
+            allow_screen    INTEGER NOT NULL DEFAULT 1,
+            allow_device_controls INTEGER NOT NULL DEFAULT 1,
+            allow_app_controls INTEGER NOT NULL DEFAULT 1,
+            max_level      INTEGER NOT NULL DEFAULT 20,
+            enabled        INTEGER NOT NULL DEFAULT 1,
+            expires_at     TEXT,
+            created_at     TEXT NOT NULL,
+            last_used_at   TEXT,
+            use_count      INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_share_links_device ON tpe_toy_share_links(device_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_share_links_token ON tpe_toy_share_links(token)"
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(tpe_toy_share_links)").fetchall()}
+    if "allow_notifications" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_notifications INTEGER NOT NULL DEFAULT 1")
+    if "allow_overlay" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_overlay INTEGER NOT NULL DEFAULT 1")
+    if "allow_audio" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_audio INTEGER NOT NULL DEFAULT 1")
+    if "allow_screen" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_screen INTEGER NOT NULL DEFAULT 1")
+    if "allow_device_controls" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_device_controls INTEGER NOT NULL DEFAULT 1")
+    if "allow_app_controls" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_app_controls INTEGER NOT NULL DEFAULT 1")
+
+
+def _ensure_toy_control_queue_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_toy_control_queue (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            link_id       INTEGER NOT NULL,
+            token         TEXT NOT NULL,
+            device_id     TEXT NOT NULL,
+            participant_id TEXT NOT NULL,
+            mode          TEXT NOT NULL,
+            command       TEXT NOT NULL,
+            level         INTEGER,
+            duration_ms   INTEGER,
+            pattern       TEXT,
+            sequence_json TEXT,
+            requested_at  TEXT NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'pending',
+            granted_at    TEXT,
+            expires_at    TEXT,
+            completed_at  TEXT,
+            result_json   TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_queue_token_status ON tpe_toy_control_queue(token, status, requested_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_queue_device_status ON tpe_toy_control_queue(device_id, status, requested_at)"
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -343,6 +451,9 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
         _ensure_behavior_log_table(conn)
+        _ensure_public_intelligence_table(conn)
+        _ensure_toy_share_links_table(conn)
+        _ensure_toy_control_queue_table(conn)
         conn.commit()
         return
 
@@ -385,6 +496,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
         _ensure_behavior_log_table(conn)
+        _ensure_public_intelligence_table(conn)
         conn.commit()
         return
 
@@ -399,6 +511,9 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_rule_engine_tables(conn)
     _ensure_evidence_vault_tables(conn)
     _ensure_behavior_log_table(conn)
+    _ensure_public_intelligence_table(conn)
+    _ensure_toy_share_links_table(conn)
+    _ensure_toy_control_queue_table(conn)
     conn.commit()
 
 
@@ -591,6 +706,16 @@ class PublicStatusUpdateRequest(BaseModel):
     confessions_posted: Optional[int] = None
     public_booking_enabled: Optional[bool] = None
     public_screen_share_approved: Optional[bool] = None
+    public_profile_enabled: Optional[bool] = None
+    public_evidence_feed_enabled: Optional[bool] = None
+    public_auto_publish_evidence: Optional[bool] = None
+    public_toy_control_enabled: Optional[bool] = None
+    public_exposure_level: Optional[str] = None
+    public_toy_queue_cooldown_sec: Optional[int] = None
+
+
+class PublicExposureProfileRequest(BaseModel):
+    profile: str
 
 
 class LimboCreateRequest(BaseModel):
@@ -639,6 +764,526 @@ class PuppyMailReplyRequest(BaseModel):
 
 class PuppyMailStatusUpdateRequest(BaseModel):
     status: str
+
+
+class PublicIntelEventRequest(BaseModel):
+    event_name: str
+    page: Optional[str] = None
+    session_id: Optional[str] = None
+    referrer: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class ToyShareLinkCreateRequest(BaseModel):
+    device_id: str
+    label: Optional[str] = None
+    expires_in_minutes: int = 120
+    max_level: int = 20
+    allow_lovense: bool = True
+    allow_intiface: bool = True
+    allow_notifications: bool = True
+    allow_overlay: bool = True
+    allow_audio: bool = True
+    allow_screen: bool = True
+    allow_device_controls: bool = True
+    allow_app_controls: bool = True
+
+
+class ToyShareControlRequest(BaseModel):
+    mode: str = "lovense"
+    command: str = "vibrate"
+    level: Optional[int] = None
+    duration_ms: Optional[int] = None
+    pattern: Optional[str] = None
+    sequence: Optional[list[dict]] = None
+    participant_id: Optional[str] = None
+
+
+class ToyShareQueueLeaveRequest(BaseModel):
+    participant_id: str
+
+
+class PublicSharedControlRequest(BaseModel):
+    action: str
+    params: Optional[dict] = None
+
+
+def _is_expired_iso(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value)
+    except Exception:
+        return True
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed <= datetime.now(timezone.utc)
+
+
+def _clamp_toy_level(level: Optional[int], max_level: int) -> int:
+    raw = 10 if level is None else int(level)
+    return max(0, min(raw, max(0, int(max_level))))
+
+
+def _toy_live_payload(mode: str, command: ToyShareControlRequest, level: int) -> dict:
+    payload: dict[str, str] = {
+        "action": "toy.live.control",
+        "toy_mode": mode,
+        "toy_command": (command.command or "vibrate").strip().lower(),
+        "toy_level": str(level),
+    }
+    pattern = (command.pattern or "").strip().lower()
+    if pattern:
+        payload["toy_pattern"] = pattern
+    if command.duration_ms is not None:
+        payload["toy_duration_ms"] = str(max(0, int(command.duration_ms)))
+    if command.sequence:
+        try:
+            payload["toy_sequence"] = json.dumps(command.sequence)
+        except Exception:
+            pass
+    return payload
+
+
+def _send_shared_toy_control(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    mode: str,
+    command: ToyShareControlRequest,
+    max_level: int,
+) -> dict:
+    normalized_mode = (mode or "lovense").strip().lower()
+    level = _clamp_toy_level(command.level, max_level)
+    normalized_command = (command.command or "vibrate").strip().lower()
+
+    if normalized_mode == "lovense" and normalized_command in {"stop", "battery", "vibrate", "rotate", "pump"} and not command.pattern:
+        payload = {
+            "action": "LOVENSE_COMMAND",
+            "toy_command": normalized_command,
+            "toy_level": str(level),
+        }
+        if normalized_command in {"stop", "battery"}:
+            payload.pop("toy_level", None)
+    else:
+        payload = _toy_live_payload(normalized_mode, command, level)
+
+    result = _send_mqtt_to_device(db, device_id, payload)
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'shared_control', 'toy_command', ?, ?, ?)
+        """,
+        (
+            device_id,
+            f"{normalized_mode}:{normalized_command}",
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    return result
+
+
+_TOY_QUEUE_SLOT_SECONDS = 20
+
+
+def _parse_iso_dt(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _effective_participant_id(
+    request: Request,
+    provided: Optional[str],
+) -> str:
+    candidate = (provided or "").strip()
+    if candidate:
+        return candidate[:80]
+    ip = (request.client.host if request.client else "anon") or "anon"
+    ua = (request.headers.get("user-agent") or "na").strip()[:30]
+    return f"{ip}:{ua}"
+
+
+def _queue_active_row(db: sqlite3.Connection, token: str) -> Optional[sqlite3.Row]:
+    return db.execute(
+        "SELECT * FROM tpe_toy_control_queue WHERE token = ? AND status = 'active' ORDER BY id ASC LIMIT 1",
+        (token,),
+    ).fetchone()
+
+
+def _queue_mark_expired_active(
+    db: sqlite3.Connection,
+    token: str,
+) -> bool:
+    active = _queue_active_row(db, token)
+    if not active:
+        return False
+    if not _is_expired_iso(active["expires_at"]):
+        return False
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE tpe_toy_control_queue SET status = 'expired', completed_at = ? WHERE id = ?",
+        (now, active["id"]),
+    )
+    try:
+        stop_cmd = ToyShareControlRequest(mode=active["mode"], command="stop", level=0)
+        _send_shared_toy_control(
+            db,
+            device_id=active["device_id"],
+            mode=active["mode"],
+            command=stop_cmd,
+            max_level=20,
+        )
+    except Exception:
+        pass
+    return True
+
+
+def _queue_recent_completion_seconds(
+    db: sqlite3.Connection,
+    *,
+    token: str,
+    participant_id: str,
+) -> Optional[int]:
+    row = db.execute(
+        """
+        SELECT completed_at
+        FROM tpe_toy_control_queue
+        WHERE token = ? AND participant_id = ? AND status IN ('completed', 'expired') AND completed_at IS NOT NULL
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (token, participant_id),
+    ).fetchone()
+    if not row:
+        return None
+    completed = _parse_iso_dt(row["completed_at"])
+    if not completed:
+        return None
+    delta = datetime.now(timezone.utc) - completed
+    return max(0, int(delta.total_seconds()))
+
+
+def _queue_promote_next(
+    db: sqlite3.Connection,
+    *,
+    link_row: sqlite3.Row,
+    max_level: int,
+) -> Optional[sqlite3.Row]:
+    token = str(link_row["token"])
+    _queue_mark_expired_active(db, token)
+    active = _queue_active_row(db, token)
+    if active and not _is_expired_iso(active["expires_at"]):
+        return active
+
+    pending = db.execute(
+        """
+        SELECT q.*
+        FROM tpe_toy_control_queue q
+        WHERE q.token = ? AND q.status = 'pending'
+        ORDER BY (
+            SELECT COUNT(*)
+            FROM tpe_toy_control_queue h
+            WHERE h.token = q.token
+              AND h.participant_id = q.participant_id
+              AND h.status IN ('completed', 'expired')
+        ) ASC,
+        q.id ASC
+        LIMIT 1
+        """,
+        (token,),
+    ).fetchone()
+    if not pending:
+        return None
+
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(seconds=_TOY_QUEUE_SLOT_SECONDS)).isoformat()
+    cmd = ToyShareControlRequest(
+        mode=str(pending["mode"] or "lovense"),
+        command=str(pending["command"] or "vibrate"),
+        level=int(pending["level"] or 10),
+        duration_ms=int(pending["duration_ms"] or 0),
+        pattern=(pending["pattern"] or None),
+    )
+    if pending["sequence_json"]:
+        try:
+            decoded = json.loads(pending["sequence_json"])
+            if isinstance(decoded, list):
+                cmd.sequence = decoded
+        except Exception:
+            pass
+
+    result = _send_shared_toy_control(
+        db,
+        device_id=link_row["device_id"],
+        mode=cmd.mode,
+        command=cmd,
+        max_level=max_level,
+    )
+    db.execute(
+        """
+        UPDATE tpe_toy_control_queue
+        SET status = 'active', granted_at = ?, expires_at = ?, result_json = ?
+        WHERE id = ?
+        """,
+        (
+            _now_iso(),
+            expires_at,
+            json.dumps(result),
+            pending["id"],
+        ),
+    )
+    return db.execute(
+        "SELECT * FROM tpe_toy_control_queue WHERE id = ?",
+        (pending["id"],),
+    ).fetchone()
+
+
+def _queue_position(
+    db: sqlite3.Connection,
+    *,
+    token: str,
+    participant_id: str,
+) -> Optional[int]:
+    row = db.execute(
+        "SELECT id FROM tpe_toy_control_queue WHERE token = ? AND participant_id = ? AND status = 'pending' ORDER BY id ASC LIMIT 1",
+        (token, participant_id),
+    ).fetchone()
+    if not row:
+        return None
+    ahead = db.execute(
+        "SELECT COUNT(*) AS n FROM tpe_toy_control_queue WHERE token = ? AND status = 'pending' AND id <= ?",
+        (token, row["id"]),
+    ).fetchone()
+    return int(ahead["n"]) if ahead else None
+
+
+_PUBLIC_SHARED_COMMANDS = {
+    "request_checkin": {
+        "scope": "allow_device_controls",
+        "action": "REQUEST_CHECKIN",
+        "fields": (),
+    },
+    "lock_device": {
+        "scope": "allow_device_controls",
+        "action": "LOCK_DEVICE",
+        "fields": (),
+    },
+    "screen_on": {
+        "scope": "allow_screen",
+        "action": "SCREEN_ON",
+        "fields": (),
+    },
+    "screen_off": {
+        "scope": "allow_screen",
+        "action": "SCREEN_OFF",
+        "fields": (),
+    },
+    "set_brightness": {
+        "scope": "allow_screen",
+        "action": "SET_BRIGHTNESS",
+        "fields": ("value",),
+    },
+    "set_volume": {
+        "scope": "allow_audio",
+        "action": "SET_VOLUME",
+        "fields": ("level", "stream"),
+    },
+    "speak_text": {
+        "scope": "allow_audio",
+        "action": "SPEAK_TEXT",
+        "fields": ("text",),
+    },
+    "play_audio": {
+        "scope": "allow_audio",
+        "action": "PLAY_AUDIO",
+        "fields": ("url",),
+    },
+    "show_overlay": {
+        "scope": "allow_overlay",
+        "action": "SHOW_OVERLAY",
+        "fields": ("title", "message", "image_url"),
+    },
+    "send_notification": {
+        "scope": "allow_notifications",
+        "action": "SEND_NOTIFICATION",
+        "fields": ("title", "body"),
+    },
+    "open_url": {
+        "scope": "allow_device_controls",
+        "action": "OPEN_URL",
+        "fields": ("url",),
+    },
+    "set_flashlight": {
+        "scope": "allow_device_controls",
+        "action": "SET_FLASHLIGHT",
+        "fields": ("enabled",),
+    },
+    "open_app": {
+        "scope": "allow_app_controls",
+        "action": "OPEN_APP",
+        "fields": ("app_name",),
+    },
+    "force_stop_app": {
+        "scope": "allow_app_controls",
+        "action": "FORCE_STOP_APP",
+        "fields": ("app_name",),
+    },
+    "set_dnd": {
+        "scope": "allow_device_controls",
+        "action": "SET_DND",
+        "fields": ("policy",),
+    },
+}
+
+
+def _public_shared_payload(command: PublicSharedControlRequest) -> tuple[str, dict, str]:
+    command_key = (command.action or "").strip().lower()
+    spec = _PUBLIC_SHARED_COMMANDS.get(command_key)
+    if not spec:
+        raise HTTPException(status_code=400, detail="Unsupported shared action")
+
+    params = command.params or {}
+    payload = {"action": spec["action"]}
+    for field in spec["fields"]:
+        value = params.get(field)
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            payload[field] = "true" if value else "false"
+        else:
+            payload[field] = str(value)
+    return str(spec["scope"]), payload, command_key
+
+
+def _record_public_intel_event(
+    db: sqlite3.Connection,
+    *,
+    event_name: str,
+    page: Optional[str] = None,
+    session_id: Optional[str] = None,
+    referrer: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    metadata: Optional[dict] = None,
+    created_at: Optional[str] = None,
+) -> None:
+    event = (event_name or "").strip().lower()
+    if not event:
+        return
+    page_val = (page or "").strip() or None
+    session_val = (session_id or "").strip() or None
+    referrer_val = (referrer or "").strip() or None
+    ua_val = (user_agent or "").strip() or None
+    metadata_json = None
+    if metadata:
+        try:
+            metadata_json = json.dumps(metadata)
+        except Exception:
+            metadata_json = None
+    db.execute(
+        """
+        INSERT INTO public_intelligence_events
+            (event_name, page, session_id, referrer, user_agent, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            event,
+            page_val,
+            session_val,
+            referrer_val,
+            ua_val,
+            metadata_json,
+            created_at or _now_iso(),
+        ),
+    )
+
+
+@router.post("/api/public/intel/event", status_code=202)
+def ingest_public_intel_event(
+    payload: PublicIntelEventRequest,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Best-effort public website telemetry ingestion endpoint."""
+    if len((payload.event_name or "").strip()) > 80:
+        raise HTTPException(status_code=400, detail="event_name is too long")
+    _record_public_intel_event(
+        db,
+        event_name=payload.event_name,
+        page=payload.page,
+        session_id=payload.session_id,
+        referrer=payload.referrer or request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        metadata=payload.metadata,
+    )
+    db.commit()
+    return {"status": "accepted"}
+
+
+@router.get("/api/handler/public-intelligence")
+def handler_public_intelligence(
+    days: int = 14,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Return public-site funnel intelligence for handler dashboard."""
+    selected_days = max(1, min(int(days), 90))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=selected_days)
+    cutoff_iso = cutoff.isoformat()
+
+    rows = db.execute(
+        "SELECT event_name, created_at FROM public_intelligence_events WHERE created_at >= ?",
+        (cutoff_iso,),
+    ).fetchall()
+    event_counter: Counter[str] = Counter()
+    hourly = [0] * 24
+    for row in rows:
+        event_name = str(row["event_name"] or "unknown").strip().lower()
+        event_counter[event_name] += 1
+        try:
+            ts = datetime.fromisoformat(str(row["created_at"]).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            hourly[ts.astimezone(timezone.utc).hour] += 1
+        except Exception:
+            pass
+
+    page_views = event_counter.get("page_view", 0)
+    booking_starts = event_counter.get("booking_start", 0)
+    booking_submits = event_counter.get("booking_submit_success", 0)
+    mail_starts = event_counter.get("mail_start", 0)
+    mail_submits = event_counter.get("mail_submit_success", 0)
+
+    booking_conversion_rate = round((booking_submits / booking_starts) * 100, 1) if booking_starts else None
+    mail_conversion_rate = round((mail_submits / mail_starts) * 100, 1) if mail_starts else None
+    booking_view_to_submit = round((booking_submits / page_views) * 100, 1) if page_views else None
+
+    return {
+        "days": selected_days,
+        "window_start": cutoff_iso,
+        "event_count": len(rows),
+        "page_views": page_views,
+        "booking_starts": booking_starts,
+        "booking_submits": booking_submits,
+        "mail_starts": mail_starts,
+        "mail_submits": mail_submits,
+        "booking_conversion_rate": booking_conversion_rate,
+        "mail_conversion_rate": mail_conversion_rate,
+        "booking_view_to_submit_rate": booking_view_to_submit,
+        "top_events": [
+            {"event": ev, "count": cnt}
+            for ev, cnt in event_counter.most_common(10)
+        ],
+        "hourly_activity": hourly,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -766,6 +1411,7 @@ async def handler_device_status(
 @router.post("/api/booking", status_code=201)
 def create_booking_intake(
     payload: BookingCreateRequest,
+    request: Request,
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Public booking intake endpoint used by retained public surfaces."""
@@ -802,6 +1448,15 @@ def create_booking_intake(
             now,
         ),
     )
+    _record_public_intel_event(
+        db,
+        event_name="booking_submit_success",
+        page="index",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        metadata={"source": source},
+        created_at=now,
+    )
     db.commit()
     return {"id": cur.lastrowid, "status": "new"}
 
@@ -809,6 +1464,7 @@ def create_booking_intake(
 @router.post("/api/puppy-mail", status_code=201)
 def create_puppy_mail_thread(
     payload: PuppyMailCreateRequest,
+    request: Request,
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Public puppy-mail intake endpoint for message widget/page submissions."""
@@ -836,6 +1492,15 @@ def create_puppy_mail_thread(
         VALUES (?, ?, ?, 'received', ?)
         """,
         (thread_id, sender_name, body, now),
+    )
+    _record_public_intel_event(
+        db,
+        event_name="mail_submit_success",
+        page="index",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        metadata={"source": source},
+        created_at=now,
     )
     db.commit()
     return {"thread_id": thread_id, "status": "open"}
@@ -1670,6 +2335,21 @@ def _safe_choice(value: Optional[str], allowed: List[str], default: str) -> str:
     return raw if raw in allowed else default
 
 
+def _public_setting_enabled(db: sqlite3.Connection, key: str, default: bool = False) -> bool:
+    return _safe_bool(get_setting(db, key, "true" if default else "false"), default)
+
+
+def _resolve_public_evidence_visibility(
+    db: sqlite3.Connection,
+    requested_public_visible: bool,
+) -> int:
+    if requested_public_visible:
+        return 1
+    if _public_setting_enabled(db, "public_auto_publish_evidence", default=False):
+        return 1
+    return 0
+
+
 @router.get("/api/handler/public-status")
 def handler_get_public_status(
     _current_user: dict = Depends(role_required("admin", "handler")),
@@ -1707,6 +2387,17 @@ def handler_get_public_status(
         "confessions_posted": _safe_int(get_setting(db, "public_confessions_posted", "0")),
         "public_booking_enabled": _safe_bool(get_setting(db, "public_booking_enabled", "false")),
         "public_screen_share_approved": _safe_bool(get_setting(db, "public_screen_share_approved", "false")),
+        "public_profile_enabled": _safe_bool(get_setting(db, "public_profile_enabled", "true")),
+        "public_evidence_feed_enabled": _safe_bool(get_setting(db, "public_evidence_feed_enabled", "true")),
+        "public_auto_publish_evidence": _safe_bool(get_setting(db, "public_auto_publish_evidence", "false")),
+        "public_toy_control_enabled": _safe_bool(get_setting(db, "public_toy_control_enabled", "true")),
+        "public_exposure_level": _safe_choice(
+            get_setting(db, "public_exposure_level", "controlled"),
+            PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+            "controlled",
+        ),
+        "public_toy_queue_cooldown_sec": max(0, min(_safe_int(get_setting(db, "public_toy_queue_cooldown_sec", "30"), 30), 600)),
+        "public_exposure_options": PUBLIC_EXPOSURE_LEVEL_OPTIONS,
     }
 
 
@@ -1764,8 +2455,93 @@ def handler_update_public_status(
             "public_screen_share_approved",
             "true" if payload.public_screen_share_approved else "false",
         )
+    if payload.public_profile_enabled is not None:
+        set_setting(
+            db,
+            "public_profile_enabled",
+            "true" if payload.public_profile_enabled else "false",
+        )
+    if payload.public_evidence_feed_enabled is not None:
+        set_setting(
+            db,
+            "public_evidence_feed_enabled",
+            "true" if payload.public_evidence_feed_enabled else "false",
+        )
+    if payload.public_auto_publish_evidence is not None:
+        set_setting(
+            db,
+            "public_auto_publish_evidence",
+            "true" if payload.public_auto_publish_evidence else "false",
+        )
+    if payload.public_toy_control_enabled is not None:
+        set_setting(
+            db,
+            "public_toy_control_enabled",
+            "true" if payload.public_toy_control_enabled else "false",
+        )
+    if payload.public_exposure_level is not None:
+        exposure_level = payload.public_exposure_level.strip().lower()
+        if exposure_level not in PUBLIC_EXPOSURE_LEVEL_OPTIONS:
+            raise HTTPException(status_code=400, detail="public_exposure_level is not a valid option")
+        set_setting(db, "public_exposure_level", exposure_level)
+    if payload.public_toy_queue_cooldown_sec is not None:
+        cooldown = max(0, min(int(payload.public_toy_queue_cooldown_sec), 600))
+        set_setting(db, "public_toy_queue_cooldown_sec", str(cooldown))
 
     return {"updated": True}
+
+
+@router.post("/api/handler/public-status/exposure-profile")
+def handler_apply_public_exposure_profile(
+    payload: PublicExposureProfileRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    profile = (payload.profile or "").strip().lower()
+    presets = {
+        "private": {
+            "public_profile_enabled": "false",
+            "public_booking_enabled": "false",
+            "public_screen_share_approved": "false",
+            "public_evidence_feed_enabled": "false",
+            "public_auto_publish_evidence": "false",
+            "public_toy_control_enabled": "false",
+            "public_exposure_level": "private",
+        },
+        "controlled": {
+            "public_profile_enabled": "true",
+            "public_booking_enabled": "false",
+            "public_screen_share_approved": "false",
+            "public_evidence_feed_enabled": "true",
+            "public_auto_publish_evidence": "false",
+            "public_toy_control_enabled": "false",
+            "public_exposure_level": "controlled",
+        },
+        "amplified": {
+            "public_profile_enabled": "true",
+            "public_booking_enabled": "true",
+            "public_screen_share_approved": "false",
+            "public_evidence_feed_enabled": "true",
+            "public_auto_publish_evidence": "true",
+            "public_toy_control_enabled": "true",
+            "public_exposure_level": "amplified",
+        },
+        "full_public": {
+            "public_profile_enabled": "true",
+            "public_booking_enabled": "true",
+            "public_screen_share_approved": "true",
+            "public_evidence_feed_enabled": "true",
+            "public_auto_publish_evidence": "true",
+            "public_toy_control_enabled": "true",
+            "public_exposure_level": "full_public",
+        },
+    }
+    selected = presets.get(profile)
+    if not selected:
+        raise HTTPException(status_code=400, detail="Unknown exposure profile")
+    for key, value in selected.items():
+        set_setting(db, key, value)
+    return {"updated": True, "profile": profile}
 
 
 # ---------------------------------------------------------------------------
@@ -2403,7 +3179,7 @@ def handler_tpe_evidence_create(
             body.source_audit_id,
             body.source_upload_id,
             json.dumps(body.metadata or {}),
-            0,
+            _resolve_public_evidence_visibility(db, body.public_visible),
             str(current_user.get("user_id") or current_user.get("username") or "handler"),
             now,
             now,
@@ -2555,7 +3331,7 @@ def handler_tpe_evidence_promote_event(
             body.consequence_action,
             event_id,
             event_row["payload_json"] or json.dumps({}),
-            0,
+            _resolve_public_evidence_visibility(db, body.public_visible),
             str(current_user.get("user_id") or current_user.get("username") or "handler"),
             now,
             now,
@@ -2610,7 +3386,7 @@ def handler_tpe_evidence_promote_audit(
             body.consequence_action,
             audit_id,
             json.dumps(metadata),
-            0,
+            _resolve_public_evidence_visibility(db, body.public_visible),
             str(current_user.get("user_id") or current_user.get("username") or "handler"),
             now,
             now,
@@ -2661,7 +3437,7 @@ def handler_tpe_evidence_promote_upload(
                 "content_type": upload_row["content_type"],
                 "size_bytes": upload_row["size_bytes"],
             }),
-            0,
+            _resolve_public_evidence_visibility(db, body.public_visible),
             str(current_user.get("user_id") or current_user.get("username") or "handler"),
             now,
             now,
@@ -2734,6 +3510,8 @@ def public_tpe_evidence_feed(
     limit: int = 50,
     db: sqlite3.Connection = Depends(get_db),
 ) -> list:
+    if not _public_setting_enabled(db, "public_evidence_feed_enabled", default=True):
+        return []
     capped_limit = max(1, min(limit, 200))
     rows = db.execute(
         "SELECT id, device_id, category, severity, title, summary, consequence_action, created_at "
@@ -2752,6 +3530,84 @@ def public_tpe_evidence_feed(
         item["attachments"] = [dict(a) for a in attachments]
         result.append(item)
     return result
+
+
+@router.post("/api/handler/tpe/evidence/publish-recent")
+def handler_tpe_evidence_publish_recent(
+    hours: int = Query(default=24, ge=1, le=24 * 30),
+    device_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    device_id_norm = (device_id or "").strip() or None
+    if device_id_norm:
+        _assert_evidence_access(db, current_user, device_id_norm)
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=int(hours))).isoformat()
+    params: list[object] = [cutoff]
+    sql = (
+        "UPDATE handler_evidence_vault SET public_visible = 1, updated_at = ? "
+        "WHERE created_at >= ?"
+    )
+    update_ts = _now_iso()
+    params.insert(0, update_ts)
+    if device_id_norm:
+        sql += " AND device_id = ?"
+        params.append(device_id_norm)
+    sql += " AND public_visible = 0"
+
+    result = db.execute(sql, tuple(params))
+    db.commit()
+    return {
+        "updated": True,
+        "published_count": int(result.rowcount or 0),
+        "hours": int(hours),
+        "device_id": device_id_norm,
+    }
+
+
+@router.post("/api/handler/tpe/evidence/hide-all")
+def handler_tpe_evidence_hide_all(
+    device_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    device_id_norm = (device_id or "").strip() or None
+    if device_id_norm:
+        _assert_evidence_access(db, current_user, device_id_norm)
+
+    update_ts = _now_iso()
+    if device_id_norm:
+        result = db.execute(
+            "UPDATE handler_evidence_vault SET public_visible = 0, updated_at = ? WHERE device_id = ? AND public_visible = 1",
+            (update_ts, device_id_norm),
+        )
+    else:
+        if current_user.get("role") == "admin":
+            result = db.execute(
+                "UPDATE handler_evidence_vault SET public_visible = 0, updated_at = ? WHERE public_visible = 1",
+                (update_ts,),
+            )
+        else:
+            assigned = _handler_allowed_devices(db, current_user["user_id"])
+            if assigned:
+                placeholders = ",".join("?" for _ in assigned)
+                result = db.execute(
+                    "UPDATE handler_evidence_vault SET public_visible = 0, updated_at = ? "
+                    f"WHERE public_visible = 1 AND (device_id IS NULL OR device_id IN ({placeholders}))",
+                    (update_ts, *assigned),
+                )
+            else:
+                result = db.execute(
+                    "UPDATE handler_evidence_vault SET public_visible = 0, updated_at = ? WHERE public_visible = 1 AND device_id IS NULL",
+                    (update_ts,),
+                )
+    db.commit()
+    return {
+        "updated": True,
+        "hidden_count": int(result.rowcount or 0),
+        "device_id": device_id_norm,
+    }
 
 
 @router.post("/api/handler/tpe/push")
@@ -2795,6 +3651,573 @@ def handler_tpe_push(
     )
     db.commit()
     return result
+
+
+@router.get("/api/handler/tpe/toy-share-links")
+def handler_list_toy_share_links(
+    device_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    selected_device_id = (device_id or "").strip()
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if selected_device_id and selected_device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+        query = (
+            "SELECT * FROM tpe_toy_share_links WHERE device_id IN (" + ",".join("?" * len(assigned)) + ") "
+            if assigned
+            else "SELECT * FROM tpe_toy_share_links WHERE 1=0 "
+        )
+        params: list[str] = list(assigned)
+        if selected_device_id:
+            query += "AND device_id = ? "
+            params.append(selected_device_id)
+        query += "ORDER BY id DESC LIMIT 100"
+        rows = db.execute(query, tuple(params)).fetchall()
+    else:
+        if selected_device_id:
+            rows = db.execute(
+                "SELECT * FROM tpe_toy_share_links WHERE device_id = ? ORDER BY id DESC LIMIT 100",
+                (selected_device_id,),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM tpe_toy_share_links ORDER BY id DESC LIMIT 100"
+            ).fetchall()
+
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["allow_lovense"] = bool(item.get("allow_lovense"))
+        item["allow_intiface"] = bool(item.get("allow_intiface"))
+        item["allow_notifications"] = bool(item.get("allow_notifications"))
+        item["allow_overlay"] = bool(item.get("allow_overlay"))
+        item["allow_audio"] = bool(item.get("allow_audio"))
+        item["allow_screen"] = bool(item.get("allow_screen"))
+        item["allow_device_controls"] = bool(item.get("allow_device_controls"))
+        item["allow_app_controls"] = bool(item.get("allow_app_controls"))
+        item["enabled"] = bool(item.get("enabled"))
+        result.append(item)
+    return result
+
+
+@router.post("/api/handler/tpe/toy-share-links", status_code=201)
+def handler_create_toy_share_link(
+    body: ToyShareLinkCreateRequest,
+    request: Request,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    device_id = (body.device_id or "").strip()
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id is required")
+
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
+    row = db.execute(
+        "SELECT device_id FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    max_level = max(0, min(int(body.max_level), 20))
+    expires_minutes = max(5, min(int(body.expires_in_minutes), 60 * 24 * 14))
+    created_at = _now_iso()
+    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)).isoformat()
+    token = secrets.token_urlsafe(24)
+
+    insert_cur = db.execute(
+        """
+        INSERT INTO tpe_toy_share_links
+            (token, device_id, created_by, label, allow_lovense, allow_intiface,
+             allow_notifications, allow_overlay, allow_audio, allow_screen,
+             allow_device_controls, allow_app_controls,
+             max_level, enabled, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        """,
+        (
+            token,
+            device_id,
+            current_user.get("user_id"),
+            (body.label or "").strip() or None,
+            1 if body.allow_lovense else 0,
+            1 if body.allow_intiface else 0,
+            1 if body.allow_notifications else 0,
+            1 if body.allow_overlay else 0,
+            1 if body.allow_audio else 0,
+            1 if body.allow_screen else 0,
+            1 if body.allow_device_controls else 0,
+            1 if body.allow_app_controls else 0,
+            max_level,
+            expires_at,
+            created_at,
+        ),
+    )
+    link_id = insert_cur.lastrowid
+    db.commit()
+
+    base = str(request.base_url).rstrip("/")
+    control_url = f"{base}/static/toy-control.html?token={token}"
+    return {
+        "id": link_id,
+        "token": token,
+        "device_id": device_id,
+        "control_url": control_url,
+        "expires_at": expires_at,
+        "max_level": max_level,
+        "allow_lovense": body.allow_lovense,
+        "allow_intiface": body.allow_intiface,
+        "allow_notifications": body.allow_notifications,
+        "allow_overlay": body.allow_overlay,
+        "allow_audio": body.allow_audio,
+        "allow_screen": body.allow_screen,
+        "allow_device_controls": body.allow_device_controls,
+        "allow_app_controls": body.allow_app_controls,
+    }
+
+
+@router.get("/api/public/control/{token}/meta")
+def public_control_meta(
+    token: str,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    token_value = (token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    row = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE token = ?",
+        (token_value,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    if not bool(row["enabled"]) or _is_expired_iso(row["expires_at"]):
+        raise HTTPException(status_code=403, detail="Share link is not active")
+
+    return {
+        "label": row["label"] or "Shared Control",
+        "device_id": row["device_id"],
+        "expires_at": row["expires_at"],
+        "max_level": int(row["max_level"] or 20),
+        "allow_lovense": bool(row["allow_lovense"]),
+        "allow_intiface": bool(row["allow_intiface"]),
+        "allow_notifications": bool(row["allow_notifications"]),
+        "allow_overlay": bool(row["allow_overlay"]),
+        "allow_audio": bool(row["allow_audio"]),
+        "allow_screen": bool(row["allow_screen"]),
+        "allow_device_controls": bool(row["allow_device_controls"]),
+        "allow_app_controls": bool(row["allow_app_controls"]),
+        "public_exposure_level": _safe_choice(
+            get_setting(db, "public_exposure_level", "controlled"),
+            PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+            "controlled",
+        ),
+    }
+
+
+@router.post("/api/public/control/{token}/command")
+def public_shared_control_command(
+    token: str,
+    body: PublicSharedControlRequest,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    if not _public_setting_enabled(db, "public_toy_control_enabled", default=True):
+        raise HTTPException(status_code=403, detail="Public shared controls are disabled by handler settings")
+
+    token_value = (token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    row = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE token = ?",
+        (token_value,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    if not bool(row["enabled"]) or _is_expired_iso(row["expires_at"]):
+        raise HTTPException(status_code=403, detail="Share link is not active")
+
+    scope, payload, command_key = _public_shared_payload(body)
+    if not bool(row[scope] if scope in row.keys() else 0):
+        raise HTTPException(status_code=403, detail="This control scope is disabled for the shared link")
+
+    result = _send_mqtt_to_device(db, row["device_id"], payload)
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'shared_control', 'public_command', ?, ?, ?)
+        """,
+        (
+            row["device_id"],
+            command_key,
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    db.execute(
+        "UPDATE tpe_toy_share_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
+        (_now_iso(), row["id"]),
+    )
+    db.commit()
+    return {
+        "status": "ok",
+        "command": command_key,
+        "device_id": row["device_id"],
+        "result": result,
+    }
+
+
+@router.post("/api/handler/tpe/toy-share-links/{link_id}/disable")
+def handler_disable_toy_share_link(
+    link_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        "SELECT id, device_id FROM tpe_toy_share_links WHERE id = ?",
+        (link_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if row["device_id"] not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
+    db.execute(
+        "UPDATE tpe_toy_share_links SET enabled = 0 WHERE id = ?",
+        (link_id,),
+    )
+    db.commit()
+    return {"disabled": True, "id": link_id}
+
+
+def _assert_handler_toy_link_access(
+    db: sqlite3.Connection,
+    current_user: dict,
+    link_id: int,
+) -> sqlite3.Row:
+    row = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE id = ?",
+        (link_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    if current_user.get("role") != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if row["device_id"] not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+    return row
+
+
+@router.get("/api/handler/tpe/toy-share-links/{link_id}/queue")
+def handler_toy_share_queue_state(
+    link_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    link_row = _assert_handler_toy_link_access(db, current_user, link_id)
+    active = _queue_promote_next(db, link_row=link_row, max_level=int(link_row["max_level"] or 20))
+    pending = db.execute(
+        """
+        SELECT id, participant_id, mode, command, level, pattern, requested_at
+        FROM tpe_toy_control_queue
+        WHERE token = ? AND status = 'pending'
+        ORDER BY id ASC
+        LIMIT 50
+        """,
+        (link_row["token"],),
+    ).fetchall()
+    db.commit()
+    return {
+        "link_id": link_id,
+        "active": dict(active) if active else None,
+        "pending": [dict(r) for r in pending],
+        "slot_seconds": _TOY_QUEUE_SLOT_SECONDS,
+    }
+
+
+@router.post("/api/handler/tpe/toy-share-links/{link_id}/queue/skip-active")
+def handler_toy_share_queue_skip_active(
+    link_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    link_row = _assert_handler_toy_link_access(db, current_user, link_id)
+    active = _queue_active_row(db, str(link_row["token"]))
+    if active:
+        now = _now_iso()
+        db.execute(
+            "UPDATE tpe_toy_control_queue SET status = 'skipped', completed_at = ? WHERE id = ?",
+            (now, active["id"]),
+        )
+    next_active = _queue_promote_next(db, link_row=link_row, max_level=int(link_row["max_level"] or 20))
+    db.commit()
+    return {
+        "updated": True,
+        "skipped_active_id": (int(active["id"]) if active else None),
+        "next_active_id": (int(next_active["id"]) if next_active else None),
+    }
+
+
+@router.post("/api/handler/tpe/toy-share-links/{link_id}/queue/remove/{queue_id}")
+def handler_toy_share_queue_remove_entry(
+    link_id: int,
+    queue_id: int,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    link_row = _assert_handler_toy_link_access(db, current_user, link_id)
+    queue_row = db.execute(
+        "SELECT * FROM tpe_toy_control_queue WHERE id = ? AND token = ?",
+        (queue_id, link_row["token"]),
+    ).fetchone()
+    if not queue_row:
+        raise HTTPException(status_code=404, detail="Queue entry not found")
+    if queue_row["status"] not in {"pending", "active"}:
+        raise HTTPException(status_code=400, detail="Queue entry is not removable")
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE tpe_toy_control_queue SET status = 'removed', completed_at = ? WHERE id = ?",
+        (now, queue_row["id"]),
+    )
+    next_active = _queue_promote_next(db, link_row=link_row, max_level=int(link_row["max_level"] or 20))
+    db.commit()
+    return {
+        "updated": True,
+        "removed_id": int(queue_row["id"]),
+        "next_active_id": (int(next_active["id"]) if next_active else None),
+    }
+
+
+@router.post("/api/public/toy-share/{token}/control")
+def public_toy_share_control(
+    token: str,
+    body: ToyShareControlRequest,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    if not _public_setting_enabled(db, "public_toy_control_enabled", default=True):
+        raise HTTPException(status_code=403, detail="Public toy control is disabled by handler settings")
+
+    token_value = (token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    row = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE token = ?",
+        (token_value,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Share link not found")
+    if not bool(row["enabled"]):
+        raise HTTPException(status_code=403, detail="Share link has been disabled")
+    if _is_expired_iso(row["expires_at"]):
+        raise HTTPException(status_code=403, detail="Share link has expired")
+
+    mode = (body.mode or "lovense").strip().lower()
+    if mode not in {"lovense", "intiface"}:
+        raise HTTPException(status_code=400, detail="mode must be lovense or intiface")
+
+    if mode == "lovense" and not bool(row["allow_lovense"]):
+        raise HTTPException(status_code=403, detail="Lovense control not permitted for this link")
+    if mode == "intiface" and not bool(row["allow_intiface"]):
+        raise HTTPException(status_code=403, detail="Intiface control not permitted for this link")
+
+    exposure_level = _safe_choice(
+        get_setting(db, "public_exposure_level", "controlled"),
+        PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+        "controlled",
+    )
+    participant_id = _effective_participant_id(request, body.participant_id)
+    queue_cooldown_sec = max(0, min(_safe_int(get_setting(db, "public_toy_queue_cooldown_sec", "30"), 30), 600))
+
+    if exposure_level == "full_public" and (body.command or "vibrate").strip().lower() != "stop":
+        since_completion = _queue_recent_completion_seconds(
+            db,
+            token=token_value,
+            participant_id=participant_id,
+        )
+        if since_completion is not None and since_completion < queue_cooldown_sec:
+            retry = max(1, queue_cooldown_sec - since_completion)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Cooldown active. Try again in {retry} seconds.",
+                headers={"Retry-After": str(retry)},
+            )
+
+        existing = db.execute(
+            "SELECT * FROM tpe_toy_control_queue WHERE token = ? AND participant_id = ? AND status IN ('pending','active') ORDER BY id ASC LIMIT 1",
+            (token_value, participant_id),
+        ).fetchone()
+        if not existing:
+            sequence_json = None
+            if body.sequence:
+                try:
+                    sequence_json = json.dumps(body.sequence)
+                except Exception:
+                    sequence_json = None
+            db.execute(
+                """
+                INSERT INTO tpe_toy_control_queue
+                    (link_id, token, device_id, participant_id, mode, command, level, duration_ms, pattern, sequence_json, requested_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                """,
+                (
+                    row["id"],
+                    token_value,
+                    row["device_id"],
+                    participant_id,
+                    mode,
+                    (body.command or "vibrate").strip().lower(),
+                    _clamp_toy_level(body.level, int(row["max_level"] or 20)),
+                    max(0, int(body.duration_ms or 0)),
+                    (body.pattern or "").strip().lower() or None,
+                    sequence_json,
+                    _now_iso(),
+                ),
+            )
+
+        active = _queue_promote_next(db, link_row=row, max_level=int(row["max_level"] or 20))
+        db.commit()
+
+        mine_active = bool(active and str(active["participant_id"]) == participant_id)
+        pos = _queue_position(db, token=token_value, participant_id=participant_id)
+        pending_total_row = db.execute(
+            "SELECT COUNT(*) AS n FROM tpe_toy_control_queue WHERE token = ? AND status = 'pending'",
+            (token_value,),
+        ).fetchone()
+        pending_total = int(pending_total_row["n"] if pending_total_row else 0)
+        return {
+            "status": "queued" if not mine_active else "active",
+            "full_public_queue": True,
+            "participant_id": participant_id,
+            "active": mine_active,
+            "position": pos,
+            "pending_total": pending_total,
+            "turn_seconds": _TOY_QUEUE_SLOT_SECONDS,
+            "active_expires_at": (active["expires_at"] if active else None),
+        }
+
+    if exposure_level == "full_public" and (body.command or "").strip().lower() == "stop":
+        mine_active = db.execute(
+            "SELECT * FROM tpe_toy_control_queue WHERE token = ? AND participant_id = ? AND status = 'active' ORDER BY id ASC LIMIT 1",
+            (token_value, participant_id),
+        ).fetchone()
+        if mine_active:
+            now = _now_iso()
+            db.execute(
+                "UPDATE tpe_toy_control_queue SET status = 'completed', completed_at = ? WHERE id = ?",
+                (now, mine_active["id"]),
+            )
+            active_after = _queue_promote_next(db, link_row=row, max_level=int(row["max_level"] or 20))
+            db.commit()
+            return {
+                "status": "released",
+                "full_public_queue": True,
+                "next_active_participant": (active_after["participant_id"] if active_after else None),
+            }
+
+    result = _send_shared_toy_control(
+        db,
+        device_id=row["device_id"],
+        mode=mode,
+        command=body,
+        max_level=int(row["max_level"] or 20),
+    )
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE tpe_toy_share_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
+        (now, row["id"]),
+    )
+    db.commit()
+    return {
+        "status": "ok",
+        "mode": mode,
+        "device_id": row["device_id"],
+        "result": result,
+    }
+
+
+@router.get("/api/public/toy-share/{token}/queue/status")
+def public_toy_share_queue_status(
+    token: str,
+    request: Request,
+    participant_id: Optional[str] = Query(default=None),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    token_value = (token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    row = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE token = ?",
+        (token_value,),
+    ).fetchone()
+    if not row or not bool(row["enabled"]) or _is_expired_iso(row["expires_at"]):
+        raise HTTPException(status_code=404, detail="Share link not found")
+
+    pid = _effective_participant_id(request, participant_id)
+    active = _queue_promote_next(db, link_row=row, max_level=int(row["max_level"] or 20))
+    pos = _queue_position(db, token=token_value, participant_id=pid)
+    pending_total_row = db.execute(
+        "SELECT COUNT(*) AS n FROM tpe_toy_control_queue WHERE token = ? AND status = 'pending'",
+        (token_value,),
+    ).fetchone()
+    db.commit()
+
+    return {
+        "participant_id": pid,
+        "active_for_you": bool(active and str(active["participant_id"]) == pid),
+        "position": pos,
+        "pending_total": int(pending_total_row["n"] if pending_total_row else 0),
+        "turn_seconds": _TOY_QUEUE_SLOT_SECONDS,
+        "active_expires_at": (active["expires_at"] if active else None),
+    }
+
+
+@router.post("/api/public/toy-share/{token}/queue/leave")
+def public_toy_share_queue_leave(
+    token: str,
+    payload: ToyShareQueueLeaveRequest,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    token_value = (token or "").strip()
+    participant_id = (payload.participant_id or "").strip()
+    if not token_value or not participant_id:
+        raise HTTPException(status_code=400, detail="token and participant_id are required")
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE tpe_toy_control_queue SET status = 'cancelled', completed_at = ? WHERE token = ? AND participant_id = ? AND status = 'pending'",
+        (now, token_value, participant_id),
+    )
+    active = db.execute(
+        "SELECT * FROM tpe_toy_control_queue WHERE token = ? AND participant_id = ? AND status = 'active' ORDER BY id ASC LIMIT 1",
+        (token_value, participant_id),
+    ).fetchone()
+    if active:
+        db.execute(
+            "UPDATE tpe_toy_control_queue SET status = 'completed', completed_at = ? WHERE id = ?",
+            (now, active["id"]),
+        )
+        link_row = db.execute(
+            "SELECT * FROM tpe_toy_share_links WHERE token = ?",
+            (token_value,),
+        ).fetchone()
+        if link_row:
+            _queue_promote_next(db, link_row=link_row, max_level=int(link_row["max_level"] or 20))
+
+    db.commit()
+    return {"left": True}
 
 
 @router.post("/api/handler/tpe/checkins/request")
