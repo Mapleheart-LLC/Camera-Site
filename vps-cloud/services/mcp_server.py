@@ -120,8 +120,8 @@ def _load_credential(db_key: str, env_key: str) -> str:
             return str(row[0])
     except _sqlite3.Error as exc:
         logger.debug("Could not read credential '%s' from DB: %s", db_key, exc)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Unexpected error reading credential '%s': %s", db_key, exc)
     return os.environ.get(env_key, "")
 
 
@@ -200,7 +200,8 @@ def post_to_bluesky(content: str) -> Dict[str, Any]:
             try:
                 client.login(session_string=stored_session)
                 authenticated = True
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("Bluesky: could not resume stored session, will re-login: %s", exc)
                 client = Client()
 
         if not authenticated:

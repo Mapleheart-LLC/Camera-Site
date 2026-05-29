@@ -5697,7 +5697,28 @@ def handler_approve_social_post_draft(
         (new_status, json.dumps(result, ensure_ascii=False), draft_id),
     )
     db.commit()
-    return {"draft_id": draft_id, "status": new_status, "result": result}
+
+    # Build a sanitized per-platform summary for the API response.  Raw
+    # exception strings are logged server-side only and not forwarded to the
+    # client to avoid leaking internal details.
+    per_platform = []
+    for r in result.get("results", []):
+        entry: dict = {"platform": r.get("platform"), "status": r.get("status")}
+        if r.get("status") == "posted":
+            # Include post identifiers so the handler can verify the post.
+            if r.get("tweet_id"):
+                entry["tweet_id"] = r["tweet_id"]
+            if r.get("post_uri"):
+                entry["post_uri"] = r["post_uri"]
+        if r.get("status") == "error":
+            logger.warning(
+                "Social post draft %s failed on %s: %s",
+                draft_id, r.get("platform"), r.get("error"),
+            )
+            entry["error"] = "Posting failed; check server logs for details."
+        per_platform.append(entry)
+
+    return {"draft_id": draft_id, "status": new_status, "platforms": per_platform}
 
 
 @router.delete("/api/handler/social-post-drafts/{draft_id}", status_code=200)
