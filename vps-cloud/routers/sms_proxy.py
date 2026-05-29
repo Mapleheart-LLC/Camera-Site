@@ -424,7 +424,7 @@ def _get_unified_message_payload(
 
 def _publish_incoming_proxy_sms(
     db: sqlite3.Connection,
-    thread_id: str,
+    puppy_mail_thread_id: int,
     message_id: str,
 ) -> None:
     """Publish INCOMING_PROXY_SMS via MQTT to all paired devices."""
@@ -446,12 +446,12 @@ def _publish_incoming_proxy_sms(
         )
         payload: dict = {
             "action": "INCOMING_PROXY_SMS",
-            "thread_id": thread_id,
-            "message_id": str(message_payload["id"]),
-            "sender": message_payload["sender"],
-            "content": message_payload["content"],
-            "timestamp": message_payload["timestamp"],
-            "media_url": message_payload["media_url"],
+            "thread_id": str(puppy_mail_thread_id),
+            "message_id": str(message_payload.get("id", message_id)),
+            "sender": message_payload.get("sender", ""),
+            "content": message_payload.get("content", ""),
+            "timestamp": message_payload.get("timestamp", _now_iso()),
+            "media_url": message_payload.get("media_url"),
         }
 
         sent = failed = 0
@@ -466,7 +466,7 @@ def _publish_incoming_proxy_sms(
             "INCOMING_PROXY_SMS dispatched: sent=%d failed=%d thread=%s",
             sent,
             failed,
-            thread_id,
+            puppy_mail_thread_id,
         )
     except Exception as exc:
         logger.exception("Error publishing INCOMING_PROXY_SMS: %s", exc)
@@ -592,7 +592,7 @@ async def twilio_inbound_webhook(
     background_tasks.add_task(
         _publish_incoming_proxy_sms_bg,
         captured_db,
-        str(puppy_mail_thread_id),
+        puppy_mail_thread_id,
         message_id,
     )
 
@@ -612,11 +612,11 @@ async def twilio_inbound_webhook(
 
 def _publish_incoming_proxy_sms_bg(
     db: sqlite3.Connection,
-    thread_id: str,
+    puppy_mail_thread_id: int,
     message_id: str,
 ) -> None:
     try:
-        _publish_incoming_proxy_sms(db, thread_id, message_id)
+        _publish_incoming_proxy_sms(db, puppy_mail_thread_id, message_id)
     finally:
         db.close()
 
