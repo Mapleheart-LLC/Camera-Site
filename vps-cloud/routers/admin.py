@@ -1,5 +1,5 @@
-"""
-routers/admin.py – Admin-only management endpoints for mochii.live.
+﻿"""
+routers/admin.py â€“ Admin-only management endpoints for mochii.live.
 
 All endpoints are protected by HTTP Basic Auth via the ``get_admin_user``
 dependency (ADMIN_USERNAME / ADMIN_PASSWORD environment variables).
@@ -7,29 +7,29 @@ This auth system is entirely separate from the username/password JWT flow.
 
 Endpoints
 ---------
-  GET    /api/admin/cameras            – list all cameras (full details)
-  POST   /api/admin/cameras            – add a new camera
-  PUT    /api/admin/cameras/{cam_id}   – update an existing camera
-  DELETE /api/admin/cameras/{cam_id}   – remove a camera
-  GET    /api/admin/stats              – user/camera counts + recent activations + camera access count
-  GET    /api/admin/camera-logs        – 50 most recent camera service access log entries
-  POST   /api/admin/control/{device}   – manually trigger an IoT device
-  GET    /api/admin/settings           – current env-var / runtime configuration status
-  PATCH  /api/admin/settings           – update runtime-configurable settings (e.g. mock_auth)
-  GET    /api/admin/store/products     – list all products
-  POST   /api/admin/store/products     – create a product
-  PUT    /api/admin/store/products/{id} – update a product
-  DELETE /api/admin/store/products/{id} – delete a product
-  GET    /api/admin/store/orders       – list all orders (most recent first)
-  GET    /api/admin/drool/credentials  – show which drool scraper credentials are configured
-  PUT    /api/admin/drool/credentials  – save / clear drool scraper credentials
+  GET    /api/admin/cameras            â€“ list all cameras (full details)
+  POST   /api/admin/cameras            â€“ add a new camera
+  PUT    /api/admin/cameras/{cam_id}   â€“ update an existing camera
+  DELETE /api/admin/cameras/{cam_id}   â€“ remove a camera
+  GET    /api/admin/stats              â€“ user/camera counts + recent activations + camera access count
+  GET    /api/admin/camera-logs        â€“ 50 most recent camera service access log entries
+  POST   /api/admin/control/{device}   â€“ manually trigger an IoT device
+  GET    /api/admin/settings           â€“ current env-var / runtime configuration status
+  PATCH  /api/admin/settings           â€“ update runtime-configurable settings (e.g. mock_auth)
+  GET    /api/admin/store/products     â€“ list all products
+  POST   /api/admin/store/products     â€“ create a product
+  PUT    /api/admin/store/products/{id} â€“ update a product
+  DELETE /api/admin/store/products/{id} â€“ delete a product
+  GET    /api/admin/store/orders       â€“ list all orders (most recent first)
+  GET    /api/admin/drool/credentials  â€“ show which drool scraper credentials are configured
+  PUT    /api/admin/drool/credentials  â€“ save / clear drool scraper credentials
                                          (Reddit API, Reddit IFTTT, Twitter, Bluesky)
-  DELETE /api/admin/drool/{entry_id}   – delete a single drool archive entry (+ its comments/reactions)
-  POST   /api/admin/drool/purge-bad    – delete all entries whose original_url is not a valid http(s) URL
-  GET    /api/admin/users              – list all registered site users
-  POST   /api/admin/users              – create a new user account (username/password/access_level/role)
-  PATCH  /api/admin/users/{user_id}    – update a user's password, access_level, and/or role
-  DELETE /api/admin/users/{user_id}    – delete a user account
+  DELETE /api/admin/drool/{entry_id}   â€“ delete a single drool archive entry (+ its comments/reactions)
+  POST   /api/admin/drool/purge-bad    â€“ delete all entries whose original_url is not a valid http(s) URL
+  GET    /api/admin/users              â€“ list all registered site users
+  POST   /api/admin/users              â€“ create a new user account (username/password/access_level/role)
+  PATCH  /api/admin/users/{user_id}    â€“ update a user's password, access_level, and/or role
+  DELETE /api/admin/users/{user_id}    â€“ delete a user account
 """
 
 import logging
@@ -50,7 +50,7 @@ from routers.tpe import _send_fcm_to_all
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_VALID_DEVICES = {"pishock", "lovense", "pavlok"}
+_VALID_DEVICES = {"pavlok", "lovense", "pavlok"}
 
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
@@ -381,7 +381,7 @@ def admin_control_device(
     Manually trigger an IoT device without rate limiting or an auth JWT.
 
     Lovense and Pavlok commands are forwarded to the paired TPE app via FCM.
-    PiShock uses a direct connection (not relayed through the app).
+    Pavlok uses a direct connection (not relayed through the app).
 
     Logs the activation to the ``activations`` table with the admin username
     as the actor so it appears in the stats history.
@@ -424,7 +424,7 @@ def admin_control_device(
 
 
 # ---------------------------------------------------------------------------
-# Puppy Pouch – admin question management
+# Puppy Pouch â€“ admin question management
 # ---------------------------------------------------------------------------
 
 # Maximum tweet body length for answer text (Twitter limit is 280; reserve
@@ -509,7 +509,7 @@ def _post_answer_tweet(question_id: str, answer_text: str) -> bool:
 
     base_url = os.environ.get("BASE_URL", "").rstrip("/")
     if not base_url:
-        logger.warning("Tweet post: BASE_URL not set – cannot build an absolute share URL; skipping tweet.")
+        logger.warning("Tweet post: BASE_URL not set â€“ cannot build an absolute share URL; skipping tweet.")
         return False
     share_url = f"{base_url}/q/{question_id}"
 
@@ -518,7 +518,7 @@ def _post_answer_tweet(question_id: str, answer_text: str) -> bool:
 
     status_code = _do_post(access_token, tweet_text)
     if status_code == 401:
-        # Token likely expired – refresh once and retry.
+        # Token likely expired â€“ refresh once and retry.
         new_token = _refresh_token()
         if new_token:
             status_code = _do_post(new_token, tweet_text)
@@ -554,7 +554,7 @@ def _post_answer_bluesky(question_id: str, answer_text: str) -> bool:
 
     base_url = os.environ.get("BASE_URL", "").rstrip("/")
     if not base_url:
-        logger.warning("Bluesky post: BASE_URL not set – cannot build an absolute share URL; skipping post.")
+        logger.warning("Bluesky post: BASE_URL not set â€“ cannot build an absolute share URL; skipping post.")
         return False
         
     share_url = f"{base_url}/q/{question_id}"
@@ -672,7 +672,7 @@ def admin_answer_question(
     tweeted = _post_answer_tweet(question_id, payload.answer)
     return {
         "id": question_id,
-        "message": "Answer saved and question is now public 🐾",
+        "message": "Answer saved and question is now public ðŸ¾",
         "tweeted": tweeted,
     }
   
@@ -696,7 +696,7 @@ def admin_delete_question(
 
 
 # ---------------------------------------------------------------------------
-# Danger Zone – runtime configuration / environment variable settings
+# Danger Zone â€“ runtime configuration / environment variable settings
 # ---------------------------------------------------------------------------
 
 _DEFAULT_SECRET_KEY = "changeme-replace-in-production!!"
@@ -715,7 +715,7 @@ def get_settings(
     """Return the current status of all important runtime / environment settings.
 
     Security-sensitive values (SECRET_KEY, passwords, OAuth secrets) are
-    never returned – only a *status* string indicating whether they are set
+    never returned â€“ only a *status* string indicating whether they are set
     to a known-insecure default or a custom value.
     """
     secret_key = os.environ.get("JWT_SECRET") or os.environ.get("SECRET_KEY", "")
@@ -766,7 +766,7 @@ def patch_settings(
 
     Security-critical settings (SECRET_KEY, OAuth credentials, admin
     password) must be changed via environment variables and a container
-    restart – they are intentionally not exposed through this endpoint.
+    restart â€“ they are intentionally not exposed through this endpoint.
     """
     updated: list[str] = []
     if body.mock_auth is not None:
@@ -781,7 +781,7 @@ def patch_settings(
 
 
 # ---------------------------------------------------------------------------
-# Store – product management
+# Store â€“ product management
 # ---------------------------------------------------------------------------
 
 
@@ -927,7 +927,7 @@ def admin_delete_product(
 
 
 # ---------------------------------------------------------------------------
-# Store – order management
+# Store â€“ order management
 # ---------------------------------------------------------------------------
 
 
@@ -964,16 +964,16 @@ def admin_list_orders(
 
 
 # ---------------------------------------------------------------------------
-# Drool Log – scraper credentials management
+# Drool Log â€“ scraper credentials management
 # ---------------------------------------------------------------------------
 
-# Mapping: request field → (settings_table_key, env_var_fallback, is_secret)
+# Mapping: request field â†’ (settings_table_key, env_var_fallback, is_secret)
 _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
-    # Per-platform on/off toggles – '1' = enabled (default), '0' = disabled
+    # Per-platform on/off toggles â€“ '1' = enabled (default), '0' = disabled
     "reddit_enabled":  ("drool_reddit_enabled",  "REDDIT_ENABLED",  False),
     "twitter_enabled": ("drool_twitter_enabled",  "TWITTER_ENABLED", False),
     "bsky_enabled":    ("drool_bsky_enabled",     "BSKY_ENABLED",    False),
-    # Reddit mode toggle – value is 'api' (default), 'ifttt', or 'gsheet'
+    # Reddit mode toggle â€“ value is 'api' (default), 'ifttt', or 'gsheet'
     "reddit_mode":           ("drool_reddit_mode",           "REDDIT_MODE",           False),
     # Reddit API credentials (used when reddit_mode == 'api')
     "reddit_client_id":      ("drool_reddit_client_id",      "REDDIT_CLIENT_ID",      False),
@@ -985,9 +985,9 @@ _DROOL_CRED_MAP: dict[str, tuple[str, str, bool]] = {
     "reddit_ifttt_secret":   ("drool_reddit_ifttt_secret",   "REDDIT_IFTTT_SECRET",   True),
     # Google Sheets CSV export URL (used when reddit_mode == 'gsheet')
     # Share the sheet as "Anyone with the link can view", then:
-    #   File → Share → Publish to web → CSV → copy the link
+    #   File â†’ Share â†’ Publish to web â†’ CSV â†’ copy the link
     "reddit_gsheet_csv_url":   ("drool_reddit_gsheet_csv_url",   "REDDIT_GSHEET_CSV_URL",   False),
-    # Second sheet URL – IFTTT needs a separate applet for upvotes vs saves,
+    # Second sheet URL â€“ IFTTT needs a separate applet for upvotes vs saves,
     # which write to different sheets.  Leave blank if only one sheet is in use.
     "reddit_gsheet_csv_url_2": ("drool_reddit_gsheet_csv_url_2", "REDDIT_GSHEET_CSV_URL_2", False),
     "twitter_user_id":            ("drool_twitter_user_id",              "TWITTER_USER_ID",        False),
@@ -1053,7 +1053,7 @@ def get_drool_credentials(
 ):
     """Return the configuration status of all drool scraper credentials.
 
-    Actual credential values are never returned – only whether each field
+    Actual credential values are never returned â€“ only whether each field
     is set (and from which source: 'db', 'env', or 'none').
     """
     result: dict[str, dict] = {}
@@ -1096,7 +1096,7 @@ def put_drool_credentials(
     for field, (db_key, _env_key, _is_secret) in _DROOL_CRED_MAP.items():
         value = getattr(payload, field, None)
         if value is None:
-            continue  # not provided – leave unchanged
+            continue  # not provided â€“ leave unchanged
         # Validate the mode field
         if field == "reddit_mode" and value not in (_REDDIT_MODE_DEFAULT, "ifttt", "gsheet", ""):
             raise HTTPException(
@@ -1110,7 +1110,7 @@ def put_drool_credentials(
                 detail=f"{field} must be '0' or '1'.",
             )
         if value == "":
-            # Empty string → delete the DB entry (revert to env fallback)
+            # Empty string â†’ delete the DB entry (revert to env fallback)
             db.execute("DELETE FROM settings WHERE key = ?", (db_key,))
         else:
             set_setting(db, db_key, value)
@@ -1295,14 +1295,14 @@ def get_analytics(
     db: sqlite3.Connection = Depends(get_db),
 ):
     """Return aggregated analytics across users, cameras, store, Q&A, activations, and drool."""
-    # ── Users ──────────────────────────────────────────────────────────────
+    # â”€â”€ Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     user_levels = db.execute(
         "SELECT access_level, COUNT(*) AS cnt FROM users GROUP BY access_level"
     ).fetchall()
     by_access_level = {str(r["access_level"]): r["cnt"] for r in user_levels}
 
-    # ── Camera access (last 30 days) ───────────────────────────────────────
+    # â”€â”€ Camera access (last 30 days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     cam_total_30d = db.execute(
         "SELECT COUNT(*) FROM camera_service_logs WHERE accessed_at >= date('now','-30 days')"
     ).fetchone()[0]
@@ -1318,7 +1318,7 @@ def get_analytics(
         "SELECT access_level, COUNT(*) AS cnt FROM camera_service_logs GROUP BY access_level"
     ).fetchall()
 
-    # ── Activations (last 30 days) ─────────────────────────────────────────
+    # â”€â”€ Activations (last 30 days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     act_total_30d = db.execute(
         "SELECT COUNT(*) FROM activations WHERE activated_at >= date('now','-30 days')"
     ).fetchone()[0]
@@ -1334,7 +1334,7 @@ def get_analytics(
         "SELECT device, COUNT(*) AS cnt FROM activations GROUP BY device"
     ).fetchall()
 
-    # ── Q&A ────────────────────────────────────────────────────────────────
+    # â”€â”€ Q&A â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     q_total = db.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
     q_answered = db.execute("SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL").fetchone()[0]
     q_by_day = db.execute(
@@ -1346,7 +1346,7 @@ def get_analytics(
         """
     ).fetchall()
 
-    # ── Orders / revenue (last 30 days) ────────────────────────────────────
+    # â”€â”€ Orders / revenue (last 30 days) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     orders_total = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
     revenue_total_row = db.execute(
         "SELECT COALESCE(SUM(total_amount), 0) FROM orders WHERE status = 'paid'"
@@ -1370,7 +1370,7 @@ def get_analytics(
         """
     ).fetchall()
 
-    # ── Drool archive ───────────────────────────────────────────────────────
+    # â”€â”€ Drool archive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     drool_total = db.execute("SELECT COUNT(*) FROM drool_archive").fetchone()[0]
     drool_views_row = db.execute(
         "SELECT COALESCE(SUM(view_count), 0) FROM drool_archive"
@@ -1439,13 +1439,13 @@ def get_cloudflare_analytics(
     frontend can render a consistent chart regardless of Cloudflare's chosen
     granularity (hourly or daily depending on the query window).
 
-    Requires the API token to have *Zone → Analytics → Read* and
-    *Zone → Zone → Read* permissions.
+    Requires the API token to have *Zone â†’ Analytics â†’ Read* and
+    *Zone â†’ Zone â†’ Read* permissions.
     """
     if not CF_API_TOKEN or not CF_ZONE_ID:
         return {"configured": False}
 
-    # since=-43200 → 43,200 minutes ago (30 days); Cloudflare expects a negative integer of minutes
+    # since=-43200 â†’ 43,200 minutes ago (30 days); Cloudflare expects a negative integer of minutes
     try:
         with httpx.Client(timeout=15.0) as client:
             resp = client.get(
@@ -1463,7 +1463,7 @@ def get_cloudflare_analytics(
     if resp.status_code == 403:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Cloudflare API returned 403 – check CLAPI permissions.",
+            detail="Cloudflare API returned 403 â€“ check CLAPI permissions.",
         )
     if resp.status_code != 200:
         raise HTTPException(
@@ -1521,7 +1521,7 @@ def get_cloudflare_analytics(
 
 
 # ---------------------------------------------------------------------------
-# Discord bot – settings & status
+# Discord bot â€“ settings & status
 # ---------------------------------------------------------------------------
 
 
@@ -1636,7 +1636,7 @@ async def discord_test_notification(
             detail="DISCORD_ADMIN_CHANNEL_ID is not configured.",
         )
     await send_admin_notification(
-        f"🧪 Test notification from the admin panel (triggered by **{admin_user}**) 🐾"
+        f"ðŸ§ª Test notification from the admin panel (triggered by **{admin_user}**) ðŸ¾"
     )
     return {"sent": True}
 
@@ -1863,3 +1863,4 @@ def admin_delete_vod(vod_id: int, _: str = Depends(get_admin_user), db: sqlite3.
         raise HTTPException(status_code=404, detail="VOD not found.")
     db.execute("DELETE FROM vods WHERE id = ?", (vod_id,))
     db.commit()
+

@@ -1,22 +1,22 @@
-"""
-routers/interactive.py – IoT device control endpoints.
+﻿"""
+routers/interactive.py â€“ IoT device control endpoints.
 
 Provides POST endpoints for authenticated subscribers (access_level >= 1):
-  - POST /api/control/pishock   – trigger a PiShock device (direct/VPN)
-  - POST /api/control/lovense   – trigger a Lovense device via the TPE app
-  - POST /api/control/pavlok    – trigger a Pavlok device via the TPE app
+  - POST /api/control/pavlok   â€“ trigger a Pavlok device (direct/VPN)
+  - POST /api/control/lovense   â€“ trigger a Lovense device via the TPE app
+  - POST /api/control/pavlok    â€“ trigger a Pavlok device via the TPE app
 
 Access rules
 ------------
-  level 0            – 403 Forbidden (no subscription).
-  level 1 or 2       – Teaser access: device activates for 5 seconds; a
+  level 0            â€“ 403 Forbidden (no subscription).
+  level 1 or 2       â€“ Teaser access: device activates for 5 seconds; a
                        1-hour cooldown is then enforced via Redis.  If a
                        cooldown key already exists the endpoint returns
                        429 Too Many Requests with a ``Retry-After`` header.
-  level 3 (Premium)  – No rate limit.
+  level 3 (Premium)  â€“ No rate limit.
 
 Lovense and Pavlok commands are routed through the paired TPE app via FCM
-(``LOVENSE_COMMAND`` / ``PAVLOK_COMMAND`` data messages).  PiShock continues
+(``LOVENSE_COMMAND`` / ``PAVLOK_COMMAND`` data messages).  Pavlok continues
 to use a direct connection and is not relayed through the app.
 
 Both endpoints require a valid JWT (Bearer token).
@@ -51,10 +51,10 @@ def _make_teaser_dependency(device: str):
     """
     Return a FastAPI dependency that enforces teaser rate-limiting for *device*.
 
-    - Level 0   → 403 Forbidden.
-    - Level 1/2 → 429 if a Redis cooldown key is present (with ``Retry-After``
+    - Level 0   â†’ 403 Forbidden.
+    - Level 1/2 â†’ 429 if a Redis cooldown key is present (with ``Retry-After``
                   seconds remaining); otherwise set a 1-hour cooldown and allow.
-    - Level 3+  → no rate limit, pass through immediately.
+    - Level 3+  â†’ no rate limit, pass through immediately.
     """
 
     async def check_teaser_limit(
@@ -74,7 +74,7 @@ def _make_teaser_dependency(device: str):
             # Premium subscribers have no rate limit.
             return current_user
 
-        # Teaser path (access levels 1 and 2) – enforce the 1-hour cooldown.
+        # Teaser path (access levels 1 and 2) â€“ enforce the 1-hour cooldown.
         # If Redis is unavailable, skip rate-limiting and grant access.
         if redis is None:
             return current_user
@@ -82,10 +82,10 @@ def _make_teaser_dependency(device: str):
         key = _cooldown_key(fanvue_id, device)
         ttl: int = await redis.ttl(key)
 
-        # ttl > 0  : key exists and has remaining time → cooldown active
+        # ttl > 0  : key exists and has remaining time â†’ cooldown active
         # ttl == -1: key exists with no expiry (should not happen, but treat as
         #            active to avoid bypassing the cooldown)
-        # ttl == -2: key does not exist → grant access
+        # ttl == -2: key does not exist â†’ grant access
         if ttl > 0 or ttl == -1:
             retry_after = ttl if ttl > 0 else _COOLDOWN_SECONDS
             raise HTTPException(
@@ -94,7 +94,7 @@ def _make_teaser_dependency(device: str):
                 headers={"Retry-After": str(retry_after)},
             )
 
-        # No active cooldown – grant access and start the 1-hour cooldown now.
+        # No active cooldown â€“ grant access and start the 1-hour cooldown now.
         await redis.set(key, "1", ex=_COOLDOWN_SECONDS)
         return current_user
 
@@ -110,26 +110,26 @@ def _log_activation(db: sqlite3.Connection, device: str, actor: str) -> None:
     db.commit()
 
 
-@router.post("/pishock")
-async def control_pishock(
-    current_user: dict = Depends(_make_teaser_dependency("pishock")),
+@router.post("/pavlok")
+async def control_pavlok(
+    current_user: dict = Depends(_make_teaser_dependency("pavlok")),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Trigger a PiShock device for the authenticated subscriber.
+    Trigger a Pavlok device for the authenticated subscriber.
 
     Premium users (level 3+) receive an unlimited activation.  Teaser users
-    (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
+    (levels 1â€“2) receive a 5-second activation followed by a 1-hour cooldown.
 
     Currently returns a mock success response; the real implementation will
     forward the command to the local-edge agent over the Tailscale VPN.
     """
     access_level: int = current_user.get("access_level", 0)
     is_teaser = access_level < _PREMIUM_LEVEL
-    _log_activation(db, "pishock", current_user["fanvue_id"])
+    _log_activation(db, "pavlok", current_user["fanvue_id"])
     response: dict = {
         "status": "ok",
-        "device": "pishock",
+        "device": "pavlok",
         "message": "Command accepted (mock response).",
         "user": current_user["fanvue_id"],
     }
@@ -148,7 +148,7 @@ async def control_lovense(
     Trigger a Lovense device for the authenticated subscriber.
 
     Premium users (level 3+) receive an unlimited activation.  Teaser users
-    (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
+    (levels 1â€“2) receive a 5-second activation followed by a 1-hour cooldown.
 
     The command is forwarded to the paired TPE app via an FCM ``LOVENSE_COMMAND``
     data message; the app then relays it to the connected Lovense toy.
@@ -185,7 +185,7 @@ async def control_pavlok(
     Trigger a Pavlok device for the authenticated subscriber.
 
     Premium users (level 3+) receive an unlimited activation.  Teaser users
-    (levels 1–2) receive a 5-second activation followed by a 1-hour cooldown.
+    (levels 1â€“2) receive a 5-second activation followed by a 1-hour cooldown.
 
     The command is forwarded to the paired TPE app via an FCM ``PAVLOK_COMMAND``
     data message; the app then relays it to the connected Pavlok device.
@@ -212,3 +212,4 @@ async def control_pavlok(
         response["activation_seconds"] = _TEASER_DURATION_SECONDS
         response["cooldown_seconds"] = _COOLDOWN_SECONDS
     return response
+

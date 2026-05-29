@@ -1,21 +1,21 @@
-"""
-discord-bot/bot.py – Standalone Discord gateway bot for mochii.live
+﻿"""
+discord-bot/bot.py â€“ Standalone Discord gateway bot for mochii.live
 
 Features
 --------
-  /stream   – Check if any camera stream is currently live (public embed)
-  /link     – Ephemeral message with instructions to link a site account
-  /ask      – Open a modal to submit an anonymous question to the Puppy Pouch
-  /tier     – Show the caller's current subscriber tier (ephemeral)
-  /notify   – Toggle DM opt-in for stream go-live notifications
-  /poke     – Trigger a connected IoT device (access_level ≥ 1 required)
-  /token    – Get a one-time 5-minute login link for the site
+  /stream   â€“ Check if any camera stream is currently live (public embed)
+  /link     â€“ Ephemeral message with instructions to link a site account
+  /ask      â€“ Open a modal to submit an anonymous question to the Puppy Pouch
+  /tier     â€“ Show the caller's current subscriber tier (ephemeral)
+  /notify   â€“ Toggle DM opt-in for stream go-live notifications
+  /poke     â€“ Trigger a connected IoT device (access_level â‰¥ 1 required)
+  /token    â€“ Get a one-time 5-minute login link for the site
 
-  Reply button on question messages → modal → saves answer & publishes it
+  Reply button on question messages â†’ modal â†’ saves answer & publishes it
 
-  on_member_join – optional welcome DM + admin channel notification
+  on_member_join â€“ optional welcome DM + admin channel notification
 
-  Stream watcher – background task that polls go2rtc every 30 s and posts
+  Stream watcher â€“ background task that polls go2rtc every 30 s and posts
   a go-live / stream-ended notification when live state changes, and DMs
   opted-in members via the notify-me list.
 
@@ -25,7 +25,7 @@ All runtime toggles and message templates are stored in the shared SQLite
 Environment variables
 ---------------------
 DISCORD_BOT_TOKEN            (required) Bot token
-DISCORD_GUILD_ID             (optional) Guild ID – omit for global command sync
+DISCORD_GUILD_ID             (optional) Guild ID â€“ omit for global command sync
 DISCORD_QUESTION_CHANNEL_ID  Channel for new Q&A notes (with Reply button)
 DISCORD_NOTIFICATION_CHANNEL_ID  Channel for published answers / events
 DISCORD_ADMIN_CHANNEL_ID     Private channel for operational alerts
@@ -34,10 +34,10 @@ GO2RTC_HOST                  go2rtc host (default: go2rtc)
 GO2RTC_PORT                  go2rtc port (default: 1984)
 BASE_URL                     Public site root URL (e.g. https://mochii.live)
 DATABASE_PATH                Shared SQLite database (default: /app/data/camera_site.db)
-SECRET_KEY                   Shared JWT secret (same as backend SECRET_KEY) – used by /token
+SECRET_KEY                   Shared JWT secret (same as backend SECRET_KEY) â€“ used by /token
 BACKEND_URL                  Internal backend URL (default: http://backend:8000)
-ADMIN_USERNAME               HTTP Basic admin username – used by /poke
-ADMIN_PASSWORD               HTTP Basic admin password – used by /poke
+ADMIN_USERNAME               HTTP Basic admin username â€“ used by /poke
+ADMIN_PASSWORD               HTTP Basic admin password â€“ used by /poke
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mochii-bot")
 
-# ── Environment variables ────────────────────────────────────────────────────
+# â”€â”€ Environment variables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 BOT_TOKEN      = os.environ.get("DISCORD_BOT_TOKEN", "")
 GUILD_ID       = os.environ.get("DISCORD_GUILD_ID", "")
@@ -86,7 +86,7 @@ _MOCHII_PINK  = 0xE8AEB7
 _MOCHII_RED   = 0xFF5C5C
 _MOCHII_GREY  = 0x5C5C5C
 
-# ── Database helpers ─────────────────────────────────────────────────────────
+# â”€â”€ Database helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 def _db() -> sqlite3.Connection:
@@ -117,7 +117,7 @@ def _channel(setting_key: str, env_fallback: str) -> str:
     return (_get_setting(setting_key) or env_fallback).strip()
 
 
-# ── Notify-me helpers ────────────────────────────────────────────────────────
+# â”€â”€ Notify-me helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 def _get_notify_users() -> list[str]:
@@ -144,14 +144,14 @@ def _set_notify_users(users: list[str]) -> None:
         logger.warning("Failed to save notify-me list: %s", exc)
 
 
-# ── Poke cooldowns (in-memory) ───────────────────────────────────────────────
+# â”€â”€ Poke cooldowns (in-memory) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # key: (discord_id, device)  value: monotonic timestamp when cooldown expires
 _poke_cooldowns: dict[tuple[str, str], float] = {}
-_POKE_COOLDOWN_TIER12 = 3600   # 1 hour  for access_level 1–2
+_POKE_COOLDOWN_TIER12 = 3600   # 1 hour  for access_level 1â€“2
 _POKE_COOLDOWN_TIER3  = 300    # 5 minutes for access_level 3+
 
 
-# ── Bot client ───────────────────────────────────────────────────────────────
+# â”€â”€ Bot client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 class MochiiBot(discord.Client):
@@ -175,7 +175,7 @@ class MochiiBot(discord.Client):
         self.loop.create_task(_stream_live_watcher(), name="stream-live-watcher")
 
     async def on_ready(self) -> None:
-        logger.info("Discord bot ready – %s (ID: %s)", self.user, self.user.id)
+        logger.info("Discord bot ready â€“ %s (ID: %s)", self.user, self.user.id)
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         """Route component interactions (buttons). App commands are handled by the tree."""
@@ -185,7 +185,7 @@ class MochiiBot(discord.Client):
                 await _handle_reply_button(interaction, custom_id[len("reply:"):])
                 return
         # All other interaction types (app commands, modals, autocomplete) are
-        # routed to the CommandTree through the client's internal dispatch – we
+        # routed to the CommandTree through the client's internal dispatch â€“ we
         # don't need to call tree.on_interaction here.
 
     async def on_member_join(self, member: discord.Member) -> None:
@@ -195,7 +195,7 @@ class MochiiBot(discord.Client):
 bot = MochiiBot()
 
 
-# ── Slash commands ───────────────────────────────────────────────────────────
+# â”€â”€ Slash commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @bot.tree.command(name="stream", description="Check if the stream is currently live")
@@ -217,19 +217,19 @@ async def cmd_stream(interaction: discord.Interaction) -> None:
 
     if is_live:
         embed = discord.Embed(
-            title="🔴 Stream is LIVE!",
-            description="Click below to watch now 🐾",
+            title="ðŸ”´ Stream is LIVE!",
+            description="Click below to watch now ðŸ¾",
             color=_MOCHII_RED,
             url=stream_url,
             timestamp=datetime.now(timezone.utc),
         )
-        embed.add_field(name="👀 Viewers", value=str(total_viewers), inline=True)
+        embed.add_field(name="ðŸ‘€ Viewers", value=str(total_viewers), inline=True)
         embed.set_footer(text="mochii.live")
         await interaction.followup.send(embed=embed)
     else:
         embed = discord.Embed(
-            title="⚫ Stream is Offline",
-            description="Not live right now – check back later! 🐾",
+            title="âš« Stream is Offline",
+            description="Not live right now â€“ check back later! ðŸ¾",
             color=_MOCHII_GREY,
         )
         embed.set_footer(text="mochii.live")
@@ -248,8 +248,8 @@ async def cmd_schedule(interaction: discord.Interaction) -> None:
             pass
     if not schedule:
         embed = discord.Embed(
-            title="📅 Stream Schedule",
-            description="No upcoming streams scheduled yet – check back later! 🐾",
+            title="ðŸ“… Stream Schedule",
+            description="No upcoming streams scheduled yet â€“ check back later! ðŸ¾",
             color=_MOCHII_PINK,
         )
         await interaction.response.send_message(embed=embed)
@@ -261,10 +261,10 @@ async def cmd_schedule(interaction: discord.Interaction) -> None:
         note = slot.get("note", "")
         line = f"**{day}** {time_str}"
         if note:
-            line += f" – {note}"
+            line += f" â€“ {note}"
         lines.append(line)
     embed = discord.Embed(
-        title="📅 Stream Schedule",
+        title="ðŸ“… Stream Schedule",
         description="\n".join(lines),
         color=_MOCHII_PINK,
         timestamp=datetime.now(timezone.utc),
@@ -282,12 +282,12 @@ async def cmd_schedule(interaction: discord.Interaction) -> None:
 async def cmd_link(interaction: discord.Interaction) -> None:
     if not BASE_URL:
         await interaction.response.send_message(
-            "⚠️ The site URL hasn't been configured yet – ask an admin.", ephemeral=True
+            "âš ï¸ The site URL hasn't been configured yet â€“ ask an admin.", ephemeral=True
         )
         return
 
     await interaction.response.send_message(
-        f"🔗 **Link your Discord account to your site account:**\n"
+        f"ðŸ”— **Link your Discord account to your site account:**\n"
         f"1. Log in at **{BASE_URL}/member**\n"
         f"2. Go to your profile settings and click **Link Discord**.\n\n"
         f"Once linked, `/tier` will show your subscriber tier.",
@@ -324,16 +324,16 @@ async def cmd_tier(interaction: discord.Interaction) -> None:
             else "Log in and link your Discord account to check."
         )
         await interaction.response.send_message(
-            f"🔗 Your Discord account isn't linked to a site account yet.\n{link_text}",
+            f"ðŸ”— Your Discord account isn't linked to a site account yet.\n{link_text}",
             ephemeral=True,
         )
         return
 
-    tier_labels = {0: "Free 🐾", 1: "Pack Member", 2: "Alpha", 3: "Alpha+"}
+    tier_labels = {0: "Free ðŸ¾", 1: "Pack Member", 2: "Alpha", 3: "Alpha+"}
     tier_name = tier_labels.get(access_level, f"Tier {access_level}")
 
     embed = discord.Embed(
-        title="🐾 Subscriber Tier",
+        title="ðŸ¾ Subscriber Tier",
         description=f"Your current tier: **{tier_name}**",
         color=_MOCHII_PINK,
     )
@@ -342,7 +342,7 @@ async def cmd_tier(interaction: discord.Interaction) -> None:
 
 @bot.tree.command(
     name="notify",
-    description="Toggle DM notifications for when the stream goes live 🔔",
+    description="Toggle DM notifications for when the stream goes live ðŸ””",
 )
 async def cmd_notify(interaction: discord.Interaction) -> None:
     discord_id = str(interaction.user.id)
@@ -352,28 +352,28 @@ async def cmd_notify(interaction: discord.Interaction) -> None:
         users.remove(discord_id)
         _set_notify_users(users)
         await interaction.response.send_message(
-            "🔕 You've been removed from go-live DM alerts. "
-            "Run `/notify` again to re-enable. 🐾",
+            "ðŸ”• You've been removed from go-live DM alerts. "
+            "Run `/notify` again to re-enable. ðŸ¾",
             ephemeral=True,
         )
     else:
         users.append(discord_id)
         _set_notify_users(users)
         await interaction.response.send_message(
-            "🔔 Done! You'll receive a DM the next time the stream goes live. "
-            "Run `/notify` again to unsubscribe. 🐾",
+            "ðŸ”” Done! You'll receive a DM the next time the stream goes live. "
+            "Run `/notify` again to unsubscribe. ðŸ¾",
             ephemeral=True,
         )
 
 
 @bot.tree.command(
     name="poke",
-    description="Activate the creator's connected toy 🐾 (active subscription required)",
+    description="Activate the creator's connected toy ðŸ¾ (active subscription required)",
 )
 @app_commands.describe(device="Which device to poke")
 @app_commands.choices(device=[
-    app_commands.Choice(name="PiShock ⚡", value="pishock"),
-    app_commands.Choice(name="Lovense 💜", value="lovense"),
+    app_commands.Choice(name="Pavlok âš¡", value="pavlok"),
+    app_commands.Choice(name="Lovense ðŸ’œ", value="lovense"),
 ])
 async def cmd_poke(
     interaction: discord.Interaction,
@@ -381,7 +381,7 @@ async def cmd_poke(
 ) -> None:
     if not _is_enabled("discord_poke_enabled", default=False):
         await interaction.response.send_message(
-            "⚠️ `/poke` isn't enabled right now – check back later! 🐾",
+            "âš ï¸ `/poke` isn't enabled right now â€“ check back later! ðŸ¾",
             ephemeral=True,
         )
         return
@@ -413,14 +413,14 @@ async def cmd_poke(
             else "Link your Discord account to your site account first."
         )
         await interaction.response.send_message(
-            f"🔗 Your Discord account isn't linked to a site account yet.\n{link_text}",
+            f"ðŸ”— Your Discord account isn't linked to a site account yet.\n{link_text}",
             ephemeral=True,
         )
         return
 
     if access_level < 1:
         await interaction.response.send_message(
-            "🔒 An active subscription is required to use `/poke`. 🐾",
+            "ðŸ”’ An active subscription is required to use `/poke`. ðŸ¾",
             ephemeral=True,
         )
         return
@@ -435,14 +435,14 @@ async def cmd_poke(
         mins, secs = divmod(remaining, 60)
         wait_str = f"{mins}m {secs}s" if mins else f"{secs}s"
         await interaction.response.send_message(
-            f"⏳ Cooldown active – try again in **{wait_str}**. 🐾",
+            f"â³ Cooldown active â€“ try again in **{wait_str}**. ðŸ¾",
             ephemeral=True,
         )
         return
 
     if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         await interaction.response.send_message(
-            "⚠️ Device control is not configured on this server. Ask an admin.", ephemeral=True
+            "âš ï¸ Device control is not configured on this server. Ask an admin.", ephemeral=True
         )
         return
 
@@ -456,14 +456,14 @@ async def cmd_poke(
     except Exception as exc:
         logger.warning("Poke request to backend failed: %s", exc)
         await interaction.response.send_message(
-            "⚠️ Couldn't reach the device controller – try again in a moment. 🐾",
+            "âš ï¸ Couldn't reach the device controller â€“ try again in a moment. ðŸ¾",
             ephemeral=True,
         )
         return
 
     if resp.status_code != 200:
         await interaction.response.send_message(
-            f"⚠️ Device controller returned an error (HTTP {resp.status_code}). 🐾",
+            f"âš ï¸ Device controller returned an error (HTTP {resp.status_code}). ðŸ¾",
             ephemeral=True,
         )
         return
@@ -473,11 +473,11 @@ async def cmd_poke(
     _poke_cooldowns[ck] = now + cooldown
     cooldown_str = "5 minutes" if access_level >= 3 else "1 hour"
 
-    device_labels = {"pishock": "⚡ PiShock", "lovense": "💜 Lovense"}
+    device_labels = {"pavlok": "âš¡ Pavlok", "lovense": "ðŸ’œ Lovense"}
     label = device_labels.get(device_name, device_name)
 
     embed = discord.Embed(
-        title=f"{label} activated! 🐾",
+        title=f"{label} activated! ðŸ¾",
         description="Command sent to the creator's device.",
         color=_MOCHII_PINK,
         timestamp=datetime.now(timezone.utc),
@@ -488,18 +488,18 @@ async def cmd_poke(
 
 @bot.tree.command(
     name="token",
-    description="Get a one-time 5-minute link to log in to the site without a password 🔑",
+    description="Get a one-time 5-minute link to log in to the site without a password ðŸ”‘",
 )
 async def cmd_token(interaction: discord.Interaction) -> None:
     if not BASE_URL:
         await interaction.response.send_message(
-            "⚠️ The site URL hasn't been configured yet – ask an admin.", ephemeral=True
+            "âš ï¸ The site URL hasn't been configured yet â€“ ask an admin.", ephemeral=True
         )
         return
 
     if not SECRET_KEY:
         await interaction.response.send_message(
-            "⚠️ Token generation isn't configured on this server – ask an admin.", ephemeral=True
+            "âš ï¸ Token generation isn't configured on this server â€“ ask an admin.", ephemeral=True
         )
         return
 
@@ -532,7 +532,7 @@ async def cmd_token(interaction: discord.Interaction) -> None:
             else "Link your Discord account to your site account first."
         )
         await interaction.response.send_message(
-            f"🔗 Your Discord account isn't linked to a site account yet.\n{link_text}",
+            f"ðŸ”— Your Discord account isn't linked to a site account yet.\n{link_text}",
             ephemeral=True,
         )
         return
@@ -549,18 +549,18 @@ async def cmd_token(interaction: discord.Interaction) -> None:
     login_url = f"{BASE_URL}/member?token={token}"
 
     await interaction.response.send_message(
-        f"🔑 **One-time login link** – expires in **5 minutes**:\n"
+        f"ðŸ”‘ **One-time login link** â€“ expires in **5 minutes**:\n"
         f"{login_url}\n\n"
-        "⚠️ Keep this private – it logs directly into your account!",
+        "âš ï¸ Keep this private â€“ it logs directly into your account!",
         ephemeral=True,
     )
 
 
-class AskModal(discord.ui.Modal, title="Ask a Question 🐾"):
+class AskModal(discord.ui.Modal, title="Ask a Question ðŸ¾"):
     question = discord.ui.TextInput(
         label="Your anonymous question",
         style=discord.TextStyle.paragraph,
-        placeholder="Type your question here…",
+        placeholder="Type your question hereâ€¦",
         required=True,
         max_length=500,
     )
@@ -569,7 +569,7 @@ class AskModal(discord.ui.Modal, title="Ask a Question 🐾"):
         question_text = self.question.value.strip()
         if not question_text:
             await interaction.response.send_message(
-                "⚠️ Your question was empty – please try again.", ephemeral=True
+                "âš ï¸ Your question was empty â€“ please try again.", ephemeral=True
             )
             return
 
@@ -587,12 +587,12 @@ class AskModal(discord.ui.Modal, title="Ask a Question 🐾"):
         except Exception as exc:
             logger.error("Failed to save question via /ask: %s", exc)
             await interaction.response.send_message(
-                "⚠️ Something went wrong saving your question. Please try again.", ephemeral=True
+                "âš ï¸ Something went wrong saving your question. Please try again.", ephemeral=True
             )
             return
 
         await interaction.response.send_message(
-            "✅ Your question has been submitted anonymously to the Puppy Pouch! 🐾",
+            "âœ… Your question has been submitted anonymously to the Puppy Pouch! ðŸ¾",
             ephemeral=True,
         )
 
@@ -602,35 +602,35 @@ class AskModal(discord.ui.Modal, title="Ask a Question 🐾"):
             channel = bot.get_channel(int(ch_id))
             if channel:
                 embed = discord.Embed(
-                    title="📬 New note in the Puppy Pouch!",
+                    title="ðŸ“¬ New note in the Puppy Pouch!",
                     description=f">>> {question_text}",
                     color=_MOCHII_PINK,
                     timestamp=datetime.now(timezone.utc),
                 )
-                embed.set_footer(text="mochii.live · Puppy Pouch")
+                embed.set_footer(text="mochii.live Â· Puppy Pouch")
                 view = discord.ui.View(timeout=None)
                 view.add_item(discord.ui.Button(
-                    label="Reply 🐾",
+                    label="Reply ðŸ¾",
                     style=discord.ButtonStyle.primary,
                     custom_id=f"reply:{question_id}",
                 ))
                 await channel.send(embed=embed, view=view)
 
 
-@bot.tree.command(name="ask", description="Submit an anonymous question to the Puppy Pouch 🐾")
+@bot.tree.command(name="ask", description="Submit an anonymous question to the Puppy Pouch ðŸ¾")
 async def cmd_ask(interaction: discord.Interaction) -> None:
     await interaction.response.send_modal(AskModal())
 
 
-# ── Reply button → modal → save answer ───────────────────────────────────────
+# â”€â”€ Reply button â†’ modal â†’ save answer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
-class ReplyModal(discord.ui.Modal, title="Reply to Note 🐾"):
+class ReplyModal(discord.ui.Modal, title="Reply to Note ðŸ¾"):
     def __init__(self, question_id: str, question_preview: str) -> None:
         super().__init__()
         self._question_id = question_id
         self.preview = discord.ui.TextInput(
-            label="Note (reference – not editable)",
+            label="Note (reference â€“ not editable)",
             style=discord.TextStyle.paragraph,
             default=question_preview[:1024],
             required=False,
@@ -638,7 +638,7 @@ class ReplyModal(discord.ui.Modal, title="Reply to Note 🐾"):
         self.reply = discord.ui.TextInput(
             label="Your reply",
             style=discord.TextStyle.paragraph,
-            placeholder="Write your answer… 🐾",
+            placeholder="Write your answerâ€¦ ðŸ¾",
             required=True,
             max_length=2000,
         )
@@ -649,7 +649,7 @@ class ReplyModal(discord.ui.Modal, title="Reply to Note 🐾"):
         answer_text = self.reply.value.strip()
         if not answer_text:
             await interaction.response.send_message(
-                "⚠️ Reply was empty – please try again.", ephemeral=True
+                "âš ï¸ Reply was empty â€“ please try again.", ephemeral=True
             )
             return
 
@@ -666,19 +666,19 @@ class ReplyModal(discord.ui.Modal, title="Reply to Note 🐾"):
         except Exception as exc:
             logger.error("Failed to save reply from Discord modal: %s", exc)
             await interaction.response.send_message(
-                "⚠️ Failed to save the reply. Please try again.", ephemeral=True
+                "âš ï¸ Failed to save the reply. Please try again.", ephemeral=True
             )
             return
 
         if not saved:
             await interaction.response.send_message(
-                "⚠️ Couldn't save – that note may have already been answered.",
+                "âš ï¸ Couldn't save â€“ that note may have already been answered.",
                 ephemeral=True,
             )
             return
 
         share_url = f"{BASE_URL}/q/{self._question_id}" if BASE_URL else ""
-        lines = ["✅ Reply saved and published! 🐾"]
+        lines = ["âœ… Reply saved and published! ðŸ¾"]
         if share_url:
             lines.append(f"Share: {share_url}")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
@@ -688,7 +688,7 @@ class ReplyModal(discord.ui.Modal, title="Reply to Note 🐾"):
         if ch_id and _is_enabled("discord_notify_answers", default=True):
             channel = bot.get_channel(int(ch_id))
             if channel:
-                content = "✅ A Puppy Pouch note has been answered and published!"
+                content = "âœ… A Puppy Pouch note has been answered and published!"
                 if share_url:
                     content += f"\n{share_url}"
                 await channel.send(content)
@@ -706,14 +706,14 @@ async def _handle_reply_button(interaction: discord.Interaction, question_id: st
         conn.close()
         if row is None:
             await interaction.response.send_message(
-                "⚠️ That note has already been answered or deleted.", ephemeral=True
+                "âš ï¸ That note has already been answered or deleted.", ephemeral=True
             )
             return
         question_text = row["text"]
     except Exception as exc:
         logger.warning("DB error fetching question for reply: %s", exc)
         await interaction.response.send_message(
-            "⚠️ Database error – please try again.", ephemeral=True
+            "âš ï¸ Database error â€“ please try again.", ephemeral=True
         )
         return
 
@@ -722,7 +722,7 @@ async def _handle_reply_button(interaction: discord.Interaction, question_id: st
     )
 
 
-# ── Member join ──────────────────────────────────────────────────────────────
+# â”€â”€ Member join â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 async def _handle_member_join(member: discord.Member) -> None:
@@ -730,20 +730,20 @@ async def _handle_member_join(member: discord.Member) -> None:
         return
 
     welcome_msg = _get_setting("discord_welcome_dm_message") or (
-        f"Hey {member.mention}, welcome to the pack! 🐾\n\n"
+        f"Hey {member.mention}, welcome to the pack! ðŸ¾\n\n"
         + (
             f"Check out the site at {BASE_URL} and link your account to unlock subscriber perks!\n"
             if BASE_URL
             else ""
         )
-        + "Hope you enjoy it here 💕"
+        + "Hope you enjoy it here ðŸ’•"
     )
 
     try:
         await member.send(welcome_msg)
         logger.info("Welcome DM sent to %s (%s)", member.name, member.id)
     except discord.Forbidden:
-        logger.info("Welcome DM blocked by %s (%s) – DMs disabled", member.name, member.id)
+        logger.info("Welcome DM blocked by %s (%s) â€“ DMs disabled", member.name, member.id)
 
     # Admin channel notification
     ch_id = _channel("discord_admin_channel_id", _ENV_ADMIN_CH)
@@ -751,12 +751,12 @@ async def _handle_member_join(member: discord.Member) -> None:
         channel = bot.get_channel(int(ch_id))
         if channel:
             await channel.send(
-                f"👋 New member joined: **{discord.utils.escape_markdown(member.name)}** "
+                f"ðŸ‘‹ New member joined: **{discord.utils.escape_markdown(member.name)}** "
                 f"(`{member.id}`)"
             )
 
 
-# ── Stream live watcher ───────────────────────────────────────────────────────
+# â”€â”€ Stream live watcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 _stream_was_live: bool = False
@@ -814,14 +814,14 @@ async def _stream_live_watcher() -> None:
                     stream_url = f"{BASE_URL}/member" if BASE_URL else ""
                     template = (
                         _get_setting("discord_stream_live_message")
-                        or "@here 🔴 **{title}** is now LIVE! {url}"
+                        or "@here ðŸ”´ **{title}** is now LIVE! {url}"
                     )
                     content = template.format(
                         title=stream_title, url=stream_url
                     ).strip()
 
                     embed = discord.Embed(
-                        title="🔴 Stream is LIVE!",
+                        title="ðŸ”´ Stream is LIVE!",
                         description=stream_title,
                         color=_MOCHII_RED,
                         url=stream_url or None,
@@ -837,9 +837,9 @@ async def _stream_live_watcher() -> None:
                     dm_content = (
                         _get_setting("discord_notify_me_dm_message")
                         or (
-                            f"🔴 **mochii is LIVE!** Come watch → {stream_url}"
+                            f"ðŸ”´ **mochii is LIVE!** Come watch â†’ {stream_url}"
                             if stream_url
-                            else "🔴 **mochii is LIVE!** Come watch now 🐾"
+                            else "ðŸ”´ **mochii is LIVE!** Come watch now ðŸ¾"
                         )
                     )
                     for uid in notify_users:
@@ -855,7 +855,7 @@ async def _stream_live_watcher() -> None:
                 channel = bot.get_channel(int(ch_id))
                 if channel:
                     await channel.send(
-                        "⚫ The stream has ended. Thanks for watching! 🐾"
+                        "âš« The stream has ended. Thanks for watching! ðŸ¾"
                     )
                 logger.info("Stream-offline notification sent")
 
@@ -865,7 +865,7 @@ async def _stream_live_watcher() -> None:
             logger.warning("Stream live watcher error: %s", exc)
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# â”€â”€ Entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 if __name__ == "__main__":
     if not BOT_TOKEN:
@@ -874,3 +874,4 @@ if __name__ == "__main__":
             "Set it in your .env file or compose environment."
         )
     bot.run(BOT_TOKEN, log_handler=None)
+
