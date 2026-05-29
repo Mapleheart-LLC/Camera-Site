@@ -2350,8 +2350,62 @@ def _resolve_public_evidence_visibility(
     return 0
 
 
+def _latest_active_public_control_url(
+    db: sqlite3.Connection,
+    request: Request,
+) -> Optional[dict]:
+    if not _public_setting_enabled(db, "public_toy_control_enabled", default=True):
+        return None
+
+    exposure_level = _safe_choice(
+        get_setting(db, "public_exposure_level", "controlled"),
+        PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+        "controlled",
+    )
+    if exposure_level == "private":
+        return None
+
+    rows = db.execute(
+        "SELECT * FROM tpe_toy_share_links WHERE enabled = 1 ORDER BY id DESC LIMIT 100"
+    ).fetchall()
+    live_row = None
+    for row in rows:
+        if not _is_expired_iso(row["expires_at"]):
+            live_row = row
+            break
+
+    if not live_row:
+        return None
+
+    base = str(request.base_url).rstrip("/")
+    return {
+        "id": int(live_row["id"]),
+        "label": (live_row["label"] or "Shared Control"),
+        "expires_at": live_row["expires_at"],
+        "control_url": f"{base}/static/toy-control.html?token={live_row['token']}",
+    }
+
+
+@router.get("/api/public/control/live")
+def public_live_control_link(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    live = _latest_active_public_control_url(db, request)
+    if not live:
+        return {"active": False, "control_url": None}
+    return {
+        "active": True,
+        "control_url": live["control_url"],
+        "label": live["label"],
+        "expires_at": live["expires_at"],
+        "id": live["id"],
+    }
+
+
 @router.get("/api/handler/public-status")
 def handler_get_public_status(
+    request: Request,
     _current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
@@ -2371,6 +2425,8 @@ def handler_get_public_status(
         PUBLIC_MODE_OPTIONS,
         "Service",
     )
+    live = _latest_active_public_control_url(db, request)
+
     return {
         "days_caged_start_date": get_setting(db, "days_caged_start_date", ""),
         "days_caged_paused": _safe_bool(get_setting(db, "days_caged_paused", "false")),
@@ -2398,6 +2454,10 @@ def handler_get_public_status(
         ),
         "public_toy_queue_cooldown_sec": max(0, min(_safe_int(get_setting(db, "public_toy_queue_cooldown_sec", "30"), 30), 600)),
         "public_exposure_options": PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+        "public_live_control_active": bool(live),
+        "public_live_control_url": (live["control_url"] if live else None),
+        "public_live_control_label": (live["label"] if live else None),
+        "public_live_control_expires_at": (live["expires_at"] if live else None),
     }
 
 

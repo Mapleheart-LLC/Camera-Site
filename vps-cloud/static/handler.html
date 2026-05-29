@@ -1140,6 +1140,12 @@
                   <button class="btn-action" id="public-status-save-btn" style="width:auto">Save Public Status</button>
                   <span id="public-status-result" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></span>
                 </div>
+                <div style="display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.6rem">
+                  <input id="public-live-control-url" readonly placeholder="No active public control link" style="min-width:320px;max-width:100%" />
+                  <button class="btn-action" id="public-live-control-open-btn" style="width:auto">Open Live Page</button>
+                  <button class="btn-action" id="public-live-control-copy-btn" style="width:auto">Copy Live Link</button>
+                  <button class="btn-action" id="public-live-control-refresh-btn" style="width:auto">Refresh Live Link</button>
+                </div>
               </div>
             </div>
 
@@ -1315,6 +1321,8 @@
               </div>
               <div class="cmd-guide-meta">
                 <label><input id="cmd-everyday-only" type="checkbox" checked /> Show only everyday command groups</label>
+                <label>Focus volume <input id="cmd-recipe-focus-volume" type="number" min="0" max="100" value="30" style="max-width:88px;padding:.2rem .35rem" /></label>
+                <label>Night brightness <input id="cmd-recipe-night-brightness" type="number" min="0" max="255" value="35" style="max-width:88px;padding:.2rem .35rem" /></label>
                 <span id="cmd-guide-result"></span>
               </div>
             </div>
@@ -3592,10 +3600,12 @@
 
       var steps = [];
       if (recipeId === 'focus') {
+        var focusVolumeRaw = parseInt(v('cmd-recipe-focus-volume') || '30', 10);
+        var focusVolume = Number.isNaN(focusVolumeRaw) ? 30 : Math.max(0, Math.min(100, focusVolumeRaw));
         steps = [
           { action: 'CLEAR_NOTIFICATIONS', fields: {} },
           { action: 'SET_DND', fields: { policy: 'priority' } },
-          { action: 'SET_VOLUME', fields: { stream: 'media', level: '30' } },
+          { action: 'SET_VOLUME', fields: { stream: 'media', level: String(focusVolume) } },
         ];
       } else if (recipeId === 'attention') {
         steps = [
@@ -3604,8 +3614,10 @@
           { action: 'SEND_NOTIFICATION', fields: { title: 'Handler Check-in', body: 'Please check in now.' } },
         ];
       } else if (recipeId === 'night') {
+        var nightBrightnessRaw = parseInt(v('cmd-recipe-night-brightness') || '35', 10);
+        var nightBrightness = Number.isNaN(nightBrightnessRaw) ? 35 : Math.max(0, Math.min(255, nightBrightnessRaw));
         steps = [
-          { action: 'SET_BRIGHTNESS', fields: { value: '35' } },
+          { action: 'SET_BRIGHTNESS', fields: { value: String(nightBrightness) } },
           { action: 'SET_DND', fields: { policy: 'priority' } },
           { action: 'SET_VOLUME', fields: { stream: 'ring', level: '20' } },
         ];
@@ -3626,6 +3638,53 @@
 
       if (resultEl) resultEl.textContent = 'Recipe sent: ' + recipeId + '.';
       showToast('✅ Recipe applied.');
+    }
+
+    async function loadPublicLiveControlLink() {
+      var input = document.getElementById('public-live-control-url');
+      if (!input) return;
+      var statusEl = document.getElementById('public-status-result');
+      try {
+        var data = await apiGet('/api/public/control/live');
+        var url = (data && data.active && data.control_url) ? String(data.control_url) : '';
+        input.value = url;
+        if (!url) {
+          input.placeholder = 'No active public control link';
+          return;
+        }
+        input.placeholder = 'Active link ready';
+      } catch (e) {
+        input.value = '';
+        input.placeholder = 'Unable to load live control link';
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '⚠️ Could not load live link.';
+      }
+    }
+
+    function openPublicLiveControlLink() {
+      var input = document.getElementById('public-live-control-url');
+      var statusEl = document.getElementById('public-status-result');
+      var url = (input && input.value ? input.value : '').trim();
+      if (!url) {
+        if (statusEl) statusEl.textContent = 'No active live link to open.';
+        return;
+      }
+      window.open(url, '_blank', 'noopener');
+    }
+
+    async function copyPublicLiveControlLink() {
+      var input = document.getElementById('public-live-control-url');
+      var statusEl = document.getElementById('public-status-result');
+      var url = (input && input.value ? input.value : '').trim();
+      if (!url) {
+        if (statusEl) statusEl.textContent = 'No active live link to copy.';
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+        if (statusEl) statusEl.textContent = 'Live link copied.';
+      } catch (_) {
+        if (statusEl) statusEl.textContent = 'Clipboard denied for live link.';
+      }
     }
 
     function initCommandCenter() {
@@ -3762,6 +3821,7 @@
         _setCheckboxValue('public-auto-publish-evidence', !!data.public_auto_publish_evidence);
         _setCheckboxValue('public-toy-control-enabled', data.public_toy_control_enabled !== false);
         _setInputValue('public-toy-queue-cooldown', data.public_toy_queue_cooldown_sec != null ? data.public_toy_queue_cooldown_sec : '30');
+        _setInputValue('public-live-control-url', data.public_live_control_url || '');
         if (statusEl) statusEl.textContent = 'Loaded.';
       } catch(e) {
         if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'Failed to load public status.';
@@ -3978,6 +4038,9 @@
     document.getElementById('public-profile-full').addEventListener('click', function() { applyPublicExposureProfile('full_public'); });
     document.getElementById('public-evidence-publish-recent').addEventListener('click', publishRecentEvidence);
     document.getElementById('public-evidence-hide-all').addEventListener('click', hideAllPublicEvidence);
+    document.getElementById('public-live-control-refresh-btn').addEventListener('click', loadPublicLiveControlLink);
+    document.getElementById('public-live-control-open-btn').addEventListener('click', openPublicLiveControlLink);
+    document.getElementById('public-live-control-copy-btn').addEventListener('click', copyPublicLiveControlLink);
     document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
 
     // ═══════════════════════════════════════════════════════════

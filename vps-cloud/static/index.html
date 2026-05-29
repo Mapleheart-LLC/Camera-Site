@@ -1206,6 +1206,14 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
+        <a class="link-card" id="public-live-control-card" href="#" style="display:none">
+          <span class="link-card-emoji" aria-hidden="true">&#127918;</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Join Live Control</span>
+            <span class="link-card-desc" id="public-live-control-desc">public control session is active now</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
+        </a>
         <a class="link-card" id="public-booking-link-card" href="#public-booking-card" style="display:none">
           <span class="link-card-emoji" aria-hidden="true">&#128197;</span>
           <span class="link-card-body">
@@ -1377,8 +1385,13 @@
       document.getElementById('pub-status-note').textContent = 'Public status temporarily unavailable.';
       var bookingLink = document.getElementById('public-booking-link-card');
       var bookingCard = document.getElementById('public-booking-card');
+      var liveCard = document.getElementById('public-live-control-card');
       if (bookingLink) bookingLink.style.display = 'none';
       if (bookingCard) bookingCard.style.display = 'none';
+      if (liveCard) {
+        liveCard.style.display = 'none';
+        liveCard.href = '#';
+      }
     }
 
     function getPublicIntelSessionId() {
@@ -1444,6 +1457,34 @@
           document.getElementById('pub-status-note').textContent = 'Booking requests are currently closed by the handler.';
         } else {
           document.getElementById('pub-status-note').textContent = '';
+        }
+
+        try {
+          const liveResp = await fetch('/api/public/control/live');
+          const liveData = liveResp.ok ? await liveResp.json() : null;
+          const liveCard = document.getElementById('public-live-control-card');
+          const liveDesc = document.getElementById('public-live-control-desc');
+          if (liveCard && liveData && liveData.active && liveData.control_url) {
+            liveCard.style.display = '';
+            liveCard.href = String(liveData.control_url);
+            if (liveDesc) {
+              liveDesc.textContent = liveData.expires_at
+                ? ('active now - expires ' + new Date(liveData.expires_at).toLocaleString())
+                : 'public control session is active now';
+            }
+          } else if (liveCard) {
+            liveCard.style.display = 'none';
+            liveCard.href = '#';
+            if (liveDesc) liveDesc.textContent = 'public control session is active now';
+          }
+        } catch (_) {
+          const liveCard = document.getElementById('public-live-control-card');
+          const liveDesc = document.getElementById('public-live-control-desc');
+          if (liveCard) {
+            liveCard.style.display = 'none';
+            liveCard.href = '#';
+          }
+          if (liveDesc) liveDesc.textContent = 'public control session is active now';
         }
       } catch (_) {
         setPublicStatusFallback();
