@@ -137,11 +137,58 @@
       color: #b79ca2;
       font-size: .84rem;
     }
-
-    .onboarding-grid {
-      display: grid;
-      gap: .6rem;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      .cmd-guide-wrap {
+        border: 1px solid #3d2a2e;
+        border-radius: 12px;
+        background: #25191d;
+        padding: .75rem;
+        margin-bottom: .75rem;
+      }
+      .cmd-guide-title {
+        font-size: .86rem;
+        font-weight: 800;
+        color: #e8aeb7;
+        margin-bottom: .25rem;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      .cmd-guide-sub {
+        color: #b79ca2;
+        font-size: .78rem;
+        margin-bottom: .55rem;
+        line-height: 1.4;
+      }
+      .cmd-guide-grid {
+        display: grid;
+        gap: .45rem;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        margin-bottom: .55rem;
+      }
+      .cmd-guide-btn {
+        border: 1px solid #4b3138;
+        border-radius: 10px;
+        background: #2e1d23;
+        color: #f0e6e8;
+        font-family: inherit;
+        font-weight: 700;
+        font-size: .78rem;
+        text-align: left;
+        padding: .5rem .6rem;
+        cursor: pointer;
+        transition: border-color .2s, background .2s;
+      }
+      .cmd-guide-btn:hover { border-color: #e8aeb7; background: #38222a; }
+      .cmd-guide-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .55rem;
+        flex-wrap: wrap;
+        color: #b79ca2;
+        font-size: .76rem;
+      }
+      .cmd-guide-meta label { display:flex; align-items:center; gap:.35rem; margin:0; text-transform:none; letter-spacing:0; color:#c9b0b6; }
+      .cmd-guide-meta input[type="checkbox"] { width:auto; }
     }
     .onboarding-step {
       border: 1px solid #3d2a2e;
@@ -1255,6 +1302,22 @@
           <!-- ═══════════════ REMOTE COMMANDS ═══════════════ -->
           <section id="sec-commands" class="handler-section" data-advanced="true">
             <h2 class="section-heading">📡 Remote Commands</h2>
+            <p class="section-help">Advanced control, simplified: start with guided recipes, then open specific groups only when needed.</p>
+
+            <div class="cmd-guide-wrap">
+              <div class="cmd-guide-title">Guided Command Recipes</div>
+              <div class="cmd-guide-sub">These send a short bundle of safe, common commands for everyday handling. You can still use manual controls below.</div>
+              <div class="cmd-guide-grid">
+                <button type="button" class="cmd-guide-btn" data-cmd-recipe="focus">Focus Mode: quiet notifications + calmer audio</button>
+                <button type="button" class="cmd-guide-btn" data-cmd-recipe="attention">Attention Ping: request check-in + overlay prompt</button>
+                <button type="button" class="cmd-guide-btn" data-cmd-recipe="night">Night Winddown: dim screen + set DND priority</button>
+                <button type="button" class="cmd-guide-btn" data-cmd-recipe="safety">Safety Lockdown: lock + screen off</button>
+              </div>
+              <div class="cmd-guide-meta">
+                <label><input id="cmd-everyday-only" type="checkbox" checked /> Show only everyday command groups</label>
+                <span id="cmd-guide-result"></span>
+              </div>
+            </div>
 
             <div class="cmd-toolbar" aria-label="Command center tools">
               <div class="cmd-toolbar-top">
@@ -1283,7 +1346,7 @@
             </div>
 
             <!-- ── Notifications & Messaging ── -->
-            <details class="cmd-group" open>
+            <details class="cmd-group" data-everyday="true" open>
               <summary>📣 Notifications &amp; Messaging</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -1329,7 +1392,7 @@
             </details>
 
             <!-- ── Content Filter / NudeNet ── -->
-            <details class="cmd-group">
+            <details class="cmd-group" data-everyday="true">
               <summary>🔍 Content Filter / NudeNet</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -1347,7 +1410,7 @@
             </details>
 
             <!-- ── Tone & Vocabulary ── -->
-            <details class="cmd-group">
+            <details class="cmd-group" data-everyday="true">
               <summary>🗣️ Tone &amp; Vocabulary Enforcement</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -1378,7 +1441,7 @@
             </details>
 
             <!-- ── Tasks ── -->
-            <details class="cmd-group">
+            <details class="cmd-group" data-everyday="true">
               <summary>📋 Tasks</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -1395,7 +1458,7 @@
             </details>
 
             <!-- ── Rituals ── -->
-            <details class="cmd-group">
+            <details class="cmd-group" data-everyday="true">
               <summary>🌹 Rituals</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -1419,7 +1482,7 @@
             </details>
 
             <!-- ── Honorifics ── -->
-            <details class="cmd-group">
+            <details class="cmd-group" data-everyday="true">
               <summary>🏷️ Honorifics</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
@@ -2077,6 +2140,7 @@
           <!-- ═══════════════ LOGS ═══════════════ -->
           <section id="sec-logs" class="handler-section" data-advanced="true">
             <h2 class="section-heading">📜 Logs</h2>
+            <p class="section-help">Use this for trend review and troubleshooting. Start with Behavior Learning Insights for a quick summary, then open detailed logs only if needed.</p>
             <div class="card">
               <div class="card-header">
                 <h2>Behavior Learning Insights</h2>
@@ -3462,6 +3526,7 @@
       var searchEl = document.getElementById('cmd-search');
       if (!searchEl) return;
       var q = String(searchEl.value || '').trim().toLowerCase();
+      var everydayOnly = !!(document.getElementById('cmd-everyday-only') && document.getElementById('cmd-everyday-only').checked);
       var groups = _allCommandGroups();
       var visibleRowCount = 0;
       var visibleGroupCount = 0;
@@ -3489,16 +3554,22 @@
           }
         });
 
-        group.style.display = groupHasVisible ? '' : 'none';
-        if (groupHasVisible) visibleGroupCount += 1;
+        var isEverydayGroup = group.dataset.everyday === 'true';
+        var shouldShowGroup = groupHasVisible && (!everydayOnly || isEverydayGroup);
+        group.style.display = shouldShowGroup ? '' : 'none';
+        if (shouldShowGroup) visibleGroupCount += 1;
         if (q) group.open = groupHasVisible;
       });
 
       var countEl = document.getElementById('cmd-filter-count');
       if (countEl) {
-        countEl.textContent = q
-          ? (visibleRowCount + ' matches in ' + visibleGroupCount + ' groups')
-          : '';
+        if (q) {
+          countEl.textContent = visibleRowCount + ' matches in ' + visibleGroupCount + ' groups';
+        } else if (everydayOnly) {
+          countEl.textContent = 'Everyday groups only';
+        } else {
+          countEl.textContent = '';
+        }
       }
     }
 
@@ -3507,6 +3578,54 @@
       if (!searchEl) return;
       searchEl.value = '';
       filterCommandRows();
+    }
+
+    async function runCommandRecipe(recipeId) {
+      var resultEl = document.getElementById('cmd-guide-result');
+      if (!viewingDeviceId) {
+        if (resultEl) resultEl.textContent = 'Pick a device first.';
+        showToast('⚠️ No device selected.', true);
+        return;
+      }
+
+      if (resultEl) resultEl.textContent = 'Running recipe...';
+
+      var steps = [];
+      if (recipeId === 'focus') {
+        steps = [
+          { action: 'CLEAR_NOTIFICATIONS', fields: {} },
+          { action: 'SET_DND', fields: { policy: 'priority' } },
+          { action: 'SET_VOLUME', fields: { stream: 'media', level: '30' } },
+        ];
+      } else if (recipeId === 'attention') {
+        steps = [
+          { action: 'REQUEST_CHECKIN', fields: {} },
+          { action: 'SHOW_OVERLAY', fields: { title: 'Check-in Requested', message: 'Please open the app and respond.' } },
+          { action: 'SEND_NOTIFICATION', fields: { title: 'Handler Check-in', body: 'Please check in now.' } },
+        ];
+      } else if (recipeId === 'night') {
+        steps = [
+          { action: 'SET_BRIGHTNESS', fields: { value: '35' } },
+          { action: 'SET_DND', fields: { policy: 'priority' } },
+          { action: 'SET_VOLUME', fields: { stream: 'ring', level: '20' } },
+        ];
+      } else if (recipeId === 'safety') {
+        if (!window.confirm('Apply Safety Lockdown now?')) {
+          if (resultEl) resultEl.textContent = 'Cancelled.';
+          return;
+        }
+        steps = [
+          { action: 'LOCK_DEVICE', fields: {} },
+          { action: 'SCREEN_OFF', fields: {} },
+        ];
+      }
+
+      for (var i = 0; i < steps.length; i += 1) {
+        await sendFcm(steps[i].action, steps[i].fields, 'cmd-toolbar-result');
+      }
+
+      if (resultEl) resultEl.textContent = 'Recipe sent: ' + recipeId + '.';
+      showToast('✅ Recipe applied.');
     }
 
     function initCommandCenter() {
@@ -3518,6 +3637,7 @@
       var expandBtn = document.getElementById('cmd-expand-all');
       var collapseBtn = document.getElementById('cmd-collapse-all');
       var resetBtn = document.getElementById('cmd-reset-filter');
+      var everydayOnlyEl = document.getElementById('cmd-everyday-only');
 
       if (searchEl) {
         searchEl.addEventListener('input', filterCommandRows);
@@ -3534,6 +3654,15 @@
           setCommandGroupsOpen(true);
         });
       }
+      if (everydayOnlyEl) {
+        everydayOnlyEl.addEventListener('change', filterCommandRows);
+      }
+
+      sec.querySelectorAll('[data-cmd-recipe]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          runCommandRecipe(btn.getAttribute('data-cmd-recipe'));
+        });
+      });
 
       sec.querySelectorAll('[data-quick-action]').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -3552,6 +3681,8 @@
           if (searchEl) searchEl.focus();
         }
       });
+
+      filterCommandRows();
     }
 
     // ═══════════════════════════════════════════════════════════
