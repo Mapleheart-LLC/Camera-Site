@@ -246,22 +246,25 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_threads)").fetchall()}
+    if "public_token" not in thread_cols:
+        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN public_token TEXT")
+    if "guest_code_hash" not in thread_cols:
+        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN guest_code_hash TEXT")
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_puppy_mail_threads_public_token ON puppy_mail_threads(public_token)"
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_puppy_mail_threads_guest_code_hash ON puppy_mail_threads(guest_code_hash)"
     )
-    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_threads)").fetchall()}
-    if "public_token" not in thread_cols:
-        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN public_token TEXT")
-    if "guest_code_hash" not in thread_cols:
-        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN guest_code_hash TEXT")
     message_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_messages)").fetchall()}
     if "edited_at" not in message_cols:
         conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_at TEXT")
     if "edited_by" not in message_cols:
         conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_by TEXT")
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_threads)").fetchall()}
+    if "public_token" not in thread_cols:
+        return
     missing_token_rows = conn.execute(
         "SELECT id FROM puppy_mail_threads WHERE public_token IS NULL OR TRIM(public_token) = ''"
     ).fetchall()
@@ -2908,12 +2911,12 @@ def handler_answer_question(
     }
 
 
-@router.delete("/api/handler/questions/{question_id}", status_code=204)
+@router.delete("/api/handler/questions/{question_id}")
 def handler_delete_question(
     question_id: str,
     _current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
-) -> None:
+) -> dict:
     """Delete a question (handler/admin)."""
     row = db.execute(
         "SELECT id FROM questions WHERE id = ?",
@@ -2923,6 +2926,7 @@ def handler_delete_question(
         raise HTTPException(status_code=404, detail="Question not found.")
     db.execute("DELETE FROM questions WHERE id = ?", (question_id,))
     db.commit()
+    return {"deleted": True, "id": question_id}
 
 
 # ---------------------------------------------------------------------------
