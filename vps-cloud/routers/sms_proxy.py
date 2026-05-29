@@ -80,6 +80,7 @@ def migrate_sms_proxy(conn: sqlite3.Connection) -> None:
             thread_id    TEXT PRIMARY KEY,
             from_number  TEXT NOT NULL,
             to_number    TEXT NOT NULL,
+            puppy_mail_thread_id INTEGER,
             created_at   TEXT NOT NULL,
             updated_at   TEXT NOT NULL
         );
@@ -109,6 +110,9 @@ def migrate_sms_proxy(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(sms_threads)").fetchall()}
+    if "puppy_mail_thread_id" not in thread_cols:
+        conn.execute("ALTER TABLE sms_threads ADD COLUMN puppy_mail_thread_id INTEGER")
 
     # Backfill: ensure sms_tone_rules setting row exists
     conn.execute(
@@ -307,12 +311,119 @@ def _store_outbound_message(
     return message_id
 
 
-def _publish_incoming_proxy_sms(
+def _ensure_unified_thread(
     db: sqlite3.Connection,
+    *,
+    sms_thread_id: str,
     from_number: str,
-    to_number: str,
+    created_at: str,
+) -> int:
+    row = db.execute(
+        "SELECT puppy_mail_thread_id FROM sms_threads WHERE thread_id = ?",
+        (sms_thread_id,),
+    ).fetchone()
+    if row and row["puppy_mail_thread_id"] is not None:
+        return int(row["puppy_mail_thread_id"])
+
+    existing = db.execute(
+        """
+        SELECT id
+        FROM puppy_mail_threads
+        WHERE source = 'sms_proxy' AND sender_contact = ?
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """,
+        (from_number,),
+    ).fetchone()
+    if existing:
+        puppy_mail_thread_id = int(existing["id"])
+        db.execute(
+            """
+            UPDATE puppy_mail_threads
+            SET sender_name = ?,
+                sender_contact = ?,
+                status = 'open',
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (from_number, from_number, created_at, puppy_mail_thread_id),
+        )
+    else:
+        cur = db.execute(
+            """
+            INSERT INTO puppy_mail_threads
+                (sender_name, sender_contact, source, status, created_at, updated_at)
+            VALUES (?, ?, 'sms_proxy', 'open', ?, ?)
+            """,
+            (from_number, from_number, created_at, created_at),
+        )
+        puppy_mail_thread_id = int(cur.lastrowid)
+
+    db.execute(
+        "UPDATE sms_threads SET puppy_mail_thread_id = ?, updated_at = ? WHERE thread_id = ?",
+        (puppy_mail_thread_id, created_at, sms_thread_id),
+    )
+    db.commit()
+    return puppy_mail_thread_id
+
+
+def _store_unified_inbound_message(
+    db: sqlite3.Connection,
+    *,
+    puppy_mail_thread_id: int,
+    source_message_id: str,
+    sender: str,
     body: str,
     media_urls: list[str],
+    created_at: str,
+) -> int:
+    cur = db.execute(
+        """
+        INSERT INTO puppy_mail_messages
+            (thread_id, author, body, media_url, source_message_id, delivery_status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'received', ?)
+        """,
+        (
+            puppy_mail_thread_id,
+            sender,
+            body,
+            media_urls[0] if media_urls else None,
+            source_message_id,
+            created_at,
+        ),
+    )
+    db.execute(
+        "UPDATE puppy_mail_threads SET updated_at = ?, status = 'open' WHERE id = ?",
+        (created_at, puppy_mail_thread_id),
+    )
+    db.commit()
+    return int(cur.lastrowid)
+
+
+def _get_unified_message_payload(
+    db: sqlite3.Connection,
+    *,
+    source_message_id: str,
+) -> dict:
+    from routers.handler import serialize_puppy_mail_message
+
+    row = db.execute(
+        """
+        SELECT id, thread_id, author, body, media_url, delivery_status, created_at, edited_at, edited_by
+        FROM puppy_mail_messages
+        WHERE source_message_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (source_message_id,),
+    ).fetchone()
+    if not row:
+        raise LookupError(f"Unified message not found for source_message_id={source_message_id}")
+    return serialize_puppy_mail_message(row)
+
+
+def _publish_incoming_proxy_sms(
+    db: sqlite3.Connection,
     thread_id: str,
     message_id: str,
 ) -> None:
@@ -329,15 +440,18 @@ def _publish_incoming_proxy_sms(
             logger.info("No devices registered – INCOMING_PROXY_SMS not forwarded.")
             return
 
+        message_payload = _get_unified_message_payload(
+            db,
+            source_message_id=message_id,
+        )
         payload: dict = {
             "action": "INCOMING_PROXY_SMS",
-            "from_number": from_number,
-            "to_number": to_number,
-            "body": body,
-            "media_urls": media_urls,
             "thread_id": thread_id,
-            "message_id": message_id,
-            "received_at": _now_iso(),
+            "message_id": str(message_payload["id"]),
+            "sender": message_payload["sender"],
+            "content": message_payload["content"],
+            "timestamp": message_payload["timestamp"],
+            "media_url": message_payload["media_url"],
         }
 
         sent = failed = 0
@@ -454,19 +568,31 @@ async def twilio_inbound_webhook(
             media_urls.append(url)
 
     # ── Persist thread and message ─────────────────────────────────────────
-    thread_id  = _get_or_create_thread(db, from_number, to_number)
+    received_at = _now_iso()
+    thread_id = _get_or_create_thread(db, from_number, to_number)
     message_id = _store_inbound_message(db, thread_id, body, media_urls)
+    puppy_mail_thread_id = _ensure_unified_thread(
+        db,
+        sms_thread_id=thread_id,
+        from_number=from_number,
+        created_at=received_at,
+    )
+    _store_unified_inbound_message(
+        db,
+        puppy_mail_thread_id=puppy_mail_thread_id,
+        source_message_id=message_id,
+        sender=from_number,
+        body=body,
+        media_urls=media_urls,
+        created_at=received_at,
+    )
 
     # ── Forward to field devices via MQTT (background) ─────────────────────
     captured_db = get_db_connection()
     background_tasks.add_task(
         _publish_incoming_proxy_sms_bg,
         captured_db,
-        from_number,
-        to_number,
-        body,
-        media_urls,
-        thread_id,
+        str(puppy_mail_thread_id),
         message_id,
     )
 
@@ -486,17 +612,11 @@ async def twilio_inbound_webhook(
 
 def _publish_incoming_proxy_sms_bg(
     db: sqlite3.Connection,
-    from_number: str,
-    to_number: str,
-    body: str,
-    media_urls: list[str],
     thread_id: str,
     message_id: str,
 ) -> None:
     try:
-        _publish_incoming_proxy_sms(
-            db, from_number, to_number, body, media_urls, thread_id, message_id
-        )
+        _publish_incoming_proxy_sms(db, thread_id, message_id)
     finally:
         db.close()
 
