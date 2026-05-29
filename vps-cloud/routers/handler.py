@@ -1459,6 +1459,7 @@ def _notify_puppy_mail_app(
                 "body": body[:220],
                 "pm_thread_id": str(int(thread_id)),
                 "pm_event": event_kind[:40],
+                "tap_target": "pack_chat",
             },
         )
     except Exception:
@@ -1486,6 +1487,7 @@ def _notify_booking_app(
                 "body": body[:220],
                 "booking_id": str(int(booking_id)),
                 "booking_event": event_kind[:40],
+                "tap_target": "booking_queue",
             },
         )
     except Exception:

@@ -387,6 +387,10 @@ App MQTT notification behavior for queue/chat flows:
 
 - Backend emits SEND_NOTIFICATION for puppy-mail events (new thread, packmate message, handler reply, handler edit, thread resolved/reopened).
 - Backend emits SEND_NOTIFICATION for booking events (new intake + handler status transitions).
+- App notification taps now carry optional context extras to TpeFlutterActivity for deep handling:
+	- tap_target (for example: pack_chat, booking_queue)
+	- pm_thread_id, pm_event
+	- booking_id, booking_event
 - Optional settings flags can disable categories without code changes:
 	- puppy_mail_app_notifications_enabled (default true)
 	- booking_app_notifications_enabled (default true)
