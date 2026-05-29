@@ -94,6 +94,8 @@ _MAX_UPLOAD_BYTES       = 50  * 1024 * 1024  # 50 MB for screenshots / short rec
 _CHUNK_SIZE_BYTES       = 256 * 1024          # 256 KB read chunks for streaming uploads
 _MQTT_COMMAND_TOPIC_SUFFIX_RE = re.compile(r"/\{device_id\}/commands/?$")
 _PAIRING_CODE_TTL_SECONDS = int(os.environ.get("TPE_PAIRING_CODE_TTL_SECONDS", "600"))
+_TPE_AUTO_PAIR_ENABLED = os.environ.get("TPE_AUTO_PAIR_ENABLED", "true")
+_TPE_AUTO_PAIR_KEY = os.environ.get("TPE_AUTO_PAIR_KEY", "")
 
 # ---------------------------------------------------------------------------
 # MQTT dispatch
@@ -546,6 +548,14 @@ class PairCodeRequest(BaseModel):
     mqtt_client_id: Optional[str] = None
 
 
+class PairAutoRequest(BaseModel):
+    fcm_token: str
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
+    mqtt_client_id: Optional[str] = None
+    auto_pair_key: Optional[str] = None
+
+
 @device_router.post("/api/pair")
 def tpe_pair(
     body: PairRequest,
@@ -718,6 +728,101 @@ def tpe_pair_with_code(
         "mqtt_password": payload.get("mqtt_password", ""),
         "mqtt_topic_prefix": payload.get("mqtt_topic_prefix", ""),
         "signaling_url": payload.get("signaling_url", ""),
+    }
+
+
+@device_router.post("/api/pair/auto")
+def tpe_pair_auto(
+    body: PairAutoRequest,
+    background_tasks: BackgroundTasks,
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
+    x_auto_pair_key: Optional[str] = Header(default=None, alias="X-Auto-Pair-Key"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Auto-pair a device for zero-step enrollment when auto-pair is enabled."""
+    auto_pair_enabled_raw = _resolve_setting(
+        db,
+        "TPE_AUTO_PAIR_ENABLED",
+        "tpe_auto_pair_enabled",
+        _TPE_AUTO_PAIR_ENABLED,
+    )
+    if not _parse_bool_string(auto_pair_enabled_raw):
+        raise HTTPException(status_code=403, detail="Auto pairing is disabled")
+
+    expected_auto_pair_key = _resolve_setting(
+        db,
+        "TPE_AUTO_PAIR_KEY",
+        "tpe_auto_pair_key",
+        _TPE_AUTO_PAIR_KEY,
+    )
+    if expected_auto_pair_key:
+        provided_auto_pair_key = (
+            (body.auto_pair_key or "").strip() or (x_auto_pair_key or "").strip()
+        )
+        if not secrets.compare_digest(provided_auto_pair_key, expected_auto_pair_key):
+            raise HTTPException(status_code=401, detail="Invalid auto_pair_key")
+
+    fcm_token = body.fcm_token.strip()
+    if not fcm_token:
+        raise HTTPException(status_code=400, detail="Missing or invalid fcm_token")
+
+    body_device_id = (body.device_id or "").strip()
+    device_name = (body.device_name or "").strip() or None
+    mqtt_client_id = (body.mqtt_client_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    device_id = body_device_id or mqtt_client_id or header_device_id or fcm_token
+    if not device_id:
+        raise HTTPException(status_code=400, detail="Missing device identifier")
+
+    now = _now_iso()
+    db.execute(
+        """
+        INSERT INTO tpe_paired_devices (fcm_token, paired_at, last_seen)
+        VALUES (?, ?, ?)
+        ON CONFLICT(fcm_token) DO UPDATE SET last_seen = excluded.last_seen
+        """,
+        (device_id, now, now),
+    )
+    db.execute(
+        """
+        INSERT INTO handler_device_status (device_id, device_name, fcm_token, is_online, last_seen, updated_at)
+        VALUES (?, ?, ?, 1, ?, ?)
+        ON CONFLICT(device_id) DO UPDATE SET
+            device_name = COALESCE(excluded.device_name, device_name),
+            fcm_token = excluded.fcm_token,
+            is_online = 1,
+            last_seen = excluded.last_seen,
+            updated_at = excluded.updated_at
+        """,
+        (device_id, device_name, fcm_token, now, now),
+    )
+    db.commit()
+
+    status_row = db.execute(
+        "SELECT * FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if status_row:
+        background_tasks.add_task(_handler_ws.broadcast, {"type": "status_update", **dict(status_row)})
+
+    response_payload: dict[str, Any] = {}
+    try:
+        response_payload = _build_tpe_pairing_payload(db)
+    except HTTPException:
+        # Pairing token may be intentionally unset in auto-pair mode.
+        response_payload = {}
+
+    logger.info("TPE device auto-paired: %s…", device_id[:16])
+    return {
+        "status": "paired",
+        "auto_paired": True,
+        "endpoint": response_payload.get("endpoint", ""),
+        "webhook_secret": response_payload.get("webhook_secret", ""),
+        "mqtt_broker_uri": response_payload.get("mqtt_broker_uri", ""),
+        "mqtt_username": response_payload.get("mqtt_username", ""),
+        "mqtt_password": response_payload.get("mqtt_password", ""),
+        "mqtt_topic_prefix": response_payload.get("mqtt_topic_prefix", ""),
+        "signaling_url": response_payload.get("signaling_url", ""),
     }
 
 

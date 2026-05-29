@@ -130,9 +130,9 @@
     }
     .pairing-card .card-body {
       display: grid;
-      grid-template-columns: minmax(220px, 280px) 1fr;
-      gap: 1.25rem;
-      align-items: center;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      align-items: start;
     }
     .pairing-qr-wrap {
       display: flex;
@@ -636,29 +636,17 @@
 
       <div class="card pairing-card">
         <div class="card-header">
-          <h2>ðŸ”— Pair tpeapp</h2>
-          <div style="display:flex;gap:.45rem;flex-wrap:wrap">
-            <button class="btn-action pairing-qr-refresh-btn" id="pairing-qr-refresh-btn">Refresh QR</button>
-            <button class="btn-action pairing-qr-refresh-btn" id="pairing-code-refresh-btn">Generate Code</button>
-          </div>
+          <h2>âœ¨ Automatic Enrollment</h2>
         </div>
         <div class="card-body">
-          <div class="pairing-qr-wrap">
-            <img id="pairing-qr-image" alt="TPE pairing QR code" />
-            <div id="pairing-qr-placeholder">Loading pairing QRâ€¦</div>
-          </div>
           <div class="pairing-copy">
-            <p>Scan this code in <strong>tpeapp</strong> to register the device with this site. Newly paired devices will appear here automatically.</p>
+            <p>New installs of <strong>tpeapp</strong> enroll automatically and appear in this panel without any QR or pairing code flow.</p>
             <ol>
-              <li>Open the pairing flow in tpeapp.</li>
-              <li>Scan this QR code.</li>
-              <li>Keep the app open until the device finishes pairing.</li>
+              <li>Install and open the app.</li>
+              <li>Grant required permissions.</li>
+              <li>Keep the app open briefly on first launch.</li>
             </ol>
-            <div style="margin:.5rem 0;color:#9e7e82;font-size:.85rem;font-weight:700">No camera? Use pairing code:</div>
-            <div id="pairing-code-value" style="font-size:1.3rem;letter-spacing:.25rem;font-weight:800">------</div>
-            <div id="pairing-code-expiry" style="font-size:.82rem;color:#9e7e82;margin-top:.15rem"></div>
-            <div style="font-size:.82rem;color:#9e7e82">In the app, choose code pairing, enter this code and the site endpoint.</div>
-            <div id="pairing-qr-status"></div>
+            <div style="font-size:.82rem;color:#9e7e82">If no device appears, check endpoint reachability and backend auto-enrollment settings.</div>
           </div>
         </div>
       </div>
@@ -1920,7 +1908,10 @@
      * Updated on every WS status_update, lock, and snapshot message.
      */
     const _deviceCache = {};
-    let _pairingQrObjectUrl = null;
+    let _pairingCodeAutoTimer = null;
+    let _pairingPairPollTimer = null;
+    let _pairingPairPollStartedAt = 0;
+    let _pairingKnownDevicesAtStart = 0;
     let _handlerNoAssignmentHint = null;
     const DEVICE_ONLINE_STALE_MS = 5 * 60 * 1000;
 
@@ -2014,42 +2005,6 @@
       return name || String(device.device_id || '').trim();
     }
 
-    async function loadPairingQr() {
-      const img = document.getElementById('pairing-qr-image');
-      const placeholder = document.getElementById('pairing-qr-placeholder');
-      const status = document.getElementById('pairing-qr-status');
-      if (!img || !placeholder || !status) return;
-      placeholder.style.display = 'block';
-      placeholder.textContent = 'Loading pairing QRâ€¦';
-      img.style.display = 'none';
-      status.textContent = '';
-      try {
-        const r = await fetch('/api/handler/tpe/qr', { headers: authHeader() });
-        if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
-        let errText = '';
-        if (!r.ok) {
-          try {
-            const errData = await r.json();
-            errText = errData.detail || '';
-          } catch(e) {
-            // Ignore JSON parse errors and fall back to the generic HTTP error message below.
-          }
-          throw new Error(errText || ('HTTP ' + r.status));
-        }
-        const blob = await r.blob();
-        if (_pairingQrObjectUrl) URL.revokeObjectURL(_pairingQrObjectUrl);
-        _pairingQrObjectUrl = URL.createObjectURL(blob);
-        img.src = _pairingQrObjectUrl;
-        img.style.display = 'block';
-        placeholder.style.display = 'none';
-        status.textContent = 'Ready to scan.';
-      } catch(e) {
-        if (e.message === AUTH_EXPIRED_ERROR) return;
-        placeholder.textContent = 'Pairing QR unavailable.';
-        status.textContent = e.message || 'Failed to load pairing QR.';
-      }
-    }
-
     async function loadPairingCode() {
       const codeEl = document.getElementById('pairing-code-value');
       const expiryEl = document.getElementById('pairing-code-expiry');
@@ -2066,10 +2021,64 @@
         if (r.expires_at) {
           expiryEl.textContent = 'Expires: ' + fmtDate(r.expires_at);
         }
-        status.textContent = code ? 'Pairing code ready.' : 'Pairing code unavailable.';
+        status.textContent = code ? 'Pairing code ready. Waiting for app to pair…' : 'Pairing code unavailable.';
+        schedulePairingCodeRefresh(r.expires_at);
+        startPairingAutoDetect();
       } catch (e) {
         status.textContent = (e && e.message) ? e.message : 'Failed to create pairing code.';
       }
+    }
+
+    function schedulePairingCodeRefresh(expiresAtIso) {
+      if (_pairingCodeAutoTimer) {
+        clearTimeout(_pairingCodeAutoTimer);
+        _pairingCodeAutoTimer = null;
+      }
+      const expiresAtMs = expiresAtIso ? Date.parse(expiresAtIso) : NaN;
+      const msUntilRefresh = Number.isFinite(expiresAtMs)
+        ? Math.max(20_000, expiresAtMs - Date.now() - 30_000)
+        : 120_000;
+      _pairingCodeAutoTimer = setTimeout(function() {
+        loadPairingCode();
+      }, msUntilRefresh);
+    }
+
+    async function fetchDeviceCount() {
+      try {
+        const devices = await apiGet('/api/handler/devices');
+        return Array.isArray(devices) ? devices.length : 0;
+      } catch (_e) {
+        return 0;
+      }
+    }
+
+    async function startPairingAutoDetect() {
+      const status = document.getElementById('pairing-qr-status');
+      if (_pairingPairPollTimer) {
+        clearInterval(_pairingPairPollTimer);
+        _pairingPairPollTimer = null;
+      }
+      _pairingKnownDevicesAtStart = await fetchDeviceCount();
+      _pairingPairPollStartedAt = Date.now();
+
+      _pairingPairPollTimer = setInterval(async function() {
+        const elapsed = Date.now() - _pairingPairPollStartedAt;
+        if (elapsed > 120_000) {
+          clearInterval(_pairingPairPollTimer);
+          _pairingPairPollTimer = null;
+          if (status && status.textContent.indexOf('paired') === -1) {
+            status.textContent = 'Still waiting for app pairing…';
+          }
+          return;
+        }
+        const nowCount = await fetchDeviceCount();
+        if (nowCount > _pairingKnownDevicesAtStart) {
+          clearInterval(_pairingPairPollTimer);
+          _pairingPairPollTimer = null;
+          if (status) status.textContent = 'Device paired successfully. Refreshing list…';
+          setTimeout(function() { initPanel(); }, 700);
+        }
+      }, 3_000);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -4068,8 +4077,6 @@
       initCommandCenter();
       connectWS();
       showKennelOverview();
-      loadPairingQr();
-      loadPairingCode();
       updateDeleteDeviceActionAccess();
 
       // Eagerly populate kennel cards before the first WS push
@@ -4093,12 +4100,6 @@
       }).catch(function() {});
     }
 
-    document.getElementById('pairing-qr-refresh-btn').addEventListener('click', function() {
-      loadPairingQr();
-    });
-    document.getElementById('pairing-code-refresh-btn').addEventListener('click', function() {
-      loadPairingCode();
-    });
   </script>
 </body>
 </html>
