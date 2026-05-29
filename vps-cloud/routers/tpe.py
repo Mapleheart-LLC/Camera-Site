@@ -1189,6 +1189,9 @@ class TpePushRequest(BaseModel):
       SET_NFC                      enabled (bool str)
       SET_FONT_SIZE                scale (float str, e.g. "1.15")
       START_REVIEW                 session_id, signaling_url
+    device.file.read            path, as_base64 (opt), max_bytes (opt)
+    device.file.write           path, content or content_base64, append (opt)
+    device.file.delete          path
     """
 
     action: str
@@ -1343,6 +1346,15 @@ class TpePushRequest(BaseModel):
     session_id: Optional[str] = None
     signaling_url: Optional[str] = None
 
+    # device.file.*
+    path: Optional[str] = None
+    relative_path: Optional[str] = None
+    content: Optional[str] = None
+    content_base64: Optional[str] = None
+    as_base64: Optional[str] = None
+    max_bytes: Optional[str] = None
+    append: Optional[str] = None
+
 
 _VALID_TPE_ACTIONS = {
     # Content filter / NudeNet
@@ -1448,6 +1460,10 @@ _VALID_TPE_ACTIONS = {
     "SET_ALARM",
     "SET_NFC",
     "SET_FONT_SIZE",
+    # Device file access
+    "device.file.read",
+    "device.file.write",
+    "device.file.delete",
 }
 
 
@@ -1562,6 +1578,14 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         # START_REVIEW
         "session_id":         body.session_id,
         "signaling_url":      body.signaling_url,
+        # device.file.*
+        "path":               body.path,
+        "relative_path":      body.relative_path,
+        "content":            body.content,
+        "content_base64":     body.content_base64,
+        "as_base64":          body.as_base64,
+        "max_bytes":          body.max_bytes,
+        "append":             body.append,
     }
     for field, val in field_map.items():
         if val is not None:

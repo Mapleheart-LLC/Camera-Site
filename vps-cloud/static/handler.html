@@ -1581,6 +1581,42 @@
               </div>
             </details>
 
+            <!-- ── Device File Access ── -->
+            <details class="cmd-group">
+              <summary>🗂️ Device File Access</summary>
+              <div class="cmd-group-body">
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Read File</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-file-read-path" placeholder="Relative path e.g. notes/session.txt" />
+                    <select id="cmd-file-read-base64"><option value="false">Return Text</option><option value="true">Return Base64</option></select>
+                    <input id="cmd-file-read-max" type="number" placeholder="Max bytes (opt, default 65536)" min="1" />
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('device.file.read',{path:v('cmd-file-read-path'),as_base64:v('cmd-file-read-base64'),max_bytes:v('cmd-file-read-max')},'res-cmd-file-read')">Send</button>
+                  <span class="cmd-result" id="res-cmd-file-read"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Write File</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-file-write-path" placeholder="Relative path e.g. notes/session.txt" />
+                    <textarea id="cmd-file-write-content" placeholder="Text content (or leave empty and use Base64)"></textarea>
+                    <textarea id="cmd-file-write-b64" placeholder="Base64 content (optional)"></textarea>
+                    <select id="cmd-file-write-append"><option value="false">Replace</option><option value="true">Append</option></select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendFcm('device.file.write',{path:v('cmd-file-write-path'),content:v('cmd-file-write-content'),content_base64:v('cmd-file-write-b64'),append:v('cmd-file-write-append')},'res-cmd-file-write')">Send</button>
+                  <span class="cmd-result" id="res-cmd-file-write"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Delete File</span>
+                  <div class="cmd-inputs">
+                    <input id="cmd-file-delete-path" placeholder="Relative path (handler-origin files only)" />
+                  </div>
+                  <button class="btn-cmd danger" onclick="sendFcm('device.file.delete',{path:v('cmd-file-delete-path')},'res-cmd-file-delete')">Send</button>
+                  <span class="cmd-result" id="res-cmd-file-delete"></span>
+                </div>
+              </div>
+            </details>
+
             <!-- ── Screen & Display ── -->
             <details class="cmd-group">
               <summary>🖥️ Screen &amp; Display</summary>
@@ -1832,6 +1868,34 @@
           <!-- ═══════════════ LOGS ═══════════════ -->
           <section id="sec-logs" class="handler-section">
             <h2 class="section-heading">📜 Logs</h2>
+            <div class="card">
+              <div class="card-header">
+                <h2>Behavior Learning Insights</h2>
+                <div style="display:flex;gap:.45rem;align-items:center">
+                  <label for="behavior-days" style="font-size:.78rem;color:#9e7e82">Window</label>
+                  <select id="behavior-days" class="section-filter" style="min-width:88px">
+                    <option value="7">7 days</option>
+                    <option value="14" selected>14 days</option>
+                    <option value="30">30 days</option>
+                  </select>
+                  <button class="btn-action" id="behavior-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
+                </div>
+              </div>
+              <div class="card-body" style="display:grid;gap:.7rem">
+                <div id="behavior-kpis" style="display:grid;gap:.45rem;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));"></div>
+                <div id="behavior-signals" style="display:grid;gap:.45rem;"></div>
+                <div style="display:grid;gap:.45rem;grid-template-columns:1fr 1fr;align-items:start;">
+                  <div>
+                    <div style="font-size:.8rem;color:#9e7e82;margin-bottom:.25rem">Top Events</div>
+                    <div id="behavior-top-events"></div>
+                  </div>
+                  <div>
+                    <div style="font-size:.8rem;color:#9e7e82;margin-bottom:.25rem">Top Triggers</div>
+                    <div id="behavior-top-reasons"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="card">
               <div class="card-header">
                 <h2>Consequence Events</h2>
@@ -3775,7 +3839,90 @@
     // LOGS
     // ═══════════════════════════════════════════════════════════
 
-    async function loadLogs() { await Promise.all([loadEvents(), loadAudits()]); }
+    async function loadLogs() { await Promise.all([loadBehaviorInsights(), loadEvents(), loadAudits()]); }
+
+    function _renderBehaviorList(el, items, keyA, keyB) {
+      if (!el) return;
+      if (!Array.isArray(items) || !items.length) {
+        el.innerHTML = '<div class="empty-row" style="padding:.45rem .55rem;border:1px dashed #3d2a2e;border-radius:10px">No data in this window.</div>';
+        return;
+      }
+      el.innerHTML = items.map(function(item) {
+        return '<div style="display:flex;justify-content:space-between;gap:.6rem;padding:.35rem .5rem;border:1px solid #3d2a2e;border-radius:10px;background:#24191d">' +
+          '<span style="color:#f0e6e8">' + esc(item[keyA] || '—') + '</span>' +
+          '<span style="color:#9e7e82">' + esc(String(item[keyB] || 0)) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function loadBehaviorInsights() {
+      var kpisEl = document.getElementById('behavior-kpis');
+      var signalsEl = document.getElementById('behavior-signals');
+      var eventsEl = document.getElementById('behavior-top-events');
+      var reasonsEl = document.getElementById('behavior-top-reasons');
+      var daysEl = document.getElementById('behavior-days');
+      var days = daysEl ? String(daysEl.value || '14') : '14';
+
+      if (kpisEl) kpisEl.innerHTML = '<div class="empty-row" style="grid-column:1/-1;padding:.45rem .55rem;border:1px dashed #3d2a2e;border-radius:10px">Loading insights…</div>';
+      if (signalsEl) signalsEl.innerHTML = '';
+      if (eventsEl) eventsEl.innerHTML = '';
+      if (reasonsEl) reasonsEl.innerHTML = '';
+
+      try {
+        var qs = '?days=' + encodeURIComponent(days);
+        if (viewingDeviceId) qs += '&device_id=' + encodeURIComponent(viewingDeviceId);
+        var data = await apiGet('/api/handler/tpe/behavior-insights' + qs);
+
+        var kpis = [
+          { label: 'Events', value: data.event_count != null ? String(data.event_count) : '—' },
+          { label: 'Behavior Logs', value: data.behavior_log_count != null ? String(data.behavior_log_count) : '—' },
+          { label: 'Social Interactions', value: data.social_interaction_count != null ? String(data.social_interaction_count) : '—' },
+          { label: 'Phone Events', value: data.phone_event_count != null ? String(data.phone_event_count) : '—' },
+          { label: 'Check-ins', value: data.checkin_count != null ? String(data.checkin_count) : '—' },
+          { label: 'Vitals Samples', value: data.vitals_sample_count != null ? String(data.vitals_sample_count) : '—' },
+          { label: 'Task Completion', value: data.task_completion_rate != null ? String(data.task_completion_rate) + '%' : '—' },
+          { label: 'Mood Avg', value: data.mood_avg != null ? String(data.mood_avg) : '—' },
+          { label: 'Mood Delta', value: data.mood_delta != null ? String(data.mood_delta) : '—' },
+          { label: 'High-Risk Audits', value: data.high_risk_count != null ? String(data.high_risk_count) : '—' },
+          { label: 'Avg Battery', value: data.avg_battery != null ? String(data.avg_battery) + '%' : '—' },
+          { label: 'Avg Heart Rate', value: data.avg_heart_rate != null ? String(data.avg_heart_rate) + ' bpm' : '—' },
+          { label: 'Logged Steps', value: data.step_total != null ? String(data.step_total) : '—' },
+        ];
+
+        if (kpisEl) {
+          kpisEl.innerHTML = kpis.map(function(k) {
+            return '<div style="padding:.55rem .6rem;border:1px solid #3d2a2e;border-radius:12px;background:#24191d">' +
+              '<div style="font-size:.72rem;color:#9e7e82">' + esc(k.label) + '</div>' +
+              '<div style="font-size:1rem;color:#f0e6e8;font-weight:700;margin-top:.12rem">' + esc(k.value) + '</div>' +
+            '</div>';
+          }).join('');
+        }
+
+        var signals = Array.isArray(data.learning_signals) ? data.learning_signals : [];
+        if (signalsEl) {
+          if (!signals.length) {
+            signalsEl.innerHTML = '<div class="empty-row" style="padding:.45rem .55rem;border:1px dashed #3d2a2e;border-radius:10px">Not enough data to infer learning signals yet.</div>';
+          } else {
+            signalsEl.innerHTML = signals.map(function(s) {
+              return '<div style="padding:.5rem .6rem;border:1px solid #3d2a2e;border-radius:10px;background:#24191d">' +
+                '<div style="display:flex;justify-content:space-between;gap:.6rem">' +
+                  '<strong style="color:#f0e6e8">' + esc(s.title || 'Signal') + '</strong>' +
+                  '<span style="color:#c49a9f">' + esc(s.value || '') + '</span>' +
+                '</div>' +
+                '<div style="font-size:.78rem;color:#9e7e82;margin-top:.2rem">' + esc(s.detail || '') + '</div>' +
+              '</div>';
+            }).join('');
+          }
+        }
+
+        _renderBehaviorList(eventsEl, (data.top_behavior_events && data.top_behavior_events.length ? data.top_behavior_events : (data.top_event_types || [])), 'event', 'count');
+        _renderBehaviorList(reasonsEl, data.top_reasons || [], 'reason', 'count');
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && kpisEl) {
+          kpisEl.innerHTML = '<div class="empty-row" style="grid-column:1/-1;padding:.45rem .55rem;border:1px dashed #3d2a2e;border-radius:10px">Failed to load behavior insights.</div>';
+        }
+      }
+    }
 
     async function loadEvents() {
       var tbody = document.getElementById('events-tbody');
@@ -3807,6 +3954,8 @@
     }
 
     document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
+    document.getElementById('behavior-refresh-btn').addEventListener('click', loadBehaviorInsights);
+    document.getElementById('behavior-days').addEventListener('change', loadBehaviorInsights);
 
     // ═══════════════════════════════════════════════════════════
     // VITALS CHART

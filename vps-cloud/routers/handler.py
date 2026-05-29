@@ -29,12 +29,13 @@ Device audio relay (webhook secret via query parameter):
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 import json
 import logging
 import secrets
 import sqlite3
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
@@ -285,6 +286,28 @@ def _ensure_evidence_vault_tables(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+def _ensure_behavior_log_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_behavior_logs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id   TEXT,
+            source      TEXT NOT NULL,
+            event_type  TEXT NOT NULL,
+            event_value TEXT,
+            payload_json TEXT,
+            created_at  TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tpe_behavior_logs_created_at ON tpe_behavior_logs(created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tpe_behavior_logs_device ON tpe_behavior_logs(device_id)"
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS handler_evidence_attachments (
@@ -319,6 +342,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
+        _ensure_behavior_log_table(conn)
         conn.commit()
         return
 
@@ -360,6 +384,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
+        _ensure_behavior_log_table(conn)
         conn.commit()
         return
 
@@ -373,6 +398,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_puppy_mail_tables(conn)
     _ensure_rule_engine_tables(conn)
     _ensure_evidence_vault_tables(conn)
+    _ensure_behavior_log_table(conn)
     conn.commit()
 
 
@@ -698,6 +724,28 @@ async def handler_device_status(
             body.ai_label,
             body.ai_score,
             now,
+            now,
+        ),
+    )
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'device_status', 'status_report', ?, ?, ?)
+        """,
+        (
+            resolved_device_id,
+            "ai_alert" if body.ai_alert else "status_ok",
+            json.dumps(
+                {
+                    "battery_pct": body.battery_pct,
+                    "lat": body.lat,
+                    "lon": body.lon,
+                    "ai_alert": bool(body.ai_alert),
+                    "ai_label": body.ai_label,
+                    "ai_score": body.ai_score,
+                    "device_name": resolved_device_name,
+                }
+            ),
             now,
         ),
     )
@@ -2730,7 +2778,23 @@ def handler_tpe_push(
         if body.device_id not in assigned:
             raise HTTPException(status_code=403, detail="Access denied to this device.")
 
-    return _send_mqtt_to_device(db, body.device_id, _build_tpe_payload(body))
+    payload = _build_tpe_payload(body)
+    result = _send_mqtt_to_device(db, body.device_id, payload)
+
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'handler_command', 'command_push', ?, ?, ?)
+        """,
+        (
+            body.device_id,
+            body.action,
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    db.commit()
+    return result
 
 
 @router.post("/api/handler/tpe/checkins/request")
@@ -2777,6 +2841,414 @@ def handler_tpe_audits(
         (min(limit, 200),),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.get("/api/handler/tpe/behavior-insights")
+def handler_tpe_behavior_insights(
+    days: int = 14,
+    device_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Return lightweight behavioral learning metrics for the handler panel.
+
+    Insights are computed from existing TPE logs (events, audits, check-ins,
+    tasks) over a configurable rolling window.
+    """
+
+    def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
+        if not ts:
+            return None
+        try:
+            normalized = str(ts).replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except Exception:
+            return None
+
+    selected_days = max(1, min(int(days), 90))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=selected_days)
+    cutoff_iso = cutoff.isoformat()
+
+    scoped_device_id = (device_id or "").strip() or None
+    allowed_devices: Optional[set[str]] = None
+
+    if current_user["role"] != "admin":
+        assigned = set(_handler_allowed_devices(db, current_user["user_id"]))
+        if scoped_device_id and scoped_device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+        allowed_devices = assigned
+
+    event_rows = db.execute(
+        "SELECT event, reason, payload_json, received_at FROM tpe_events WHERE received_at >= ? ORDER BY received_at DESC",
+        (cutoff_iso,),
+    ).fetchall()
+    audit_rows = db.execute(
+        "SELECT detection_ratio, last_score, received_at FROM tpe_audit_logs WHERE received_at >= ? ORDER BY received_at DESC",
+        (cutoff_iso,),
+    ).fetchall()
+    checkin_rows = db.execute(
+        "SELECT mood_score, checked_in_at FROM tpe_checkins WHERE checked_in_at >= ? ORDER BY checked_in_at DESC",
+        (cutoff_iso,),
+    ).fetchall()
+    task_rows = db.execute(
+        "SELECT status, created_at, completed_at FROM tpe_tasks WHERE created_at >= ? OR completed_at >= ?",
+        (cutoff_iso, cutoff_iso),
+    ).fetchall()
+    vital_rows = db.execute(
+        "SELECT device_id, heart_rate, steps, timestamp FROM device_vitals "
+        "WHERE timestamp >= ? ORDER BY timestamp DESC",
+        (cutoff_iso,),
+    ).fetchall()
+    behavior_rows = db.execute(
+        "SELECT device_id, source, event_type, event_value, payload_json, created_at "
+        "FROM tpe_behavior_logs WHERE created_at >= ? ORDER BY created_at DESC",
+        (cutoff_iso,),
+    ).fetchall()
+
+    filtered_events = []
+    hourly_hist = [0] * 24
+    event_counter: Counter[str] = Counter()
+    reason_counter: Counter[str] = Counter()
+    social_action_counter: Counter[str] = Counter()
+    social_platform_counter: Counter[str] = Counter()
+    phone_event_counter: Counter[str] = Counter()
+
+    for row in event_rows:
+        payload = {}
+        raw_payload = row["payload_json"]
+        if raw_payload:
+            try:
+                payload = json.loads(raw_payload)
+            except Exception:
+                payload = {}
+
+        event_device_id = str(
+            payload.get("device_id")
+            or payload.get("deviceId")
+            or payload.get("target_device")
+            or ""
+        ).strip() or None
+
+        if scoped_device_id and event_device_id and event_device_id != scoped_device_id:
+            continue
+        if allowed_devices is not None and event_device_id and event_device_id not in allowed_devices:
+            continue
+
+        filtered_events.append(row)
+        event_name = (row["event"] or "unknown").strip().lower()
+        event_counter[event_name] += 1
+
+        if event_name == "social_interaction" or (
+            payload.get("platform") is not None and payload.get("action") is not None
+        ):
+            platform = str(payload.get("platform") or "unknown").strip().lower()
+            action = str(payload.get("action") or "unknown").strip().lower()
+            social_platform_counter[platform] += 1
+            social_action_counter[action] += 1
+
+        # Events emitted directly from on-device services/hooks (not handler UI).
+        if event_name in {
+            "app_blocked",
+            "override_used",
+            "tone_block",
+            "mdm_executed",
+            "permission_to_speak",
+            "xposed_coverage",
+            "silent_selfie",
+            "device_health_sync_success",
+            "device_health_sync_failed",
+            "device_health_sync_empty",
+            "health_connect_toggle",
+            "health_connect_toggle_failed",
+            "text_replacement_rule_added",
+            "text_replacement_rule_removed",
+            "filter_settings_saved",
+            "handler_settings_saved",
+            "remote_injection_mode_set",
+            "device_admin_activated",
+            "device_admin_activation_pending",
+            "device_admin_deactivated",
+            "device_admin_deactivate_failed",
+            "vault_settings_saved",
+            "mqtt_event_received",
+            "app_lifecycle",
+            "typing_session_metrics",
+        }:
+            phone_event_counter[event_name] += 1
+
+        reason = (row["reason"] or "").strip()
+        if reason:
+            reason_counter[reason] += 1
+
+        evt_ts = _parse_iso(row["received_at"])
+        if evt_ts is not None:
+            hourly_hist[evt_ts.hour] += 1
+
+    mood_values = [int(r["mood_score"]) for r in checkin_rows if r["mood_score"] is not None]
+    mood_avg = round(sum(mood_values) / len(mood_values), 2) if mood_values else None
+
+    mid = datetime.now(timezone.utc) - timedelta(days=max(1, selected_days // 2))
+    recent_moods = []
+    prior_moods = []
+    for r in checkin_rows:
+        ts = _parse_iso(r["checked_in_at"])
+        if ts is None or r["mood_score"] is None:
+            continue
+        if ts >= mid:
+            recent_moods.append(int(r["mood_score"]))
+        else:
+            prior_moods.append(int(r["mood_score"]))
+    mood_delta = None
+    if recent_moods and prior_moods:
+        mood_delta = round((sum(recent_moods) / len(recent_moods)) - (sum(prior_moods) / len(prior_moods)), 2)
+
+    completed_statuses = {"completed", "done", "verified", "success"}
+    task_total = 0
+    task_completed = 0
+    for row in task_rows:
+        created = _parse_iso(row["created_at"])
+        completed_at = _parse_iso(row["completed_at"])
+        if (created and created >= cutoff) or (completed_at and completed_at >= cutoff):
+            task_total += 1
+            status = (row["status"] or "").strip().lower()
+            if status in completed_statuses:
+                task_completed += 1
+    task_completion_rate = round((task_completed / task_total) * 100, 1) if task_total else None
+
+    ratios = [float(r["detection_ratio"]) for r in audit_rows if r["detection_ratio"] is not None]
+    audit_ratio_avg = round(sum(ratios) / len(ratios), 4) if ratios else None
+    high_risk_count = sum(1 for r in ratios if r >= 0.6)
+
+    top_event_types = [
+        {"event": ev, "count": cnt}
+        for ev, cnt in event_counter.most_common(6)
+    ]
+    top_reasons = [
+        {"reason": rsn, "count": cnt}
+        for rsn, cnt in reason_counter.most_common(5)
+    ]
+    top_social_actions = [
+        {"action": action, "count": cnt}
+        for action, cnt in social_action_counter.most_common(8)
+    ]
+    top_social_platforms = [
+        {"platform": platform, "count": cnt}
+        for platform, cnt in social_platform_counter.most_common(8)
+    ]
+
+    learning_signals: list[dict] = []
+    if mood_delta is not None:
+        learning_signals.append(
+            {
+                "title": "Mood trend",
+                "value": "improving" if mood_delta > 0 else "declining" if mood_delta < 0 else "flat",
+                "detail": f"Delta {mood_delta:+.2f} vs previous period",
+            }
+        )
+    if task_completion_rate is not None:
+        learning_signals.append(
+            {
+                "title": "Task follow-through",
+                "value": f"{task_completion_rate}%",
+                "detail": f"{task_completed}/{task_total} tasks completed",
+            }
+        )
+    if audit_ratio_avg is not None:
+        learning_signals.append(
+            {
+                "title": "Audit risk pressure",
+                "value": f"{high_risk_count} high-risk",
+                "detail": f"Avg detection ratio {audit_ratio_avg:.4f}",
+            }
+        )
+    if top_reasons:
+        learning_signals.append(
+            {
+                "title": "Most common trigger",
+                "value": top_reasons[0]["reason"],
+                "detail": f"Seen {top_reasons[0]['count']} times",
+            }
+        )
+
+    behavior_filtered = []
+    behavior_event_counter: Counter[str] = Counter()
+    command_counter: Counter[str] = Counter()
+    source_counter: Counter[str] = Counter()
+    ai_alert_status_reports = 0
+    battery_points = []
+
+    for row in behavior_rows:
+        log_device_id = str(row["device_id"] or "").strip() or None
+        if scoped_device_id and log_device_id and log_device_id != scoped_device_id:
+            continue
+        if allowed_devices is not None and log_device_id and log_device_id not in allowed_devices:
+            continue
+
+        behavior_filtered.append(row)
+        source = str(row["source"] or "unknown")
+        event_type = str(row["event_type"] or "unknown")
+        event_value = str(row["event_value"] or "")
+
+        source_counter[source] += 1
+        behavior_event_counter[event_type] += 1
+        if source == "handler_command" and event_value:
+            command_counter[event_value] += 1
+
+        payload = {}
+        raw_payload = row["payload_json"]
+        if raw_payload:
+            try:
+                payload = json.loads(raw_payload)
+            except Exception:
+                payload = {}
+
+        if source == "device_status":
+            if payload.get("ai_alert") is True:
+                ai_alert_status_reports += 1
+            if payload.get("battery_pct") is not None:
+                try:
+                    battery_points.append(int(payload.get("battery_pct")))
+                except Exception:
+                    pass
+
+    avg_battery = round(sum(battery_points) / len(battery_points), 1) if battery_points else None
+    low_battery_count = sum(1 for b in battery_points if b <= 20)
+
+    vital_filtered = []
+    hr_points = []
+    step_points = []
+    for row in vital_rows:
+        v_device_id = str(row["device_id"] or "").strip() or None
+        if scoped_device_id and v_device_id and v_device_id != scoped_device_id:
+            continue
+        if allowed_devices is not None and v_device_id and v_device_id not in allowed_devices:
+            continue
+
+        vital_filtered.append(row)
+        try:
+            hr = int(row["heart_rate"] or 0)
+        except Exception:
+            hr = 0
+        try:
+            steps = int(row["steps"] or 0)
+        except Exception:
+            steps = 0
+        if hr > 0:
+            hr_points.append(hr)
+        if steps > 0:
+            step_points.append(steps)
+
+    avg_heart_rate = round(sum(hr_points) / len(hr_points), 1) if hr_points else None
+    max_heart_rate = max(hr_points) if hr_points else None
+    step_total = sum(step_points) if step_points else 0
+    step_avg = round(step_total / len(step_points), 1) if step_points else None
+
+    if command_counter:
+        top_cmd, top_cmd_count = command_counter.most_common(1)[0]
+        learning_signals.append(
+            {
+                "title": "Most used handler command",
+                "value": top_cmd,
+                "detail": f"Issued {top_cmd_count} times in window",
+            }
+        )
+    if avg_battery is not None:
+        learning_signals.append(
+            {
+                "title": "Battery stability",
+                "value": f"avg {avg_battery}%",
+                "detail": f"Low-battery reports (<=20%): {low_battery_count}",
+            }
+        )
+    if ai_alert_status_reports:
+        learning_signals.append(
+            {
+                "title": "AI alert pressure",
+                "value": str(ai_alert_status_reports),
+                "detail": "AI alert flags seen in device status reports",
+            }
+        )
+    if avg_heart_rate is not None:
+        learning_signals.append(
+            {
+                "title": "On-device vitals",
+                "value": f"avg {avg_heart_rate} bpm",
+                "detail": (
+                    f"Peak {max_heart_rate} bpm, total logged steps {step_total}"
+                    if max_heart_rate is not None
+                    else f"Total logged steps {step_total}"
+                ),
+            }
+        )
+    if phone_event_counter:
+        top_phone_event, top_phone_count = phone_event_counter.most_common(1)[0]
+        learning_signals.append(
+            {
+                "title": "Phone-side trigger hotspot",
+                "value": top_phone_event,
+                "detail": f"Observed {top_phone_count} times in window",
+            }
+        )
+    if top_social_actions:
+        top_social = top_social_actions[0]
+        learning_signals.append(
+            {
+                "title": "Top social interaction",
+                "value": top_social["action"],
+                "detail": f"Observed {top_social['count']} interactions",
+            }
+        )
+
+    top_behavior_events = [
+        {"event": ev, "count": cnt}
+        for ev, cnt in behavior_event_counter.most_common(8)
+    ]
+    top_commands = [
+        {"command": ev, "count": cnt}
+        for ev, cnt in command_counter.most_common(8)
+    ]
+
+    return {
+        "days": selected_days,
+        "device_id": scoped_device_id,
+        "window_start": cutoff_iso,
+        "event_count": len(filtered_events),
+        "checkin_count": len(checkin_rows),
+        "task_count": task_total,
+        "audit_count": len(audit_rows),
+        "mood_avg": mood_avg,
+        "mood_delta": mood_delta,
+        "task_completion_rate": task_completion_rate,
+        "audit_ratio_avg": audit_ratio_avg,
+        "high_risk_count": high_risk_count,
+        "top_event_types": top_event_types,
+        "top_reasons": top_reasons,
+        "social_interaction_count": sum(social_action_counter.values()),
+        "top_social_actions": top_social_actions,
+        "top_social_platforms": top_social_platforms,
+        "phone_event_count": sum(phone_event_counter.values()),
+        "top_phone_events": [
+            {"event": ev, "count": cnt}
+            for ev, cnt in phone_event_counter.most_common(8)
+        ],
+        "hourly_activity": hourly_hist,
+        "vitals_sample_count": len(vital_filtered),
+        "avg_heart_rate": avg_heart_rate,
+        "max_heart_rate": max_heart_rate,
+        "step_total": step_total,
+        "step_avg": step_avg,
+        "behavior_log_count": len(behavior_filtered),
+        "behavior_sources": [{"source": src, "count": cnt} for src, cnt in source_counter.most_common(6)],
+        "top_behavior_events": top_behavior_events,
+        "top_commands": top_commands,
+        "avg_battery": avg_battery,
+        "low_battery_count": low_battery_count,
+        "ai_alert_status_reports": ai_alert_status_reports,
+        "learning_signals": learning_signals,
+    }
 
 
 @router.get("/api/handler/tpe/qr")
