@@ -61,6 +61,9 @@ from routers.ws_manager import handler_ws as _handler_ws
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["handler"])
+AI_WARDEN_HEARTBEAT_SECONDS = 20
+AI_WARDEN_TELEMETRY_QUEUE_MAX_SIZE = 2000
+WS_CLOSE_AUTH_FAILED = 4001
 
 PUBLIC_COUNTER_ONE_LABEL_OPTIONS = [
     "Edges",
@@ -680,7 +683,7 @@ class _AiWardenTunnel:
                 pass
         self._ws = ws
         self._loop = asyncio.get_running_loop()
-        self._queue = asyncio.Queue(maxsize=2000)
+        self._queue = asyncio.Queue(maxsize=AI_WARDEN_TELEMETRY_QUEUE_MAX_SIZE)
 
     async def detach(self, ws: WebSocket) -> None:
         if self._ws is not ws:
@@ -5819,8 +5822,12 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
     connected = False
     try:
         expected = _effective_webhook_secret(db)
-        if expected and not secrets.compare_digest(secret, expected):
-            await websocket.close(code=4001)
+        provided_secret = (secret or "").strip()
+        auth_header = (websocket.headers.get("authorization") or "").strip()
+        if auth_header.lower().startswith("bearer "):
+            provided_secret = auth_header[7:].strip()
+        if expected and not secrets.compare_digest(provided_secret, expected):
+            await websocket.close(code=WS_CLOSE_AUTH_FAILED)
             return
 
         await websocket.accept()
@@ -5837,7 +5844,7 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
 
         async def _heartbeat_loop() -> None:
             while True:
-                await asyncio.sleep(20)
+                await asyncio.sleep(AI_WARDEN_HEARTBEAT_SECONDS)
                 await websocket.send_json({"type": "heartbeat", "ts": _now_iso()})
 
         heartbeat_task = asyncio.create_task(_heartbeat_loop())

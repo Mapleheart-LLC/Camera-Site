@@ -351,7 +351,8 @@ class _MqttClientService:
             try:
                 listener(topic, payload_raw)
             except Exception:
-                logger.debug("MQTT listener callback failed", exc_info=True)
+                listener_name = getattr(listener, "__name__", repr(listener))
+                logger.debug("MQTT listener callback failed: %s", listener_name, exc_info=True)
 
     def publish_json(self, topic: str, payload: dict[str, Any], qos: int = 1, retain: bool = False) -> bool:
         client = self._client
