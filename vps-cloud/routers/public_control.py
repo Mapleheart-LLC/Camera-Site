@@ -1,62 +1,36 @@
-"""
-Public SMS control + WATCH signaling routes.
-
-Endpoints:
-  POST /sms                       Twilio inbound SMS webhook (public)
-  POST /api/public/leak           Device leak callback → send MMS to SECRET requester
-  GET  /api/public/leak/media/{id} Serve uploaded leak image for Twilio MediaUrl
-  WS   /ws/public/watch/{id}      WebRTC signaling relay for 60-second WATCH sessions
-"""
+"""Public WATCH signaling routes and leak media intake."""
 
 from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
-import html
-import hmac
 import json
 import logging
 import os
 import re
-import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 
-import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
 from db import get_db, get_db_connection
-from routers.tpe import _send_mqtt_to_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["public-control"])
 
-_DEFAULT_UNIT_084_DEVICE_ID = "unit-084"
-_UNIT_084_DEVICE_ID = os.environ.get("UNIT_084_DEVICE_ID", _DEFAULT_UNIT_084_DEVICE_ID).strip() or _DEFAULT_UNIT_084_DEVICE_ID
-_WATCH_LINK_BASE = os.environ.get("WATCH_LINK_BASE", "https://mochii.live/watch").rstrip("/")
 _LEAK_UPLOAD_PATH = Path(os.environ.get("PUBLIC_LEAK_UPLOAD_PATH", "/app/data/public_leaks"))
 
-_TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
-_TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
-_TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
-_TWILIO_VALIDATE_SIGNATURE = os.environ.get("TWILIO_VALIDATE_SIGNATURE", "false").strip().lower() == "true"
-
-_IMAGE_URL_RE = re.compile(r"(https?://\S+)", re.IGNORECASE)
 _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".heif")
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
 _MAX_LEAK_BYTES = 10 * 1024 * 1024
-_MAX_BAN_WORD_LEN = 128
 _MAX_WS_MESSAGE_LEN = 64 * 1024
-_PHONE_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 _UUID_HEX_RE = re.compile(r"[0-9a-f]{32}")
-_TWILIO_API_TIMEOUT_SECONDS = 12.0
 _WS_SEND_TIMEOUT_SECONDS = 5.0
 _WS_CLOSE_SESSION_NOT_FOUND = 4404
 
@@ -75,16 +49,6 @@ def migrate_public_control(conn: sqlite3.Connection) -> None:
             requester_phone TEXT NOT NULL,
             created_at      TEXT NOT NULL,
             expires_at      TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS public_secret_requests (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            requester_phone TEXT NOT NULL,
-            requested_at    TEXT NOT NULL,
-            fulfilled_at    TEXT
         )
         """
     )
@@ -109,33 +73,7 @@ def _now_iso() -> str:
     return _now().isoformat()
 
 
-def _xml_response(message: str) -> Response:
-    escaped = html.escape(message)
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<Response>"
-        f"<Message>{escaped}</Message>"
-        "</Response>"
-    )
-    return Response(content=xml, media_type="application/xml")
-
-
-def _extract_image_url(text: str) -> Optional[str]:
-    if not text:
-        return None
-    for match in _IMAGE_URL_RE.findall(text):
-        candidate = match.strip().lstrip("(").rstrip(".,!?)]")
-        parsed = urlparse(candidate)
-        if parsed.scheme in {"http", "https"} and parsed.path.lower().endswith(_IMAGE_EXTS):
-            return candidate
-    return None
-
-
-def _dispatch_to_unit_084(db: sqlite3.Connection, payload: dict[str, str]) -> None:
-    _send_mqtt_to_device(db, _UNIT_084_DEVICE_ID, payload)
-
-
-def _store_watch_session(db: sqlite3.Connection, session_id: str, requester_phone: str) -> None:
+def _store_watch_session(db: sqlite3.Connection, session_id: str, requester_phone: str) -> str:
     created = _now()
     expires = created + timedelta(seconds=_WATCH_TTL_SECONDS)
     db.execute(
@@ -146,25 +84,7 @@ def _store_watch_session(db: sqlite3.Connection, session_id: str, requester_phon
         (session_id, requester_phone, created.isoformat(), expires.isoformat()),
     )
     db.commit()
-
-
-def _record_secret_request(db: sqlite3.Connection, requester_phone: str) -> None:
-    db.execute(
-        """
-        INSERT INTO public_secret_requests (requester_phone, requested_at, fulfilled_at)
-        VALUES (?, ?, NULL)
-        """,
-        (requester_phone, _now_iso()),
-    )
-    db.commit()
-
-
-def _twilio_credentials_available() -> bool:
-    return bool(_TWILIO_ACCOUNT_SID and _TWILIO_AUTH_TOKEN and _TWILIO_FROM_NUMBER)
-
-
-def _valid_phone(value: str) -> bool:
-    return bool(_PHONE_RE.fullmatch(value.strip()))
+    return expires.isoformat()
 
 
 def _is_safe_public_image_url(value: str) -> bool:
@@ -172,24 +92,21 @@ def _is_safe_public_image_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and parsed.path.lower().endswith(_IMAGE_EXTS)
 
 
-def _validate_twilio_signature(
+@router.post("/api/public/watch/session")
+def create_public_watch_session(
     request: Request,
-    signature: str,
-    fields: dict[str, str],
-) -> bool:
-    if not signature or not _TWILIO_AUTH_TOKEN:
-        return False
-    url = str(request.url).split("?", 1)[0]
-    s = url
-    for key in sorted(fields.keys()):
-        s += key + (fields[key] or "")
-    digest = hmac.new(
-        _TWILIO_AUTH_TOKEN.encode("utf-8"),
-        s.encode("utf-8"),
-        hashlib.sha1,  # Twilio webhook signature spec mandates HMAC-SHA1.
-    ).digest()
-    expected = base64.b64encode(digest).decode("utf-8")
-    return secrets.compare_digest(expected, signature)
+    phone: Optional[str] = Form(default="anonymous"),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    session_id = uuid.uuid4().hex
+    expires_at = _store_watch_session(db, session_id, (phone or "anonymous").strip() or "anonymous")
+    base_url = _base_url_for_public(request, db)
+    ws_base = base_url.replace("http://", "ws://", 1).replace("https://", "wss://", 1)
+    return {
+        "session_id": session_id,
+        "expires_at": expires_at,
+        "ws_url": f"{ws_base}/ws/public/watch/{session_id}",
+    }
 
 
 def _base_url_for_public(request: Request, db: sqlite3.Connection) -> str:
@@ -200,118 +117,6 @@ def _base_url_for_public(request: Request, db: sqlite3.Connection) -> str:
     if env_base:
         return env_base
     return str(request.base_url).rstrip("/")
-
-
-async def _send_twilio_mms(to_number: str, body_text: str, media_url: str) -> None:
-    if not _twilio_credentials_available():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Twilio MMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.",
-        )
-    if not _valid_phone(to_number):
-        raise HTTPException(status_code=400, detail="Invalid destination phone number.")
-    if not _is_safe_public_image_url(media_url):
-        raise HTTPException(status_code=400, detail="Invalid media URL.")
-    endpoint = f"https://api.twilio.com/2010-04-01/Accounts/{_TWILIO_ACCOUNT_SID}/Messages.json"
-    form = {
-        "To": to_number,
-        "From": _TWILIO_FROM_NUMBER,
-        "Body": body_text,
-        "MediaUrl": media_url,
-    }
-    async with httpx.AsyncClient(timeout=_TWILIO_API_TIMEOUT_SECONDS) as client:
-        resp = await client.post(
-            endpoint,
-            content=urlencode(form),
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            auth=(_TWILIO_ACCOUNT_SID, _TWILIO_AUTH_TOKEN),
-        )
-    if not resp.is_success:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Twilio MMS send failed: status={resp.status_code}",
-        )
-
-
-def _has_mms_attachment(num_media: str, media_url_0: str) -> bool:
-    if not media_url_0.strip():
-        return False
-    if not num_media:
-        return False
-    try:
-        return int(num_media) > 0
-    except ValueError:
-        return False
-
-
-@router.post("/sms")
-async def twilio_sms_webhook(
-    request: Request,
-    body: str = Form(default="", alias="Body"),
-    from_number: str = Form(default="", alias="From"),
-    num_media: str = Form(default="0", alias="NumMedia"),
-    media_url_0: str = Form(default="", alias="MediaUrl0"),
-    db: sqlite3.Connection = Depends(get_db),
-):
-    text = (body or "").strip()
-    text_upper = text.upper()
-    from_number = from_number.strip()
-    signature = request.headers.get("X-Twilio-Signature", "").strip()
-
-    if _TWILIO_VALIDATE_SIGNATURE:
-        fields = {
-            "Body": body,
-            "From": from_number,
-            "NumMedia": num_media,
-            "MediaUrl0": media_url_0,
-        }
-        if not _validate_twilio_signature(request, signature, fields):
-            raise HTTPException(status_code=403, detail="Invalid Twilio signature.")
-
-    image_url = _extract_image_url(text)
-    if not image_url and _has_mms_attachment(num_media, media_url_0):
-        image_url = media_url_0.strip()
-    if image_url and not _is_safe_public_image_url(image_url):
-        image_url = None
-
-    try:
-        if text_upper in {"SHOCK", "VIBRATE"}:
-            _dispatch_to_unit_084(db, {"action": "ble_trigger", "type": text_upper.lower()})
-            return _xml_response("Physical stimulus delivered to Unit 084.")
-
-        if text_upper == "WATCH":
-            session_id = uuid.uuid4().hex
-            _store_watch_session(db, session_id, from_number)
-            _dispatch_to_unit_084(
-                db,
-                {
-                    "action": "start_spectacle",
-                    "session_id": session_id,
-                    "ttl_seconds": str(_WATCH_TTL_SECONDS),
-                },
-            )
-            return _xml_response(f"{_WATCH_LINK_BASE}/{session_id}")
-
-        if text_upper == "SECRET":
-            if not _valid_phone(from_number):
-                return _xml_response("Command failed. Please try again shortly.")
-            _record_secret_request(db, from_number)
-            _dispatch_to_unit_084(db, {"action": "roulette_leak"})
-            return _xml_response("Accessing Unit 084's gallery. Stand by.")
-
-        if image_url:
-            _dispatch_to_unit_084(db, {"action": "set_wallpaper", "image_url": image_url})
-            return _xml_response("Unit's wallpaper overwritten.")
-
-        ban_word = text[:_MAX_BAN_WORD_LEN] if text else "<empty>"
-        _dispatch_to_unit_084(db, {"action": "ban_word", "word": ban_word})
-        return _xml_response("Word stolen. The Unit can no longer type this.")
-    except HTTPException as exc:
-        logger.warning("Public SMS command failed: %s", exc.detail)
-        return _xml_response("Command failed. Please try again shortly.")
-    except Exception as exc:
-        logger.exception("Unexpected SMS webhook error: %s", exc)
-        return _xml_response("Command failed. Please try again shortly.")
 
 
 def _leak_ext_from_content_type(content_type: str) -> str:
@@ -386,18 +191,6 @@ def _store_raw_leak_media(
     return media_id
 
 
-def _next_secret_recipient(db: sqlite3.Connection) -> Optional[sqlite3.Row]:
-    return db.execute(
-        """
-        SELECT id, requester_phone
-        FROM public_secret_requests
-        WHERE fulfilled_at IS NULL
-        ORDER BY requested_at ASC
-        LIMIT 1
-        """
-    ).fetchone()
-
-
 @router.post("/api/public/leak")
 async def public_leak_callback(
     request: Request,
@@ -406,10 +199,6 @@ async def public_leak_callback(
     file: Optional[UploadFile] = File(default=None),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    recipient = _next_secret_recipient(db)
-    if not recipient:
-        raise HTTPException(status_code=404, detail="No pending SECRET requester.")
-
     resolved_image_url = (image_url or "").strip()
 
     if not resolved_image_url and image_base64:
@@ -429,18 +218,10 @@ async def public_leak_callback(
     if not resolved_image_url:
         raise HTTPException(status_code=400, detail="Provide image_url, image_base64, or file.")
 
-    await _send_twilio_mms(
-        to_number=recipient["requester_phone"],
-        body_text="Unit 084 leak received.",
-        media_url=resolved_image_url,
-    )
+    if not _is_safe_public_image_url(resolved_image_url):
+        raise HTTPException(status_code=400, detail="Invalid media URL.")
 
-    db.execute(
-        "UPDATE public_secret_requests SET fulfilled_at = ? WHERE id = ?",
-        (_now_iso(), recipient["id"]),
-    )
-    db.commit()
-    return {"status": "sent", "to": recipient["requester_phone"]}
+    return {"status": "stored", "media_url": resolved_image_url}
 
 
 @router.get("/api/public/leak/media/{media_id}")

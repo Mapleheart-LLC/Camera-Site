@@ -1126,7 +1126,6 @@ def handler_list_devices(
         rows = db.execute(
             "SELECT device_id, device_name, is_online, is_locked, battery_pct, last_seen "
             "FROM handler_device_status ORDER BY last_seen DESC"
-        _evaluate_rule_engine_for_device(db, resolved_device_id)
         ).fetchall()
     else:
         assigned = _handler_allowed_devices(db, current_user["user_id"])

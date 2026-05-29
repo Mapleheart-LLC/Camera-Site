@@ -110,6 +110,8 @@ _mock_auth_raw = os.environ.get("MOCK_AUTH", "")
 MOCK_AUTH: bool = _mock_auth_raw == True or (  # noqa: E712 – intentional bool/str check
     isinstance(_mock_auth_raw, str) and _mock_auth_raw.lower() == "true"
 )
+_runtime_env = os.environ.get("ENVIRONMENT", "").strip().lower()
+PRODUCTION_MODE: bool = _runtime_env in {"prod", "production"}
 
 # Canonical public root URL of the site (e.g. https://mochii.live).
 # Used for OG image URLs and share-page links so they are always absolute
@@ -879,6 +881,9 @@ async def auth_login(
     effective_mock_auth = (
         db_mock_auth.lower() == "true" if db_mock_auth is not None else MOCK_AUTH
     )
+    if PRODUCTION_MODE and effective_mock_auth:
+        logger.warning("MOCK_AUTH requested but disabled because ENVIRONMENT=%s", _runtime_env)
+        effective_mock_auth = False
 
     if effective_mock_auth:
         mock_token = create_access_token(
