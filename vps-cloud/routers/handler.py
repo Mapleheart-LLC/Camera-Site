@@ -5699,6 +5699,9 @@ def handler_approve_social_post_draft(
                 draft_id, r.get("platform"), r.get("error"),
             )
         else:
+            # execute_post_social_update only sets status to 'posted' on
+            # success; any other non-error state is treated as a successful
+            # post for logging purposes.
             logger.info(
                 "Social post draft %d posted on %s",
                 draft_id, r.get("platform"),
