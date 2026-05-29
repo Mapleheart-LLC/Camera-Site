@@ -9,7 +9,7 @@ import sqlite3
 import ssl
 import threading
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from db import get_db_connection
 
@@ -42,12 +42,14 @@ class _MqttClientService:
         self._presence_enabled = True
         self._presence_heartbeat_topic = "tpeapp/device/+/heartbeat"
         self._presence_status_topic = "tpeapp/device/+/status"
+        self._telemetry_topic = "tpeapp/device/+/telemetry"
 
         self._status_topic_re: Optional[re.Pattern[str]] = None
         self._heartbeat_topic_re: Optional[re.Pattern[str]] = None
         self._presence_queue: "queue.Queue[tuple[str, bool]]" = queue.Queue(maxsize=_PRESENCE_QUEUE_MAX_SIZE)
         self._presence_stop = threading.Event()
         self._presence_worker: Optional[threading.Thread] = None
+        self._message_listeners: list[Callable[[str, str], None]] = []
 
     def _setting(self, db, env_key: str, db_key: str, default: str = "") -> str:
         env_val = os.environ.get(env_key)
@@ -127,6 +129,12 @@ class _MqttClientService:
                 "MQTT_PRESENCE_STATUS_TOPIC",
                 "tpe_mqtt_presence_status_topic",
                 self._presence_status_topic,
+            )
+            self._telemetry_topic = self._setting(
+                db,
+                "MQTT_TELEMETRY_TOPIC",
+                "tpe_mqtt_telemetry_topic",
+                self._telemetry_topic,
             )
             self._compile_presence_regexes()
 
@@ -251,10 +259,13 @@ class _MqttClientService:
             try:
                 client.subscribe(self._presence_heartbeat_topic, qos=1)
                 client.subscribe(self._presence_status_topic, qos=1)
+                if self._telemetry_topic:
+                    client.subscribe(self._telemetry_topic, qos=1)
                 logger.info(
-                    "MQTT presence subscriptions active: heartbeat=%s status=%s",
+                    "MQTT presence subscriptions active: heartbeat=%s status=%s telemetry=%s",
                     self._presence_heartbeat_topic,
                     self._presence_status_topic,
+                    self._telemetry_topic,
                 )
             except Exception as exc:
                 logger.warning("MQTT presence subscribe failed: %s", exc)
@@ -335,6 +346,14 @@ class _MqttClientService:
             except queue.Full:
                 logger.debug("MQTT presence queue full; dropping update for %s", device_id)
 
+        listeners = list(self._message_listeners)
+        for listener in listeners:
+            try:
+                listener(topic, payload_raw)
+            except Exception:
+                listener_name = getattr(listener, "__name__", repr(listener))
+                logger.debug("MQTT listener callback failed: %s", listener_name, exc_info=True)
+
     def publish_json(self, topic: str, payload: dict[str, Any], qos: int = 1, retain: bool = False) -> bool:
         client = self._client
         if not self._enabled or client is None:
@@ -358,6 +377,17 @@ class _MqttClientService:
 
     def topic_for_device_signaling(self, device_id: str) -> str:
         return self._device_signaling_topic_template.format(device_id=device_id)
+
+    def add_message_listener(self, callback: Callable[[str, str], None]) -> None:
+        if callback in self._message_listeners:
+            return
+        self._message_listeners.append(callback)
+
+    def remove_message_listener(self, callback: Callable[[str, str], None]) -> None:
+        try:
+            self._message_listeners.remove(callback)
+        except ValueError:
+            pass
 
 
 mqtt_client = _MqttClientService()
