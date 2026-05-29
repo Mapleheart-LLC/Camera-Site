@@ -1177,7 +1177,7 @@
           <div class="public-status-value" id="pub-days-locked">--</div>
           <div class="public-status-label">Days Locked</div>
           <div class="public-status-sub" id="pub-days-locked-goal">Goal: --</div>
-          <div style="display:flex;gap:.5rem;justify-content:center;margin-top:.6rem">
+          <div id="pub-days-controls" style="display:flex;gap:.5rem;justify-content:center;margin-top:.6rem">
             <button id="pub-days-remove" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">-1 day</button>
             <button id="pub-days-add" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">+1 day</button>
           </div>
@@ -1206,6 +1206,14 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
+        <a class="link-card" id="public-booking-link-card" href="#public-booking-card" style="display:none">
+          <span class="link-card-emoji" aria-hidden="true">&#128197;</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Book a Session</span>
+            <span class="link-card-desc">send a booking request to the handler team</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
+        </a>
         <a class="link-card" href="https://drool.mochii.live">
           <span class="link-card-emoji" aria-hidden="true">&#128167;</span>
           <span class="link-card-body">
@@ -1220,7 +1228,7 @@
     <div class="links-section">
       <p class="links-section-label">CONTACT HANDLER</p>
       <div class="public-intake-grid">
-        <div class="public-intake-card">
+        <div class="public-intake-card" id="public-booking-card" style="display:none">
           <h3>📅 Booking Request</h3>
           <p>Share your details and availability. Handler will review and follow up.</p>
           <input id="booking-contact" type="text" maxlength="120" placeholder="Contact handle (Discord/Telegram/etc.)" />
@@ -1363,7 +1371,14 @@
     function setPublicStatusFallback() {
       document.getElementById('pub-days-locked').textContent = '--';
       document.getElementById('pub-days-locked-goal').textContent = 'Goal: --';
+      document.getElementById('pub-days-locked-goal').style.display = 'none';
+      var daysControls = document.getElementById('pub-days-controls');
+      if (daysControls) daysControls.style.display = 'none';
       document.getElementById('pub-status-note').textContent = 'Public status temporarily unavailable.';
+      var bookingLink = document.getElementById('public-booking-link-card');
+      var bookingCard = document.getElementById('public-booking-card');
+      if (bookingLink) bookingLink.style.display = 'none';
+      if (bookingCard) bookingCard.style.display = 'none';
     }
 
     async function loadPublicStatus() {
@@ -1374,14 +1389,33 @@
         const daysLocked = data.days_locked ?? data.days_caged;
         const goalDays = data.days_locked_goal_days ?? 0;
         const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
+        const hasGoal = goalDays > 0;
+        var goalEl = document.getElementById('pub-days-locked-goal');
+        var daysControls = document.getElementById('pub-days-controls');
         document.getElementById('pub-days-locked').textContent = goalMet ? 'Unlocked' : String(daysLocked ?? '--');
-        document.getElementById('pub-days-locked-goal').textContent =
+        if (goalEl) {
+          goalEl.style.display = hasGoal ? '' : 'none';
+          goalEl.textContent =
           goalMet
             ? `Goal met! (${daysLocked}/${goalDays} days)`
             : goalDays > 0 && daysLocked != null
               ? `Goal: ${daysLocked}/${goalDays} days`
               : `Goal: ${goalDays > 0 ? goalDays + ' days' : 'not set'}`;
-        document.getElementById('pub-status-note').textContent = data.is_paused ? 'Days locked counter is currently paused.' : '';
+        }
+        if (daysControls) daysControls.style.display = hasGoal ? 'flex' : 'none';
+        var bookingEnabled = !!data.public_booking_enabled;
+        var bookingLink = document.getElementById('public-booking-link-card');
+        var bookingCard = document.getElementById('public-booking-card');
+        if (bookingLink) bookingLink.style.display = bookingEnabled ? '' : 'none';
+        if (bookingCard) bookingCard.style.display = bookingEnabled ? '' : 'none';
+
+        if (data.is_paused) {
+          document.getElementById('pub-status-note').textContent = 'Days locked counter is currently paused.';
+        } else if (!bookingEnabled) {
+          document.getElementById('pub-status-note').textContent = 'Booking requests are currently closed by the handler.';
+        } else {
+          document.getElementById('pub-status-note').textContent = '';
+        }
       } catch (_) {
         setPublicStatusFallback();
       }

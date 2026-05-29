@@ -563,6 +563,7 @@ class PublicStatusUpdateRequest(BaseModel):
     confessions_label: Optional[str] = None
     tasks_completed: Optional[int] = None
     confessions_posted: Optional[int] = None
+    public_booking_enabled: Optional[bool] = None
     public_screen_share_approved: Optional[bool] = None
 
 
@@ -1656,6 +1657,7 @@ def handler_get_public_status(
         "presets": PUBLIC_STATUS_PRESETS,
         "tasks_completed": _safe_int(get_setting(db, "public_tasks_completed", "0")),
         "confessions_posted": _safe_int(get_setting(db, "public_confessions_posted", "0")),
+        "public_booking_enabled": _safe_bool(get_setting(db, "public_booking_enabled", "false")),
         "public_screen_share_approved": _safe_bool(get_setting(db, "public_screen_share_approved", "false")),
     }
 
@@ -1702,6 +1704,12 @@ def handler_update_public_status(
         if payload.confessions_posted < 0:
             raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
         set_setting(db, "public_confessions_posted", str(payload.confessions_posted))
+    if payload.public_booking_enabled is not None:
+        set_setting(
+            db,
+            "public_booking_enabled",
+            "true" if payload.public_booking_enabled else "false",
+        )
     if payload.public_screen_share_approved is not None:
         set_setting(
             db,

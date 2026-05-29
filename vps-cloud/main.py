@@ -2893,6 +2893,7 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         db, "current_status_mode", PUBLIC_MODE_OPTIONS, "Service"
     )
     days_locked_goal = max(0, _safe_int_setting(db, "days_locked_goal_days", default=0))
+    public_booking_enabled = _safe_bool_setting(db, "public_booking_enabled", default=False)
 
     return {
         "days_locked": days_caged,
@@ -2903,6 +2904,7 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         "confessions_posted": confessions_posted,
         "confessions_label": confessions_label,
         "current_mode": current_mode,
+        "public_booking_enabled": public_booking_enabled,
         "is_paused": paused,
         "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
     }

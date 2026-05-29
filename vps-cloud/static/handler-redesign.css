@@ -504,6 +504,21 @@ button {
   gap: 0.75rem;
 }
 
+.booking-public-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 0.24rem 0.58rem;
+  border: 1px solid rgba(255, 122, 122, 0.52);
+  border-radius: 999px;
+  background: rgba(255, 122, 122, 0.12);
+}
+
+.booking-public-status.enabled {
+  color: #c7ffe0;
+  border-color: rgba(95, 208, 141, 0.62);
+  background: rgba(95, 208, 141, 0.14);
+}
+
 .screen-share-approval-wrap {
   display: flex;
   gap: 0.55rem;

@@ -1043,6 +1043,8 @@
               <div class="card-header">
                 <h2>Booking Queue</h2>
                 <div class="section-toolbar">
+                  <span id="booking-public-status" class="booking-public-status">Public booking form is hidden.</span>
+                  <button class="btn-action" id="booking-public-toggle-btn" style="width:auto;padding:.35rem .9rem;font-size:.8rem">Show Booking Publicly</button>
                   <select id="booking-status-filter" class="section-filter">
                     <option value="all">All</option>
                     <option value="new">New</option>
@@ -2265,6 +2267,7 @@
           loadLimboItems();
         }
         if (btn.dataset.target === 'sec-booking') {
+          loadPublicBookingVisibility();
           loadBookingQueue();
         }
         if (btn.dataset.target === 'sec-mail') {
@@ -3490,6 +3493,59 @@
     // BOOKING INTAKE
     // ═══════════════════════════════════════════════════════════
 
+    var _publicBookingEnabled = false;
+
+    function _renderPublicBookingVisibilityUi() {
+      var statusEl = document.getElementById('booking-public-status');
+      var btn = document.getElementById('booking-public-toggle-btn');
+      if (!statusEl || !btn) return;
+      if (_publicBookingEnabled) {
+        statusEl.textContent = 'Public booking link is visible.';
+        statusEl.classList.add('enabled');
+        btn.textContent = 'Hide Booking Publicly';
+      } else {
+        statusEl.textContent = 'Public booking link is hidden.';
+        statusEl.classList.remove('enabled');
+        btn.textContent = 'Show Booking Publicly';
+      }
+    }
+
+    async function loadPublicBookingVisibility() {
+      try {
+        var data = await apiGet('/api/handler/public-status');
+        _publicBookingEnabled = !!(data && data.public_booking_enabled);
+        _renderPublicBookingVisibilityUi();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          var statusEl = document.getElementById('booking-public-status');
+          if (statusEl) statusEl.textContent = 'Failed to load booking visibility.';
+        }
+      }
+    }
+
+    async function togglePublicBookingVisibility() {
+      var btn = document.getElementById('booking-public-toggle-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        var r = await apiPost('/api/handler/public-status', {
+          public_booking_enabled: !_publicBookingEnabled,
+        });
+        if (r.ok) {
+          _publicBookingEnabled = !_publicBookingEnabled;
+          _renderPublicBookingVisibilityUi();
+          showToast(_publicBookingEnabled ? '✅ Public booking link enabled.' : '✅ Public booking link hidden.');
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update booking visibility.', true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     function _bookingActionCell(item) {
       var id = Number(item.id || 0);
       var status = String(item.status || 'new');
@@ -3708,6 +3764,7 @@
 
     document.getElementById('booking-reload-btn').addEventListener('click', loadBookingQueue);
     document.getElementById('booking-status-filter').addEventListener('change', loadBookingQueue);
+    document.getElementById('booking-public-toggle-btn').addEventListener('click', togglePublicBookingVisibility);
     document.getElementById('mail-reload-btn').addEventListener('click', loadMailThreads);
     document.getElementById('mail-status-filter').addEventListener('change', loadMailThreads);
     document.getElementById('mail-reply-btn').addEventListener('click', sendMailReply);
@@ -3933,7 +3990,36 @@
     var _rtcPc             = null;
     var _screenShareActive = false;
     var _publicScreenShareApproved = false;
+    var _SCREEN_SHARE_CONSENT_KEY = 'handler_screen_share_one_time_consent';
     var _RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    function _hasScreenShareConsent() {
+      try {
+        return sessionStorage.getItem(_SCREEN_SHARE_CONSENT_KEY) === 'yes';
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function _saveScreenShareConsent() {
+      try {
+        sessionStorage.setItem(_SCREEN_SHARE_CONSENT_KEY, 'yes');
+      } catch (_) {
+        // Ignore storage failures; session still works but will ask again.
+      }
+    }
+
+    function _ensureScreenShareConsent() {
+      if (_hasScreenShareConsent()) return true;
+      var approved = window.confirm('One-time consent: Screen Share may expose private device content. Continue?');
+      if (!approved) {
+        _setScreenShareStatus('⚠️ One-time consent required before screen share can start.');
+        return false;
+      }
+      _saveScreenShareConsent();
+      showToast('✅ Screen share consent saved for this session.');
+      return true;
+    }
 
     function _renderScreenShareApprovalUi() {
       var statusEl = document.getElementById('screen-share-approval-status');
@@ -4017,6 +4103,7 @@
     }
 
     function startScreenShare() {
+      if (!_ensureScreenShareConsent()) return;
       if (!viewingDeviceId) { showToast('⚠️ No device selected.', true); return; }
       if (!_ws || _ws.readyState !== WebSocket.OPEN) {
         showToast('⚠️ WebSocket not connected.', true); return;
@@ -4137,6 +4224,7 @@
     function initPanel() {
       _handlerNoAssignmentHint = null;
       initCommandCenter();
+      loadPublicBookingVisibility();
       loadScreenShareApprovalStatus();
       connectWS();
       showKennelOverview();
