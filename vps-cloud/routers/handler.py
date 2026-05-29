@@ -238,6 +238,8 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
             thread_id       INTEGER NOT NULL,
             author          TEXT NOT NULL,
             body            TEXT NOT NULL,
+            media_url       TEXT,
+            source_message_id TEXT,
             delivery_status TEXT,
             edited_at       TEXT,
             edited_by       TEXT,
@@ -258,10 +260,17 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_puppy_mail_threads_guest_code_hash ON puppy_mail_threads(guest_code_hash)"
     )
     message_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_messages)").fetchall()}
+    if "media_url" not in message_cols:
+        conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN media_url TEXT")
+    if "source_message_id" not in message_cols:
+        conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN source_message_id TEXT")
     if "edited_at" not in message_cols:
         conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_at TEXT")
     if "edited_by" not in message_cols:
         conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_by TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_puppy_mail_messages_source_message_id ON puppy_mail_messages(source_message_id)"
+    )
     thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_threads)").fetchall()}
     if "public_token" not in thread_cols:
         return
@@ -600,6 +609,18 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def serialize_puppy_mail_message(row: sqlite3.Row | dict) -> dict:
+    item = dict(row)
+    media_url = item.get("media_url")
+    return {
+        **item,
+        "sender": item.get("author"),
+        "content": item.get("body"),
+        "timestamp": item.get("created_at"),
+        "media_url": media_url,
+    }
 
 
 def _verify_ws_token(token: str) -> Optional[dict]:
@@ -1949,7 +1970,7 @@ def public_get_puppy_mail_thread(
     thread = _public_puppy_mail_thread_or_403(db, thread_id=thread_id, token=thread_token)
     messages = db.execute(
         """
-        SELECT id, author, body, delivery_status, created_at, edited_at
+        SELECT id, thread_id, author, body, media_url, delivery_status, created_at, edited_at
         FROM puppy_mail_messages
         WHERE thread_id = ?
         ORDER BY id ASC
@@ -1965,7 +1986,7 @@ def public_get_puppy_mail_thread(
             "created_at": thread["created_at"],
             "updated_at": thread["updated_at"],
         },
-        "messages": [dict(m) for m in messages],
+        "messages": [serialize_puppy_mail_message(m) for m in messages],
     }
 
 
@@ -2714,14 +2735,14 @@ def handler_get_puppy_mail_thread(
 
     messages = db.execute(
         """
-        SELECT id, thread_id, author, body, delivery_status, created_at, edited_at, edited_by
+        SELECT id, thread_id, author, body, media_url, delivery_status, created_at, edited_at, edited_by
         FROM puppy_mail_messages
         WHERE thread_id = ?
         ORDER BY id ASC
         """,
         (thread_id,),
     ).fetchall()
-    return {"thread": dict(thread), "messages": [dict(m) for m in messages]}
+    return {"thread": dict(thread), "messages": [serialize_puppy_mail_message(m) for m in messages]}
 
 
 @router.post("/api/handler/puppy-mail/threads/{thread_id}/reply")
