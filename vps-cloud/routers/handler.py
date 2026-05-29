@@ -116,6 +116,14 @@ PUBLIC_STATUS_PRESETS = {
     },
 }
 
+TOY_SHARE_SCOPE_PROFILE_OPTIONS = {
+    "soft",
+    "party",
+    "strict",
+    "full_arcade",
+    "custom",
+}
+
 
 # ---------------------------------------------------------------------------
 # DB migration
@@ -370,6 +378,11 @@ def _ensure_toy_share_links_table(conn: sqlite3.Connection) -> None:
             allow_screen    INTEGER NOT NULL DEFAULT 1,
             allow_device_controls INTEGER NOT NULL DEFAULT 1,
             allow_app_controls INTEGER NOT NULL DEFAULT 1,
+            scope_profile  TEXT,
+            cmd_rate_limit_count INTEGER NOT NULL DEFAULT 24,
+            cmd_rate_limit_window_sec INTEGER NOT NULL DEFAULT 60,
+            cmd_anti_spam_window_sec INTEGER NOT NULL DEFAULT 4,
+            cmd_anti_spam_max_same INTEGER NOT NULL DEFAULT 2,
             max_level      INTEGER NOT NULL DEFAULT 20,
             enabled        INTEGER NOT NULL DEFAULT 1,
             expires_at     TEXT,
@@ -398,6 +411,16 @@ def _ensure_toy_share_links_table(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_device_controls INTEGER NOT NULL DEFAULT 1")
     if "allow_app_controls" not in cols:
         conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN allow_app_controls INTEGER NOT NULL DEFAULT 1")
+    if "scope_profile" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN scope_profile TEXT")
+    if "cmd_rate_limit_count" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN cmd_rate_limit_count INTEGER NOT NULL DEFAULT 24")
+    if "cmd_rate_limit_window_sec" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN cmd_rate_limit_window_sec INTEGER NOT NULL DEFAULT 60")
+    if "cmd_anti_spam_window_sec" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN cmd_anti_spam_window_sec INTEGER NOT NULL DEFAULT 4")
+    if "cmd_anti_spam_max_same" not in cols:
+        conn.execute("ALTER TABLE tpe_toy_share_links ADD COLUMN cmd_anti_spam_max_same INTEGER NOT NULL DEFAULT 2")
 
 
 def _ensure_toy_control_queue_table(conn: sqlite3.Connection) -> None:
@@ -432,6 +455,27 @@ def _ensure_toy_control_queue_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_toy_share_command_events_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_toy_share_command_events (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            link_id        INTEGER NOT NULL,
+            token          TEXT NOT NULL,
+            participant_id TEXT,
+            command_key    TEXT NOT NULL,
+            created_at     TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_share_command_events_link_created ON tpe_toy_share_command_events(link_id, created_at)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_toy_share_command_events_token_participant_created ON tpe_toy_share_command_events(token, participant_id, created_at)"
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -454,6 +498,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_public_intelligence_table(conn)
         _ensure_toy_share_links_table(conn)
         _ensure_toy_control_queue_table(conn)
+        _ensure_toy_share_command_events_table(conn)
         conn.commit()
         return
 
@@ -497,6 +542,9 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_evidence_vault_tables(conn)
         _ensure_behavior_log_table(conn)
         _ensure_public_intelligence_table(conn)
+        _ensure_toy_share_links_table(conn)
+        _ensure_toy_control_queue_table(conn)
+        _ensure_toy_share_command_events_table(conn)
         conn.commit()
         return
 
@@ -514,6 +562,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_public_intelligence_table(conn)
     _ensure_toy_share_links_table(conn)
     _ensure_toy_control_queue_table(conn)
+    _ensure_toy_share_command_events_table(conn)
     conn.commit()
 
 
@@ -779,6 +828,11 @@ class ToyShareLinkCreateRequest(BaseModel):
     label: Optional[str] = None
     expires_in_minutes: int = 120
     max_level: int = 20
+    scope_profile: Optional[str] = None
+    cmd_rate_limit_count: int = 24
+    cmd_rate_limit_window_sec: int = 60
+    cmd_anti_spam_window_sec: int = 4
+    cmd_anti_spam_max_same: int = 2
     allow_lovense: bool = True
     allow_intiface: bool = True
     allow_notifications: bool = True
@@ -806,6 +860,7 @@ class ToyShareQueueLeaveRequest(BaseModel):
 class PublicSharedControlRequest(BaseModel):
     action: str
     params: Optional[dict] = None
+    participant_id: Optional[str] = None
 
 
 def _is_expired_iso(value: Optional[str]) -> bool:
@@ -1162,6 +1217,133 @@ def _public_shared_payload(command: PublicSharedControlRequest) -> tuple[str, di
         else:
             payload[field] = str(value)
     return str(spec["scope"]), payload, command_key
+
+
+def _normalize_toy_share_scope_profile(value: Optional[str]) -> str:
+    raw = (value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in TOY_SHARE_SCOPE_PROFILE_OPTIONS:
+        return raw
+    return "custom"
+
+
+def _toy_share_available_mini_games(row: sqlite3.Row) -> list[str]:
+    games: list[str] = []
+    if bool(row["allow_lovense"]) or bool(row["allow_intiface"]):
+        games.append("pulse_party")
+    if bool(row["allow_audio"]) or bool(row["allow_overlay"]) or bool(row["allow_notifications"]):
+        games.append("chaos_callout")
+    if bool(row["allow_screen"]) or bool(row["allow_device_controls"]):
+        games.append("lightning_round")
+    return games
+
+
+def _link_rate_limit_value(row: sqlite3.Row, column: str, default_value: int, lower: int, upper: int) -> int:
+    try:
+        raw = int(row[column] if column in row.keys() else default_value)
+    except Exception:
+        raw = default_value
+    return max(lower, min(raw, upper))
+
+
+def _raise_throttle_error(detail: str, retry_after_sec: int) -> None:
+    retry_after = max(1, int(retry_after_sec))
+    raise HTTPException(
+        status_code=429,
+        detail=detail,
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _enforce_toy_share_command_limits(
+    db: sqlite3.Connection,
+    *,
+    link_row: sqlite3.Row,
+    participant_id: str,
+    command_key: str,
+) -> None:
+    now = datetime.now(timezone.utc)
+
+    rate_limit_count = _link_rate_limit_value(link_row, "cmd_rate_limit_count", 24, 1, 500)
+    rate_limit_window_sec = _link_rate_limit_value(link_row, "cmd_rate_limit_window_sec", 60, 1, 3600)
+    rate_cutoff = (now - timedelta(seconds=rate_limit_window_sec)).isoformat()
+
+    total_in_window = db.execute(
+        "SELECT COUNT(*) AS n FROM tpe_toy_share_command_events WHERE link_id = ? AND created_at >= ?",
+        (int(link_row["id"]), rate_cutoff),
+    ).fetchone()
+    if int(total_in_window["n"] if total_in_window else 0) >= rate_limit_count:
+        oldest = db.execute(
+            "SELECT created_at FROM tpe_toy_share_command_events WHERE link_id = ? AND created_at >= ? ORDER BY created_at ASC LIMIT 1",
+            (int(link_row["id"]), rate_cutoff),
+        ).fetchone()
+        retry_after = rate_limit_window_sec
+        oldest_dt = _parse_iso_dt(oldest["created_at"] if oldest else None)
+        if oldest_dt:
+            elapsed = int((now - oldest_dt).total_seconds())
+            retry_after = max(1, rate_limit_window_sec - max(0, elapsed))
+        _raise_throttle_error(
+            f"Rate limit reached for this link ({rate_limit_count}/{rate_limit_window_sec}s).",
+            retry_after,
+        )
+
+    anti_spam_window_sec = _link_rate_limit_value(link_row, "cmd_anti_spam_window_sec", 4, 1, 600)
+    anti_spam_max_same = _link_rate_limit_value(link_row, "cmd_anti_spam_max_same", 2, 1, 20)
+    spam_cutoff = (now - timedelta(seconds=anti_spam_window_sec)).isoformat()
+    same_in_window = db.execute(
+        """
+        SELECT COUNT(*) AS n
+        FROM tpe_toy_share_command_events
+        WHERE link_id = ? AND participant_id = ? AND command_key = ? AND created_at >= ?
+        """,
+        (int(link_row["id"]), participant_id, command_key, spam_cutoff),
+    ).fetchone()
+    if int(same_in_window["n"] if same_in_window else 0) >= anti_spam_max_same:
+        oldest_same = db.execute(
+            """
+            SELECT created_at
+            FROM tpe_toy_share_command_events
+            WHERE link_id = ? AND participant_id = ? AND command_key = ? AND created_at >= ?
+            ORDER BY created_at ASC LIMIT 1
+            """,
+            (int(link_row["id"]), participant_id, command_key, spam_cutoff),
+        ).fetchone()
+        retry_after = anti_spam_window_sec
+        oldest_same_dt = _parse_iso_dt(oldest_same["created_at"] if oldest_same else None)
+        if oldest_same_dt:
+            elapsed = int((now - oldest_same_dt).total_seconds())
+            retry_after = max(1, anti_spam_window_sec - max(0, elapsed))
+        _raise_throttle_error(
+            f"Anti-spam active for repeated '{command_key}' commands.",
+            retry_after,
+        )
+
+    db.execute(
+        "DELETE FROM tpe_toy_share_command_events WHERE link_id = ? AND created_at < ?",
+        (int(link_row["id"]), (now - timedelta(hours=24)).isoformat()),
+    )
+
+
+def _record_toy_share_command_event(
+    db: sqlite3.Connection,
+    *,
+    link_id: int,
+    token: str,
+    participant_id: Optional[str],
+    command_key: str,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO tpe_toy_share_command_events (link_id, token, participant_id, command_key, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            int(link_id),
+            token,
+            (participant_id or "").strip() or None,
+            command_key,
+            _now_iso(),
+        ),
+    )
 
 
 def _record_public_intel_event(
@@ -3757,6 +3939,7 @@ def handler_list_toy_share_links(
         item["allow_screen"] = bool(item.get("allow_screen"))
         item["allow_device_controls"] = bool(item.get("allow_device_controls"))
         item["allow_app_controls"] = bool(item.get("allow_app_controls"))
+        item["scope_profile"] = _normalize_toy_share_scope_profile(item.get("scope_profile"))
         item["enabled"] = bool(item.get("enabled"))
         result.append(item)
     return result
@@ -3787,6 +3970,11 @@ def handler_create_toy_share_link(
 
     max_level = max(0, min(int(body.max_level), 20))
     expires_minutes = max(5, min(int(body.expires_in_minutes), 60 * 24 * 14))
+    scope_profile = _normalize_toy_share_scope_profile(body.scope_profile)
+    cmd_rate_limit_count = max(1, min(int(body.cmd_rate_limit_count), 500))
+    cmd_rate_limit_window_sec = max(1, min(int(body.cmd_rate_limit_window_sec), 3600))
+    cmd_anti_spam_window_sec = max(1, min(int(body.cmd_anti_spam_window_sec), 600))
+    cmd_anti_spam_max_same = max(1, min(int(body.cmd_anti_spam_max_same), 20))
     created_at = _now_iso()
     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)).isoformat()
     token = secrets.token_urlsafe(24)
@@ -3796,9 +3984,10 @@ def handler_create_toy_share_link(
         INSERT INTO tpe_toy_share_links
             (token, device_id, created_by, label, allow_lovense, allow_intiface,
              allow_notifications, allow_overlay, allow_audio, allow_screen,
-             allow_device_controls, allow_app_controls,
+             allow_device_controls, allow_app_controls, scope_profile,
+             cmd_rate_limit_count, cmd_rate_limit_window_sec, cmd_anti_spam_window_sec, cmd_anti_spam_max_same,
              max_level, enabled, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         """,
         (
             token,
@@ -3813,6 +4002,11 @@ def handler_create_toy_share_link(
             1 if body.allow_screen else 0,
             1 if body.allow_device_controls else 0,
             1 if body.allow_app_controls else 0,
+            scope_profile,
+            cmd_rate_limit_count,
+            cmd_rate_limit_window_sec,
+            cmd_anti_spam_window_sec,
+            cmd_anti_spam_max_same,
             max_level,
             expires_at,
             created_at,
@@ -3838,6 +4032,11 @@ def handler_create_toy_share_link(
         "allow_screen": body.allow_screen,
         "allow_device_controls": body.allow_device_controls,
         "allow_app_controls": body.allow_app_controls,
+        "scope_profile": scope_profile,
+        "cmd_rate_limit_count": cmd_rate_limit_count,
+        "cmd_rate_limit_window_sec": cmd_rate_limit_window_sec,
+        "cmd_anti_spam_window_sec": cmd_anti_spam_window_sec,
+        "cmd_anti_spam_max_same": cmd_anti_spam_max_same,
     }
 
 
@@ -3872,6 +4071,12 @@ def public_control_meta(
         "allow_screen": bool(row["allow_screen"]),
         "allow_device_controls": bool(row["allow_device_controls"]),
         "allow_app_controls": bool(row["allow_app_controls"]),
+        "scope_profile": _normalize_toy_share_scope_profile(row["scope_profile"] if "scope_profile" in row.keys() else None),
+        "cmd_rate_limit_count": _link_rate_limit_value(row, "cmd_rate_limit_count", 24, 1, 500),
+        "cmd_rate_limit_window_sec": _link_rate_limit_value(row, "cmd_rate_limit_window_sec", 60, 1, 3600),
+        "cmd_anti_spam_window_sec": _link_rate_limit_value(row, "cmd_anti_spam_window_sec", 4, 1, 600),
+        "cmd_anti_spam_max_same": _link_rate_limit_value(row, "cmd_anti_spam_max_same", 2, 1, 20),
+        "mini_games": _toy_share_available_mini_games(row),
         "public_exposure_level": _safe_choice(
             get_setting(db, "public_exposure_level", "controlled"),
             PUBLIC_EXPOSURE_LEVEL_OPTIONS,
@@ -3884,6 +4089,7 @@ def public_control_meta(
 def public_shared_control_command(
     token: str,
     body: PublicSharedControlRequest,
+    request: Request,
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     if not _public_setting_enabled(db, "public_toy_control_enabled", default=True):
@@ -3906,6 +4112,14 @@ def public_shared_control_command(
     if not bool(row[scope] if scope in row.keys() else 0):
         raise HTTPException(status_code=403, detail="This control scope is disabled for the shared link")
 
+    participant_id = _effective_participant_id(request, body.participant_id)
+    _enforce_toy_share_command_limits(
+        db,
+        link_row=row,
+        participant_id=participant_id,
+        command_key=f"public:{command_key}",
+    )
+
     result = _send_mqtt_to_device(db, row["device_id"], payload)
     db.execute(
         """
@@ -3922,6 +4136,13 @@ def public_shared_control_command(
     db.execute(
         "UPDATE tpe_toy_share_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
         (_now_iso(), row["id"]),
+    )
+    _record_toy_share_command_event(
+        db,
+        link_id=int(row["id"]),
+        token=token_value,
+        participant_id=participant_id,
+        command_key=f"public:{command_key}",
     )
     db.commit()
     return {
@@ -4098,6 +4319,15 @@ def public_toy_share_control(
     )
     participant_id = _effective_participant_id(request, body.participant_id)
     queue_cooldown_sec = max(0, min(_safe_int(get_setting(db, "public_toy_queue_cooldown_sec", "30"), 30), 600))
+    command_key = f"toy:{mode}:{(body.command or 'vibrate').strip().lower()}"
+
+    if (body.command or "vibrate").strip().lower() != "stop":
+        _enforce_toy_share_command_limits(
+            db,
+            link_row=row,
+            participant_id=participant_id,
+            command_key=command_key,
+        )
 
     if exposure_level == "full_public" and (body.command or "vibrate").strip().lower() != "stop":
         since_completion = _queue_recent_completion_seconds(
@@ -4155,6 +4385,14 @@ def public_toy_share_control(
             (token_value,),
         ).fetchone()
         pending_total = int(pending_total_row["n"] if pending_total_row else 0)
+        _record_toy_share_command_event(
+            db,
+            link_id=int(row["id"]),
+            token=token_value,
+            participant_id=participant_id,
+            command_key=command_key,
+        )
+        db.commit()
         return {
             "status": "queued" if not mine_active else "active",
             "full_public_queue": True,
@@ -4198,6 +4436,14 @@ def public_toy_share_control(
         "UPDATE tpe_toy_share_links SET use_count = use_count + 1, last_used_at = ? WHERE id = ?",
         (now, row["id"]),
     )
+    if (body.command or "vibrate").strip().lower() != "stop":
+        _record_toy_share_command_event(
+            db,
+            link_id=int(row["id"]),
+            token=token_value,
+            participant_id=participant_id,
+            command_key=command_key,
+        )
     db.commit()
     return {
         "status": "ok",

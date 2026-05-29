@@ -1348,6 +1348,12 @@ def spotify_page():
     return FileResponse("static/spotify.html")
 
 
+@app.get("/booking", include_in_schema=False)
+def booking_page():
+    """Serve the detailed public booking questionnaire page."""
+    return FileResponse("static/booking.html")
+
+
 @app.get("/age-gate", include_in_schema=False)
 def age_gate_page():
     """Serve the age verification landing page."""
@@ -2049,7 +2055,9 @@ def anon_page(request: Request):
       margin-bottom: 1rem;
     }}
 
-    textarea {{
+        textarea,
+        input,
+        select {{
       width: 100%;
       background: #1a1a1a;
       border: 1px solid #3d2a2e;
@@ -2058,12 +2066,32 @@ def anon_page(request: Request):
       font-family: inherit;
       font-size: .92rem;
       padding: .65rem .85rem;
-      resize: vertical;
-      min-height: 90px;
       outline: none;
       transition: border-color .2s;
     }}
+        textarea {{
+            resize: vertical;
+            min-height: 90px;
+        }}
+        input, select {{ min-height: 40px; }}
     textarea:focus {{ border-color: #c49a9f; }}
+
+        .detail-grid {{
+            display: grid;
+            gap: .55rem;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            margin-bottom: .65rem;
+        }}
+
+        .detail-grid label {{
+            font-size: .65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #9e7e82;
+            margin-bottom: .22rem;
+            display: block;
+        }}
 
     .note-footer-row {{
       display: flex;
@@ -2313,10 +2341,41 @@ def anon_page(request: Request):
   <!-- Submit form -->
   <div class="card">
     <h2>Drop a Note 🐾</h2>
-    <p class="tagline">Ask anything anonymously – no sign-in needed.</p>
-    <textarea id="note-textarea" maxlength="280" placeholder="What's on your mind? 🐾" aria-label="Your question"></textarea>
+        <p class="tagline">Ask anonymously with a little context so answers can be better tailored.</p>
+        <div class="detail-grid">
+            <div>
+                <label for="note-topic">Topic</label>
+                <select id="note-topic" aria-label="Question topic">
+                    <option value="General">General</option>
+                    <option value="Protocol">Protocol</option>
+                    <option value="Training">Training</option>
+                    <option value="Public status">Public status</option>
+                    <option value="Relationship">Relationship</option>
+                </select>
+            </div>
+            <div>
+                <label for="note-context">Current Context</label>
+                <select id="note-context" aria-label="Current context">
+                    <option value="No context">No context</option>
+                    <option value="Urgent">Urgent</option>
+                    <option value="Emotional">Emotional</option>
+                    <option value="Planning ahead">Planning ahead</option>
+                    <option value="Follow-up">Follow-up</option>
+                </select>
+            </div>
+            <div>
+                <label for="note-response-style">Preferred Answer Style</label>
+                <select id="note-response-style" aria-label="Preferred answer style">
+                    <option value="Direct">Direct</option>
+                    <option value="Supportive">Supportive</option>
+                    <option value="Detailed">Detailed</option>
+                    <option value="Short">Short</option>
+                </select>
+            </div>
+        </div>
+        <textarea id="note-textarea" maxlength="900" placeholder="What's on your mind? Include the specific outcome you want. 🐾" aria-label="Your question"></textarea>
     <div class="note-footer-row">
-      <span id="char-count">0 / 280</span>
+            <span id="char-count">0 / 900</span>
       <button id="send-btn" disabled>Send 🐾</button>
     </div>
     <p id="send-msg" role="alert" aria-live="polite"></p>
@@ -2350,7 +2409,8 @@ def anon_page(request: Request):
   </div>
 
   <script>
-    const MAX = 280;
+    const MAX = 900;
+    const API_MAX = 1200;
     const textarea  = document.getElementById('note-textarea');
     const charCount = document.getElementById('char-count');
     const sendBtn   = document.getElementById('send-btn');
@@ -2366,6 +2426,16 @@ def anon_page(request: Request):
     sendBtn.addEventListener('click', async () => {{
       const text = textarea.value.trim();
       if (!text || text.length > MAX) return;
+            const topic = (document.getElementById('note-topic')?.value || 'General').trim();
+            const context = (document.getElementById('note-context')?.value || 'No context').trim();
+            const style = (document.getElementById('note-response-style')?.value || 'Direct').trim();
+            const payloadText = `[Topic: ${{topic}} | Context: ${{context}} | Reply style: ${{style}}] ${{text}}`;
+            if (payloadText.length > API_MAX) {{
+                sendMsg.textContent = `Please shorten your note by ${{payloadText.length - API_MAX}} characters.`;
+                sendMsg.className = 'error';
+                return;
+            }}
+
       sendBtn.disabled = true;
       sendMsg.textContent = '';
       sendMsg.className = '';
@@ -2373,7 +2443,7 @@ def anon_page(request: Request):
         const resp = await fetch('/api/questions', {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ text }}),
+                    body: JSON.stringify({{ text: payloadText }}),
         }});
         if (resp.ok) {{
           textarea.value = '';

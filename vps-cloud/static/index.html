@@ -79,151 +79,6 @@
       letter-spacing: .01em;
     }
 
-    /* Sign-in button in nav */
-    #sign-in-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: .5rem;
-      padding: .5rem 1.1rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
-      border-radius: 10px;
-      color: #e8aeb7;
-      font-size: .88rem;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background .2s, color .2s, box-shadow .2s;
-    }
-
-    #sign-in-btn:hover {
-      background: #e8aeb7;
-      color: #1a1a1a;
-      box-shadow: 0 4px 18px rgba(232,174,183,.28);
-    }
-
-    /* Auth modal */
-    #auth-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #auth-modal[hidden] { display: none; }
-
-    #auth-modal-backdrop {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, .65);
-      backdrop-filter: blur(2px);
-    }
-
-    #auth-modal-card {
-      position: relative;
-      background: #1e1e1e;
-      border: 1px solid #3d2a2e;
-      border-radius: 16px;
-      padding: 2rem 2rem 1.25rem;
-      width: 100%;
-      max-width: 380px;
-      margin: 1rem;
-      box-shadow: 0 8px 40px rgba(0, 0, 0, .55);
-      animation: authModalIn .2s ease;
-    }
-
-    @keyframes authModalIn {
-      from { opacity: 0; transform: translateY(-10px) scale(.97); }
-      to   { opacity: 1; transform: translateY(0)   scale(1);    }
-    }
-
-    #auth-modal-close {
-      position: absolute;
-      top: .65rem;
-      right: .75rem;
-      background: none;
-      border: none;
-      color: #9e7e82;
-      font-size: 1.4rem;
-      line-height: 1;
-      cursor: pointer;
-      padding: .15rem .45rem;
-      border-radius: 6px;
-      transition: color .2s, background .2s;
-    }
-
-    #auth-modal-close:hover { color: #e8aeb7; background: #2a1a1e; }
-
-    /* Login form (inside modal) */
-    #login-form-wrap {
-      width: 100%;
-      margin-bottom: .5rem;
-    }
-
-    #login-form-wrap form {
-      display: flex;
-      flex-direction: column;
-      gap: .75rem;
-    }
-
-    #login-form-wrap input[type="text"],
-    #login-form-wrap input[type="password"] {
-      width: 100%;
-      padding: .65rem .9rem;
-      background: #2a1a1e;
-      border: 1px solid #3d2a2e;
-      border-radius: 10px;
-      color: #f0e6e8;
-      font-family: inherit;
-      font-size: .95rem;
-      outline: none;
-      transition: border-color .2s;
-    }
-
-    #login-form-wrap input:focus {
-      border-color: #e8aeb7;
-    }
-
-    #login-form-wrap .form-row {
-      display: flex;
-      gap: .6rem;
-    }
-
-    #login-form-wrap .form-row button {
-      flex: 1;
-      padding: .65rem;
-      border: none;
-      border-radius: 10px;
-      font-family: inherit;
-      font-size: .9rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background .2s, color .2s, box-shadow .2s;
-    }
-
-    #login-submit-btn {
-      background: #e8aeb7;
-      color: #1a1a1a;
-    }
-
-    #login-submit-btn:hover {
-      background: #d4667a;
-      color: #fff;
-      box-shadow: 0 4px 18px rgba(212,102,122,.35);
-    }
-
-    #register-submit-btn {
-      background: #2a1a1e;
-      color: #e8aeb7;
-      border: 1px solid #3d2a2e !important;
-    }
-
-    #register-submit-btn:hover {
-      background: #3d2a2e;
-    }
 
     /* Hero section */
     .landing-hero {
@@ -309,23 +164,10 @@
       min-height: 1.15em;
     }
 
-    /* OAuth error/info message */
-    #login-message {
-      text-align: center;
-      font-size: .85rem;
-      min-height: 1.2em;
-      padding: 0 0 .25rem;
-      margin: 0;
-    }
-
-    #login-message.error   { color: #f87171; }
-    #login-message.info    { color: #9e7e82; }
-    #login-message.upgrade { color: #e8aeb7; }
-
     /* ── Links section ──────────────────────────────── */
     .links-section {
       width: 100%;
-      max-width: 560px;
+      max-width: 960px;
       margin: 0 auto;
       padding: 0 1.5rem 3rem;
     }
@@ -346,16 +188,21 @@
     }
 
     .links-list {
-      display: flex;
-      flex-direction: column;
-      gap: .65rem;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .75rem;
+    }
+
+    .links-list.primary-actions {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
 
     .link-card {
       display: flex;
       align-items: center;
       gap: 1rem;
-      padding: 1rem 1.25rem;
+      min-height: 86px;
+      padding: 1rem 1.1rem;
       background: #242424;
       border: 1px solid #3d2a2e;
       border-radius: 14px;
@@ -377,7 +224,7 @@
     .link-card:active { transform: translateY(0); }
 
     .link-card-emoji {
-      font-size: 1.45rem;
+      font-size: 1.7rem;
       width: 2rem;
       text-align: center;
       flex-shrink: 0;
@@ -409,7 +256,7 @@
 
     .public-intake-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: .75rem;
     }
 
@@ -1006,14 +853,6 @@
       box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160, 30, 50, 0.12);
     }
 
-    /* Sign-in button — hot pink on hover */
-    #sign-in-btn:hover {
-      background: #d4667a;
-      border-color: #d4667a;
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(212, 102, 122, 0.35);
-    }
-
     /* ── Mobile responsive (≤ 640px) ───────────────── */
     @media (max-width: 640px) {
 
@@ -1103,6 +942,10 @@
         grid-template-columns: minmax(0, 1fr);
       }
 
+      .links-list {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
       .public-intake-grid {
         grid-template-columns: minmax(0, 1fr);
       }
@@ -1159,9 +1002,6 @@
     <!-- Sticky nav -->
     <nav class="landing-nav">
       <span class="landing-logo">&#128062; mochii.live</span>
-      <button id="sign-in-btn" type="button">
-        Sign In &#128062;
-      </button>
     </nav>
 
     <!-- Hero -->
@@ -1186,26 +1026,10 @@
       <p class="public-status-note" id="pub-status-note"></p>
     </div>
 
-    <!-- Static nav cards -->
+    <!-- Primary actions -->
     <div class="links-section">
-      <p class="links-section-label">PAGES</p>
-      <div class="links-list">
-        <a class="link-card" href="https://links.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">&#128279;</span>
-          <span class="link-card-body">
-            <span class="link-card-title">All Links</span>
-            <span class="link-card-desc">browse my socials, shop, and more</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
-        </a>
-        <a class="link-card" href="/anon">
-          <span class="link-card-emoji" aria-hidden="true">&#128062;</span>
-          <span class="link-card-body">
-            <span class="link-card-title">Ask a Question</span>
-            <span class="link-card-desc">drop me an anonymous question or message</span>
-          </span>
-          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
-        </a>
+      <p class="links-section-label">START HERE</p>
+      <div class="links-list primary-actions">
         <a class="link-card" id="public-live-control-card" href="#" style="display:none">
           <span class="link-card-emoji" aria-hidden="true">&#127918;</span>
           <span class="link-card-body">
@@ -1214,11 +1038,34 @@
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
-        <a class="link-card" id="public-booking-link-card" href="#public-booking-card" style="display:none">
+        <a class="link-card" id="public-booking-link-card" href="/booking" style="display:none">
           <span class="link-card-emoji" aria-hidden="true">&#128197;</span>
           <span class="link-card-body">
             <span class="link-card-title">Book a Session</span>
-            <span class="link-card-desc">send a booking request to the handler team</span>
+            <span class="link-card-desc">open the detailed booking questionnaire</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
+        </a>
+        <a class="link-card" href="/anon">
+          <span class="link-card-emoji" aria-hidden="true">&#128062;</span>
+          <span class="link-card-body">
+            <span class="link-card-title">Ask a Question</span>
+            <span class="link-card-desc">drop a note with context for a better answer</span>
+          </span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Explore pages -->
+    <div class="links-section">
+      <p class="links-section-label">EXPLORE</p>
+      <div class="links-list">
+        <a class="link-card" href="https://links.mochii.live">
+          <span class="link-card-emoji" aria-hidden="true">&#128279;</span>
+          <span class="link-card-body">
+            <span class="link-card-title">All Links</span>
+            <span class="link-card-desc">browse socials, shop, and extras</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -1226,7 +1073,7 @@
           <span class="link-card-emoji" aria-hidden="true">&#128167;</span>
           <span class="link-card-body">
             <span class="link-card-title">Drool Log</span>
-            <span class="link-card-desc">the shame gallery - she liked this</span>
+            <span class="link-card-desc">the shame gallery she liked</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -1236,17 +1083,6 @@
     <div class="links-section">
       <p class="links-section-label">CONTACT HANDLER</p>
       <div class="public-intake-grid">
-        <div class="public-intake-card" id="public-booking-card" style="display:none">
-          <h3>📅 Booking Request</h3>
-          <p>Share your details and availability. Handler will review and follow up.</p>
-          <input id="booking-contact" type="text" maxlength="120" placeholder="Contact handle (Discord/Telegram/etc.)" />
-          <input id="booking-availability" type="text" maxlength="160" placeholder="Availability window" />
-          <input id="booking-intent" type="text" maxlength="200" placeholder="Session intent" />
-          <input id="booking-location" type="text" maxlength="160" placeholder="Location / timezone" />
-          <button id="booking-submit-btn" class="control-btn" type="button">Send Booking</button>
-          <div id="booking-status" class="public-intake-status"></div>
-        </div>
-
         <div class="public-intake-card">
           <h3>📬 Puppy Mail</h3>
           <p>Send a note to the handler team. Replies appear after review in-app.</p>
@@ -1319,27 +1155,6 @@
     </div>
   </section>
 
-  <!-- Auth Modal -->
-  <div id="auth-modal" role="dialog" aria-modal="true" aria-label="Sign In or Register" hidden>
-    <div id="auth-modal-backdrop"></div>
-    <div id="auth-modal-card">
-      <button id="auth-modal-close" type="button" aria-label="Close">&times;</button>
-      <div id="login-form-wrap">
-        <form id="auth-form" autocomplete="on" novalidate>
-          <label for="auth-username" class="visually-hidden">Username</label>
-          <input id="auth-username" type="text" name="username" placeholder="Username" autocomplete="username" required maxlength="32" />
-          <label for="auth-password" class="visually-hidden">Password</label>
-          <input id="auth-password" type="password" name="password" placeholder="Password" autocomplete="current-password" required maxlength="128" />
-          <div class="form-row">
-            <button id="login-submit-btn" type="submit">Sign In &#128062;</button>
-            <button id="register-submit-btn" type="button">Register</button>
-          </div>
-        </form>
-      </div>
-      <p id="login-message" role="alert" aria-live="polite"></p>
-    </div>
-  </div>
-
   <script>
     // ── Storage helpers ───────────────────────────────
     const TOKEN_KEY = 'mochii_token';
@@ -1364,14 +1179,13 @@
       document.body.style.justifyContent = 'flex-start';
 
       const msgEl = document.getElementById('login-message');
+      if (!msgEl) return;
       if (msg) {
         msgEl.textContent = msg;
         msgEl.className   = msgClass || 'info';
       } else {
         msgEl.textContent = '';
         msgEl.className   = '';
-        // No-args call = navigating back to landing; close modal if open
-        if (msg === undefined) closeAuthModal();
       }
 
     }
@@ -1603,20 +1417,6 @@
       } finally {
         btn.disabled = false;
       }
-    }
-
-    function openAuthModal() {
-      document.getElementById('auth-modal').hidden = false;
-      document.getElementById('auth-username').focus();
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeAuthModal() {
-      document.getElementById('auth-modal').hidden = true;
-      document.body.style.overflow = '';
-      const msgEl = document.getElementById('login-message');
-      msgEl.textContent = '';
-      msgEl.className   = '';
     }
 
     function escHtmlAttr(str) {
@@ -2147,91 +1947,20 @@
         .replace(/"/g, '&quot;');
     }
 
-    // ── Auth form (login + register) ─────────────────
-    (function initAuthForm() {
-      const form       = document.getElementById('auth-form');
-      const loginBtn   = document.getElementById('login-submit-btn');
-      const registerBtn = document.getElementById('register-submit-btn');
-
-      async function submitAuth(endpoint) {
-        const username = document.getElementById('auth-username').value.trim();
-        const password = document.getElementById('auth-password').value;
-        if (!username || !password) {
-          showLogin('Please enter a username and password.', 'error');
-          return;
-        }
-
-        loginBtn.disabled = true;
-        registerBtn.disabled = true;
-        showLogin('', '');
-
-        try {
-          const resp = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-          });
-          const data = await resp.json().catch(() => ({}));
-
-          if (endpoint === '/api/auth/register') {
-            if (resp.ok) {
-              showLogin('Account created! You can now sign in.', 'info');
-            } else {
-              showLogin(data.detail || 'Registration failed. Please try again.', 'error');
-            }
-            return;
-          }
-
-          // Login flow
-          if (resp.ok && data.access_token) {
-            saveToken(data.access_token);
-            closeAuthModal();
-            showDashboard();
-            loadCameras();
-            initControls();
-            initSpotify();
-            loadGoalBar();
-          } else if (resp.status === 401) {
-            showLogin('🐾 Bad Dog! Invalid username or password.', 'error');
-          } else {
-            showLogin(data.detail || 'Login failed. Please try again.', 'error');
-          }
-        } catch (_) {
-          showLogin('Could not reach the server. Please try again.', 'error');
-        } finally {
-          loginBtn.disabled = false;
-          registerBtn.disabled = false;
-        }
-      }
-
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        submitAuth('/api/auth/login');
-      });
-
-      registerBtn.addEventListener('click', () => {
-        submitAuth('/api/auth/register');
-      });
-    })();
-
-    // ── Auth modal wiring ─────────────────────────────
-    document.getElementById('sign-in-btn').addEventListener('click', openAuthModal);
-    document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
-    document.getElementById('auth-modal-backdrop').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) closeAuthModal();
-    });
+    // ── Landing interactions ─────────────────────────────
     document.getElementById('pub-days-add').addEventListener('click', () => adjustPublicDaysLocked(1));
     document.getElementById('pub-days-remove').addEventListener('click', () => adjustPublicDaysLocked(-1));
-    document.getElementById('booking-submit-btn').addEventListener('click', submitPublicBooking);
+    var bookingSubmitEl = document.getElementById('booking-submit-btn');
+    if (bookingSubmitEl) {
+      bookingSubmitEl.addEventListener('click', submitPublicBooking);
+    }
     document.getElementById('mail-submit-btn').addEventListener('click', submitPublicMail);
-    ['booking-contact', 'booking-availability', 'booking-intent', 'booking-location'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('focus', function once() {
-        emitPublicIntelEvent('booking_start', { field: id });
-        el.removeEventListener('focus', once);
+    var bookingLinkEl = document.getElementById('public-booking-link-card');
+    if (bookingLinkEl) {
+      bookingLinkEl.addEventListener('click', function() {
+        emitPublicIntelEvent('booking_start', { source: 'landing_link' });
       });
-    });
+    }
     var mailMessageEl = document.getElementById('mail-message');
     if (mailMessageEl) {
       mailMessageEl.addEventListener('focus', function once() {
@@ -2239,10 +1968,6 @@
         mailMessageEl.removeEventListener('focus', once);
       });
     }
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
-    });
-
     // ── Page initialisation ───────────────────────────
     (function init() {
       emitPublicIntelEvent('page_view');

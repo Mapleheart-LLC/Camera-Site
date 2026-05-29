@@ -2,7 +2,7 @@
 routers/questions.py – Puppy Pouch anonymous Q&A endpoints.
 
 Public endpoints (no authentication required):
-  POST /api/questions                – submit an anonymous question (≤ 280 chars)
+    POST /api/questions                – submit an anonymous question (≤ 1200 chars)
   GET  /api/questions/public         – list all answered, public questions
 """
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/questions", tags=["questions"])
 
-_MAX_QUESTION_LENGTH = 280  # Must stay in sync with _NOTE_MAX in static/index.html
+_MAX_QUESTION_LENGTH = 1200
 
 
 # ---------------------------------------------------------------------------

@@ -184,6 +184,7 @@
       <div class="chips">
         <span class="chip" id="chip-exposure">Exposure: --</span>
         <span class="chip" id="chip-turn">Turn: --</span>
+        <span class="chip" id="chip-limits">Limits: --</span>
         <span class="chip" id="chip-token">Token: --</span>
       </div>
     </section>
@@ -228,6 +229,17 @@
           <button class="alt" id="btn-toy-stop">Stop / Leave</button>
         </div>
         <div class="hint" id="toy-queue-meta">Queue idle.</div>
+      </article>
+
+      <article class="card" id="card-party">
+        <h2>Party Mini-Games</h2>
+        <div class="hint">Quick one-tap games. Each game only uses actions already enabled by this link's scopes.</div>
+        <div class="btns" style="margin-top:.7rem">
+          <button id="btn-game-pulse-party">Pulse Party</button>
+          <button id="btn-game-chaos-callout">Chaos Callout</button>
+          <button id="btn-game-lightning-round">Lightning Round</button>
+        </div>
+        <div class="hint" id="party-meta">Waiting for scope checks...</div>
       </article>
 
       <article class="card" id="card-screen">
@@ -321,6 +333,7 @@
     var token = new URLSearchParams(location.search).get('token') || '';
     var statusEl = document.getElementById('status');
     var queueMetaEl = document.getElementById('toy-queue-meta');
+    var partyMetaEl = document.getElementById('party-meta');
 
     var CLIENT_ID_KEY = 'shared_control_participant_id';
     function participantId() {
@@ -344,6 +357,15 @@
 
     function setQueueMeta(msg) {
       queueMetaEl.textContent = msg;
+    }
+
+    function setPartyMeta(msg) {
+      if (partyMetaEl) partyMetaEl.textContent = msg;
+    }
+
+    function hasScope(name) {
+      if (!meta) return false;
+      return !!meta[name];
     }
 
     function num(id, fallback) {
@@ -385,6 +407,11 @@
       document.getElementById('card-screen').style.display = m.allow_screen ? '' : 'none';
       document.getElementById('card-device').style.display = m.allow_device_controls ? '' : 'none';
       document.getElementById('card-apps').style.display = m.allow_app_controls ? '' : 'none';
+
+      var games = Array.isArray(m.mini_games) ? m.mini_games : [];
+      var gameCard = document.getElementById('card-party');
+      if (gameCard) gameCard.style.display = games.length ? '' : 'none';
+      setPartyMeta(games.length ? ('Live games: ' + games.join(' • ')) : 'No party games available for this link.');
     }
 
     async function loadMeta() {
@@ -398,11 +425,13 @@
         document.getElementById('title').textContent = meta.label || 'Shared Control Arcade';
         document.getElementById('subtitle').textContent = 'Device ' + (meta.device_id || '--') + ' • expires ' + (meta.expires_at || '--');
         document.getElementById('chip-exposure').textContent = 'Exposure: ' + (meta.public_exposure_level || '--');
+        document.getElementById('chip-limits').textContent = 'Limits: ' + Number(meta.cmd_rate_limit_count || 24) + '/' + Number(meta.cmd_rate_limit_window_sec || 60) + 's';
         document.getElementById('chip-token').textContent = 'Token: active';
         renderScopes(meta);
         return true;
       } catch (e) {
         setStatus('Unable to load shared control: ' + e.message, 'err');
+        document.getElementById('chip-limits').textContent = 'Limits: --';
         document.getElementById('chip-token').textContent = 'Token: invalid';
         return false;
       }
@@ -414,12 +443,16 @@
         var body = await api('/api/public/control/' + encodeURIComponent(token) + '/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: action, params: params || {} }),
+          body: JSON.stringify({ action: action, params: params || {}, participant_id: pid }),
         });
         setStatus('Sent: ' + action, 'ok');
         return body;
       } catch (e) {
-        setStatus('Command failed: ' + e.message, 'err');
+        if (e.status === 429) {
+          setStatus('Throttled: ' + e.message, 'err');
+        } else {
+          setStatus('Command failed: ' + e.message, 'err');
+        }
         return null;
       }
     }
@@ -471,7 +504,78 @@
 
         setStatus('Toy command sent.', 'ok');
       } catch (e) {
-        setStatus('Toy command failed: ' + e.message, 'err');
+        if (e.status === 429) {
+          setStatus('Throttled: ' + e.message, 'err');
+        } else {
+          setStatus('Toy command failed: ' + e.message, 'err');
+        }
+      }
+    }
+
+    async function playPartyGame(gameName) {
+      if (!meta && !(await loadMeta())) return;
+      var game = String(gameName || '');
+
+      if (game === 'pulse_party') {
+        if (!hasScope('allow_lovense') && !hasScope('allow_intiface')) {
+          setStatus('Pulse Party unavailable for this link.', 'err');
+          return;
+        }
+        var mode = hasScope('allow_lovense') ? 'lovense' : 'intiface';
+        var patternPool = ['pulse', 'wave', 'tease'];
+        document.getElementById('toy-mode').value = mode;
+        document.getElementById('toy-pattern').value = patternPool[Math.floor(Math.random() * patternPool.length)];
+        var lvl = Math.max(5, Math.min(Number(meta.max_level || 20), 8 + Math.floor(Math.random() * 8)));
+        document.getElementById('toy-level').value = String(lvl);
+        document.getElementById('toy-level-box').value = String(lvl);
+        document.getElementById('toy-duration').value = '18000';
+        setPartyMeta('Pulse Party rolled mode=' + mode + ', level=' + lvl + '.');
+        await sendToyControl('vibrate');
+        return;
+      }
+
+      if (game === 'chaos_callout') {
+        if (hasScope('allow_overlay')) {
+          setPartyMeta('Chaos Callout sent as overlay.');
+          await sendPublicCommand('show_overlay', {
+            title: 'Party Mode',
+            message: 'Chaos Callout activated by the crowd!',
+          });
+          return;
+        }
+        if (hasScope('allow_notifications')) {
+          setPartyMeta('Chaos Callout sent as notification.');
+          await sendPublicCommand('send_notification', {
+            title: 'Party Crowd Move',
+            body: 'Chaos Callout is live.',
+          });
+          return;
+        }
+        if (hasScope('allow_audio')) {
+          setPartyMeta('Chaos Callout sent as TTS.');
+          await sendPublicCommand('speak_text', {
+            text: 'Party mode engaged. Crowd command accepted.',
+          });
+          return;
+        }
+        setStatus('Chaos Callout is unavailable for this link.', 'err');
+        return;
+      }
+
+      if (game === 'lightning_round') {
+        if (hasScope('allow_screen')) {
+          var bright = 120 + Math.floor(Math.random() * 136);
+          setPartyMeta('Lightning Round set brightness to ' + bright + '.');
+          await sendPublicCommand('set_brightness', { value: String(bright) });
+          return;
+        }
+        if (hasScope('allow_device_controls')) {
+          var enabled = Math.random() > 0.5 ? 'true' : 'false';
+          setPartyMeta('Lightning Round toggled flashlight ' + enabled + '.');
+          await sendPublicCommand('set_flashlight', { enabled: enabled });
+          return;
+        }
+        setStatus('Lightning Round is unavailable for this link.', 'err');
       }
     }
 
@@ -595,6 +699,10 @@
       document.getElementById('btn-app-stop').addEventListener('click', function() {
         sendPublicCommand('force_stop_app', { app_name: document.getElementById('app-name').value || '' });
       });
+
+      document.getElementById('btn-game-pulse-party').addEventListener('click', function() { playPartyGame('pulse_party'); });
+      document.getElementById('btn-game-chaos-callout').addEventListener('click', function() { playPartyGame('chaos_callout'); });
+      document.getElementById('btn-game-lightning-round').addEventListener('click', function() { playPartyGame('lightning_round'); });
     }
 
     (async function boot() {

@@ -1742,9 +1742,20 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Create Share Link</span>
                   <div class="cmd-inputs">
+                    <div style="display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;width:100%">
+                      <strong style="font-size:.78rem;color:#e9d8dc">Scope Presets:</strong>
+                      <button class="btn-cmd" type="button" style="padding:.18rem .5rem" onclick="applyToyShareScopePreset('soft')">Soft</button>
+                      <button class="btn-cmd" type="button" style="padding:.18rem .5rem" onclick="applyToyShareScopePreset('party')">Party</button>
+                      <button class="btn-cmd" type="button" style="padding:.18rem .5rem" onclick="applyToyShareScopePreset('strict')">Strict</button>
+                      <button class="btn-cmd" type="button" style="padding:.18rem .5rem" onclick="applyToyShareScopePreset('full_arcade')">Full Arcade</button>
+                    </div>
                     <input id="toy-share-label" placeholder="Label (optional)" style="max-width:210px" />
                     <input id="toy-share-exp" type="number" min="5" max="20160" value="120" placeholder="Expires in minutes" style="max-width:170px" />
                     <input id="toy-share-max" type="number" min="0" max="20" value="12" placeholder="Max level" style="max-width:120px" />
+                    <input id="toy-share-rate-count" type="number" min="1" max="500" value="24" placeholder="Rate limit count" style="max-width:150px" />
+                    <input id="toy-share-rate-window" type="number" min="1" max="3600" value="60" placeholder="Rate window sec" style="max-width:150px" />
+                    <input id="toy-share-spam-window" type="number" min="1" max="600" value="4" placeholder="Spam window sec" style="max-width:150px" />
+                    <input id="toy-share-spam-max" type="number" min="1" max="20" value="2" placeholder="Max same command/window" style="max-width:190px" />
                     <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-lovense" type="checkbox" checked />Lovense</label>
                     <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-intiface" type="checkbox" checked />Intiface</label>
                     <label style="display:flex;align-items:center;gap:.35rem"><input id="toy-share-notifications" type="checkbox" checked />Notifications</label>
@@ -3306,6 +3317,92 @@
       }
     }
 
+    var toyShareScopeProfile = 'custom';
+
+    function applyToyShareScopePreset(profile) {
+      var preset = String(profile || '').toLowerCase();
+      var configs = {
+        soft: {
+          allow_lovense: true,
+          allow_intiface: true,
+          allow_notifications: false,
+          allow_overlay: true,
+          allow_audio: false,
+          allow_screen: false,
+          allow_device_controls: false,
+          allow_app_controls: false,
+          max_level: 10,
+          rate_count: 14,
+          rate_window: 60,
+          spam_window: 6,
+          spam_max: 1,
+        },
+        party: {
+          allow_lovense: true,
+          allow_intiface: true,
+          allow_notifications: true,
+          allow_overlay: true,
+          allow_audio: true,
+          allow_screen: true,
+          allow_device_controls: true,
+          allow_app_controls: false,
+          max_level: 16,
+          rate_count: 36,
+          rate_window: 45,
+          spam_window: 3,
+          spam_max: 2,
+        },
+        strict: {
+          allow_lovense: true,
+          allow_intiface: true,
+          allow_notifications: false,
+          allow_overlay: false,
+          allow_audio: false,
+          allow_screen: false,
+          allow_device_controls: false,
+          allow_app_controls: false,
+          max_level: 8,
+          rate_count: 10,
+          rate_window: 90,
+          spam_window: 8,
+          spam_max: 1,
+        },
+        full_arcade: {
+          allow_lovense: true,
+          allow_intiface: true,
+          allow_notifications: true,
+          allow_overlay: true,
+          allow_audio: true,
+          allow_screen: true,
+          allow_device_controls: true,
+          allow_app_controls: true,
+          max_level: 20,
+          rate_count: 60,
+          rate_window: 45,
+          spam_window: 2,
+          spam_max: 3,
+        },
+      };
+      var cfg = configs[preset];
+      if (!cfg) return;
+      toyShareScopeProfile = preset;
+      _setCheckboxValue('toy-share-lovense', cfg.allow_lovense);
+      _setCheckboxValue('toy-share-intiface', cfg.allow_intiface);
+      _setCheckboxValue('toy-share-notifications', cfg.allow_notifications);
+      _setCheckboxValue('toy-share-overlay', cfg.allow_overlay);
+      _setCheckboxValue('toy-share-audio', cfg.allow_audio);
+      _setCheckboxValue('toy-share-screen', cfg.allow_screen);
+      _setCheckboxValue('toy-share-device', cfg.allow_device_controls);
+      _setCheckboxValue('toy-share-app', cfg.allow_app_controls);
+      _setInputValue('toy-share-max', cfg.max_level);
+      _setInputValue('toy-share-rate-count', cfg.rate_count);
+      _setInputValue('toy-share-rate-window', cfg.rate_window);
+      _setInputValue('toy-share-spam-window', cfg.spam_window);
+      _setInputValue('toy-share-spam-max', cfg.spam_max);
+      var res = document.getElementById('res-toy-share-create');
+      if (res) res.textContent = 'Preset loaded: ' + preset.replace('_', ' ') + '.';
+    }
+
     async function createToyShareLink() {
       var res = document.getElementById('res-toy-share-create');
       if (!viewingDeviceId) {
@@ -3319,6 +3416,11 @@
           label: v('toy-share-label') || null,
           expires_in_minutes: Number(v('toy-share-exp') || '120'),
           max_level: Number(v('toy-share-max') || '12'),
+          scope_profile: toyShareScopeProfile,
+          cmd_rate_limit_count: Number(v('toy-share-rate-count') || '24'),
+          cmd_rate_limit_window_sec: Number(v('toy-share-rate-window') || '60'),
+          cmd_anti_spam_window_sec: Number(v('toy-share-spam-window') || '4'),
+          cmd_anti_spam_max_same: Number(v('toy-share-spam-max') || '2'),
           allow_lovense: document.getElementById('toy-share-lovense').checked,
           allow_intiface: document.getElementById('toy-share-intiface').checked,
           allow_notifications: document.getElementById('toy-share-notifications').checked,
@@ -3373,6 +3475,9 @@
             link.allow_device_controls ? 'Device' : null,
             link.allow_app_controls ? 'Apps' : null,
           ].filter(Boolean).join(' + ');
+          var profile = String(link.scope_profile || 'custom').replace(/_/g, ' ');
+          var throttle = Number(link.cmd_rate_limit_count || 24) + '/' + Number(link.cmd_rate_limit_window_sec || 60)
+            + 's; spam ' + Number(link.cmd_anti_spam_max_same || 2) + '/' + Number(link.cmd_anti_spam_window_sec || 4) + 's';
           var label = esc(link.label || ('Link #' + link.id));
           var queueBtn = '<button class="btn-cmd" style="padding:.18rem .5rem;margin-right:.35rem" onclick="selectToyQueueLink(' + Number(link.id) + ')">Queue</button>';
           var btn = disabled
@@ -3380,7 +3485,9 @@
             : '<button class="btn-cmd danger" style="padding:.18rem .5rem" onclick="disableToyShareLink(' + Number(link.id) + ')">Disable</button>';
           return '<div style="padding:.35rem .45rem;border:1px solid #3a2f30;border-radius:8px;margin-bottom:.28rem;display:flex;justify-content:space-between;gap:.45rem">'
             + '<div><strong>' + label + '</strong> • ' + esc(scope || 'No scope')
+            + ' • profile ' + esc(profile)
             + ' • max ' + Number(link.max_level || 0)
+            + ' • limit ' + esc(throttle)
             + ' • expires ' + esc(exp)
             + ' • used ' + Number(link.use_count || 0) + 'x</div>'
             + '<div>' + queueBtn + btn + '</div></div>';

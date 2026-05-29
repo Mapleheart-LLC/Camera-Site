@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Booking Request | mochii.live</title>
+  <meta name="description" content="Submit a detailed booking questionnaire for handler review." />
+  <style>
+    :root {
+      --bg: #171314;
+      --panel: #241b1d;
+      --panel-2: #2b2023;
+      --line: #4a3539;
+      --text: #f2e8ea;
+      --muted: #c8a8af;
+      --hot: #e8aeb7;
+      --ok: #7cdcb0;
+      --err: #f88787;
+      --font: "Nunito", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      color: var(--text);
+      background:
+        radial-gradient(900px 500px at 12% -8%, #3f2229 0%, transparent 58%),
+        radial-gradient(850px 500px at 95% 112%, #3b2b22 0%, transparent 55%),
+        linear-gradient(160deg, #1a1416, #171314 62%);
+      padding: 1rem;
+    }
+
+    .wrap { width: min(920px, 100%); margin: 0 auto; display: grid; gap: .85rem; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: .9rem;
+    }
+
+    h1 { margin: 0; color: var(--hot); font-size: clamp(1.3rem, 2.4vw, 2rem); }
+    .sub { margin-top: .35rem; color: var(--muted); font-size: .9rem; }
+
+    .row { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .full { grid-column: 1 / -1; }
+
+    label {
+      display: block;
+      margin-bottom: .28rem;
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 700;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: .56rem .62rem;
+      font: inherit;
+    }
+    textarea { min-height: 86px; resize: vertical; }
+
+    .chips { display: flex; gap: .45rem; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: .34rem .58rem;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+      font-size: .78rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chip input { display: none; }
+    .chip.active { border-color: #d9a0aa; color: #f0d7dc; background: #3a262b; }
+
+    .actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+    button {
+      border: none;
+      border-radius: 10px;
+      background: var(--hot);
+      color: #1d1215;
+      font-weight: 800;
+      padding: .62rem .92rem;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    .status { min-height: 1.2rem; color: var(--muted); font-size: .84rem; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+
+    a.back { color: var(--muted); text-decoration: none; font-weight: 700; font-size: .85rem; }
+    a.back:hover { color: var(--hot); }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <a class="back" href="/">&larr; Back to mochii.live</a>
+      <h1>Booking Questionnaire</h1>
+      <p class="sub">Give the handler enough context to review quickly and match the right session format.</p>
+    </section>
+
+    <section class="card">
+      <div class="row">
+        <div>
+          <label for="contact">Best Contact (required)</label>
+          <input id="contact" maxlength="120" placeholder="Discord / Telegram / Email" />
+        </div>
+        <div>
+          <label for="timezone">Timezone (required)</label>
+          <input id="timezone" maxlength="80" placeholder="UTC-5 / EST / CET" />
+        </div>
+        <div>
+          <label for="availability">Availability Window (required)</label>
+          <input id="availability" maxlength="160" placeholder="Weeknights 7pm-11pm, Saturdays" />
+        </div>
+        <div>
+          <label for="location">Location / Region (required)</label>
+          <input id="location" maxlength="160" placeholder="City + country or remote only" />
+        </div>
+
+        <div>
+          <label for="sessionType">Session Type</label>
+          <select id="sessionType">
+            <option value="Intro / Consult">Intro / Consult</option>
+            <option value="Training">Training</option>
+            <option value="Maintenance">Maintenance</option>
+            <option value="Intense">Intense</option>
+            <option value="Unsure">Unsure / discuss</option>
+          </select>
+        </div>
+        <div>
+          <label for="experience">Experience Level</label>
+          <select id="experience">
+            <option value="New">New</option>
+            <option value="Some experience">Some experience</option>
+            <option value="Experienced">Experienced</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Interest Areas</label>
+          <div class="chips" id="interest-chips">
+            <label class="chip"><input type="checkbox" value="Protocol" />Protocol</label>
+            <label class="chip"><input type="checkbox" value="Accountability" />Accountability</label>
+            <label class="chip"><input type="checkbox" value="Task structure" />Task structure</label>
+            <label class="chip"><input type="checkbox" value="Public control" />Public control</label>
+            <label class="chip"><input type="checkbox" value="Toy sessions" />Toy sessions</label>
+            <label class="chip"><input type="checkbox" value="Aftercare focus" />Aftercare focus</label>
+          </div>
+        </div>
+
+        <div class="full">
+          <label for="goals">Primary Goals</label>
+          <textarea id="goals" maxlength="500" placeholder="What do you want from this dynamic? What outcomes are you aiming for?"></textarea>
+        </div>
+        <div class="full">
+          <label for="limits">Hard Limits / Boundaries</label>
+          <textarea id="limits" maxlength="500" placeholder="List non-negotiables and anything that is off-limits."></textarea>
+        </div>
+        <div class="full">
+          <label for="notes">Extra Context</label>
+          <textarea id="notes" maxlength="600" placeholder="Anything else the handler should know before deciding."></textarea>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:.7rem">
+        <button id="submitBtn" type="button">Send Booking Request</button>
+        <span id="status" class="status"></span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    var chips = Array.from(document.querySelectorAll('#interest-chips .chip'));
+    chips.forEach(function(chip) {
+      var input = chip.querySelector('input');
+      function sync() { chip.classList.toggle('active', !!input.checked); }
+      chip.addEventListener('click', function() { input.checked = !input.checked; sync(); });
+      sync();
+    });
+
+    function selectedInterests() {
+      return chips.filter(function(ch) { return ch.querySelector('input').checked; })
+        .map(function(ch) { return ch.querySelector('input').value; });
+    }
+
+    function val(id) {
+      var el = document.getElementById(id);
+      return el ? String(el.value || '').trim() : '';
+    }
+
+    function setStatus(message, kind) {
+      var el = document.getElementById('status');
+      el.textContent = message;
+      el.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    async function submitBooking() {
+      var contact = val('contact');
+      var timezone = val('timezone');
+      var availability = val('availability');
+      var location = val('location');
+      var sessionType = val('sessionType');
+      var experience = val('experience');
+      var goals = val('goals');
+      var limits = val('limits');
+      var notes = val('notes');
+      var interests = selectedInterests();
+
+      if (!contact || !timezone || !availability || !location) {
+        setStatus('Please complete contact, timezone, availability, and location.', 'err');
+        return;
+      }
+
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      setStatus('Sending booking request...');
+
+      var availabilityWindow = availability + ' | TZ: ' + timezone;
+      var sessionIntent = [
+        'Type: ' + sessionType,
+        'Experience: ' + experience,
+        'Interests: ' + (interests.length ? interests.join(', ') : 'not specified'),
+        'Goals: ' + (goals || 'not provided'),
+        'Limits: ' + (limits || 'not provided'),
+        'Notes: ' + (notes || 'none'),
+      ].join(' | ');
+      var locationText = location + ' | TZ: ' + timezone;
+
+      try {
+        var resp = await fetch('/api/booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contact_handle: contact,
+            availability_window: availabilityWindow,
+            session_intent: sessionIntent,
+            location_text: locationText,
+            source: 'booking_page_v2',
+          }),
+        });
+        if (!resp.ok) {
+          var err = await resp.json().catch(function() { return {}; });
+          throw new Error(err.detail || ('HTTP ' + resp.status));
+        }
+
+        ['contact', 'timezone', 'availability', 'location', 'goals', 'limits', 'notes'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        document.getElementById('sessionType').value = 'Intro / Consult';
+        document.getElementById('experience').value = 'New';
+        chips.forEach(function(chip) {
+          var input = chip.querySelector('input');
+          input.checked = false;
+          chip.classList.remove('active');
+        });
+        setStatus('Booking sent. Handler review is now queued.', 'ok');
+      } catch (e) {
+        setStatus('Could not send booking: ' + e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('submitBtn').addEventListener('click', submitBooking);
+  </script>
+</body>
+</html>
