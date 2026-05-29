@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import Counter
+import hashlib
 import json
 import logging
 import secrets
@@ -222,6 +223,8 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
             sender_name    TEXT,
             sender_contact TEXT,
             source         TEXT NOT NULL DEFAULT 'web',
+            public_token   TEXT,
+            guest_code_hash TEXT,
             status         TEXT NOT NULL DEFAULT 'open',
             created_at     TEXT NOT NULL,
             updated_at     TEXT NOT NULL
@@ -236,11 +239,37 @@ def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
             author          TEXT NOT NULL,
             body            TEXT NOT NULL,
             delivery_status TEXT,
+            edited_at       TEXT,
+            edited_by       TEXT,
             created_at      TEXT NOT NULL,
             FOREIGN KEY(thread_id) REFERENCES puppy_mail_threads(id)
         )
         """
     )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_puppy_mail_threads_public_token ON puppy_mail_threads(public_token)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_puppy_mail_threads_guest_code_hash ON puppy_mail_threads(guest_code_hash)"
+    )
+    thread_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_threads)").fetchall()}
+    if "public_token" not in thread_cols:
+        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN public_token TEXT")
+    if "guest_code_hash" not in thread_cols:
+        conn.execute("ALTER TABLE puppy_mail_threads ADD COLUMN guest_code_hash TEXT")
+    message_cols = {row[1] for row in conn.execute("PRAGMA table_info(puppy_mail_messages)").fetchall()}
+    if "edited_at" not in message_cols:
+        conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_at TEXT")
+    if "edited_by" not in message_cols:
+        conn.execute("ALTER TABLE puppy_mail_messages ADD COLUMN edited_by TEXT")
+    missing_token_rows = conn.execute(
+        "SELECT id FROM puppy_mail_threads WHERE public_token IS NULL OR TRIM(public_token) = ''"
+    ).fetchall()
+    for row in missing_token_rows:
+        conn.execute(
+            "UPDATE puppy_mail_threads SET public_token = ? WHERE id = ?",
+            (secrets.token_urlsafe(18), int(row[0])),
+        )
 
 
 def _ensure_rule_engine_tables(conn: sqlite3.Connection) -> None:
@@ -800,9 +829,10 @@ class BookingStatusUpdateRequest(BaseModel):
 
 
 class PuppyMailCreateRequest(BaseModel):
+    message: str
+    guest_code: Optional[str] = None
     sender_name: Optional[str] = None
     sender_contact: Optional[str] = None
-    message: str
     source: Optional[str] = "web"
 
 
@@ -813,6 +843,24 @@ class PuppyMailReplyRequest(BaseModel):
 
 class PuppyMailStatusUpdateRequest(BaseModel):
     status: str
+
+
+class PuppyMailPublicMessageRequest(BaseModel):
+    thread_token: str
+    message: str
+    guest_code: Optional[str] = None
+    sender_name: Optional[str] = None
+    sender_contact: Optional[str] = None
+    source: Optional[str] = "web"
+
+
+class PuppyMailCodeLookupRequest(BaseModel):
+    guest_code: str
+
+
+class PuppyMailMessageEditRequest(BaseModel):
+    body: str
+    author: Optional[str] = None
 
 
 class PublicIntelEventRequest(BaseModel):
@@ -1388,6 +1436,60 @@ def _record_public_intel_event(
     )
 
 
+def _notify_puppy_mail_app(
+    db: sqlite3.Connection,
+    *,
+    title: str,
+    body: str,
+    thread_id: int,
+    event_kind: str,
+) -> None:
+    enabled = str(get_setting(db, "puppy_mail_app_notifications_enabled", "true")).strip().lower()
+    if enabled in {"0", "false", "off", "no"}:
+        return
+    try:
+        _send_mqtt_to_all(
+            db,
+            {
+                "action": "SEND_NOTIFICATION",
+                "title": title[:80],
+                "body": body[:220],
+                "pm_thread_id": str(int(thread_id)),
+                "pm_event": event_kind[:40],
+            },
+        )
+    except Exception:
+        # Notification dispatch should never break chat writes.
+        logger.exception("Failed to dispatch puppy mail app notification")
+
+
+def _notify_booking_app(
+    db: sqlite3.Connection,
+    *,
+    title: str,
+    body: str,
+    booking_id: int,
+    event_kind: str,
+) -> None:
+    enabled = str(get_setting(db, "booking_app_notifications_enabled", "true")).strip().lower()
+    if enabled in {"0", "false", "off", "no"}:
+        return
+    try:
+        _send_mqtt_to_all(
+            db,
+            {
+                "action": "SEND_NOTIFICATION",
+                "title": title[:80],
+                "body": body[:220],
+                "booking_id": str(int(booking_id)),
+                "booking_event": event_kind[:40],
+            },
+        )
+    except Exception:
+        # Notification dispatch should never break intake/status writes.
+        logger.exception("Failed to dispatch booking app notification")
+
+
 @router.post("/api/public/intel/event", status_code=202)
 def ingest_public_intel_event(
     payload: PublicIntelEventRequest,
@@ -1639,6 +1741,13 @@ def create_booking_intake(
         metadata={"source": source},
         created_at=now,
     )
+    _notify_booking_app(
+        db,
+        title="New Booking Request",
+        body="A new booking intake was submitted.",
+        booking_id=int(cur.lastrowid),
+        event_kind="booking_created",
+    )
     db.commit()
     return {"id": cur.lastrowid, "status": "new"}
 
@@ -1651,20 +1760,86 @@ def create_puppy_mail_thread(
 ) -> dict:
     """Public puppy-mail intake endpoint for message widget/page submissions."""
     body = (payload.message or "").strip()
-    sender_name = (payload.sender_name or "").strip() or "Anonymous"
-    sender_contact = (payload.sender_contact or "").strip()
+    sender_name = "Packmate"
+    sender_contact = None
     source = (payload.source or "web").strip() or "web"
     if not body:
         raise HTTPException(status_code=400, detail="message is required")
 
+    guest_code_norm = _normalize_guest_chat_code(payload.guest_code)
+    if not guest_code_norm:
+        raise HTTPException(status_code=400, detail="guest_code is required to start anonymous chat")
+    guest_code_hash = _hash_guest_chat_code(guest_code_norm)
+
+    existing = db.execute(
+        """
+        SELECT id, public_token
+        FROM puppy_mail_threads
+        WHERE guest_code_hash = ?
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """,
+        (guest_code_hash,),
+    ).fetchone()
+
+    if existing:
+        thread_id = int(existing["id"])
+        public_token = str(existing["public_token"] or "").strip()
+        if not public_token:
+            public_token = secrets.token_urlsafe(18)
+            db.execute(
+                "UPDATE puppy_mail_threads SET public_token = ? WHERE id = ?",
+                (public_token, thread_id),
+            )
+        now = _now_iso()
+        db.execute(
+            """
+            INSERT INTO puppy_mail_messages
+                (thread_id, author, body, delivery_status, created_at)
+            VALUES (?, ?, ?, 'received', ?)
+            """,
+            (thread_id, sender_name, body, now),
+        )
+        db.execute(
+            """
+            UPDATE puppy_mail_threads
+            SET sender_name = ?,
+                sender_contact = NULL,
+                source = ?,
+                status = 'open',
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (sender_name, source, now, thread_id),
+        )
+        _record_public_intel_event(
+            db,
+            event_name="mail_submit_success",
+            page="index",
+            referrer=request.headers.get("referer"),
+            user_agent=request.headers.get("user-agent"),
+            metadata={"source": source, "mode": "code_reuse", "thread_id": thread_id},
+            created_at=now,
+        )
+        _notify_puppy_mail_app(
+            db,
+            title="Pack Chat Update",
+            body="A Packmate sent a new message.",
+            thread_id=thread_id,
+            event_kind="packmate_message",
+        )
+        db.commit()
+        return {"thread_id": thread_id, "thread_token": public_token, "status": "open"}
+
     now = _now_iso()
+    public_token = secrets.token_urlsafe(18)
     thread_cur = db.execute(
         """
         INSERT INTO puppy_mail_threads
-            (sender_name, sender_contact, source, status, created_at, updated_at)
-        VALUES (?, ?, ?, 'open', ?, ?)
+            (sender_name, sender_contact, source, public_token, guest_code_hash, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
         """,
-        (sender_name, sender_contact, source, now, now),
+        (sender_name, sender_contact, source, public_token, guest_code_hash, now, now),
     )
     thread_id = int(thread_cur.lastrowid)
     db.execute(
@@ -1684,8 +1859,181 @@ def create_puppy_mail_thread(
         metadata={"source": source},
         created_at=now,
     )
+    _notify_puppy_mail_app(
+        db,
+        title="New Pack Chat",
+        body="A new anonymous Packmate thread started.",
+        thread_id=thread_id,
+        event_kind="thread_created",
+    )
     db.commit()
-    return {"thread_id": thread_id, "status": "open"}
+    return {"thread_id": thread_id, "thread_token": public_token, "status": "open"}
+
+
+def _normalize_guest_chat_code(code: Optional[str]) -> str:
+    value = (code or "").strip()
+    if len(value) < 4 or len(value) > 64:
+        return ""
+    return value.lower()
+
+
+def _hash_guest_chat_code(code: str) -> str:
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+
+@router.post("/api/puppy-mail/session/by-code")
+def public_lookup_puppy_mail_session(
+    payload: PuppyMailCodeLookupRequest,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    guest_code_norm = _normalize_guest_chat_code(payload.guest_code)
+    if not guest_code_norm:
+        raise HTTPException(status_code=400, detail="guest_code must be between 4 and 64 characters")
+    guest_code_hash = _hash_guest_chat_code(guest_code_norm)
+    row = db.execute(
+        """
+        SELECT id, public_token, status, updated_at
+        FROM puppy_mail_threads
+        WHERE guest_code_hash = ?
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """,
+        (guest_code_hash,),
+    ).fetchone()
+    if not row:
+        return {"found": False}
+    return {
+        "found": True,
+        "thread_id": int(row["id"]),
+        "thread_token": row["public_token"],
+        "status": row["status"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _public_puppy_mail_thread_or_403(
+    db: sqlite3.Connection,
+    *,
+    thread_id: int,
+    token: str,
+) -> sqlite3.Row:
+    token_value = (token or "").strip()
+    if not token_value:
+        raise HTTPException(status_code=400, detail="thread_token is required")
+    thread = db.execute(
+        """
+        SELECT id, sender_name, sender_contact, source, public_token, guest_code_hash, status, created_at, updated_at
+        FROM puppy_mail_threads
+        WHERE id = ?
+        """,
+        (thread_id,),
+    ).fetchone()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Puppy-mail thread not found")
+    if (thread["public_token"] or "").strip() != token_value:
+        raise HTTPException(status_code=403, detail="Invalid thread token")
+    return thread
+
+
+@router.get("/api/puppy-mail/threads/{thread_id}")
+def public_get_puppy_mail_thread(
+    thread_id: int,
+    thread_token: str = Query(...),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    thread = _public_puppy_mail_thread_or_403(db, thread_id=thread_id, token=thread_token)
+    messages = db.execute(
+        """
+        SELECT id, author, body, delivery_status, created_at, edited_at
+        FROM puppy_mail_messages
+        WHERE thread_id = ?
+        ORDER BY id ASC
+        """,
+        (thread_id,),
+    ).fetchall()
+    return {
+        "thread": {
+            "id": int(thread["id"]),
+            "status": thread["status"],
+            "sender_name": thread["sender_name"],
+            "source": thread["source"],
+            "created_at": thread["created_at"],
+            "updated_at": thread["updated_at"],
+        },
+        "messages": [dict(m) for m in messages],
+    }
+
+
+@router.post("/api/puppy-mail/threads/{thread_id}/messages", status_code=201)
+def public_append_puppy_mail_message(
+    thread_id: int,
+    payload: PuppyMailPublicMessageRequest,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    thread = _public_puppy_mail_thread_or_403(db, thread_id=thread_id, token=payload.thread_token)
+    body = (payload.message or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="message is required")
+    guest_code_norm = _normalize_guest_chat_code(payload.guest_code)
+    if not guest_code_norm:
+        raise HTTPException(status_code=400, detail="guest_code is required")
+    guest_code_hash = _hash_guest_chat_code(guest_code_norm)
+    if (thread["guest_code_hash"] or "") != guest_code_hash:
+        raise HTTPException(status_code=403, detail="guest_code does not match this chat")
+
+    author = "Packmate"
+    now = _now_iso()
+    source = (payload.source or thread["source"] or "web").strip() or "web"
+
+    cur = db.execute(
+        """
+        INSERT INTO puppy_mail_messages
+            (thread_id, author, body, delivery_status, created_at)
+        VALUES (?, ?, ?, 'received', ?)
+        """,
+        (thread_id, author, body, now),
+    )
+    db.execute(
+        """
+        UPDATE puppy_mail_threads
+        SET sender_name = ?,
+            sender_contact = NULL,
+            source = ?,
+            status = 'open',
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (
+            author,
+            source,
+            now,
+            thread_id,
+        ),
+    )
+    _record_public_intel_event(
+        db,
+        event_name="mail_submit_success",
+        page="index",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        metadata={"source": source, "mode": "thread_reply", "thread_id": thread_id},
+        created_at=now,
+    )
+    _notify_puppy_mail_app(
+        db,
+        title="Pack Chat Update",
+        body="A Packmate sent a new message.",
+        thread_id=thread_id,
+        event_kind="packmate_message",
+    )
+    db.commit()
+    return {
+        "id": int(cur.lastrowid),
+        "thread_id": thread_id,
+        "status": "open",
+        "created_at": now,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2273,6 +2621,19 @@ def handler_update_booking_status(
     values.append(booking_id)
 
     db.execute(f"UPDATE booking_intake SET {', '.join(updates)} WHERE id = ?", values)
+    status_text = {
+        "new": "Booking moved to New.",
+        "qualified": "Booking marked Qualified.",
+        "scheduled": "Booking marked Scheduled.",
+        "done": "Booking marked Done.",
+    }.get(status_value, f"Booking updated to {status_value}.")
+    _notify_booking_app(
+        db,
+        title="Booking Status Updated",
+        body=status_text,
+        booking_id=booking_id,
+        event_kind=f"booking_status_{status_value}",
+    )
     db.commit()
     return {"updated": True, "id": booking_id, "status": status_value}
 
@@ -2348,7 +2709,7 @@ def handler_get_puppy_mail_thread(
 
     messages = db.execute(
         """
-        SELECT id, thread_id, author, body, delivery_status, created_at
+        SELECT id, thread_id, author, body, delivery_status, created_at, edited_at, edited_by
         FROM puppy_mail_messages
         WHERE thread_id = ?
         ORDER BY id ASC
@@ -2386,8 +2747,63 @@ def handler_reply_puppy_mail_thread(
         "UPDATE puppy_mail_threads SET updated_at = ?, status = 'open' WHERE id = ?",
         (now, thread_id),
     )
+    _notify_puppy_mail_app(
+        db,
+        title="Handler Replied",
+        body="Your handler sent a new Pack Chat reply.",
+        thread_id=thread_id,
+        event_kind="handler_reply",
+    )
     db.commit()
     return {"id": cur.lastrowid, "thread_id": thread_id, "author": author, "created_at": now}
+
+
+@router.post("/api/handler/puppy-mail/messages/{message_id}/edit")
+def handler_edit_puppy_mail_message(
+    message_id: int,
+    payload: PuppyMailMessageEditRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    message = db.execute(
+        "SELECT id, thread_id, author FROM puppy_mail_messages WHERE id = ?",
+        (message_id,),
+    ).fetchone()
+    if not message:
+        raise HTTPException(status_code=404, detail="Puppy-mail message not found")
+
+    body = (payload.body or "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="body is required")
+    author = (payload.author or message["author"] or "Puppy").strip() or "Puppy"
+    now = _now_iso()
+
+    db.execute(
+        """
+        UPDATE puppy_mail_messages
+        SET body = ?, author = ?, edited_at = ?, edited_by = 'handler'
+        WHERE id = ?
+        """,
+        (body, author, now, message_id),
+    )
+    db.execute(
+        "UPDATE puppy_mail_threads SET updated_at = ? WHERE id = ?",
+        (now, int(message["thread_id"])),
+    )
+    _notify_puppy_mail_app(
+        db,
+        title="Pack Chat Updated",
+        body="A handler edited a Pack Chat message.",
+        thread_id=int(message["thread_id"]),
+        event_kind="handler_edit",
+    )
+    db.commit()
+    return {
+        "updated": True,
+        "id": message_id,
+        "thread_id": int(message["thread_id"]),
+        "edited_at": now,
+    }
 
 
 @router.post("/api/handler/puppy-mail/threads/{thread_id}/status")
@@ -2407,6 +2823,21 @@ def handler_update_puppy_mail_thread_status(
     db.execute(
         "UPDATE puppy_mail_threads SET status = ?, updated_at = ? WHERE id = ?",
         (status_value, now, thread_id),
+    )
+    if status_value == "resolved":
+        title = "Pack Chat Closed"
+        body = "A handler marked this Pack Chat as resolved."
+        event_kind = "thread_resolved"
+    else:
+        title = "Pack Chat Reopened"
+        body = "A handler reopened this Pack Chat."
+        event_kind = "thread_open"
+    _notify_puppy_mail_app(
+        db,
+        title=title,
+        body=body,
+        thread_id=thread_id,
+        event_kind=event_kind,
     )
     db.commit()
     return {"updated": True, "id": thread_id, "status": status_value}

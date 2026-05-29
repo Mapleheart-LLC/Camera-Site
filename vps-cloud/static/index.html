@@ -319,6 +319,81 @@
       color: #9e7e82;
     }
 
+    .public-mail-feed {
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      background: #201317;
+      min-height: 120px;
+      max-height: 220px;
+      overflow: auto;
+      padding: .5rem;
+      display: grid;
+      gap: .35rem;
+    }
+
+    .public-mail-empty {
+      color: #9e7e82;
+      font-size: .76rem;
+    }
+
+    .public-mail-msg {
+      border: 1px solid #3d2a2e;
+      border-radius: 8px;
+      padding: .36rem .5rem;
+      background: #2a171f;
+      font-size: .78rem;
+      color: #f0e6e8;
+      line-height: 1.35;
+    }
+
+    .public-mail-msg.handler {
+      border-color: #3d5d4f;
+      background: #1f2a25;
+    }
+
+    .public-mail-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: .5rem;
+      font-size: .68rem;
+      color: #c9aeb5;
+      margin-bottom: .2rem;
+    }
+
+    .public-mail-body {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .mail-code-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: .45rem;
+      align-items: center;
+    }
+
+    .mail-code-help {
+      font-size: .72rem;
+      color: #b8949f;
+      margin-top: -.1rem;
+      margin-bottom: .15rem;
+    }
+
+    .mail-live-indicator {
+      font-size: .74rem;
+      color: #7be9b5;
+      border: 1px solid #345748;
+      border-radius: 999px;
+      padding: .2rem .5rem;
+      background: rgba(30, 66, 48, .35);
+    }
+
+    .mail-live-indicator.off {
+      color: #c9aeb5;
+      border-color: #4b2f39;
+      background: rgba(52, 25, 33, .35);
+    }
+
     /* Landing footer */
     .landing-footer {
       margin-top: auto;
@@ -1085,11 +1160,21 @@
       <div class="public-intake-grid">
         <div class="public-intake-card">
           <h3>📬 Puppy Mail</h3>
-          <p>Send a note to the handler team. Replies appear after review in-app.</p>
-          <input id="mail-name" type="text" maxlength="80" placeholder="Name (optional)" />
-          <input id="mail-contact" type="text" maxlength="120" placeholder="Contact (optional)" />
-          <textarea id="mail-message" maxlength="1000" placeholder="Your message"></textarea>
-          <button id="mail-submit-btn" class="control-btn" type="button">Send Mail</button>
+          <p>Anonymous Pack Chat. Enter your private passcode to load/save your thread. Puppy only sees Packmate.</p>
+          <div class="mail-code-row">
+            <input id="mail-code" type="password" maxlength="64" placeholder="Pack passcode (4+ chars)" />
+            <button id="mail-load-btn" class="control-btn" type="button" style="background:#2e1d24;border-color:#4b2f39;color:#e8aeb7">Load Thread</button>
+          </div>
+          <div class="mail-code-help">Use the same passcode later on any device to restore your anonymous chat.</div>
+          <div id="mail-thread-feed" class="public-mail-feed">
+            <div class="public-mail-empty">No messages yet. Start the chat below.</div>
+          </div>
+          <textarea id="mail-message" maxlength="1000" placeholder="Type a message..."></textarea>
+          <div style="display:flex;gap:.45rem;flex-wrap:wrap;align-items:center">
+            <button id="mail-submit-btn" class="control-btn" type="button">Send Message</button>
+            <button id="mail-refresh-btn" class="control-btn" type="button" style="background:#2e1d24;border-color:#4b2f39;color:#e8aeb7">Sync Chat</button>
+            <span id="mail-live-indicator" class="mail-live-indicator">Auto-sync: on</span>
+          </div>
           <div id="mail-status" class="public-intake-status"></div>
         </div>
       </div>
@@ -1375,13 +1460,163 @@
       }
     }
 
+    const PUPPY_MAIL_SESSION_KEY = 'puppy_mail_thread_session_v1';
+    let _puppyMailSession = null;
+    let _puppyMailAutoTimer = null;
+    let _puppyMailRefreshing = false;
+
+    function _guestCodeValue() {
+      return (document.getElementById('mail-code')?.value || '').trim();
+    }
+
+    function _loadPuppyMailSession() {
+      try {
+        const raw = localStorage.getItem(PUPPY_MAIL_SESSION_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.thread_id || !parsed.thread_token) return null;
+        return parsed;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function _savePuppyMailSession(threadId, threadToken) {
+      _puppyMailSession = {
+        thread_id: Number(threadId),
+        thread_token: String(threadToken || ''),
+      };
+      localStorage.setItem(PUPPY_MAIL_SESSION_KEY, JSON.stringify(_puppyMailSession));
+    }
+
+    function _clearPuppyMailSession() {
+      _puppyMailSession = null;
+      localStorage.removeItem(PUPPY_MAIL_SESSION_KEY);
+    }
+
+    async function lookupPuppyMailSessionByCode(guestCode) {
+      const r = await fetch('/api/puppy-mail/session/by-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guest_code: guestCode }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body.detail || ('HTTP ' + r.status));
+      }
+      if (body && body.found && body.thread_id && body.thread_token) {
+        _savePuppyMailSession(body.thread_id, body.thread_token);
+        return true;
+      }
+      return false;
+    }
+
+    function renderPublicMailThread(messages) {
+      const host = document.getElementById('mail-thread-feed');
+      if (!host) return;
+      if (!Array.isArray(messages) || !messages.length) {
+        host.innerHTML = '<div class="public-mail-empty">No messages yet. Start the chat below.</div>';
+        return;
+      }
+      host.innerHTML = messages.map((m) => {
+        const author = String(m.author || 'unknown');
+        const isHandler = author.toLowerCase().includes('handler');
+        const edited = m.edited_at ? ' (edited)' : '';
+        const when = m.created_at ? new Date(m.created_at).toLocaleString() : 'just now';
+        return '<div class="public-mail-msg ' + (isHandler ? 'handler' : '') + '">' +
+          '<div class="public-mail-meta"><span>' + escHtml(author) + '</span><span>' + escHtml(when + edited) + '</span></div>' +
+          '<div class="public-mail-body">' + escHtml(m.body || '') + '</div>' +
+        '</div>';
+      }).join('');
+      host.scrollTop = host.scrollHeight;
+    }
+
+    async function refreshPublicMailThread(silent) {
+      if (_puppyMailRefreshing) return;
+      _puppyMailRefreshing = true;
+      const statusEl = document.getElementById('mail-status');
+      const guestCode = _guestCodeValue();
+      if (!_puppyMailSession && guestCode) {
+        try {
+          await lookupPuppyMailSessionByCode(guestCode);
+        } catch (e) {
+          if (!silent && statusEl) statusEl.textContent = '⚠️ Could not load chat with this code: ' + e.message;
+          renderPublicMailThread([]);
+          _puppyMailRefreshing = false;
+          return;
+        }
+      }
+      if (!_puppyMailSession || !_puppyMailSession.thread_id || !_puppyMailSession.thread_token) {
+        renderPublicMailThread([]);
+        if (!silent && statusEl && guestCode) statusEl.textContent = 'No existing chat for this passcode yet. Send a first message to start.';
+        _puppyMailRefreshing = false;
+        return;
+      }
+      try {
+        const q = '?thread_token=' + encodeURIComponent(_puppyMailSession.thread_token);
+        const r = await fetch('/api/puppy-mail/threads/' + encodeURIComponent(String(_puppyMailSession.thread_id)) + q);
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || ('HTTP ' + r.status));
+        }
+        const data = await r.json();
+        renderPublicMailThread(data.messages || []);
+        if (!silent && statusEl) statusEl.textContent = 'Chat synced.';
+      } catch (e) {
+        if (String(e.message || '').includes('Invalid thread token')) {
+          _clearPuppyMailSession();
+        }
+        if (!silent && statusEl) statusEl.textContent = '⚠️ Could not sync chat: ' + e.message;
+      } finally {
+        _puppyMailRefreshing = false;
+      }
+    }
+
+    function startPuppyMailAutoSync() {
+      if (_puppyMailAutoTimer) return;
+      _puppyMailAutoTimer = setInterval(function() {
+        refreshPublicMailThread(true);
+      }, 5000);
+      var liveEl = document.getElementById('mail-live-indicator');
+      if (liveEl) {
+        liveEl.textContent = 'Auto-sync: on';
+        liveEl.classList.remove('off');
+      }
+    }
+
+    async function handleMailLoadByCode() {
+      const statusEl = document.getElementById('mail-status');
+      const code = _guestCodeValue();
+      if (!code || code.length < 4) {
+        if (statusEl) statusEl.textContent = 'Enter a passcode (4+ chars) to load a thread.';
+        return;
+      }
+      _clearPuppyMailSession();
+      try {
+        const found = await lookupPuppyMailSessionByCode(code);
+        if (!found) {
+          renderPublicMailThread([]);
+          if (statusEl) statusEl.textContent = 'No thread found for this passcode yet. Send a first message to create one.';
+          return;
+        }
+        await refreshPublicMailThread(true);
+        if (statusEl) statusEl.textContent = 'Thread loaded.';
+      } catch (e) {
+        if (statusEl) statusEl.textContent = '❌ Could not load thread: ' + e.message;
+      }
+    }
+
     async function submitPublicMail() {
-      const name = (document.getElementById('mail-name')?.value || '').trim();
-      const contact = (document.getElementById('mail-contact')?.value || '').trim();
+      const guestCode = _guestCodeValue();
       const message = (document.getElementById('mail-message')?.value || '').trim();
       const statusEl = document.getElementById('mail-status');
       const btn = document.getElementById('mail-submit-btn');
 
+      if (!guestCode || guestCode.length < 4) {
+        emitPublicIntelEvent('mail_submit_failed', { reason: 'missing_guest_code' });
+        if (statusEl) statusEl.textContent = 'Enter your passcode (4+ chars) before messaging.';
+        return;
+      }
       if (!message) {
         emitPublicIntelEvent('mail_submit_failed', { reason: 'validation' });
         if (statusEl) statusEl.textContent = 'Message cannot be empty.';
@@ -1389,31 +1624,51 @@
       }
 
       btn.disabled = true;
-      if (statusEl) statusEl.textContent = 'Sending puppy mail...';
+      if (statusEl) statusEl.textContent = 'Sending message...';
       try {
-        const r = await fetch('/api/puppy-mail', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sender_name: name || null,
-            sender_contact: contact || null,
-            message: message,
-            source: 'public',
-          }),
-        });
-        if (!r.ok) {
-          const err = await r.json().catch(() => ({}));
-          throw new Error(err.detail || ('HTTP ' + r.status));
+        if (_puppyMailSession && _puppyMailSession.thread_id && _puppyMailSession.thread_token) {
+          const r = await fetch('/api/puppy-mail/threads/' + encodeURIComponent(String(_puppyMailSession.thread_id)) + '/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              thread_token: _puppyMailSession.thread_token,
+              guest_code: guestCode,
+              message: message,
+              source: 'public',
+            }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail || ('HTTP ' + r.status));
+          }
+        } else {
+          const r = await fetch('/api/puppy-mail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              guest_code: guestCode,
+              message: message,
+              source: 'public',
+            }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail || ('HTTP ' + r.status));
+          }
+          const created = await r.json().catch(() => ({}));
+          if (created.thread_id && created.thread_token) {
+            _savePuppyMailSession(created.thread_id, created.thread_token);
+          }
         }
-        ['mail-name', 'mail-contact', 'mail-message'].forEach((id) => {
-          const el = document.getElementById(id);
-          if (el) el.value = '';
-        });
-        emitPublicIntelEvent('mail_submit_success', { source: 'public' });
-        if (statusEl) statusEl.textContent = '✅ Puppy mail delivered to handler queue.';
+
+        const msgEl = document.getElementById('mail-message');
+        if (msgEl) msgEl.value = '';
+        emitPublicIntelEvent('mail_submit_success', { source: 'public', mode: _puppyMailSession ? 'thread' : 'new' });
+        if (statusEl) statusEl.textContent = '✅ Message sent. Chat is live.';
+        await refreshPublicMailThread(true);
       } catch (e) {
         emitPublicIntelEvent('mail_submit_failed', { reason: 'request_error' });
-        if (statusEl) statusEl.textContent = '❌ Could not send puppy mail: ' + e.message;
+        if (statusEl) statusEl.textContent = '❌ Could not send message: ' + e.message;
       } finally {
         btn.disabled = false;
       }
@@ -1426,6 +1681,10 @@
         .replace(/'/g, '&#39;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    }
+
+    function escHtml(str) {
+      return escHtmlAttr(str);
     }
 
     // ── Active WebRTC peer connection ─────────────────
@@ -1955,6 +2214,23 @@
       bookingSubmitEl.addEventListener('click', submitPublicBooking);
     }
     document.getElementById('mail-submit-btn').addEventListener('click', submitPublicMail);
+    var mailLoadEl = document.getElementById('mail-load-btn');
+    if (mailLoadEl) {
+      mailLoadEl.addEventListener('click', handleMailLoadByCode);
+    }
+    var mailRefreshEl = document.getElementById('mail-refresh-btn');
+    if (mailRefreshEl) {
+      mailRefreshEl.addEventListener('click', function() { refreshPublicMailThread(false); });
+    }
+    var mailCodeEl = document.getElementById('mail-code');
+    if (mailCodeEl) {
+      mailCodeEl.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          handleMailLoadByCode();
+        }
+      });
+    }
     var bookingLinkEl = document.getElementById('public-booking-link-card');
     if (bookingLinkEl) {
       bookingLinkEl.addEventListener('click', function() {
@@ -1987,6 +2263,10 @@
 
       loadPublicStatus();
       setInterval(loadPublicStatus, 60000);
+
+      _puppyMailSession = _loadPuppyMailSession();
+      refreshPublicMailThread(true);
+      startPuppyMailAutoSync();
 
       // Check for an existing session token
       if (getToken()) {

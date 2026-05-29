@@ -371,13 +371,25 @@ If Android app includes queue/inbox modules, these endpoints are available:
 - Public intake:
 	- POST /api/booking
 	- POST /api/puppy-mail
+	- POST /api/puppy-mail/session/by-code
+	- GET /api/puppy-mail/threads/{thread_id}?thread_token=...
+	- POST /api/puppy-mail/threads/{thread_id}/messages
 - Handler queue operations (JWT handler/admin):
 	- GET /api/handler/booking
 	- POST /api/handler/booking/{booking_id}/status
 	- GET /api/handler/puppy-mail/threads
 	- GET /api/handler/puppy-mail/threads/{thread_id}
 	- POST /api/handler/puppy-mail/threads/{thread_id}/reply
+	- POST /api/handler/puppy-mail/messages/{message_id}/edit
 	- POST /api/handler/puppy-mail/threads/{thread_id}/status
+
+App MQTT notification behavior for queue/chat flows:
+
+- Backend emits SEND_NOTIFICATION for puppy-mail events (new thread, packmate message, handler reply, handler edit, thread resolved/reopened).
+- Backend emits SEND_NOTIFICATION for booking events (new intake + handler status transitions).
+- Optional settings flags can disable categories without code changes:
+	- puppy_mail_app_notifications_enabled (default true)
+	- booking_app_notifications_enabled (default true)
 
 ## 8) Build Integration Checklist
 

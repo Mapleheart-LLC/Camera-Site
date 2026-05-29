@@ -1262,8 +1262,8 @@
 
           <!-- ═══════════════ PUPPY MAIL ═══════════════ -->
           <section id="sec-mail" class="handler-section">
-            <h2 class="section-heading">📬 Puppy Mail Inbox</h2>
-            <p class="section-help">Handle private threads and follow up quickly.</p>
+            <h2 class="section-heading">💬 Puppy Mail Chat</h2>
+            <p class="section-help">Treat this as IM: reply fast, moderate safely, and edit puppy messages when needed.</p>
 
             <div class="card">
               <div class="card-header">
@@ -4525,19 +4525,37 @@
     function _renderMailThreadMessages(messages) {
       var host = document.getElementById('mail-thread-messages');
       if (!host) return;
+      _mailMessageById = {};
       if (!Array.isArray(messages) || !messages.length) {
         host.innerHTML = '<div class="mail-empty">No messages in this thread.</div>';
         return;
       }
       host.innerHTML = messages.map(function(m) {
+        var id = Number(m.id || 0);
+        _mailMessageById[id] = m;
+        var authoredByHandler = String(m.author || '').toLowerCase().indexOf('handler') !== -1;
+        var editedTag = m.edited_at ? (' <span style="color:#9e7e82">(edited)</span>') : '';
+        var editBtn = '<button class="btn-action mail-edit-message-btn table-action-btn" data-message-id="' + id + '" style="margin-left:.45rem;padding:.16rem .42rem;font-size:.7rem">Edit</button>';
         return '<div class="mail-message">' +
           '<div class="mail-message-meta">' +
             '<span>' + esc(m.author || 'unknown') + '</span>' +
-            '<span class="ts-cell">' + esc(fmtDate(m.created_at)) + '</span>' +
+            '<span class="ts-cell">' + esc(fmtDate(m.created_at)) + editedTag + '</span>' +
           '</div>' +
-          '<div class="mail-message-body">' + esc(m.body || '') + '</div>' +
+          '<div class="mail-message-body" style="border-left:3px solid ' + (authoredByHandler ? '#6f8f7e' : '#7f5963') + '">' + esc(m.body || '') + '</div>' +
+          '<div style="margin-top:.3rem">' + editBtn + '</div>' +
         '</div>';
       }).join('');
+      _bindMailMessageActions();
+    }
+
+    function _bindMailMessageActions() {
+      document.querySelectorAll('.mail-edit-message-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var messageId = parseInt(btn.dataset.messageId || '0', 10);
+          if (!messageId) return;
+          editMailMessage(messageId);
+        });
+      });
     }
 
     function _bindMailThreadActions() {
@@ -4631,6 +4649,44 @@
         }
       } catch (e) {
         if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to send reply.';
+      }
+    }
+
+    async function editMailMessage(messageId) {
+      var resultEl = document.getElementById('mail-thread-result');
+      var message = _mailMessageById[Number(messageId)] || null;
+      if (!_selectedMailThreadId || !message) {
+        if (resultEl) resultEl.textContent = 'Select a thread message first.';
+        return;
+      }
+      var nextBody = prompt('Edit message text:', String(message.body || ''));
+      if (nextBody == null) return;
+      nextBody = String(nextBody).trim();
+      if (!nextBody) {
+        if (resultEl) resultEl.textContent = 'Edited message cannot be empty.';
+        return;
+      }
+      var nextAuthor = prompt('Display author name:', String(message.author || 'Puppy'));
+      if (nextAuthor == null) return;
+      nextAuthor = String(nextAuthor).trim() || 'Puppy';
+
+      if (resultEl) resultEl.textContent = 'Saving edit...';
+      try {
+        var r = await apiPost('/api/handler/puppy-mail/messages/' + encodeURIComponent(String(messageId)) + '/edit', {
+          body: nextBody,
+          author: nextAuthor,
+        });
+        if (r.ok) {
+          if (resultEl) resultEl.textContent = 'Message updated.';
+          showToast('✅ Puppy mail message edited.');
+          await loadMailThread(_selectedMailThreadId);
+          await loadMailThreads();
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          if (resultEl) resultEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
+        }
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to edit message.';
       }
     }
 
@@ -4820,6 +4876,7 @@
     var _vitalsAlertStatus = null; // string or null
     var _vitalsFlashTimer = null;
     var _selectedMailThreadId = null;
+    var _mailMessageById = {};
 
     /**
      * Show or hide the alert banner and flash effect.
