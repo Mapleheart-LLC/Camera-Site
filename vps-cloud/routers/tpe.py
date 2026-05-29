@@ -71,7 +71,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from db import get_db, get_db_connection
 from dependencies import get_admin_user
@@ -521,6 +521,23 @@ def migrate_tpe(conn: sqlite3.Connection) -> None:
             expires_at  TEXT NOT NULL,
             created_at  TEXT NOT NULL,
             used_at     TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_ai_tool_calls (
+            id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tool_name                  TEXT NOT NULL,
+            device_id                  TEXT NOT NULL,
+            action                     TEXT NOT NULL,
+            prompt_context             TEXT,
+            parameters_json            TEXT,
+            payload_json               TEXT NOT NULL,
+            transmission_status        TEXT NOT NULL,
+            transmission_response_json TEXT,
+            error                      TEXT,
+            created_at                 TEXT NOT NULL
         )
         """
     )
@@ -1375,6 +1392,7 @@ _VALID_TPE_ACTIONS = {
     "RULE_REMINDER",
     # Tone & vocabulary
     "UPDATE_RESTRICTED_VOCABULARY",
+    "UPDATE_TEXT_REPLACEMENT_POLICY",
     "UPDATE_TONE_COMPLIANCE",
     # Tasks
     "TASK_ASSIGNED",
@@ -1475,6 +1493,202 @@ _VALID_TPE_ACTIONS = {
     # Live toy sessions (non-Pavlok)
     "toy.live.control",
 }
+
+
+_SENSITIVE_AI_ACTIONS = {"LOCK_DEVICE", "PAVLOK_COMMAND", "LOVENSE_COMMAND"}
+_ALLOWED_TOOL_PARAMETER_KEYS = set(TpePushRequest.__fields__.keys()) - {"action", "device_id"}
+
+
+class ExecuteDeviceCommandToolCall(BaseModel):
+    device_id: str
+    action: str
+    parameters: Optional[Dict[str, str]] = None
+
+    @validator("device_id")
+    def _validate_device_id(cls, value: str) -> str:
+        device_id = (value or "").strip()
+        if not device_id:
+            raise ValueError("device_id is required.")
+        return device_id
+
+    @validator("action")
+    def _validate_action(cls, value: str) -> str:
+        action = (value or "").strip()
+        if action not in _VALID_TPE_ACTIONS:
+            raise ValueError(f"Unknown action '{action}'.")
+        return action
+
+
+class ExecuteDeviceCommandBridgeRequest(ExecuteDeviceCommandToolCall):
+    prompt_context: Optional[str] = None
+
+
+EXECUTE_DEVICE_COMMAND_TOOL_SCHEMA: Dict[str, Any] = {
+    "name": "execute_device_command",
+    "description": "Dispatch a validated device command over backend MQTT transport.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "device_id": {"type": "string"},
+            "action": {"type": "string", "enum": sorted(_VALID_TPE_ACTIONS)},
+            "parameters": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            },
+        },
+        "required": ["device_id", "action"],
+        "additionalProperties": False,
+    },
+}
+
+
+def _insert_ai_tool_audit_row(
+    db: sqlite3.Connection,
+    *,
+    tool_name: str,
+    device_id: str,
+    action: str,
+    prompt_context: Optional[str],
+    parameters: Optional[Dict[str, str]],
+    payload: Dict[str, str],
+    transmission_status: str,
+    transmission_response: Optional[Dict[str, int]],
+    error: Optional[str] = None,
+    created_at: Optional[str] = None,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO tpe_ai_tool_calls (
+            tool_name,
+            device_id,
+            action,
+            prompt_context,
+            parameters_json,
+            payload_json,
+            transmission_status,
+            transmission_response_json,
+            error,
+            created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            tool_name,
+            device_id,
+            action,
+            prompt_context,
+            json.dumps(parameters or {}, ensure_ascii=False),
+            json.dumps(payload, ensure_ascii=False),
+            transmission_status,
+            json.dumps(transmission_response or {}, ensure_ascii=False),
+            error,
+            created_at or _now_iso(),
+        ),
+    )
+    db.commit()
+
+
+def execute_device_command(
+    db: sqlite3.Connection,
+    tool_call: ExecuteDeviceCommandToolCall,
+    *,
+    prompt_context: Optional[str] = None,
+) -> Dict[str, Any]:
+    parameters = tool_call.parameters or {}
+    unsupported_parameters = sorted(set(parameters.keys()) - _ALLOWED_TOOL_PARAMETER_KEYS)
+    if unsupported_parameters:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Unsupported parameters for execute_device_command: "
+                f"{unsupported_parameters}"
+            ),
+        )
+
+    push_payload = {"action": tool_call.action, "device_id": tool_call.device_id, **parameters}
+    payload = _build_tpe_payload(TpePushRequest(**push_payload))
+
+    created_at = _now_iso()
+    log_data = {
+        "timestamp": created_at,
+        "tool_name": "execute_device_command",
+        "device_id": tool_call.device_id,
+        "action": tool_call.action,
+        "prompt_context": prompt_context,
+        "parameters": parameters,
+        "payload": payload,
+    }
+    if tool_call.action in _SENSITIVE_AI_ACTIONS:
+        logger.warning("AI tool call dispatch requested: %s", json.dumps(log_data, ensure_ascii=False))
+    else:
+        logger.info("AI tool call dispatch requested: %s", json.dumps(log_data, ensure_ascii=False))
+
+    try:
+        transmission = _send_mqtt_to_device(db, tool_call.device_id, payload)
+        transmission_status = (
+            "sent" if transmission.get("sent", 0) > 0 and transmission.get("failed", 0) == 0 else "failed"
+        )
+        _insert_ai_tool_audit_row(
+            db,
+            tool_name="execute_device_command",
+            device_id=tool_call.device_id,
+            action=tool_call.action,
+            prompt_context=prompt_context,
+            parameters=parameters,
+            payload=payload,
+            transmission_status=transmission_status,
+            transmission_response=transmission,
+            created_at=created_at,
+        )
+        logger.info(
+            "AI tool call transmission completed: %s",
+            json.dumps(
+                {
+                    "timestamp": created_at,
+                    "device_id": tool_call.device_id,
+                    "action": tool_call.action,
+                    "status": transmission_status,
+                    "response": transmission,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        return {
+            "tool_name": "execute_device_command",
+            "timestamp": created_at,
+            "device_id": tool_call.device_id,
+            "action": tool_call.action,
+            "payload": payload,
+            "transmission_status": transmission_status,
+            "transmission": transmission,
+        }
+    except Exception as exc:
+        _insert_ai_tool_audit_row(
+            db,
+            tool_name="execute_device_command",
+            device_id=tool_call.device_id,
+            action=tool_call.action,
+            prompt_context=prompt_context,
+            parameters=parameters,
+            payload=payload,
+            transmission_status="error",
+            transmission_response=None,
+            error=str(exc),
+            created_at=created_at,
+        )
+        logger.exception(
+            "AI tool call transmission failed: %s",
+            json.dumps(
+                {
+                    "timestamp": created_at,
+                    "device_id": tool_call.device_id,
+                    "action": tool_call.action,
+                    "prompt_context": prompt_context,
+                    "payload": payload,
+                },
+                ensure_ascii=False,
+            ),
+        )
+        raise
 
 
 def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
@@ -1633,6 +1847,24 @@ def tpe_push_settings(
         return _send_mqtt_to_device(db, body.device_id, data)
 
     return _send_mqtt_to_all(db, data)
+
+
+@admin_router.post("/ai/execute-device-command")
+def ai_execute_device_command(
+    body: ExecuteDeviceCommandBridgeRequest,
+    _admin: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Execution bridge for autonomous LLM tool calls to dispatch MQTT device commands."""
+    return execute_device_command(
+        db=db,
+        tool_call=ExecuteDeviceCommandToolCall(
+            device_id=body.device_id,
+            action=body.action,
+            parameters=body.parameters,
+        ),
+        prompt_context=body.prompt_context,
+    )
 
 
 @admin_router.get("/events")
