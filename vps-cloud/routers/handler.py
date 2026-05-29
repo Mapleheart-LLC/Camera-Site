@@ -5827,6 +5827,8 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
         if auth_header.lower().startswith("bearer "):
             provided_secret = auth_header[7:].strip()
         if expected and not secrets.compare_digest(provided_secret, expected):
+            remote_addr = websocket.client.host if websocket.client else "unknown"
+            logger.warning("Rejected /ws/ai-warden from %s: invalid secret", remote_addr)
             await websocket.close(code=WS_CLOSE_AUTH_FAILED)
             return
 
@@ -5878,7 +5880,12 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
 
                 target_device_id = _extract_target_device_id(payload)
                 if not target_device_id:
-                    await websocket.send_json({"type": "error", "detail": "target device_id is required."})
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "detail": "device_id (or deviceId/target_device/targetDevice) is required.",
+                        }
+                    )
                     continue
 
                 _mqtt_client.start(db)
@@ -5895,7 +5902,7 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
                     await websocket.send_json(
                         {
                             "type": "error",
-                            "detail": f"Failed to dispatch command for {target_device_id}.",
+                            "detail": f"MQTT publish failed for device {target_device_id}.",
                         }
                     )
                     continue
