@@ -1496,7 +1496,11 @@ _VALID_TPE_ACTIONS = {
 
 
 _SENSITIVE_AI_ACTIONS = {"LOCK_DEVICE", "PAVLOK_COMMAND", "LOVENSE_COMMAND"}
-_ALLOWED_TOOL_PARAMETER_KEYS = set(TpePushRequest.__fields__.keys()) - {"action", "device_id"}
+_TPE_PUSH_MODEL_FIELDS = (
+    set(getattr(TpePushRequest, "model_fields", {}).keys())
+    or set(getattr(TpePushRequest, "__fields__", {}).keys())
+)
+_ALLOWED_TOOL_PARAMETER_KEYS = _TPE_PUSH_MODEL_FIELDS - {"action", "device_id"}
 
 
 class ExecuteDeviceCommandToolCall(BaseModel):
@@ -1505,14 +1509,14 @@ class ExecuteDeviceCommandToolCall(BaseModel):
     parameters: Optional[Dict[str, str]] = None
 
     @validator("device_id")
-    def _validate_device_id(cls, value: str) -> str:
+    def validate_device_id(cls, value: str) -> str:
         device_id = (value or "").strip()
         if not device_id:
             raise ValueError("device_id is required.")
         return device_id
 
     @validator("action")
-    def _validate_action(cls, value: str) -> str:
+    def validate_action(cls, value: str) -> str:
         action = (value or "").strip()
         if action not in _VALID_TPE_ACTIONS:
             raise ValueError(f"Unknown action '{action}'.")
@@ -1600,7 +1604,8 @@ def execute_device_command(
             status_code=400,
             detail=(
                 "Unsupported parameters for execute_device_command: "
-                f"{unsupported_parameters}"
+                f"{unsupported_parameters}. "
+                f"Allowed parameter keys: {sorted(_ALLOWED_TOOL_PARAMETER_KEYS)}"
             ),
         )
 
