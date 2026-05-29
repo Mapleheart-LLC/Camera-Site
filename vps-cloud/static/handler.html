@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>ðŸ¾ Handler Panel</title>
+  <title>Handler Control Panel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
@@ -20,7 +21,7 @@
       min-height: 100vh;
     }
 
-    /* â”€â”€ Login panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Login panel ──────────────────────────────────── */
     #login-panel {
       display: flex;
       align-items: center;
@@ -60,7 +61,7 @@
     .btn-primary:active { transform: scale(.97); }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* â”€â”€ Handler shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Handler shell ────────────────────────────────── */
     #handler-panel { display: none; min-height: 100vh; }
 
     .handler-topbar {
@@ -102,7 +103,7 @@
     }
     #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
-    /* â”€â”€ Kennel overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Kennel overview ──────────────────────────────── */
     #kennel-overview { padding: 1.75rem 2rem; }
 
     .kennel-overview-heading {
@@ -241,11 +242,11 @@
     }
     .kennel-card:hover .kc-cta { opacity: 1; }
 
-    /* â”€â”€ Puppy detail wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Puppy detail wrapper ─────────────────────────── */
     #puppy-detail { display: none; }
     .handler-layout { display: flex; min-height: calc(100vh - 56px); }
 
-    /* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Sidebar ──────────────────────────────────────── */
     .sidebar {
       width: 220px; flex-shrink: 0;
       background: #1c1c1c; border-right: 1px solid #3d2a2e;
@@ -293,7 +294,7 @@
     .battery-bar.warn  { background: #fbbf24; }
     .battery-bar.crit  { background: #f87171; }
 
-    /* â”€â”€ Main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Main content ─────────────────────────────────── */
     .handler-main { flex: 1; padding: 1.75rem 2rem; min-width: 0; }
 
     .section-heading {
@@ -303,7 +304,7 @@
     .handler-section { display: none; }
     .handler-section.active { display: block; }
 
-    /* â”€â”€ Stat tiles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Stat tiles ───────────────────────────────────── */
     .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
     .stat-tile {
       background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
@@ -314,14 +315,14 @@
     .stat-tile .stat-label { font-size: .72rem; color: #9e7e82; margin-top: .35rem; text-transform: uppercase; letter-spacing: .05em; }
     .stat-tile .stat-sub   { font-size: .75rem; color: #c49a9f; margin-top: .2rem; }
 
-    /* â”€â”€ Status badges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Status badges ────────────────────────────────── */
     .badge { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
     .badge-ok    { background: rgba(74,222,128,.12); color: #4ade80; border: 1px solid #4ade80; }
     .badge-warn  { background: rgba(251,191,36,.12); color: #fbbf24; border: 1px solid #fbbf24; }
     .badge-error { background: rgba(248,113,113,.12); color: #f87171; border: 1px solid #f87171; }
     .badge-off   { background: rgba(156,163,175,.1);  color: #9ca3af; border: 1px solid #9ca3af; }
 
-    /* â”€â”€ Alert banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Alert banner ─────────────────────────────────── */
     #ai-alert-banner {
       display: none; align-items: center; gap: .75rem;
       background: rgba(248,113,113,.12); border: 1px solid #f87171;
@@ -330,7 +331,7 @@
     }
     #ai-alert-banner.visible { display: flex; }
 
-    /* â”€â”€ Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Card ─────────────────────────────────────────── */
     .card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
     .card-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -339,7 +340,7 @@
     .card-header h2 { font-size: .88rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .06em; }
     .card-body { padding: 1.25rem; }
 
-    /* â”€â”€ Detail map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Detail map ───────────────────────────────────── */
     #map {
       width: 100%; height: 420px; border-radius: 10px;
       border: 1px solid #3d2a2e; background: #1a1a1a;
@@ -351,7 +352,7 @@
     }
     #map-coords { margin-top: .75rem; font-size: .82rem; color: #9e7e82; font-family: monospace; }
 
-    /* â”€â”€ Quick-action grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Quick-action grid ────────────────────────────── */
     .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
     .action-card {
       background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 12px;
@@ -372,7 +373,7 @@
     .btn-action.danger-action:hover:not(:disabled) { background: #f87171; color: #1a1a1a; }
     .ac-result { margin-top: .55rem; font-size: .77rem; color: #9e7e82; min-height: 1em; }
 
-    /* â”€â”€ Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Tables ───────────────────────────────────────── */
     .admin-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
     .admin-table th { text-align: left; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; padding: .6rem .85rem; border-bottom: 1px solid #3d2a2e; }
     .admin-table td { padding: .65rem .85rem; border-bottom: 1px solid #2a1e20; vertical-align: middle; }
@@ -381,7 +382,7 @@
     .empty-row td { color: #5a3a3e; text-align: center; padding: 1.5rem; }
     .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
 
-    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast ────────────────────────────────────────── */
     .toast {
       position: fixed; bottom: 1.5rem; right: 1.5rem;
       background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px;
@@ -392,7 +393,7 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
-    /* â”€â”€ Live Listen button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Live Listen button ───────────────────────────── */
     .btn-live-listen {
       width: 100%; padding: .6rem 1rem; border-radius: 8px;
       font-family: inherit; font-size: .9rem; font-weight: 700;
@@ -416,7 +417,7 @@
       50%       { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
     }
 
-    /* â”€â”€ Screen Share â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Screen Share ─────────────────────────────────── */
     .btn-screen-share {
       width: 100%; padding: .6rem 1rem; border-radius: 8px;
       font-family: inherit; font-size: .9rem; font-weight: 700;
@@ -443,7 +444,7 @@
       color: #5a3a3e; font-size: .9rem; font-weight: 700;
     }
 
-    /* â”€â”€ Commands section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Commands section ─────────────────────────────── */
     .cmd-group {
       background: #202020; border: 1px solid #3d2a2e; border-radius: 12px;
       margin-bottom: .85rem; overflow: hidden;
@@ -536,8 +537,8 @@
       user-select: none;
     }
     .cmd-group summary::-webkit-details-marker { display: none; }
-    .cmd-group summary::after { content: 'â–¼'; margin-left: auto; font-size: .65rem; color: #5a3a3e; }
-    .cmd-group[open] summary::after { content: 'â–²'; }
+    .cmd-group summary::after { content: '▼'; margin-left: auto; font-size: .65rem; color: #5a3a3e; }
+    .cmd-group[open] summary::after { content: '▲'; }
     .cmd-group[open] summary { border-bottom-color: #3d2a2e; }
     .cmd-group-body { padding: .6rem 1.1rem; }
     .cmd-row {
@@ -577,7 +578,7 @@
     .btn-cmd.danger:hover { background: #f87171; color: #1a1a1a; }
     .cmd-result { font-size: .72rem; color: #9e7e82; min-width: 60px; flex-shrink: 0; padding-top: .3rem; }
 
-    /* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Responsive ───────────────────────────────────── */
     @media (max-width: 768px) {
       #kennel-overview { padding: 1rem; }
       #kennel-grid { grid-template-columns: 1fr 1fr; }
@@ -593,13 +594,14 @@
       #kennel-grid { grid-template-columns: 1fr; }
     }
   </style>
+  <link rel="stylesheet" href="/static/handler-redesign.css" />
 </head>
 <body>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <!-- ══════════════════════ LOGIN ══════════════════════ -->
   <div id="login-panel">
     <div id="login-card">
-      <h1>ðŸ¾ Handler Panel</h1>
+      <h1>Handler Control Panel</h1>
       <p class="subtitle">Sign in with your admin credentials to access the Handler dashboard.</p>
       <div class="field-group">
         <label for="hp-username">Username</label>
@@ -607,36 +609,36 @@
       </div>
       <div class="field-group">
         <label for="hp-password">Password</label>
-        <input id="hp-password" type="password" autocomplete="current-password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+        <input id="hp-password" type="password" autocomplete="current-password" placeholder="••••••••" />
       </div>
       <p id="login-error" role="alert" aria-live="polite"></p>
-      <button id="login-btn" class="btn-primary">ðŸ¾ Enter Handler Panel</button>
+      <button id="login-btn" class="btn-primary">Enter Handler Panel</button>
     </div>
   </div>
 
-  <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HANDLER PANEL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+  <!-- ══════════════════════ HANDLER PANEL ══════════════════════ -->
   <div id="handler-panel">
 
     <!-- Topbar -->
     <div class="handler-topbar">
-      <span class="topbar-title">ðŸ¾ Handler Panel</span>
+      <span class="topbar-title">Handler Control</span>
       <span class="topbar-badge">ADMIN</span>
-      <button id="back-to-kennel-btn">â† Back to Kennel</button>
+      <button id="back-to-kennel-btn">← Back to Kennel</button>
       <div id="ws-status-dot" title="WebSocket connection status"></div>
-      <span id="ws-status-label">Connectingâ€¦</span>
+      <span id="ws-status-label">Connecting…</span>
       <button id="logout-btn">Logout</button>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• KENNEL OVERVIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
     <div id="kennel-overview">
-      <h2 class="kennel-overview-heading">ðŸ  Kennel Overview</h2>
+      <h2 class="kennel-overview-heading">🏠 Kennel Overview</h2>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.85rem">
         <button class="btn-action" id="open-global-controls-btn" style="width:auto">Open Global Controls</button>
       </div>
 
       <div class="card pairing-card">
         <div class="card-header">
-          <h2>âœ¨ Automatic Enrollment</h2>
+          <h2>✨ Automatic Enrollment</h2>
         </div>
         <div class="card-body">
           <div class="pairing-copy">
@@ -654,130 +656,130 @@
       <!-- Master Leaflet map showing all device pins -->
       <div id="master-map-wrap">
         <div id="master-map-header">
-          <h2>ðŸ—ºï¸ All Device Locations</h2>
+          <h2>🗺️ All Device Locations</h2>
         </div>
-        <div id="master-map-placeholder">No GPS data yet â€” waiting for device check-ins.</div>
+        <div id="master-map-placeholder">No GPS data yet — waiting for device check-ins.</div>
         <div id="master-map"></div>
       </div>
 
       <!-- Device summary card grid -->
-      <div id="kennel-grid-heading">ðŸ“± Connected Devices</div>
+      <div id="kennel-grid-heading">📱 Connected Devices</div>
       <div id="kennel-grid">
         <p id="kennel-empty">No devices have checked in yet.</p>
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PUPPY DETAIL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ═══════════════ PUPPY DETAIL ═══════════════ -->
     <div id="puppy-detail">
       <div class="handler-layout">
 
-        <!-- â”€â”€ Sidebar â”€â”€ -->
+        <!-- ── Sidebar ── -->
         <aside class="sidebar" id="sidebar">
 
           <!-- Viewed-device quick-status -->
           <div class="sidebar-status">
-            <div class="sidebar-device-name" id="sb-device-name">â€”</div>
+            <div class="sidebar-device-name" id="sb-device-name">—</div>
             <div class="ss-row">
-              <span class="ss-label">ðŸ”‹ Battery</span>
-              <span class="ss-val" id="sb-battery">â€”</span>
+              <span class="ss-label">🔋 Battery</span>
+              <span class="ss-val" id="sb-battery">—</span>
             </div>
             <div class="battery-bar-wrap">
               <div class="battery-bar" id="sb-bar" style="width:0%"></div>
             </div>
             <div class="ss-row">
-              <span class="ss-label">ðŸ“¡ Status</span>
-              <span class="ss-val" id="sb-online">â€”</span>
+              <span class="ss-label">📡 Status</span>
+              <span class="ss-val" id="sb-online">—</span>
             </div>
             <div class="ss-row">
-              <span class="ss-label">ðŸ”’ Lock</span>
-              <span class="ss-val" id="sb-lock">â€”</span>
+              <span class="ss-label">🔒 Lock</span>
+              <span class="ss-val" id="sb-lock">—</span>
             </div>
             <div class="ss-row">
-              <span class="ss-label">ðŸ¤– AI Filter</span>
-              <span class="ss-val" id="sb-ai">â€”</span>
+              <span class="ss-label">🤖 AI Filter</span>
+              <span class="ss-val" id="sb-ai">—</span>
             </div>
           </div>
 
           <!-- Live Listen toggle (always visible in Puppy Detail) -->
           <div style="margin:.75rem 1.25rem 0;padding-top:.75rem;border-top:1px solid #3d2a2e">
             <button class="btn-live-listen" id="btn-live-listen-sidebar" style="font-size:.82rem">
-              ðŸŽ™ï¸ Live Listen
+              🎙️ Live Listen
             </button>
             <div id="res-live-listen-sidebar" style="font-size:.7rem;color:#9e7e82;margin-top:.35rem;min-height:1em"></div>
           </div>
 
           <div class="sidebar-section-label">Navigation</div>
-          <button class="nav-item active" data-target="sec-overview">ðŸ“Š Overview</button>
-          <button class="nav-item" data-target="sec-vitals">ðŸ’“ Vitals</button>
-          <button class="nav-item" data-target="sec-map">ðŸ—ºï¸ GPS Map</button>
-          <button class="nav-item" data-target="sec-actions">âš¡ Quick Actions</button>
-          <button class="nav-item" data-target="sec-questions">ðŸ’¬ Questions</button>
-          <button class="nav-item" data-target="sec-limbo">ðŸ«§ Limbo Queue</button>
-          <button class="nav-item" data-target="sec-booking">ðŸ“… Booking Intake</button>
-          <button class="nav-item" data-target="sec-mail">ðŸ“¬ Puppy Mail</button>
-          <button class="nav-item" data-target="sec-commands">ðŸ“¡ Commands</button>
-          <button class="nav-item" data-target="sec-logs">ðŸ“œ Logs</button>
-          <button class="nav-item" data-target="sec-screenshare">ðŸ“º Screen Share</button>
+          <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
+          <button class="nav-item" data-target="sec-vitals">💓 Vitals</button>
+          <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
+          <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
+          <button class="nav-item" data-target="sec-questions">💬 Questions</button>
+          <button class="nav-item" data-target="sec-limbo">🫧 Limbo Queue</button>
+          <button class="nav-item" data-target="sec-booking">📅 Booking Intake</button>
+          <button class="nav-item" data-target="sec-mail">📬 Puppy Mail</button>
+          <button class="nav-item" data-target="sec-commands">📡 Commands</button>
+          <button class="nav-item" data-target="sec-logs">📜 Logs</button>
+          <button class="nav-item" data-target="sec-screenshare">📺 Screen Share</button>
         </aside>
 
-        <!-- â”€â”€ Main â”€â”€ -->
+        <!-- ── Main ── -->
         <main class="handler-main">
 
-          <!-- â”€â”€â”€ AI Alert banner â”€â”€â”€ -->
+          <!-- ─── AI Alert banner ─── -->
           <div id="ai-alert-banner" role="alert">
-            âš ï¸ <span id="ai-alert-text">AI filter triggered</span>
+            ⚠️ <span id="ai-alert-text">AI filter triggered</span>
           </div>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• OVERVIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ OVERVIEW ═══════════════ -->
           <section id="sec-overview" class="handler-section active">
-            <h2 class="section-heading">ðŸ“Š Overview</h2>
+            <h2 class="section-heading">📊 Overview</h2>
 
             <div class="stats-row">
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ”‹</div>
-                <div class="stat-value" id="ov-battery">â€”</div>
+                <div class="stat-icon">🔋</div>
+                <div class="stat-value" id="ov-battery">—</div>
                 <div class="stat-label">Battery</div>
                 <div class="stat-sub" id="ov-battery-sub"></div>
               </div>
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ“</div>
-                <div class="stat-value" id="ov-gps">â€”</div>
+                <div class="stat-icon">📍</div>
+                <div class="stat-value" id="ov-gps">—</div>
                 <div class="stat-label">GPS Fix</div>
                 <div class="stat-sub" id="ov-gps-sub"></div>
               </div>
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ¤–</div>
-                <div class="stat-value" id="ov-ai">â€”</div>
+                <div class="stat-icon">🤖</div>
+                <div class="stat-value" id="ov-ai">—</div>
                 <div class="stat-label">AI Filter</div>
                 <div class="stat-sub" id="ov-ai-sub"></div>
               </div>
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ“¡</div>
-                <div class="stat-value" id="ov-online">â€”</div>
+                <div class="stat-icon">📡</div>
+                <div class="stat-value" id="ov-online">—</div>
                 <div class="stat-label">Device</div>
                 <div class="stat-sub" id="ov-online-sub"></div>
               </div>
             </div>
 
             <div class="card">
-              <div class="card-header"><h2>ðŸ“‹ Device Details</h2></div>
+              <div class="card-header"><h2>📋 Device Details</h2></div>
               <div class="card-body">
                 <table class="admin-table">
                   <tbody>
-                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700;width:160px">Last Seen</td><td class="ts-cell" id="det-last-seen">â€”</td></tr>
-                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Coordinates</td><td class="ts-cell" id="det-coords">â€”</td></tr>
-                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">â€”</td></tr>
-                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">â€”</td></tr>
-                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">â€”</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700;width:160px">Last Seen</td><td class="ts-cell" id="det-last-seen">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Coordinates</td><td class="ts-cell" id="det-coords">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VITALS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ VITALS ═══════════════ -->
           <section id="sec-vitals" class="handler-section">
-            <h2 class="section-heading">ðŸ’“ Vitals</h2>
+            <h2 class="section-heading">💓 Vitals</h2>
 
             <!-- Alert status indicator -->
             <div id="vitals-alert-banner" role="alert" style="
@@ -786,25 +788,25 @@
               border-radius:10px; padding:.75rem 1rem; margin-bottom:1rem;
               font-weight:700; font-size:.95rem; color:#f87171;
             ">
-              <span id="vitals-alert-icon">âš ï¸</span>
+              <span id="vitals-alert-icon">⚠️</span>
               <span id="vitals-alert-text">Alert active</span>
             </div>
 
             <!-- Live stats row -->
             <div class="stats-row" style="margin-bottom:1rem">
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ’“</div>
-                <div class="stat-value" id="vit-bpm">â€”</div>
+                <div class="stat-icon">💓</div>
+                <div class="stat-value" id="vit-bpm">—</div>
                 <div class="stat-label">Current BPM</div>
               </div>
               <div class="stat-tile">
-                <div class="stat-icon">ðŸ“‰</div>
-                <div class="stat-value" id="vit-baseline">â€”</div>
+                <div class="stat-icon">📉</div>
+                <div class="stat-value" id="vit-baseline">—</div>
                 <div class="stat-label">Resting Baseline</div>
               </div>
               <div class="stat-tile">
-                <div class="stat-icon">ðŸš¶</div>
-                <div class="stat-value" id="vit-status">â€”</div>
+                <div class="stat-icon">🚶</div>
+                <div class="stat-value" id="vit-status">—</div>
                 <div class="stat-label">Alert Status</div>
               </div>
             </div>
@@ -812,7 +814,7 @@
             <!-- BPM chart -->
             <div class="card">
               <div class="card-header">
-                <h2>Heart Rate â€” Last 60 Minutes</h2>
+                <h2>Heart Rate — Last 60 Minutes</h2>
                 <button class="btn-action" id="vitals-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
               </div>
               <div class="card-body">
@@ -824,70 +826,70 @@
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• GPS MAP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ GPS MAP ═══════════════ -->
           <section id="sec-map" class="handler-section">
-            <h2 class="section-heading">ðŸ—ºï¸ GPS Map</h2>
+            <h2 class="section-heading">🗺️ GPS Map</h2>
             <div class="card">
               <div class="card-header">
                 <h2>Device Location</h2>
                 <button class="btn-action" id="map-refresh-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Refresh</button>
               </div>
               <div class="card-body">
-                <div id="map-placeholder">No GPS fix yet â€” waiting for device data.</div>
+                <div id="map-placeholder">No GPS fix yet — waiting for device data.</div>
                 <div id="map" style="display:none"></div>
                 <div id="map-coords"></div>
               </div>
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• QUICK ACTIONS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ QUICK ACTIONS ═══════════════ -->
           <section id="sec-actions" class="handler-section">
-            <h2 class="section-heading">âš¡ Quick Actions</h2>
+            <h2 class="section-heading">⚡ Quick Actions</h2>
             <div class="action-grid">
               <div class="action-card">
-                <div class="ac-icon">ðŸ”’</div>
+                <div class="ac-icon">🔒</div>
                 <div class="ac-label">Lock Device</div>
                 <button class="btn-action danger-action" id="btn-lock">Send Lock Command</button>
                 <div class="ac-result" id="res-lock"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸ’—</div>
+                <div class="ac-icon">💗</div>
                 <div class="ac-label">Lovense Toy</div>
                 <button class="btn-action" id="btn-lovense">Vibrate (Full)</button>
                 <div class="ac-result" id="res-lovense"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">âš¡</div>
+                <div class="ac-icon">⚡</div>
                 <div class="ac-label">Pavlok</div>
                 <button class="btn-action" id="btn-pavlok">Send Shock</button>
                 <div class="ac-result" id="res-pavlok"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸŒ€</div>
+                <div class="ac-icon">🌀</div>
                 <div class="ac-label">Pavlok</div>
                 <button class="btn-action" id="btn-pavlok">Vibrate (Full)</button>
                 <div class="ac-result" id="res-pavlok"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸ“‹</div>
+                <div class="ac-icon">📋</div>
                 <div class="ac-label">Check-in</div>
                 <button class="btn-action" id="btn-checkin">Request Check-in</button>
                 <div class="ac-result" id="res-checkin"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸŽ™ï¸</div>
+                <div class="ac-icon">🎙️</div>
                 <div class="ac-label">Live Listen</div>
-                <button class="btn-live-listen" id="btn-live-listen-actions">ðŸŽ™ï¸ Live Listen</button>
+                <button class="btn-live-listen" id="btn-live-listen-actions">🎙️ Live Listen</button>
                 <div class="ac-result" id="res-live-listen-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸ“º</div>
+                <div class="ac-icon">📺</div>
                 <div class="ac-label">Screen Share</div>
-                <button class="btn-screen-share" id="btn-screen-share-actions">ðŸ“º Start Screen Share</button>
+                <button class="btn-screen-share" id="btn-screen-share-actions">📺 Start Screen Share</button>
                 <div class="ac-result" id="res-screen-share-actions" style="font-size:.77rem;color:#9e7e82;margin-top:.55rem;min-height:1em"></div>
               </div>
               <div class="action-card">
-                <div class="ac-icon">ðŸ—‘ï¸</div>
+                <div class="ac-icon">🗑️</div>
                 <div class="ac-label">Delete Device</div>
                 <button class="btn-action danger-action" id="btn-delete-device" aria-label="Delete current device permanently">Delete Device</button>
                 <div class="ac-result" id="res-delete-device"></div>
@@ -895,9 +897,9 @@
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• QUESTIONS + PUBLIC STATUS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ QUESTIONS + PUBLIC STATUS ═══════════════ -->
           <section id="sec-questions" class="handler-section">
-            <h2 class="section-heading">ðŸ’¬ Questions + Public Status</h2>
+            <h2 class="section-heading">💬 Questions + Public Status</h2>
 
             <div class="card">
               <div class="card-header">
@@ -982,9 +984,9 @@
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LIMBO QUEUE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ LIMBO QUEUE ═══════════════ -->
           <section id="sec-limbo" class="handler-section">
-            <h2 class="section-heading">ðŸ«§ Limbo Queue</h2>
+            <h2 class="section-heading">🫧 Limbo Queue</h2>
 
             <div class="card">
               <div class="card-header">
@@ -1033,22 +1035,22 @@
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• BOOKING INTAKE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ BOOKING INTAKE ═══════════════ -->
           <section id="sec-booking" class="handler-section">
-            <h2 class="section-heading">ðŸ“… Booking Intake</h2>
+            <h2 class="section-heading">📅 Booking Intake</h2>
 
             <div class="card">
               <div class="card-header">
                 <h2>Booking Queue</h2>
-                <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-                  <select id="booking-status-filter" style="max-width:160px">
+                <div class="section-toolbar">
+                  <select id="booking-status-filter" class="section-filter">
                     <option value="all">All</option>
                     <option value="new">New</option>
                     <option value="qualified">Qualified</option>
                     <option value="scheduled">Scheduled</option>
                     <option value="done">Done</option>
                   </select>
-                  <button class="btn-action" id="booking-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+                  <button class="btn-action section-refresh-btn" id="booking-reload-btn">Reload</button>
                 </div>
               </div>
               <div class="card-body" style="padding:0">
@@ -1062,20 +1064,20 @@
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PUPPY MAIL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ PUPPY MAIL ═══════════════ -->
           <section id="sec-mail" class="handler-section">
-            <h2 class="section-heading">ðŸ“¬ Puppy Mail</h2>
+            <h2 class="section-heading">📬 Puppy Mail</h2>
 
             <div class="card">
               <div class="card-header">
                 <h2>Threads</h2>
-                <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-                  <select id="mail-status-filter" style="max-width:160px">
+                <div class="section-toolbar">
+                  <select id="mail-status-filter" class="section-filter">
                     <option value="all">All</option>
                     <option value="open">Open</option>
                     <option value="resolved">Resolved</option>
                   </select>
-                  <button class="btn-action" id="mail-reload-btn" style="width:auto;padding:.3rem .8rem;font-size:.8rem">Reload</button>
+                  <button class="btn-action section-refresh-btn" id="mail-reload-btn">Reload</button>
                 </div>
               </div>
               <div class="card-body" style="padding:0">
@@ -1090,25 +1092,25 @@
 
             <div class="card">
               <div class="card-header"><h2>Selected Thread</h2></div>
-              <div class="card-body">
-                <div id="mail-thread-meta" style="font-size:.84rem;color:#9e7e82;min-height:1.2em">Select a thread to view messages.</div>
-                <div id="mail-thread-messages" style="margin-top:.8rem;display:grid;gap:.55rem"></div>
-                <div style="margin-top:1rem;display:grid;gap:.6rem">
-                  <textarea id="mail-reply-input" placeholder="Reply as m0chii's Handler..." style="min-height:72px"></textarea>
-                  <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-                    <button class="btn-action" id="mail-reply-btn" style="width:auto">Send Reply</button>
-                    <button class="btn-action" id="mail-mark-resolved-btn" style="width:auto">Mark Resolved</button>
-                    <button class="btn-action" id="mail-reopen-btn" style="width:auto">Reopen</button>
-                    <span id="mail-thread-result" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></span>
+              <div class="card-body mail-thread-card-body">
+                <div id="mail-thread-meta" class="mail-thread-meta">Select a thread to view messages.</div>
+                <div id="mail-thread-messages" class="mail-thread-messages"></div>
+                <div class="mail-reply-wrap">
+                  <textarea id="mail-reply-input" placeholder="Reply as m0chii's Handler..."></textarea>
+                  <div class="mail-reply-row">
+                    <button class="btn-action" id="mail-reply-btn">Send Reply</button>
+                    <button class="btn-action" id="mail-mark-resolved-btn">Mark Resolved</button>
+                    <button class="btn-action" id="mail-reopen-btn">Reopen</button>
+                    <span id="mail-thread-result" class="mail-thread-result"></span>
                   </div>
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• REMOTE COMMANDS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ REMOTE COMMANDS ═══════════════ -->
           <section id="sec-commands" class="handler-section">
-            <h2 class="section-heading">ðŸ“¡ Remote Commands</h2>
+            <h2 class="section-heading">📡 Remote Commands</h2>
 
             <div class="cmd-toolbar" aria-label="Command center tools">
               <div class="cmd-toolbar-top">
@@ -1136,9 +1138,9 @@
               <div class="cmd-toolbar-result" id="cmd-toolbar-result"></div>
             </div>
 
-            <!-- â”€â”€ Notifications & Messaging â”€â”€ -->
+            <!-- ── Notifications & Messaging ── -->
             <details class="cmd-group" open>
-              <summary>ðŸ“£ Notifications &amp; Messaging</summary>
+              <summary>📣 Notifications &amp; Messaging</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Send Notification</span>
@@ -1182,14 +1184,14 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Content Filter / NudeNet â”€â”€ -->
+            <!-- ── Content Filter / NudeNet ── -->
             <details class="cmd-group">
-              <summary>ðŸ” Content Filter / NudeNet</summary>
+              <summary>🔍 Content Filter / NudeNet</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Update Settings</span>
                   <div class="cmd-inputs">
-                    <input id="cmd-cf-thresh" placeholder="Threshold (0â€“1)" style="max-width:130px" />
+                    <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" />
                     <select id="cmd-cf-strict"><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
                     <select id="cmd-cf-nudenet"><option value="">nudenet?</option><option value="true">nudenet: on</option><option value="false">nudenet: off</option></select>
                     <textarea id="cmd-cf-classes" placeholder='blocked_classes JSON e.g. ["EXPOSED_BREAST_F"]' style="min-height:40px"></textarea>
@@ -1200,9 +1202,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Tone & Vocabulary â”€â”€ -->
+            <!-- ── Tone & Vocabulary ── -->
             <details class="cmd-group">
-              <summary>ðŸ—£ï¸ Tone &amp; Vocabulary Enforcement</summary>
+              <summary>🗣️ Tone &amp; Vocabulary Enforcement</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Tone Compliance</span>
@@ -1231,9 +1233,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Tasks â”€â”€ -->
+            <!-- ── Tasks ── -->
             <details class="cmd-group">
-              <summary>ðŸ“‹ Tasks</summary>
+              <summary>📋 Tasks</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Assign Task</span>
@@ -1248,9 +1250,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Rituals â”€â”€ -->
+            <!-- ── Rituals ── -->
             <details class="cmd-group">
-              <summary>ðŸŒ¹ Rituals</summary>
+              <summary>🌹 Rituals</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Rituals</span>
@@ -1272,9 +1274,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Honorifics â”€â”€ -->
+            <!-- ── Honorifics ── -->
             <details class="cmd-group">
-              <summary>ðŸ·ï¸ Honorifics</summary>
+              <summary>🏷️ Honorifics</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Honorific</span>
@@ -1295,9 +1297,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Permission to Speak â”€â”€ -->
+            <!-- ── Permission to Speak ── -->
             <details class="cmd-group">
-              <summary>ðŸ—£ï¸ Permission to Speak (PTS)</summary>
+              <summary>🗣️ Permission to Speak (PTS)</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">PTS Enabled</span>
@@ -1318,9 +1320,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ App Gating / Geofencing â”€â”€ -->
+            <!-- ── App Gating / Geofencing ── -->
             <details class="cmd-group">
-              <summary>ðŸš§ App Gating / Geofencing</summary>
+              <summary>🚧 App Gating / Geofencing</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">App Gating Enabled</span>
@@ -1366,9 +1368,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Affirmations & Mantras â”€â”€ -->
+            <!-- ── Affirmations & Mantras ── -->
             <details class="cmd-group">
-              <summary>â° Affirmations &amp; Mantras</summary>
+              <summary>⏰ Affirmations &amp; Mantras</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Affirmations</span>
@@ -1405,9 +1407,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Consequences â”€â”€ -->
+            <!-- ── Consequences ── -->
             <details class="cmd-group">
-              <summary>âš–ï¸ Consequences</summary>
+              <summary>⚖️ Consequences</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Start Corner Time</span>
@@ -1427,9 +1429,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Sub Status â”€â”€ -->
+            <!-- ── Sub Status ── -->
             <details class="cmd-group">
-              <summary>ðŸ”µ Sub Status</summary>
+              <summary>🔵 Sub Status</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Sub Status</span>
@@ -1442,9 +1444,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Handler / AI Settings â”€â”€ -->
+            <!-- ── Handler / AI Settings ── -->
             <details class="cmd-group">
-              <summary>ðŸ¤– Handler / AI Chat Settings</summary>
+              <summary>🤖 Handler / AI Chat Settings</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">System Prompt</span>
@@ -1481,15 +1483,15 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Lovense Toy Control â”€â”€ -->
+            <!-- ── Lovense Toy Control ── -->
             <details class="cmd-group">
-              <summary>ðŸ’™ Lovense Toy Control</summary>
+              <summary>💙 Lovense Toy Control</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Toy Command</span>
                   <div class="cmd-inputs">
                     <select id="cmd-lovense-cmd"><option value="vibrate">Vibrate</option><option value="rotate">Rotate</option><option value="pump">Pump</option><option value="stop">Stop</option><option value="battery">Battery</option></select>
-                    <input id="cmd-lovense-level" type="number" placeholder="Level (0â€“20)" min="0" max="20" style="max-width:130px" />
+                    <input id="cmd-lovense-level" type="number" placeholder="Level (0–20)" min="0" max="20" style="max-width:130px" />
                   </div>
                   <button class="btn-cmd" onclick="sendFcm('LOVENSE_COMMAND',{toy_command:v('cmd-lovense-cmd'),toy_level:v('cmd-lovense-level')},'res-cmd-lovense')">Send</button>
                   <span class="cmd-result" id="res-cmd-lovense"></span>
@@ -1505,15 +1507,15 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Pavlok Control â”€â”€ -->
+            <!-- ── Pavlok Control ── -->
             <details class="cmd-group">
-              <summary>âš¡ Pavlok Control</summary>
+              <summary>⚡ Pavlok Control</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Pavlok Command</span>
                   <div class="cmd-inputs">
                     <select id="cmd-pavlok-cmd"><option value="zap">Zap</option><option value="vibrate">Vibrate</option><option value="beep">Beep</option><option value="stop">Stop</option></select>
-                    <input id="cmd-pavlok-intensity" type="number" placeholder="Intensity (0â€“255)" min="0" max="255" style="max-width:150px" />
+                    <input id="cmd-pavlok-intensity" type="number" placeholder="Intensity (0–255)" min="0" max="255" style="max-width:150px" />
                     <input id="cmd-pavlok-dur" type="number" placeholder="Duration (ms)" min="0" max="25500" style="max-width:130px" />
                   </div>
                   <button class="btn-cmd danger" onclick="sendFcm('PAVLOK_COMMAND',{pavlok_cmd:v('cmd-pavlok-cmd'),pavlok_intensity:v('cmd-pavlok-intensity'),pavlok_duration_ms:v('cmd-pavlok-dur')},'res-cmd-pavlok')">Send</button>
@@ -1522,9 +1524,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ App Management â”€â”€ -->
+            <!-- ── App Management ── -->
             <details class="cmd-group">
-              <summary>ðŸ“± App Management</summary>
+              <summary>📱 App Management</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Open App</span>
@@ -1577,19 +1579,19 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Screen & Display â”€â”€ -->
+            <!-- ── Screen & Display ── -->
             <details class="cmd-group">
-              <summary>ðŸ–¥ï¸ Screen &amp; Display</summary>
+              <summary>🖥️ Screen &amp; Display</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Open URL</span>
-                  <div class="cmd-inputs"><input id="cmd-url" placeholder="https://â€¦" /></div>
+                  <div class="cmd-inputs"><input id="cmd-url" placeholder="https://…" /></div>
                   <button class="btn-cmd" onclick="sendFcm('OPEN_URL',{url:v('cmd-url')},'res-cmd-url')">Send</button>
                   <span class="cmd-result" id="res-cmd-url"></span>
                 </div>
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Brightness</span>
-                  <div class="cmd-inputs"><input id="cmd-brightness" type="number" placeholder="0â€“255" min="0" max="255" /></div>
+                  <div class="cmd-inputs"><input id="cmd-brightness" type="number" placeholder="0–255" min="0" max="255" /></div>
                   <button class="btn-cmd" onclick="sendFcm('SET_BRIGHTNESS',{value:v('cmd-brightness')},'res-cmd-brightness')">Send</button>
                   <span class="cmd-result" id="res-cmd-brightness"></span>
                 </div>
@@ -1649,15 +1651,15 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Audio & Sound â”€â”€ -->
+            <!-- ── Audio & Sound ── -->
             <details class="cmd-group">
-              <summary>ðŸ”Š Audio &amp; Sound</summary>
+              <summary>🔊 Audio &amp; Sound</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Volume</span>
                   <div class="cmd-inputs">
                     <select id="cmd-vol-stream"><option value="media">Media</option><option value="ring">Ring</option><option value="alarm">Alarm</option><option value="notification">Notification</option><option value="system">System</option><option value="call">Voice Call</option></select>
-                    <input id="cmd-vol-level" type="number" placeholder="Level (0â€“100)" min="0" max="100" />
+                    <input id="cmd-vol-level" type="number" placeholder="Level (0–100)" min="0" max="100" />
                   </div>
                   <button class="btn-cmd" onclick="sendFcm('SET_VOLUME',{stream:v('cmd-vol-stream'),level:v('cmd-vol-level')},'res-cmd-volume')">Send</button>
                   <span class="cmd-result" id="res-cmd-volume"></span>
@@ -1685,9 +1687,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Lock Screen & Access â”€â”€ -->
+            <!-- ── Lock Screen & Access ── -->
             <details class="cmd-group">
-              <summary>ðŸ”’ Lock Screen &amp; Access</summary>
+              <summary>🔒 Lock Screen &amp; Access</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Lock Device</span>
@@ -1704,9 +1706,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Network & Connectivity â”€â”€ -->
+            <!-- ── Network & Connectivity ── -->
             <details class="cmd-group">
-              <summary>ðŸŒ Network &amp; Connectivity</summary>
+              <summary>🌐 Network &amp; Connectivity</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Wi-Fi</span>
@@ -1752,9 +1754,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Camera & Sensors â”€â”€ -->
+            <!-- ── Camera & Sensors ── -->
             <details class="cmd-group">
-              <summary>ðŸ“· Camera &amp; Sensors</summary>
+              <summary>📷 Camera &amp; Sensors</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Take Screenshot</span>
@@ -1785,9 +1787,9 @@
               </div>
             </details>
 
-            <!-- â”€â”€ Device Settings â”€â”€ -->
+            <!-- ── Device Settings ── -->
             <details class="cmd-group">
-              <summary>âš™ï¸ Device Settings</summary>
+              <summary>⚙️ Device Settings</summary>
               <div class="cmd-group-body">
                 <div class="cmd-row">
                   <span class="cmd-row-label">Do Not Disturb</span>
@@ -1825,9 +1827,9 @@
 
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ LOGS ═══════════════ -->
           <section id="sec-logs" class="handler-section">
-            <h2 class="section-heading">ðŸ“œ Logs</h2>
+            <h2 class="section-heading">📜 Logs</h2>
             <div class="card">
               <div class="card-header">
                 <h2>Consequence Events</h2>
@@ -1837,7 +1839,7 @@
                 <table class="admin-table">
                   <thead><tr><th>Event</th><th>Reason</th><th>Received</th></tr></thead>
                   <tbody id="events-tbody">
-                    <tr class="empty-row"><td colspan="3">Loadingâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="3">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1848,27 +1850,31 @@
                 <table class="admin-table">
                   <thead><tr><th>Label</th><th>Score</th><th>Ratio</th><th>Received</th></tr></thead>
                   <tbody id="audits-tbody">
-                    <tr class="empty-row"><td colspan="4">Loadingâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="4">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
             </div>
           </section>
 
-          <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SCREEN SHARE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+          <!-- ═══════════════ SCREEN SHARE ═══════════════ -->
           <section id="sec-screenshare" class="handler-section">
-            <h2 class="section-heading">ðŸ“º Screen Share</h2>
+            <h2 class="section-heading">📺 Screen Share</h2>
             <div class="card">
               <div class="card-header">
                 <h2>Remote Device Screen</h2>
-                <button class="btn-screen-share" id="btn-screen-share-section" style="width:auto;padding:.35rem .9rem;font-size:.85rem">ðŸ“º Start Screen Share</button>
+                <div class="screen-share-approval-wrap">
+                  <span id="screen-share-approval-status" class="screen-share-approval-status">Public access pending handler approval.</span>
+                  <button class="btn-action" id="screen-share-approval-btn" style="width:auto;padding:.35rem .9rem;font-size:.8rem">Approve Public Screen Share</button>
+                </div>
+                <button class="btn-screen-share" id="btn-screen-share-section" style="width:auto;padding:.35rem .9rem;font-size:.85rem">📺 Start Screen Share</button>
               </div>
-              <div class="card-body">
+              <div class="card-body screenshare-card-body">
                 <div id="screen-share-video-wrap">
-                  <div id="screen-share-placeholder">No screen share active â€” click Start to begin.</div>
+                  <div id="screen-share-placeholder">No screen share active — click Start to begin.</div>
                   <video id="screen-share-video" autoplay playsinline aria-label="Remote device screen share"></video>
                 </div>
-                <div id="screen-share-status" style="font-size:.82rem;color:#9e7e82;min-height:1.2em"></div>
+                <div id="screen-share-status" class="screen-share-status"></div>
               </div>
             </div>
           </section>
@@ -1888,9 +1894,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
   <script>
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // STATE
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     const JWT_KEY = 'handler_panel_jwt';
     const AUTH_EXPIRED_ERROR = 'auth-expired';
@@ -1899,7 +1905,7 @@
 
     /**
      * device_id of the puppy currently shown in the detail panel.
-     * null â†’ kennel overview is the active view.
+     * null → kennel overview is the active view.
      */
     let viewingDeviceId = null;
 
@@ -1915,7 +1921,7 @@
     let _handlerNoAssignmentHint = null;
     const DEVICE_ONLINE_STALE_MS = 5 * 60 * 1000;
 
-    // â”€â”€ Credential storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Credential storage ─────────────────────────────
     function saveJwt(token)  { sessionStorage.setItem(JWT_KEY, token); }
     function getJwt()        { return sessionStorage.getItem(JWT_KEY); }
     function clearJwt()    { sessionStorage.removeItem(JWT_KEY); }
@@ -1924,7 +1930,7 @@
       return jwt ? { 'Authorization': 'Bearer ' + jwt } : {};
     }
 
-    // â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Toast ──────────────────────────────────────────
     let _toastTimer = null;
     function showToast(msg, isError = false) {
       const el = document.getElementById('toast');
@@ -1936,14 +1942,14 @@
       _toastTimer = setTimeout(function() { el.classList.remove('show'); }, 3200);
     }
 
-    // â”€â”€ HTML escape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── HTML escape ────────────────────────────────────
     function esc(s) {
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── API helpers ────────────────────────────────────
     async function apiGet(path) {
       const r = await fetch(path, { headers: authHeader() });
       if (r.status === 401) { showLoginPanel('Session expired.'); throw new Error(AUTH_EXPIRED_ERROR); }
@@ -1970,7 +1976,7 @@
       return r;
     }
 
-    // â”€â”€ Utility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Utility ───────────────────────────────────────
     function setText(id, val) {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
@@ -1994,9 +2000,9 @@
     }
 
     function battLevel(pct) {
-      if (pct >= 60) return 'ðŸŸ¢ Good';
-      if (pct >= 20) return 'ðŸŸ¡ Low';
-      return 'ðŸ”´ Critical';
+      if (pct >= 60) return '🟢 Good';
+      if (pct >= 20) return '🟡 Low';
+      return '🔴 Critical';
     }
 
     function deviceLabel(device) {
@@ -2013,7 +2019,7 @@
 
       codeEl.textContent = '------';
       expiryEl.textContent = '';
-      status.textContent = 'Generating one-time pairing codeâ€¦';
+      status.textContent = 'Generating one-time pairing code…';
       try {
         const r = await apiPost('/api/handler/tpe/pairing-code', {});
         const code = (r.pairing_code || '').toString();
@@ -2021,7 +2027,7 @@
         if (r.expires_at) {
           expiryEl.textContent = 'Expires: ' + fmtDate(r.expires_at);
         }
-        status.textContent = code ? 'Pairing code ready. Waiting for app to pair…' : 'Pairing code unavailable.';
+        status.textContent = code ? 'Pairing code ready. Waiting for app to pair�' : 'Pairing code unavailable.';
         schedulePairingCodeRefresh(r.expires_at);
         startPairingAutoDetect();
       } catch (e) {
@@ -2067,7 +2073,7 @@
           clearInterval(_pairingPairPollTimer);
           _pairingPairPollTimer = null;
           if (status && status.textContent.indexOf('paired') === -1) {
-            status.textContent = 'Still waiting for app pairing…';
+            status.textContent = 'Still waiting for app pairing�';
           }
           return;
         }
@@ -2075,15 +2081,15 @@
         if (nowCount > _pairingKnownDevicesAtStart) {
           clearInterval(_pairingPairPollTimer);
           _pairingPairPollTimer = null;
-          if (status) status.textContent = 'Device paired successfully. Refreshing list…';
+          if (status) status.textContent = 'Device paired successfully. Refreshing list�';
           setTimeout(function() { initPanel(); }, 700);
         }
       }, 3_000);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // VIEW NAVIGATION
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function showLoginPanel(msg) {
       sendMicStop();
@@ -2187,7 +2193,7 @@
       if (res) res.textContent = viewingDeviceId ? '' : 'Select a device first.';
     }
 
-    // â”€â”€ Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Login ──────────────────────────────────────────
     document.getElementById('login-btn').addEventListener('click', async function() {
       var user  = document.getElementById('hp-username').value.trim();
       var pass  = document.getElementById('hp-password').value;
@@ -2196,7 +2202,7 @@
       errEl.textContent = '';
       if (!user || !pass) { errEl.textContent = 'Please enter credentials.'; return; }
       btn.disabled = true;
-      btn.textContent = 'Checkingâ€¦';
+      btn.textContent = 'Checking…';
       try {
         var resp = await fetch('/api/auth/login', {
           method: 'POST',
@@ -2205,12 +2211,12 @@
         });
         if (!resp.ok) {
           var errData = await resp.json().catch(function() { return {}; });
-          errEl.textContent = 'ðŸ¾ ' + (errData.detail || 'Invalid credentials.');
+          errEl.textContent = '🐾 ' + (errData.detail || 'Invalid credentials.');
           return;
         }
         var data = await resp.json();
         if (data.role !== 'handler' && data.role !== 'admin') {
-          errEl.textContent = 'ðŸ¾ Access denied â€” handler or admin role required.';
+          errEl.textContent = '🐾 Access denied — handler or admin role required.';
           return;
         }
         saveJwt(data.access_token);
@@ -2221,10 +2227,10 @@
         showHandlerPanel();
       } catch(e) {
         clearJwt();
-        errEl.textContent = 'ðŸ¾ Login failed. Please try again.';
+        errEl.textContent = '🐾 Login failed. Please try again.';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'ðŸ¾ Enter Handler Panel';
+        btn.textContent = '🐾 Enter Handler Panel';
       }
     });
     ['hp-username', 'hp-password'].forEach(function(id) {
@@ -2233,14 +2239,14 @@
       });
     });
 
-    // â”€â”€ Logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', function() { showLoginPanel(''); });
 
-    // â”€â”€ Back to Kennel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Back to Kennel ─────────────────────────────────
     document.getElementById('back-to-kennel-btn').addEventListener('click', showKennelOverview);
     document.getElementById('open-global-controls-btn').addEventListener('click', showGlobalControls);
 
-    // â”€â”€ Sidebar navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Sidebar navigation ─────────────────────────────
     document.querySelectorAll('.nav-item[data-target]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
@@ -2264,12 +2270,15 @@
         if (btn.dataset.target === 'sec-mail') {
           loadMailThreads();
         }
+        if (btn.dataset.target === 'sec-screenshare') {
+          loadScreenShareApprovalStatus();
+        }
       });
     });
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // KENNEL OVERVIEW â€” DEVICE CARDS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
+    // KENNEL OVERVIEW — DEVICE CARDS
+    // ═══════════════════════════════════════════════════════════
 
     /**
      * Create a new kennel card or update the existing one for a device.
@@ -2303,11 +2312,11 @@
       var aiAlert = !!device.ai_alert;
       var label   = deviceLabel(device) || device.device_id;
       var batt    = device.battery_pct;
-      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : 'â€”';
-      var battIcon = 'ðŸŸ¢';
+      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : '—';
+      var battIcon = '🟢';
       if (batt !== null && batt !== undefined) {
-        if (batt < 20) battIcon = 'ðŸ”´';
-        else if (batt < 60) battIcon = 'ðŸŸ¡';
+        if (batt < 20) battIcon = '🔴';
+        else if (batt < 60) battIcon = '🟡';
       }
       card.innerHTML =
         '<div class="kc-header">' +
@@ -2316,12 +2325,12 @@
         '</div>' +
         '<div class="kc-stats">' +
           '<div class="kc-stat">' + battIcon + ' ' + esc(battStr) + '</div>' +
-          '<div class="kc-stat">' + (locked ? 'ðŸ”’ Locked' : 'ðŸ”“ Open') + '</div>' +
-          '<div class="kc-stat' + (aiAlert ? ' kc-alert' : '') + '">' + (aiAlert ? 'âš ï¸ Alert' : 'ðŸ¤– Clear') + '</div>' +
-          '<div class="kc-stat">' + (online ? 'ðŸ“¡ Online' : 'ðŸ“´ Offline') + '</div>' +
+          '<div class="kc-stat">' + (locked ? '🔒 Locked' : '🔓 Open') + '</div>' +
+          '<div class="kc-stat' + (aiAlert ? ' kc-alert' : '') + '">' + (aiAlert ? '⚠️ Alert' : '🤖 Clear') + '</div>' +
+          '<div class="kc-stat">' + (online ? '📡 Online' : '📴 Offline') + '</div>' +
         '</div>' +
-        '<div class="kc-last-seen">' + esc(device.last_seen ? fmtDate(device.last_seen) : 'â€”') + '</div>' +
-        '<div class="kc-cta">View detail â†’</div>';
+        '<div class="kc-last-seen">' + esc(device.last_seen ? fmtDate(device.last_seen) : '—') + '</div>' +
+        '<div class="kc-cta">View detail →</div>';
     }
 
     function _refreshKennelEmptyState() {
@@ -2355,18 +2364,18 @@
       }
 
       if (viewingDeviceId === deviceId) {
-        showToast('ðŸ—‘ï¸ Device deleted.');
+        showToast('🗑️ Device deleted.');
         showKennelOverview();
       }
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // MASTER MAP (Kennel Overview)
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     var _masterMap      = null;
     var _masterMapReady = false;
-    var _masterMarkers  = {}; // device_id â†’ L.Marker
+    var _masterMarkers  = {}; // device_id → L.Marker
 
     function initMasterMap() {
       if (_masterMapReady) return;
@@ -2393,62 +2402,62 @@
       var label = deviceLabel(device) || did;
       if (_masterMarkers[did]) {
         _masterMarkers[did].setLatLng([lat, lon]);
-        _masterMarkers[did].setPopupContent('ðŸ“ ' + esc(label));
+        _masterMarkers[did].setPopupContent('📍 ' + esc(label));
       } else {
         _masterMarkers[did] = L.marker([lat, lon])
           .addTo(_masterMap)
-          .bindPopup('ðŸ“ ' + esc(label))
+          .bindPopup('📍 ' + esc(label))
           .on('click', function() { showPuppyDetail(did); });
       }
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // DETAIL DASHBOARD â€” STATUS RENDERING
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
+    // DETAIL DASHBOARD — STATUS RENDERING
+    // ═══════════════════════════════════════════════════════════
 
     function renderStatus(s) {
       if (!s || !s.updated_at) {
         ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
          'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
-         'ov-online','sb-lock'].forEach(function(id) { setText(id, 'â€”'); });
+         'ov-online','sb-lock'].forEach(function(id) { setText(id, '—'); });
         if (!viewingDeviceId) {
           setText('ov-online-sub', 'No device selected');
-          setText('sb-online', 'âšª No device selected');
-          setText('det-last-seen', 'â€”');
+          setText('sb-online', '⚪ No device selected');
+          setText('det-last-seen', '—');
         } else {
           setText('ov-online-sub', 'No recent check-in');
-          setText('sb-online', 'âšª Awaiting status');
+          setText('sb-online', '⚪ Awaiting status');
           setText('det-last-seen', 'No data yet');
         }
         updateBatteryBar(0);
         document.getElementById('ai-alert-banner').classList.remove('visible');
-        document.getElementById('det-lock').textContent = 'â€”';
+        document.getElementById('det-lock').textContent = '—';
         return;
       }
 
       var batt    = s.battery_pct;
-      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : 'â€”';
+      var battStr = (batt !== null && batt !== undefined) ? batt + '%' : '—';
       setText('ov-battery',     battStr);
       setText('sb-battery',     battStr);
       setText('ov-battery-sub', (batt !== null && batt !== undefined) ? battLevel(batt) : '');
       updateBatteryBar(batt);
 
       var hasGps = s.lat !== null && s.lat !== undefined && s.lon !== null && s.lon !== undefined;
-      setText('ov-gps',     hasGps ? 'âœ…' : 'âŒ');
+      setText('ov-gps',     hasGps ? '✅' : '❌');
       setText('ov-gps-sub', hasGps ? (+s.lat).toFixed(4) + ', ' + (+s.lon).toFixed(4) : 'No fix');
-      setText('det-coords', hasGps ? (+s.lat).toFixed(6) + ', ' + (+s.lon).toFixed(6) : 'â€”');
+      setText('det-coords', hasGps ? (+s.lat).toFixed(6) + ', ' + (+s.lon).toFixed(6) : '—');
 
       var aiAlert = !!s.ai_alert;
-      setText('ov-ai',        aiAlert ? 'âš ï¸' : 'âœ…');
+      setText('ov-ai',        aiAlert ? '⚠️' : '✅');
       setText('ov-ai-sub',    aiAlert ? (s.ai_label || 'Alert') : 'Clear');
-      setText('sb-ai',        aiAlert ? 'âš ï¸ Alert' : 'âœ… Clear');
-      setText('det-ai-label', s.ai_label || 'â€”');
-      setText('det-ai-score', (s.ai_score !== null && s.ai_score !== undefined) ? (+s.ai_score).toFixed(3) : 'â€”');
+      setText('sb-ai',        aiAlert ? '⚠️ Alert' : '✅ Clear');
+      setText('det-ai-label', s.ai_label || '—');
+      setText('det-ai-score', (s.ai_score !== null && s.ai_score !== undefined) ? (+s.ai_score).toFixed(3) : '—');
 
       var banner = document.getElementById('ai-alert-banner');
       if (aiAlert) {
         var label = s.ai_label ? ' (' + s.ai_label + ')' : '';
-        var score = (s.ai_score !== null && s.ai_score !== undefined) ? ' â€” score: ' + (+s.ai_score).toFixed(3) : '';
+        var score = (s.ai_score !== null && s.ai_score !== undefined) ? ' — score: ' + (+s.ai_score).toFixed(3) : '';
         document.getElementById('ai-alert-text').textContent = 'AI filter triggered' + label + score;
         banner.classList.add('visible');
       } else {
@@ -2457,15 +2466,15 @@
 
       var online = isDeviceOnline(s);
       var locked = !!s.is_locked;
-      setText('ov-online',     online ? 'ðŸŸ¢' : 'ðŸ”´');
+      setText('ov-online',     online ? '🟢' : '🔴');
       setText('ov-online-sub', online ? 'Connected' : 'Disconnected');
-      setText('sb-online',     online ? 'ðŸŸ¢ Connected' : 'ðŸ”´ Disconnected');
-      setText('sb-lock',       locked ? 'ðŸ”’ Locked' : 'ðŸ”“ Open');
+      setText('sb-online',     online ? '🟢 Connected' : '🔴 Disconnected');
+      setText('sb-lock',       locked ? '🔒 Locked' : '🔓 Open');
       document.getElementById('det-lock').innerHTML = locked
         ? '<span class="badge badge-error">Locked</span>'
         : '<span class="badge badge-ok">Open</span>';
 
-      setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : 'â€”');
+      setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : '—');
 
       if (hasGps) updateDetailMapMarker(+s.lat, +s.lon);
     }
@@ -2480,9 +2489,9 @@
       else if (p < 60) bar.classList.add('warn');
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // WEBSOCKET
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     var _ws = null;
     var _wsReconnectTimer = null;
@@ -2491,8 +2500,8 @@
 
     function setWsDot(state) {
       WS_DOT.className = state;
-      var labels = { connected: 'WS Connected', error: 'WS Disconnected', '': 'WS Connectingâ€¦' };
-      WS_LABEL.textContent = labels[state] !== undefined ? labels[state] : 'Connectingâ€¦';
+      var labels = { connected: 'WS Connected', error: 'WS Disconnected', '': 'WS Connecting…' };
+      WS_LABEL.textContent = labels[state] !== undefined ? labels[state] : 'Connecting…';
     }
 
     function connectWS() {
@@ -2508,7 +2517,7 @@
       _ws.addEventListener('error', function() { setWsDot('error'); });
 
       _ws.addEventListener('message', function(evt) {
-        // Binary audio chunk relayed from device â†’ feed to Web Audio API.
+        // Binary audio chunk relayed from device → feed to Web Audio API.
         if (evt.data instanceof ArrayBuffer) {
           _playAudioChunk(evt.data);
           return;
@@ -2517,13 +2526,13 @@
         try { msg = JSON.parse(evt.data); } catch(e) { return; }
         if (msg.type === 'ping') return;
 
-        // â”€â”€ WebRTC signaling: answer / ICE candidates relayed from device â”€
+        // ── WebRTC signaling: answer / ICE candidates relayed from device ─
         if (msg.type === 'webrtc_answer' || msg.type === 'webrtc_ice_candidate') {
           if (msg.device_id === viewingDeviceId) _handleRtcSignal(msg);
           return;
         }
 
-        // â”€â”€ Snapshot: initial device list sent on WS connect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Snapshot: initial device list sent on WS connect ──────────
         if (msg.type === 'snapshot') {
           if (!Array.isArray(msg.devices)) return;
           if (msg.notice === 'no-assignment') {
@@ -2542,7 +2551,7 @@
           return;
         }
 
-        // â”€â”€ Status update: device posted new telemetry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Status update: device posted new telemetry ────────────────
         if (msg.type === 'status_update') {
           var prev = _deviceCache[msg.device_id] || {};
           _deviceCache[msg.device_id] = Object.assign({}, prev, msg);
@@ -2560,24 +2569,24 @@
           return;
         }
 
-        // â”€â”€ Lock confirmation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Lock confirmation ─────────────────────────────────────────
         if (msg.type === 'lock') {
           if (_deviceCache[msg.device_id]) {
             _deviceCache[msg.device_id].is_locked = msg.is_locked !== undefined ? msg.is_locked : 1;
             buildOrUpdateKennelCard(_deviceCache[msg.device_id]);
           }
           if (msg.device_id === viewingDeviceId) {
-            showToast('ðŸ”’ Lock command confirmed by server.');
-            setText('sb-lock', 'ðŸ”’ Locked');
+            showToast('🔒 Lock command confirmed by server.');
+            setText('sb-lock', '🔒 Locked');
           }
         }
 
-        // â”€â”€ Vitals update: biometric data broadcast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Vitals update: biometric data broadcast ───────────────────
         if (msg.type === 'vitals_update' && msg.device_id === viewingDeviceId) {
           var bpm = msg.current_bpm;
           _vitalsBaseline = msg.baseline !== undefined ? msg.baseline : _vitalsBaseline;
-          setText('vit-bpm',      bpm !== undefined ? bpm : 'â€”');
-          setText('vit-baseline', _vitalsBaseline !== null && _vitalsBaseline !== undefined ? _vitalsBaseline : 'â€”');
+          setText('vit-bpm',      bpm !== undefined ? bpm : '—');
+          setText('vit-baseline', _vitalsBaseline !== null && _vitalsBaseline !== undefined ? _vitalsBaseline : '—');
           renderVitalsAlert(msg.alert_status || null);
           pushVitalsPoint(bpm, _vitalsBaseline, new Date().toISOString());
         }
@@ -2591,9 +2600,9 @@
       setWsDot('');
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // LIVE LISTEN â€” Web Audio API + mic commands
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
+    // LIVE LISTEN — Web Audio API + mic commands
+    // ═══════════════════════════════════════════════════════════
 
     var _micActive       = false;
     var _audioCtx        = null;
@@ -2642,10 +2651,10 @@
     function _updateLiveListenBtns() {
       document.querySelectorAll('.btn-live-listen').forEach(function(btn) {
         if (_micActive) {
-          btn.textContent = 'ðŸ”´ Stop Listening';
+          btn.textContent = '🔴 Stop Listening';
           btn.classList.add('active');
         } else {
-          btn.textContent = 'ðŸŽ™ï¸ Live Listen';
+          btn.textContent = '🎙️ Live Listen';
           btn.classList.remove('active');
         }
       });
@@ -2653,15 +2662,15 @@
 
     /** Begin streaming: warm up AudioContext then send START_HOT_MIC to the device. */
     function sendMicStart() {
-      if (!viewingDeviceId) { showToast('âš ï¸ No device selected.', true); return; }
+      if (!viewingDeviceId) { showToast('⚠️ No device selected.', true); return; }
       if (!_ws || _ws.readyState !== WebSocket.OPEN) {
-        showToast('âš ï¸ WebSocket not connected.', true); return;
+        showToast('⚠️ WebSocket not connected.', true); return;
       }
       _micActive = true;
       _getAudioCtx();  // pre-warm before first audio chunk arrives
       _ws.send(JSON.stringify({ action: 'mic_start', device_id: viewingDeviceId }));
       _updateLiveListenBtns();
-      showToast('ðŸŽ™ï¸ Live Listen started.');
+      showToast('🎙️ Live Listen started.');
     }
 
     /** Stop streaming: send STOP_HOT_MIC to the device and silence local playback. */
@@ -2688,9 +2697,9 @@
       }, 4000);
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // DETAIL MAP (Puppy Detail view)
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     var _detailMap      = null;
     var _detailMarker   = null;
@@ -2719,21 +2728,21 @@
       if (_detailMarker) {
         _detailMarker.setLatLng(coords);
       } else {
-        _detailMarker = L.marker(coords).addTo(_detailMap).bindPopup('ðŸ“ Device location');
+        _detailMarker = L.marker(coords).addTo(_detailMap).bindPopup('📍 Device location');
         _detailMap.setView(coords, 15);
       }
       document.getElementById('map-coords').textContent =
-        'ðŸ“ ' + lat.toFixed(6) + ', ' + lon.toFixed(6);
+        '📍 ' + lat.toFixed(6) + ', ' + lon.toFixed(6);
     }
 
     document.getElementById('map-refresh-btn').addEventListener('click', fetchAndRenderStatus);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // QUICK ACTIONS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function _requireDevice(resEl) {
-      if (!viewingDeviceId) { resEl.textContent = 'âš ï¸ No device selected.'; return false; }
+      if (!viewingDeviceId) { resEl.textContent = '⚠️ No device selected.'; return false; }
       return true;
     }
 
@@ -2741,12 +2750,12 @@
       var btn = document.getElementById('btn-lock');
       var res = document.getElementById('res-lock');
       if (!_requireDevice(res)) return;
-      btn.disabled = true; res.textContent = 'Sendingâ€¦';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/lock', { device_id: viewingDeviceId });
-        if (r.ok) { res.textContent = 'âœ… Lock sent.'; showToast('ðŸ”’ Lock command sent.'); }
-        else { var b = await r.json().catch(function() { return {}; }); res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status)); }
-      } catch(e) { if (e.message !== '401') res.textContent = 'âŒ Request failed.'; }
+        if (r.ok) { res.textContent = '✅ Lock sent.'; showToast('🔒 Lock command sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
     }
 
@@ -2754,14 +2763,14 @@
       var btn = document.getElementById('btn-lovense');
       var res = document.getElementById('res-lovense');
       if (!_requireDevice(res)) return;
-      btn.disabled = true; res.textContent = 'Sendingâ€¦';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'LOVENSE_COMMAND', toy_command: 'vibrate', toy_level: '10',
         });
-        if (r.ok) { res.textContent = 'âœ… Vibrate sent.'; showToast('ðŸ’— Lovense vibrate sent.'); }
-        else { var b = await r.json().catch(function() { return {}; }); res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status)); }
-      } catch(e) { if (e.message !== '401') res.textContent = 'âŒ Request failed.'; }
+        if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('💗 Lovense vibrate sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
     }
 
@@ -2769,15 +2778,15 @@
       var btn = document.getElementById('btn-pavlok');
       var res = document.getElementById('res-pavlok');
       if (!_requireDevice(res)) return;
-      btn.disabled = true; res.textContent = 'Sendingâ€¦';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'shock', pavlok_intensity: '50', pavlok_duration_ms: '1000',
         });
-        if (r.ok) { res.textContent = 'âœ… Shock sent.'; showToast('âš¡ Pavlok command sent.'); }
-        else { var b = await r.json().catch(function() { return {}; }); res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status)); }
-      } catch(e) { if (e.message !== '401') res.textContent = 'âŒ Request failed.'; }
+        if (r.ok) { res.textContent = '✅ Shock sent.'; showToast('⚡ Pavlok command sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
     }
 
@@ -2785,15 +2794,15 @@
       var btn = document.getElementById('btn-pavlok');
       var res = document.getElementById('res-pavlok');
       if (!_requireDevice(res)) return;
-      btn.disabled = true; res.textContent = 'Sendingâ€¦';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
           pavlok_cmd: 'vibrate', pavlok_intensity: '100', pavlok_duration_ms: '5000',
         });
-        if (r.ok) { res.textContent = 'âœ… Vibrate sent.'; showToast('ðŸŒ€ Pavlok vibrate sent.'); }
-        else { var b = await r.json().catch(function() { return {}; }); res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status)); }
-      } catch(e) { if (e.message !== '401') res.textContent = 'âŒ Request failed.'; }
+        if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('🌀 Pavlok vibrate sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
     }
 
@@ -2801,12 +2810,12 @@
       var btn = document.getElementById('btn-checkin');
       var res = document.getElementById('res-checkin');
       if (!_requireDevice(res)) return;
-      btn.disabled = true; res.textContent = 'Sendingâ€¦';
+      btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/checkins/request', { device_id: viewingDeviceId });
-        if (r.ok) { res.textContent = 'âœ… Check-in requested.'; showToast('ðŸ“‹ Check-in request sent.'); }
-        else { var b = await r.json().catch(function() { return {}; }); res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status)); }
-      } catch(e) { if (e.message !== '401') res.textContent = 'âŒ Request failed.'; }
+        if (r.ok) { res.textContent = '✅ Check-in requested.'; showToast('📋 Check-in request sent.'); }
+        else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
+      } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
     }
 
@@ -2816,8 +2825,8 @@
       if (!_requireDevice(res)) return;
 
       if (currentUserRole !== 'admin') {
-        res.textContent = 'âŒ Admin role required.';
-        showToast('âŒ Only admins can delete devices.', true);
+        res.textContent = '❌ Admin role required.';
+        showToast('❌ Only admins can delete devices.', true);
         return;
       }
 
@@ -2829,27 +2838,27 @@
 
       btn.disabled = true;
       _deleteInProgress = true;
-      res.textContent = 'Deletingâ€¦';
+      res.textContent = 'Deleting…';
       try {
         const targetDeviceId = viewingDeviceId;
         const r = await apiDelete('/api/handler/devices/' + encodeURIComponent(targetDeviceId));
         if (r.ok) {
           removeDeviceFromUi(targetDeviceId);
-          res.textContent = 'âœ… Device deleted.';
-          showToast('ðŸ—‘ï¸ Device deleted.');
+          res.textContent = '✅ Device deleted.';
+          showToast('🗑️ Device deleted.');
         } else {
           const b = await r.json().catch(function() { return {}; });
           if (r.status === 403) {
-            res.textContent = 'âŒ Admin role required.';
-            showToast('âŒ Only admins can delete devices.', true);
+            res.textContent = '❌ Admin role required.';
+            showToast('❌ Only admins can delete devices.', true);
           } else if (r.status === 404) {
-            res.textContent = 'âŒ Device not found.';
+            res.textContent = '❌ Device not found.';
           } else {
-            res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+            res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
           }
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) res.textContent = 'âŒ Request failed.';
+        if (e.message !== AUTH_EXPIRED_ERROR) res.textContent = '❌ Request failed.';
       } finally {
         _deleteInProgress = false;
         updateDeleteDeviceActionAccess();
@@ -2865,9 +2874,9 @@
     document.getElementById('btn-live-listen-sidebar').addEventListener('click', toggleLiveListen);
     document.getElementById('btn-live-listen-actions').addEventListener('click', toggleLiveListen);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // REMOTE COMMANDS â€” generic FCM push helpers
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
+    // REMOTE COMMANDS — generic FCM push helpers
+    // ═══════════════════════════════════════════════════════════
 
     /** Return trimmed value of an input/select/textarea by id. */
     function v(id) {
@@ -2892,11 +2901,11 @@
     async function sendFcm(action, fieldsObj, resId) {
       var res = resId ? document.getElementById(resId) : null;
       if (!viewingDeviceId) {
-        if (res) res.textContent = 'âš ï¸ No device selected.';
-        showToast('âš ï¸ No device selected.', true);
+        if (res) res.textContent = '⚠️ No device selected.';
+        showToast('⚠️ No device selected.', true);
         return;
       }
-      if (res) res.textContent = 'Sendingâ€¦';
+      if (res) res.textContent = 'Sending…';
       var payload = { device_id: viewingDeviceId, action: action };
       Object.keys(fieldsObj).forEach(function(k) {
         if (fieldsObj[k] !== '' && fieldsObj[k] !== null && fieldsObj[k] !== undefined) payload[k] = fieldsObj[k];
@@ -2904,14 +2913,14 @@
       try {
         var r = await apiPost('/api/handler/tpe/push', payload);
         if (r.ok) {
-          if (res) res.textContent = 'âœ… Sent.';
-          showToast('âœ… ' + action + ' sent.');
+          if (res) res.textContent = '✅ Sent.';
+          showToast('✅ ' + action + ' sent.');
         } else {
           var b = await r.json().catch(function() { return {}; });
-          if (res) res.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+          if (res) res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
         }
       } catch(e) {
-        if (e.message !== '401' && res) res.textContent = 'âŒ Request failed.';
+        if (e.message !== '401' && res) res.textContent = '❌ Request failed.';
       }
     }
 
@@ -3025,9 +3034,9 @@
       });
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // QUESTIONS + PUBLIC STATUS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function _optIntInput(id) {
       var raw = v(id);
@@ -3113,13 +3122,13 @@
         var r = await apiPost('/api/handler/public-status', payload);
         if (r.ok) {
           if (statusEl) statusEl.textContent = 'Saved.';
-          showToast('âœ… Public status settings updated.');
+          showToast('✅ Public status settings updated.');
         } else {
           var b = await r.json().catch(function() { return {}; });
-          if (statusEl) statusEl.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+          if (statusEl) statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = 'âŒ Save failed.';
+        if (e.message !== AUTH_EXPIRED_ERROR && statusEl) statusEl.textContent = '❌ Save failed.';
       } finally {
         btn.disabled = false;
       }
@@ -3197,21 +3206,21 @@
       if (!input) return;
       var answer = (input.value || '').trim();
       if (!answer) {
-        showToast('âš ï¸ Answer cannot be empty.', true);
+        showToast('⚠️ Answer cannot be empty.', true);
         return;
       }
       try {
         var r = await apiPost('/api/handler/questions/' + encodeURIComponent(questionId) + '/answer', { answer: answer });
         if (r.ok) {
-          showToast('âœ… Answer published.');
+          showToast('✅ Answer published.');
           await loadHandlerQuestions();
           await loadHandlerPublicStatus();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to answer question.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to answer question.', true);
       }
     }
 
@@ -3221,15 +3230,15 @@
       try {
         var r = await apiDelete('/api/handler/questions/' + encodeURIComponent(questionId));
         if (r.ok) {
-          showToast('ðŸ—‘ï¸ Question deleted.');
+          showToast('🗑️ Question deleted.');
           await loadHandlerQuestions();
           await loadHandlerPublicStatus();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to delete question.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to delete question.', true);
       }
     }
 
@@ -3241,9 +3250,9 @@
     document.getElementById('public-preset-punishment').addEventListener('click', function() { applyPublicStatusPreset('punishment'); });
     document.getElementById('questions-reload-btn').addEventListener('click', loadHandlerQuestions);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // LIMBO QUEUE
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function _bindLimboRowActions() {
       document.querySelectorAll('.limbo-answer-btn').forEach(function(btn) {
@@ -3318,14 +3327,14 @@
         } else {
           resolvedEl.innerHTML = resolved.map(function(item) {
             var label = item.status === 'answered' ? '<span class="badge badge-ok">Answered</span>' : '<span class="badge badge-warn">Dismissed</span>';
-            var resolution = item.status === 'answered' ? (item.answer_text || 'â€”') : (item.dismissed_reason || 'Dismissed');
+            var resolution = item.status === 'answered' ? (item.answer_text || '—') : (item.dismissed_reason || 'Dismissed');
             var tier = esc(item.publication_tier || 'sensitive');
             var allowed = !!item.public_allowed;
-            var publishCell = 'â€”';
+            var publishCell = '—';
             if (item.status === 'answered') {
               if (item.published_question_id) {
                 publishCell = '<span class="badge badge-ok">Published</span>' +
-                  '<div style="margin-top:.35rem"><a href="/q/' + esc(item.published_question_id) + '" target="_blank" rel="noopener" style="font-size:.72rem;color:#c49a9f;text-decoration:none">Open Public â†—</a></div>';
+                  '<div style="margin-top:.35rem"><a href="/q/' + esc(item.published_question_id) + '" target="_blank" rel="noopener" style="font-size:.72rem;color:#c49a9f;text-decoration:none">Open Public ↗</a></div>';
               } else {
                 publishCell = '<button class="btn-action limbo-publish-btn" data-limbo-id="' + Number(item.id || 0) + '" style="width:auto;padding:.3rem .65rem;font-size:.76rem">Publish Now</button>';
               }
@@ -3373,14 +3382,14 @@
       try {
         var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/governance', payload);
         if (r.ok) {
-          showToast('âœ… Limbo governance updated.');
+          showToast('✅ Limbo governance updated.');
           await loadLimboItems();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to update governance.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update governance.', true);
       }
     }
 
@@ -3402,14 +3411,14 @@
         if (r.ok) {
           document.getElementById('limbo-create-text').value = '';
           statusEl.textContent = 'Added to limbo.';
-          showToast('âœ… Limbo item added.');
+          showToast('✅ Limbo item added.');
           await loadLimboItems();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          statusEl.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+          statusEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) statusEl.textContent = 'âŒ Failed to add limbo item.';
+        if (e.message !== AUTH_EXPIRED_ERROR) statusEl.textContent = '❌ Failed to add limbo item.';
       } finally {
         btn.disabled = false;
       }
@@ -3420,20 +3429,20 @@
       var input = document.querySelector('.limbo-answer-input[data-limbo-id="' + itemId + '"]');
       var answer = input ? (input.value || '').trim() : '';
       if (!answer) {
-        showToast('âš ï¸ Limbo answer cannot be empty.', true);
+        showToast('⚠️ Limbo answer cannot be empty.', true);
         return;
       }
       try {
         var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/answer', { answer_text: answer });
         if (r.ok) {
-          showToast('âœ… Limbo item answered.');
+          showToast('✅ Limbo item answered.');
           await loadLimboItems();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to answer limbo item.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to answer limbo item.', true);
       }
     }
 
@@ -3443,14 +3452,14 @@
       try {
         var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/dismiss', { reason: reason });
         if (r.ok) {
-          showToast('ðŸ—‘ï¸ Limbo item dismissed.');
+          showToast('🗑️ Limbo item dismissed.');
           await loadLimboItems();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to dismiss limbo item.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to dismiss limbo item.', true);
       }
     }
 
@@ -3460,32 +3469,32 @@
         var r = await apiPost('/api/handler/limbo/' + encodeURIComponent(String(itemId)) + '/publish', {});
         if (r.ok) {
           var b = await r.json().catch(function() { return {}; });
-          if (b.already_published) showToast('â„¹ï¸ Limbo item already published.');
-          else showToast('âœ… Limbo item published to public feed.');
+          if (b.already_published) showToast('ℹ️ Limbo item already published.');
+          else showToast('✅ Limbo item published to public feed.');
           await loadLimboItems();
           await loadHandlerQuestions();
           await loadHandlerPublicStatus();
         } else {
           var err = await r.json().catch(function() { return {}; });
-          showToast('âŒ ' + (err.detail || ('HTTP ' + r.status)), true);
+          showToast('❌ ' + (err.detail || ('HTTP ' + r.status)), true);
         }
       } catch(e) {
-        if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to publish limbo item.', true);
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to publish limbo item.', true);
       }
     }
 
     document.getElementById('limbo-create-btn').addEventListener('click', createLimboItem);
     document.getElementById('limbo-reload-btn').addEventListener('click', loadLimboItems);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // BOOKING INTAKE
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function _bookingActionCell(item) {
       var id = Number(item.id || 0);
       var status = String(item.status || 'new');
       var priority = String(item.priority || 'normal');
-      return '<div style="display:grid;gap:.35rem;min-width:190px">' +
+      return '<div class="booking-action-stack">' +
         '<select class="booking-status-select" data-booking-id="' + id + '">' +
           '<option value="new"' + (status === 'new' ? ' selected' : '') + '>new</option>' +
           '<option value="qualified"' + (status === 'qualified' ? ' selected' : '') + '>qualified</option>' +
@@ -3497,7 +3506,7 @@
           '<option value="normal"' + (priority === 'normal' ? ' selected' : '') + '>normal</option>' +
           '<option value="high"' + (priority === 'high' ? ' selected' : '') + '>high</option>' +
         '</select>' +
-        '<button class="btn-action booking-save-btn" data-booking-id="' + id + '" style="width:auto;padding:.3rem .7rem;font-size:.76rem">Save</button>' +
+        '<button class="btn-action booking-save-btn table-action-btn" data-booking-id="' + id + '">Save</button>' +
       '</div>';
     }
 
@@ -3514,14 +3523,14 @@
               priority: priorityEl ? priorityEl.value : 'normal'
             });
             if (r.ok) {
-              showToast('âœ… Booking updated.');
+              showToast('✅ Booking updated.');
               await loadBookingQueue();
             } else {
               var b = await r.json().catch(function() { return {}; });
-              showToast('âŒ ' + (b.detail || ('HTTP ' + r.status)), true);
+              showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
             }
           } catch (e) {
-            if (e.message !== AUTH_EXPIRED_ERROR) showToast('âŒ Failed to update booking.', true);
+            if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update booking.', true);
           }
         });
       });
@@ -3540,9 +3549,9 @@
         }
         tbody.innerHTML = data.map(function(item) {
           return '<tr>' +
-            '<td>' + esc(item.contact_handle || 'â€”') + '</td>' +
-            '<td>' + esc(item.availability_window || 'â€”') + '</td>' +
-            '<td><div>' + esc(item.session_intent || 'â€”') + '</div><div style="margin-top:.25rem;color:#9e7e82;font-size:.75rem">' + esc(item.location_text || 'â€”') + '</div></td>' +
+            '<td>' + esc(item.contact_handle || '—') + '</td>' +
+            '<td>' + esc(item.availability_window || '—') + '</td>' +
+            '<td><div>' + esc(item.session_intent || '—') + '</div><div style="margin-top:.25rem;color:#9e7e82;font-size:.75rem">' + esc(item.location_text || '—') + '</div></td>' +
             '<td>' + esc(item.source || 'public') + '</td>' +
             '<td><span class="badge badge-warn">' + esc(item.status || 'new') + '</span> <span style="font-size:.72rem;color:#9e7e82">' + esc(item.priority || 'normal') + '</span></td>' +
             '<td>' + _bookingActionCell(item) + '</td>' +
@@ -3556,24 +3565,24 @@
       }
     }
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // PUPPY MAIL
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     function _renderMailThreadMessages(messages) {
       var host = document.getElementById('mail-thread-messages');
       if (!host) return;
       if (!Array.isArray(messages) || !messages.length) {
-        host.innerHTML = '<div style="color:#9e7e82;font-size:.84rem">No messages in this thread.</div>';
+        host.innerHTML = '<div class="mail-empty">No messages in this thread.</div>';
         return;
       }
       host.innerHTML = messages.map(function(m) {
-        return '<div style="border:1px solid #3d2a2e;border-radius:10px;padding:.65rem .8rem;background:#1b1b1b">' +
-          '<div style="display:flex;justify-content:space-between;gap:.75rem;font-size:.74rem;color:#9e7e82;margin-bottom:.35rem">' +
+        return '<div class="mail-message">' +
+          '<div class="mail-message-meta">' +
             '<span>' + esc(m.author || 'unknown') + '</span>' +
             '<span class="ts-cell">' + esc(fmtDate(m.created_at)) + '</span>' +
           '</div>' +
-          '<div style="white-space:pre-wrap;line-height:1.45">' + esc(m.body || '') + '</div>' +
+          '<div class="mail-message-body">' + esc(m.body || '') + '</div>' +
         '</div>';
       }).join('');
     }
@@ -3603,11 +3612,11 @@
           var sender = (t.sender_name || 'Anonymous') + (t.sender_contact ? (' (' + t.sender_contact + ')') : '');
           return '<tr>' +
             '<td>' + esc(sender) + '</td>' +
-            '<td>' + esc(t.latest_message || 'â€”') + '</td>' +
+            '<td>' + esc(t.latest_message || '—') + '</td>' +
             '<td>' + esc(t.source || 'web') + '</td>' +
             '<td><span class="badge ' + (t.status === 'resolved' ? 'badge-ok' : 'badge-warn') + '">' + esc(t.status || 'open') + '</span></td>' +
             '<td class="ts-cell">' + esc(fmtDate(t.latest_message_at || t.updated_at || t.created_at)) + '</td>' +
-            '<td><button class="btn-action mail-open-thread-btn" data-thread-id="' + Number(t.id || 0) + '" style="width:auto;padding:.3rem .7rem;font-size:.76rem">Open</button></td>' +
+            '<td><button class="btn-action mail-open-thread-btn table-action-btn" data-thread-id="' + Number(t.id || 0) + '">Open</button></td>' +
           '</tr>';
         }).join('');
         _bindMailThreadActions();
@@ -3628,8 +3637,8 @@
         var data = await apiGet('/api/handler/puppy-mail/threads/' + encodeURIComponent(String(threadId)));
         var thread = data.thread || {};
         if (metaEl) {
-          metaEl.textContent = 'Thread #' + String(thread.id || threadId) + ' â€¢ ' +
-            String(thread.status || 'open') + ' â€¢ ' +
+          metaEl.textContent = 'Thread #' + String(thread.id || threadId) + ' • ' +
+            String(thread.status || 'open') + ' • ' +
             String(thread.sender_name || 'Anonymous') +
             (thread.sender_contact ? (' (' + thread.sender_contact + ')') : '');
         }
@@ -3660,15 +3669,15 @@
         if (r.ok) {
           if (input) input.value = '';
           if (resultEl) resultEl.textContent = 'Reply sent.';
-          showToast('âœ… Puppy mail reply sent.');
+          showToast('✅ Puppy mail reply sent.');
           await loadMailThread(_selectedMailThreadId);
           await loadMailThreads();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          if (resultEl) resultEl.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+          if (resultEl) resultEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
         }
       } catch (e) {
-        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = 'âŒ Failed to send reply.';
+        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to send reply.';
       }
     }
 
@@ -3685,15 +3694,15 @@
         });
         if (r.ok) {
           if (resultEl) resultEl.textContent = 'Status updated.';
-          showToast('âœ… Thread marked ' + nextStatus + '.');
+          showToast('✅ Thread marked ' + nextStatus + '.');
           await loadMailThread(_selectedMailThreadId);
           await loadMailThreads();
         } else {
           var b = await r.json().catch(function() { return {}; });
-          if (resultEl) resultEl.textContent = 'âŒ ' + (b.detail || ('HTTP ' + r.status));
+          if (resultEl) resultEl.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status));
         }
       } catch (e) {
-        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = 'âŒ Failed to update status.';
+        if (e.message !== AUTH_EXPIRED_ERROR && resultEl) resultEl.textContent = '❌ Failed to update status.';
       }
     }
 
@@ -3705,21 +3714,21 @@
     document.getElementById('mail-mark-resolved-btn').addEventListener('click', function() { updateMailThreadStatus('resolved'); });
     document.getElementById('mail-reopen-btn').addEventListener('click', function() { updateMailThreadStatus('open'); });
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // LOGS
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     async function loadLogs() { await Promise.all([loadEvents(), loadAudits()]); }
 
     async function loadEvents() {
       var tbody = document.getElementById('events-tbody');
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loadingâ€¦</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Loading…</td></tr>';
       try {
         var data = await apiGet('/api/handler/tpe/events?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No events yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(ev) {
           return '<tr><td><span class="badge ' + (ev.event === 'punishment' ? 'badge-error' : 'badge-ok') + '">' + esc(ev.event) + '</span></td>' +
-            '<td>' + esc(ev.reason || 'â€”') + '</td>' +
+            '<td>' + esc(ev.reason || '—') + '</td>' +
             '<td class="ts-cell">' + fmtDate(ev.received_at) + '</td></tr>';
         }).join('');
       } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="3">Failed to load events.</td></tr>'; }
@@ -3727,14 +3736,14 @@
 
     async function loadAudits() {
       var tbody = document.getElementById('audits-tbody');
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loadingâ€¦</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Loading…</td></tr>';
       try {
         var data = await apiGet('/api/handler/tpe/audits?limit=50');
         if (!data.length) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No audit records yet.</td></tr>'; return; }
         tbody.innerHTML = data.map(function(a) {
-          return '<tr><td>' + esc(a.last_label || 'â€”') + '</td>' +
-            '<td class="ts-cell">' + (a.last_score !== null ? (+a.last_score).toFixed(3) : 'â€”') + '</td>' +
-            '<td class="ts-cell">' + (a.detection_ratio !== null ? (+a.detection_ratio * 100).toFixed(1) + '%' : 'â€”') + '</td>' +
+          return '<tr><td>' + esc(a.last_label || '—') + '</td>' +
+            '<td class="ts-cell">' + (a.last_score !== null ? (+a.last_score).toFixed(3) : '—') + '</td>' +
+            '<td class="ts-cell">' + (a.detection_ratio !== null ? (+a.detection_ratio * 100).toFixed(1) + '%' : '—') + '</td>' +
             '<td class="ts-cell">' + fmtDate(a.received_at) + '</td></tr>';
         }).join('');
       } catch(e) { tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Failed to load audits.</td></tr>'; }
@@ -3742,9 +3751,9 @@
 
     document.getElementById('logs-refresh-btn').addEventListener('click', loadLogs);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // VITALS CHART
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     var _vitalsChart     = null;   // Chart.js instance
     var _vitalsBaseline  = null;   // current resting baseline (number or null)
@@ -3754,7 +3763,7 @@
 
     /**
      * Show or hide the alert banner and flash effect.
-     * alertStatus â€“ null, 'Physical Activity', 'Excitement/Stress', or 'Activity Alert'
+     * alertStatus – null, 'Physical Activity', 'Excitement/Stress', or 'Activity Alert'
      */
     function renderVitalsAlert(alertStatus) {
       _vitalsAlertStatus = alertStatus;
@@ -3765,15 +3774,15 @@
 
       if (!alertStatus) {
         banner.style.display = 'none';
-        if (statusEl) statusEl.textContent = 'âœ… Normal';
+        if (statusEl) statusEl.textContent = '✅ Normal';
         return;
       }
 
       // Determine icon and label
-      var icon = alertStatus === 'Physical Activity' ? 'ðŸƒ' : 'ðŸ˜°';
+      var icon = alertStatus === 'Physical Activity' ? '🏃' : '😰';
       document.getElementById('vitals-alert-icon').textContent = icon;
       document.getElementById('vitals-alert-text').textContent = alertStatus;
-      if (statusEl) statusEl.textContent = 'âš ï¸ ' + alertStatus;
+      if (statusEl) statusEl.textContent = '⚠️ ' + alertStatus;
 
       // Flash the banner
       banner.style.display = 'flex';
@@ -3786,8 +3795,8 @@
 
     /**
      * (Re-)draw the Chart.js BPM graph with the given readings array and baseline.
-     * readings â€“ [{timestamp, heart_rate}, ...]
-     * baseline â€“ number or null
+     * readings – [{timestamp, heart_rate}, ...]
+     * baseline – number or null
      */
     function renderVitalsChart(readings, baseline) {
       var placeholder = document.getElementById('vitals-chart-placeholder');
@@ -3878,12 +3887,12 @@
           '/api/vitals/history?device_id=' + encodeURIComponent(viewingDeviceId) + '&minutes=60'
         );
         _vitalsBaseline = data.baseline;
-        setText('vit-bpm',      data.readings.length ? data.readings[data.readings.length - 1].heart_rate : 'â€”');
-        setText('vit-baseline', data.baseline !== null ? data.baseline : 'â€”');
+        setText('vit-bpm',      data.readings.length ? data.readings[data.readings.length - 1].heart_rate : '—');
+        setText('vit-baseline', data.baseline !== null ? data.baseline : '—');
         renderVitalsAlert(data.alert_status);
         renderVitalsChart(data.readings, data.baseline);
       } catch(e) {
-        // silent â€“ WS will deliver live updates
+        // silent – WS will deliver live updates
       }
     }
 
@@ -3908,7 +3917,7 @@
       _vitalsChart.data.labels.push(label);
       // BPM dataset is always index 0
       _vitalsChart.data.datasets[0].data.push(bpm);
-      // Baseline dataset (index 1, if present) â€“ update all points to new value
+      // Baseline dataset (index 1, if present) – update all points to new value
       if (_vitalsChart.data.datasets[1] && baseline !== null) {
         _vitalsChart.data.datasets[1].data.push(baseline);
       }
@@ -3917,13 +3926,65 @@
 
     document.getElementById('vitals-refresh-btn').addEventListener('click', loadVitalsHistory);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // SCREEN SHARE â€” WebRTC
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
+    // SCREEN SHARE — WebRTC
+    // ═══════════════════════════════════════════════════════════
 
     var _rtcPc             = null;
     var _screenShareActive = false;
+    var _publicScreenShareApproved = false;
     var _RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    function _renderScreenShareApprovalUi() {
+      var statusEl = document.getElementById('screen-share-approval-status');
+      var btn = document.getElementById('screen-share-approval-btn');
+      if (!statusEl || !btn) return;
+      if (_publicScreenShareApproved) {
+        statusEl.textContent = 'Public access approved by handler.';
+        statusEl.classList.add('approved');
+        btn.textContent = 'Disable Public Screen Share';
+      } else {
+        statusEl.textContent = 'Public access pending handler approval.';
+        statusEl.classList.remove('approved');
+        btn.textContent = 'Approve Public Screen Share';
+      }
+    }
+
+    async function loadScreenShareApprovalStatus() {
+      try {
+        var data = await apiGet('/api/handler/public-status');
+        _publicScreenShareApproved = !!(data && data.public_screen_share_approved);
+        _renderScreenShareApprovalUi();
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) {
+          var statusEl = document.getElementById('screen-share-approval-status');
+          if (statusEl) statusEl.textContent = 'Failed to load approval status.';
+        }
+      }
+    }
+
+    async function toggleScreenShareApproval() {
+      var btn = document.getElementById('screen-share-approval-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        var r = await apiPost('/api/handler/public-status', {
+          public_screen_share_approved: !_publicScreenShareApproved,
+        });
+        if (r.ok) {
+          _publicScreenShareApproved = !_publicScreenShareApproved;
+          _renderScreenShareApprovalUi();
+          showToast(_publicScreenShareApproved ? '✅ Public screen share approved.' : '✅ Public screen share approval removed.');
+        } else {
+          var b = await r.json().catch(function() { return {}; });
+          showToast('❌ ' + (b.detail || ('HTTP ' + r.status)), true);
+        }
+      } catch (e) {
+        if (e.message !== AUTH_EXPIRED_ERROR) showToast('❌ Failed to update screen share approval.', true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
     function _setScreenShareStatus(msg) {
       var el = document.getElementById('screen-share-status');
@@ -3935,10 +3996,10 @@
     function _updateScreenShareBtns() {
       document.querySelectorAll('.btn-screen-share').forEach(function(btn) {
         if (_screenShareActive) {
-          btn.textContent = 'ðŸ”´ Stop Screen Share';
+          btn.textContent = '🔴 Stop Screen Share';
           btn.classList.add('active');
         } else {
-          btn.textContent = 'ðŸ“º Start Screen Share';
+          btn.textContent = '📺 Start Screen Share';
           btn.classList.remove('active');
         }
       });
@@ -3956,15 +4017,15 @@
     }
 
     function startScreenShare() {
-      if (!viewingDeviceId) { showToast('âš ï¸ No device selected.', true); return; }
+      if (!viewingDeviceId) { showToast('⚠️ No device selected.', true); return; }
       if (!_ws || _ws.readyState !== WebSocket.OPEN) {
-        showToast('âš ï¸ WebSocket not connected.', true); return;
+        showToast('⚠️ WebSocket not connected.', true); return;
       }
-      if (_rtcPc) return; // Already active â€” toggleScreenShare handles stop/start.
+      if (_rtcPc) return; // Already active — toggleScreenShare handles stop/start.
 
       _screenShareActive = true;
       _updateScreenShareBtns();
-      _setScreenShareStatus('ðŸ”„ Initiating connectionâ€¦');
+      _setScreenShareStatus('🔄 Initiating connection…');
 
       var pc = new RTCPeerConnection(_RTC_CONFIG);
       _rtcPc = pc;
@@ -3990,17 +4051,17 @@
           video.srcObject = evt.streams[0];
           video.style.display = 'block';
           if (placeholder) placeholder.style.display = 'none';
-          _setScreenShareStatus('âœ… Receiving screen share.');
-          showToast('ðŸ“º Screen share connected.');
+          _setScreenShareStatus('✅ Receiving screen share.');
+          showToast('📺 Screen share connected.');
         }
       };
 
       pc.onconnectionstatechange = function() {
         var stateLabels = {
-          connecting: 'ðŸ”„ Connectingâ€¦',
-          connected:  'âœ… Connected',
-          disconnected: 'âš ï¸ Disconnected â€” reconnectingâ€¦',
-          failed: 'âŒ Connection failed.',
+          connecting: '🔄 Connecting…',
+          connected:  '✅ Connected',
+          disconnected: '⚠️ Disconnected — reconnecting…',
+          failed: '❌ Connection failed.',
           closed: '',
         };
         _setScreenShareStatus(stateLabels[pc.connectionState] || ('Connection: ' + pc.connectionState));
@@ -4016,11 +4077,11 @@
             device_id: viewingDeviceId,
             sdp: offer.sdp,
           }));
-          _setScreenShareStatus('â³ Offer sent â€” waiting for device answerâ€¦');
+          _setScreenShareStatus('⏳ Offer sent — waiting for device answer…');
         });
       }).catch(function(err) {
         console.error('[ScreenShare] createOffer error:', err);
-        _setScreenShareStatus('âŒ Failed to create offer.');
+        _setScreenShareStatus('❌ Failed to create offer.');
         stopScreenShare();
       });
     }
@@ -4037,10 +4098,10 @@
       if (!_rtcPc) return;
       if (msg.type === 'webrtc_answer') {
         _rtcPc.setRemoteDescription({ type: 'answer', sdp: msg.sdp })
-          .then(function() { _setScreenShareStatus('âœ… Answer received â€” negotiating ICEâ€¦'); })
+          .then(function() { _setScreenShareStatus('✅ Answer received — negotiating ICE…'); })
           .catch(function(err) {
             console.error('[ScreenShare] setRemoteDescription error:', err);
-            _setScreenShareStatus('âŒ Failed to set remote description.');
+            _setScreenShareStatus('❌ Failed to set remote description.');
           });
       } else if (msg.type === 'webrtc_ice_candidate' && msg.candidate) {
         _rtcPc.addIceCandidate(new RTCIceCandidate(msg.candidate))
@@ -4050,10 +4111,11 @@
 
     document.getElementById('btn-screen-share-section').addEventListener('click', toggleScreenShare);
     document.getElementById('btn-screen-share-actions').addEventListener('click', toggleScreenShare);
+    document.getElementById('screen-share-approval-btn').addEventListener('click', toggleScreenShareApproval);
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
     // INITIALISATION
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════
 
     /**
      * Fetch the latest status for the currently-viewed device and render it
@@ -4075,6 +4137,7 @@
     function initPanel() {
       _handlerNoAssignmentHint = null;
       initCommandCenter();
+      loadScreenShareApprovalStatus();
       connectWS();
       showKennelOverview();
       updateDeleteDeviceActionAccess();
@@ -4103,4 +4166,5 @@
   </script>
 </body>
 </html>
+
 

@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live â€“ Join the pack and access live streams. Sign in with your account." />
+  <meta name="description" content="mochii.live - Join the pack and access live streams. Sign in with your account." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:locale"      content="en_US" />
-  <meta property="og:title"       content="mochii.live ðŸ¾" />
+  <meta property="og:title"       content="mochii.live" />
   <meta property="og:description" content="Join the pack and access live streams." />
   <meta property="og:url"         content="https://mochii.live/" />
   <link rel="canonical"           href="https://mochii.live/" />
   <meta name="twitter:card"       content="summary" />
-  <meta name="twitter:title"      content="mochii.live ðŸ¾" />
+  <meta name="twitter:title"      content="mochii.live" />
   <meta name="twitter:description" content="Join the pack and access live streams." />
-  <title>mochii.live ðŸ¾</title>
+  <title>mochii.live</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -43,14 +43,14 @@
       padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
     }
 
-    /* â”€â”€ Pulsing paw loading animation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Pulsing paw loading animation ─────────────── */
     @keyframes pawPulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50%       { opacity: 0.35; transform: scale(1.2); }
     }
     .paw-loading { display: inline-block; animation: pawPulse 1.1s ease-in-out infinite; }
 
-    /* â”€â”€ Guest landing page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Guest landing page ─────────────────────────── */
     #login-section {
       display: flex;
       flex-direction: column;
@@ -322,7 +322,7 @@
     #login-message.info    { color: #9e7e82; }
     #login-message.upgrade { color: #e8aeb7; }
 
-    /* â”€â”€ Links section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Links section ──────────────────────────────── */
     .links-section {
       width: 100%;
       max-width: 560px;
@@ -407,6 +407,71 @@
       padding: 2rem;
     }
 
+    .public-intake-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+
+    .public-intake-card {
+      background: #242424;
+      border: 1px solid #3d2a2e;
+      border-radius: 14px;
+      padding: 1rem;
+      display: grid;
+      gap: .6rem;
+    }
+
+    .public-intake-card h3 {
+      font-size: .9rem;
+      color: #e8aeb7;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .public-intake-card p {
+      font-size: .78rem;
+      color: #9e7e82;
+      line-height: 1.45;
+    }
+
+    .public-intake-card input,
+    .public-intake-card textarea {
+      width: 100%;
+      background: #1c1c1c;
+      border: 1px solid #3d2a2e;
+      border-radius: 10px;
+      color: #f0e6e8;
+      font-family: inherit;
+      font-size: .84rem;
+      padding: .52rem .66rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .public-intake-card input:focus,
+    .public-intake-card textarea:focus {
+      border-color: #e8aeb7;
+    }
+
+    .public-intake-card textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    .public-intake-card .control-btn {
+      width: auto;
+      justify-self: start;
+      padding: .42rem .82rem;
+      font-size: .8rem;
+    }
+
+    .public-intake-status {
+      min-height: 1.15em;
+      font-size: .76rem;
+      color: #9e7e82;
+    }
+
     /* Landing footer */
     .landing-footer {
       margin-top: auto;
@@ -414,7 +479,7 @@
       padding: 1.5rem;
     }
 
-    /* â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Dashboard ──────────────────────────────────── */
     #dashboard-section {
       display: none;
       width: 100%;
@@ -468,14 +533,14 @@
 
     #logout-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
-    /* â”€â”€ Main layout: sidebar + viewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Main layout: sidebar + viewer ─────────────── */
     #main-layout {
       display: flex;
       flex: 1;
       overflow: hidden;
     }
 
-    /* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Sidebar ────────────────────────────────────── */
     #camera-sidebar {
       width: 220px;
       flex-shrink: 0;
@@ -551,7 +616,7 @@
       text-decoration: underline;
     }
 
-    /* â”€â”€ Video viewer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Video viewer ───────────────────────────────── */
     #viewer {
       flex: 1;
       display: flex;
@@ -603,7 +668,7 @@
       font-weight: 600;
     }
 
-    /* â”€â”€ IoT Controls bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── IoT Controls bar ───────────────────────────── */
     #controls-bar {
       display: none;
       align-items: center;
@@ -615,7 +680,7 @@
       flex-wrap: wrap;
     }
 
-    /* â”€â”€ Viewer count badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Viewer count badge ──────────────────────────── */
     #viewer-count-badge {
       font-size: .78rem;
       color: #9e7e82;
@@ -623,7 +688,7 @@
       margin-left: .4rem;
     }
 
-    /* â”€â”€ Goal bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Goal bar ────────────────────────────────────── */
     #goal-bar-wrap {
       padding: .6rem 1.5rem;
       background: #202020;
@@ -720,7 +785,7 @@
       transition: width 1s linear;
     }
 
-    /* â”€â”€ Spotify bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Spotify bar ────────────────────────────────────── */
     #spotify-bar {
       display: none;
       position: fixed;
@@ -891,7 +956,7 @@
       flex-shrink: 0;
     }
 
-    /* â”€â”€ Heat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Heat ───────────────────────────────────────── */
 
     /* Smoldering background bloom behind the hero */
     #login-section {
@@ -905,12 +970,12 @@
       filter: drop-shadow(0 0 18px rgba(220, 80, 100, 0.45));
     }
 
-    /* Hero heading â€” warm glow on the text */
+    /* Hero heading — warm glow on the text */
     .landing-hero h1 {
       text-shadow: 0 0 40px rgba(232, 100, 120, 0.35);
     }
 
-    /* Link cards â€” deep ember on hover, crimson border pulse */
+    /* Link cards — deep ember on hover, crimson border pulse */
     .link-card:hover {
       background: #2a1520;
       border-color: #d4667a;
@@ -936,12 +1001,12 @@
       transform: translateX(100%);
     }
 
-    /* Nav â€” very subtle warm top border glow */
+    /* Nav — very subtle warm top border glow */
     .landing-nav {
       box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160, 30, 50, 0.12);
     }
 
-    /* Sign-in button â€” hot pink on hover */
+    /* Sign-in button — hot pink on hover */
     #sign-in-btn:hover {
       background: #d4667a;
       border-color: #d4667a;
@@ -949,7 +1014,7 @@
       box-shadow: 0 4px 20px rgba(212, 102, 122, 0.35);
     }
 
-    /* â”€â”€ Mobile responsive (â‰¤ 640px) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Mobile responsive (≤ 640px) ───────────────── */
     @media (max-width: 640px) {
 
       /* Allow the dashboard to scroll instead of clipping */
@@ -1038,6 +1103,10 @@
         grid-template-columns: minmax(0, 1fr);
       }
 
+      .public-intake-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
       #viewer-title {
         font-size: .95rem;
         margin-bottom: .5rem;
@@ -1084,22 +1153,22 @@
 </head>
 <body>
 
-  <!-- â”€â”€ Guest Landing Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Guest Landing Section ──────────────────────── -->
   <section id="login-section">
 
     <!-- Sticky nav -->
     <nav class="landing-nav">
-      <span class="landing-logo">ðŸ¾ mochii.live</span>
+      <span class="landing-logo">&#128062; mochii.live</span>
       <button id="sign-in-btn" type="button">
-        Sign In ðŸ¾
+        Sign In &#128062;
       </button>
     </nav>
 
     <!-- Hero -->
     <div class="landing-hero">
-      <span class="hero-paw" aria-hidden="true">ðŸ¾</span>
+      <span class="hero-paw" aria-hidden="true">&#128062;</span>
       <h1 aria-label="mochii.live">mochii.live</h1>
-      <p class="hero-tagline">come find your place in the pack. ðŸ¾</p>
+      <p class="hero-tagline">come find your place in the pack. &#128062;</p>
     </div>
 
     <div class="public-status-strip" aria-label="Public status">
@@ -1109,7 +1178,7 @@
           <div class="public-status-label">Days Locked</div>
           <div class="public-status-sub" id="pub-days-locked-goal">Goal: --</div>
           <div style="display:flex;gap:.5rem;justify-content:center;margin-top:.6rem">
-            <button id="pub-days-remove" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">âˆ’1 day</button>
+            <button id="pub-days-remove" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">-1 day</button>
             <button id="pub-days-add" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">+1 day</button>
           </div>
         </div>
@@ -1119,32 +1188,58 @@
 
     <!-- Static nav cards -->
     <div class="links-section">
-      <p class="links-section-label">pages âœ¦</p>
+      <p class="links-section-label">PAGES</p>
       <div class="links-list">
         <a class="link-card" href="https://links.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">ðŸ”—</span>
+          <span class="link-card-emoji" aria-hidden="true">&#128279;</span>
           <span class="link-card-body">
             <span class="link-card-title">All Links</span>
             <span class="link-card-desc">browse my socials, shop, and more</span>
           </span>
-          <span class="link-card-arrow" aria-hidden="true">â†’</span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
         <a class="link-card" href="/anon">
-          <span class="link-card-emoji" aria-hidden="true">ðŸ¾</span>
+          <span class="link-card-emoji" aria-hidden="true">&#128062;</span>
           <span class="link-card-body">
             <span class="link-card-title">Ask a Question</span>
             <span class="link-card-desc">drop me an anonymous question or message</span>
           </span>
-          <span class="link-card-arrow" aria-hidden="true">â†’</span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
         <a class="link-card" href="https://drool.mochii.live">
-          <span class="link-card-emoji" aria-hidden="true">ðŸ’§</span>
+          <span class="link-card-emoji" aria-hidden="true">&#128167;</span>
           <span class="link-card-body">
             <span class="link-card-title">Drool Log</span>
-            <span class="link-card-desc">the shame gallery â€“ she liked this</span>
+            <span class="link-card-desc">the shame gallery - she liked this</span>
           </span>
-          <span class="link-card-arrow" aria-hidden="true">â†’</span>
+          <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
+      </div>
+    </div>
+
+    <div class="links-section">
+      <p class="links-section-label">CONTACT HANDLER</p>
+      <div class="public-intake-grid">
+        <div class="public-intake-card">
+          <h3>📅 Booking Request</h3>
+          <p>Share your details and availability. Handler will review and follow up.</p>
+          <input id="booking-contact" type="text" maxlength="120" placeholder="Contact handle (Discord/Telegram/etc.)" />
+          <input id="booking-availability" type="text" maxlength="160" placeholder="Availability window" />
+          <input id="booking-intent" type="text" maxlength="200" placeholder="Session intent" />
+          <input id="booking-location" type="text" maxlength="160" placeholder="Location / timezone" />
+          <button id="booking-submit-btn" class="control-btn" type="button">Send Booking</button>
+          <div id="booking-status" class="public-intake-status"></div>
+        </div>
+
+        <div class="public-intake-card">
+          <h3>📬 Puppy Mail</h3>
+          <p>Send a note to the handler team. Replies appear after review in-app.</p>
+          <input id="mail-name" type="text" maxlength="80" placeholder="Name (optional)" />
+          <input id="mail-contact" type="text" maxlength="120" placeholder="Contact (optional)" />
+          <textarea id="mail-message" maxlength="1000" placeholder="Your message"></textarea>
+          <button id="mail-submit-btn" class="control-btn" type="button">Send Mail</button>
+          <div id="mail-status" class="public-intake-status"></div>
+        </div>
       </div>
     </div>
 
@@ -1153,38 +1248,38 @@
          this link is security-through-obscurity only. Anyone who discovers /admin.html
          still needs valid admin credentials to access any protected functionality. -->
     <footer class="landing-footer">
-      <a href="/admin.html" style="color:#1a1a1a;text-decoration:none;" tabindex="-1" aria-hidden="true">ðŸ¾</a>
+      <a href="/admin.html" style="color:#1a1a1a;text-decoration:none;" tabindex="-1" aria-hidden="true">&#128062;</a>
     </footer>
 
   </section>
 
-  <!-- â”€â”€ Dashboard Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Dashboard Section ─────────────────────────── -->
   <section id="dashboard-section" aria-label="Camera Dashboard">
     <header>
-      <h1 aria-label="mochii.live">ðŸ¾ mochii.live</h1>
+      <h1 aria-label="mochii.live">&#128062; mochii.live</h1>
       <span id="tier-badge"></span>
-      <button id="logout-btn">Go for a Walk ðŸ¾</button>
+      <button id="logout-btn">Go for a Walk &#128062;</button>
     </header>
     <div id="main-layout">
       <!-- Sidebar -->
       <nav id="camera-sidebar" aria-label="Camera list">
         <h2>The Yard</h2>
-        <p id="sidebar-message"><span class="paw-loading" role="status" aria-label="Loading cameras">ðŸ¾</span></p>
+        <p id="sidebar-message"><span class="paw-loading" role="status" aria-label="Loading cameras">&#128062;</span></p>
         <div id="upgrade-prompt">
-          ðŸ¾ Bad Dog! No treats here.<br>
+          🐾 Bad Dog! No treats here.<br>
           Link your Discord account to unlock streams.
         </div>
       </nav>
       <!-- Viewer -->
       <div id="viewer">
-        <p id="viewer-placeholder">ðŸ¾ Pick a spot in The Yard.</p>
+        <p id="viewer-placeholder">🐾 Pick a spot in The Yard.</p>
         <video id="stream-video" style="display:none;" autoplay muted playsinline controls></video>
         <p id="stream-status" class="stream-status" style="display:none;"></p>
         <span id="viewer-count-badge"></span>
         <p id="viewer-title" style="display:none;"></p>
       </div>
     </div>
-    <!-- â”€â”€ Goal bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Goal bar ──────────────────────────────────── -->
     <div id="goal-bar-wrap" style="display:none" aria-label="Stream goal">
       <div id="goal-bar-label">
         <span id="goal-bar-text">Stream Goal</span>
@@ -1192,16 +1287,16 @@
       </div>
       <div id="goal-bar-track"><div id="goal-bar-fill" style="width:0%"></div></div>
     </div>
-    <!-- â”€â”€ IoT Controls bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── IoT Controls bar ──────────────────────────── -->
     <div id="controls-bar" aria-label="Interactive device controls">
       <h2>Interactive Controls</h2>
       <div id="controls-buttons">
         <div class="control-btn-wrap">
-          <button id="pavlok-btn" class="control-btn">âš¡ Pavlok ðŸ¾</button>
+          <button id="pavlok-btn" class="control-btn">⚡ Pavlok 🐾</button>
           <div id="pavlok-cooldown-bar" class="cooldown-bar"><div class="cooldown-bar-fill"></div></div>
         </div>
         <div class="control-btn-wrap">
-          <button id="lovense-btn" class="control-btn">ðŸ’œ Lovense ðŸ¾</button>
+          <button id="lovense-btn" class="control-btn">💜 Lovense 🐾</button>
           <div id="lovense-cooldown-bar" class="cooldown-bar"><div class="cooldown-bar-fill"></div></div>
         </div>
       </div>
@@ -1220,7 +1315,7 @@
           <label for="auth-password" class="visually-hidden">Password</label>
           <input id="auth-password" type="password" name="password" placeholder="Password" autocomplete="current-password" required maxlength="128" />
           <div class="form-row">
-            <button id="login-submit-btn" type="submit">Sign In ðŸ¾</button>
+            <button id="login-submit-btn" type="submit">Sign In &#128062;</button>
             <button id="register-submit-btn" type="button">Register</button>
           </div>
         </form>
@@ -1230,14 +1325,14 @@
   </div>
 
   <script>
-    // â”€â”€ Storage helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Storage helpers ───────────────────────────────
     const TOKEN_KEY = 'mochii_token';
 
     function saveToken(token) { sessionStorage.setItem(TOKEN_KEY, token); }
     function getToken()       { return sessionStorage.getItem(TOKEN_KEY); }
     function clearToken()     { sessionStorage.removeItem(TOKEN_KEY); }
 
-    // â”€â”€ UI toggles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── UI toggles ────────────────────────────────────
     function showDashboard() {
       document.getElementById('login-section').style.display     = 'none';
       const dash = document.getElementById('dashboard-section');
@@ -1279,7 +1374,7 @@
         const daysLocked = data.days_locked ?? data.days_caged;
         const goalDays = data.days_locked_goal_days ?? 0;
         const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
-        document.getElementById('pub-days-locked').textContent = goalMet ? 'ðŸ”“ Unlocked' : String(daysLocked ?? '--');
+        document.getElementById('pub-days-locked').textContent = goalMet ? 'Unlocked' : String(daysLocked ?? '--');
         document.getElementById('pub-days-locked-goal').textContent =
           goalMet
             ? `Goal met! (${daysLocked}/${goalDays} days)`
@@ -1316,6 +1411,90 @@
       }
     }
 
+    async function submitPublicBooking() {
+      const contact = (document.getElementById('booking-contact')?.value || '').trim();
+      const availability = (document.getElementById('booking-availability')?.value || '').trim();
+      const intent = (document.getElementById('booking-intent')?.value || '').trim();
+      const location = (document.getElementById('booking-location')?.value || '').trim();
+      const statusEl = document.getElementById('booking-status');
+      const btn = document.getElementById('booking-submit-btn');
+
+      if (!contact || !availability || !intent || !location) {
+        if (statusEl) statusEl.textContent = 'Please complete all booking fields.';
+        return;
+      }
+
+      btn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Sending booking request...';
+      try {
+        const r = await fetch('/api/booking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contact_handle: contact,
+            availability_window: availability,
+            session_intent: intent,
+            location_text: location,
+            source: 'public',
+          }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || ('HTTP ' + r.status));
+        }
+        ['booking-contact', 'booking-availability', 'booking-intent', 'booking-location'].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        if (statusEl) statusEl.textContent = '✅ Booking sent. Handler will review it soon.';
+      } catch (e) {
+        if (statusEl) statusEl.textContent = '❌ Could not send booking: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function submitPublicMail() {
+      const name = (document.getElementById('mail-name')?.value || '').trim();
+      const contact = (document.getElementById('mail-contact')?.value || '').trim();
+      const message = (document.getElementById('mail-message')?.value || '').trim();
+      const statusEl = document.getElementById('mail-status');
+      const btn = document.getElementById('mail-submit-btn');
+
+      if (!message) {
+        if (statusEl) statusEl.textContent = 'Message cannot be empty.';
+        return;
+      }
+
+      btn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Sending puppy mail...';
+      try {
+        const r = await fetch('/api/puppy-mail', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_name: name || null,
+            sender_contact: contact || null,
+            message: message,
+            source: 'public',
+          }),
+        });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || ('HTTP ' + r.status));
+        }
+        ['mail-name', 'mail-contact', 'mail-message'].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        if (statusEl) statusEl.textContent = '✅ Puppy mail delivered to handler queue.';
+      } catch (e) {
+        if (statusEl) statusEl.textContent = '❌ Could not send puppy mail: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     function openAuthModal() {
       document.getElementById('auth-modal').hidden = false;
       document.getElementById('auth-username').focus();
@@ -1339,10 +1518,10 @@
         .replace(/>/g, '&gt;');
     }
 
-    // â”€â”€ Active WebRTC peer connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Active WebRTC peer connection ─────────────────
     let activePc = null;
 
-    // â”€â”€ WebRTC stream using go2rtc API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── WebRTC stream using go2rtc API ────────────────
     async function startWebRTCStream(webrtcApiUrl) {
       const videoEl  = document.getElementById('stream-video');
       const statusEl = document.getElementById('stream-status');
@@ -1350,7 +1529,7 @@
       if (activePc) { activePc.close(); activePc = null; }
       videoEl.srcObject = null;
 
-      statusEl.textContent = 'Connectingâ€¦';
+      statusEl.textContent = 'Connecting…';
       statusEl.className   = 'stream-status connecting';
 
       const pc = new RTCPeerConnection({ iceServers: [] });
@@ -1362,7 +1541,7 @@
       pc.ontrack = (ev) => {
         if (ev.streams && ev.streams[0]) {
           videoEl.srcObject = ev.streams[0];
-          statusEl.textContent = 'â— Live';
+          statusEl.textContent = '● Live';
           statusEl.className   = 'stream-status live';
           videoEl.classList.add('live-glow');
         }
@@ -1370,7 +1549,7 @@
 
       pc.oniceconnectionstatechange = () => {
         if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
-          statusEl.textContent = 'Connection lost â€“ reload to retry';
+          statusEl.textContent = 'Connection lost – reload to retry';
           statusEl.className   = 'stream-status error';
           videoEl.classList.remove('live-glow');
         }
@@ -1416,7 +1595,7 @@
       }
     }
 
-    // â”€â”€ Switch to a camera â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Switch to a camera ────────────────────────────
     function selectCamera(displayName, streamSlug, buttonEl) {
       document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
       buttonEl.classList.add('active');
@@ -1433,7 +1612,7 @@
       startViewerPoll(streamSlug);
     }
 
-    // â”€â”€ Render sidebar camera buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Render sidebar camera buttons ─────────────────
     function renderSidebar(cameras) {
       const sidebar     = document.getElementById('camera-sidebar');
       const upgradeEl   = document.getElementById('upgrade-prompt');
@@ -1458,7 +1637,7 @@
       });
     }
 
-    // â”€â”€ Load allowed cameras from the protected API â”€â”€â”€
+    // ── Load allowed cameras from the protected API ───
     async function loadCameras() {
       const token = getToken();
       if (!token) { showLogin(); return; }
@@ -1469,6 +1648,9 @@
         });
 
         if (resp.status === 401) { clearToken(); showLogin(); return; }
+        if (resp.status === 403) {
+          throw new Error('Screen share is not publicly approved by a handler yet.');
+        }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
         const cameras = await resp.json();
@@ -1483,13 +1665,13 @@
       }
     }
 
-    // â”€â”€ IoT Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── IoT Controls ──────────────────────────────────
 
     /**
      * Decode the payload section of a JWT without verifying the signature.
      *
      * NOTE: This is used only to make UI decisions (e.g., show/hide buttons).
-     * It is NOT a security boundary â€“ authorisation is always enforced server-side.
+     * It is NOT a security boundary – authorisation is always enforced server-side.
      */
     function decodeJwtPayload(token) {
       try {
@@ -1500,9 +1682,9 @@
 
     /** Map access_level to a mochii.live tier badge label. */
     function tierLabel(level) {
-      if (level >= 3) return 'ðŸ¾ Alpha Pack';
-      if (level >= 2) return 'ðŸ¾ Loyal Doggo';
-      if (level >= 1) return 'ðŸ¾ Good Pupil';
+      if (level >= 3) return 'Alpha Pack';
+      if (level >= 2) return 'Loyal Doggo';
+      if (level >= 1) return 'Good Pupil';
       return null;
     }
 
@@ -1561,16 +1743,16 @@
 
     /**
      * Call the control API for *device* and handle the response:
-     *   200 â€“ show activation feedback; start cooldown timer for teaser users.
-     *   429 â€“ extract Retry-After and start cooldown timer.
-     *   401 â€“ token expired; return to login.
+     *   200 – show activation feedback; start cooldown timer for teaser users.
+     *   429 – extract Retry-After and start cooldown timer.
+     *   401 – token expired; return to login.
      */
     async function triggerDevice(device, btn, baseLabel) {
       const token = getToken();
       if (!token) return;
 
       btn.disabled    = true;
-      btn.textContent = `${baseLabel} â€¦`;
+      btn.textContent = `${baseLabel} …`;
 
       try {
         const resp = await fetch(`/api/control/${device}`, {
@@ -1593,7 +1775,7 @@
           } else {
             // Premium: brief confirmation, then re-enable immediately.
             btn.disabled    = false;
-            btn.textContent = `${baseLabel} âœ“`;
+            btn.textContent = `${baseLabel} ✓`;
             setTimeout(() => { btn.textContent = baseLabel; }, 2000);
           }
         } else if (resp.status === 429) {
@@ -1638,8 +1820,8 @@
       }
 
       const devices = [
-        { id: 'pavlok', label: 'âš¡ Pavlok ðŸ¾', btnId: 'pavlok-btn' },
-        { id: 'lovense', label: 'ðŸ’œ Lovense ðŸ¾', btnId: 'lovense-btn' },
+        { id: 'pavlok', label: '⚡ Pavlok 🐾', btnId: 'pavlok-btn' },
+        { id: 'lovense', label: '💜 Lovense 🐾', btnId: 'lovense-btn' },
       ];
 
       devices.forEach(({ id, label, btnId }) => {
@@ -1659,7 +1841,7 @@
       });
     }
 
-    // â”€â”€ Spotify: Now Playing & Add to Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Spotify: Now Playing & Add to Queue ───────────
 
     let _npPollInterval = null;
 
@@ -1705,7 +1887,7 @@
           linkEl.style.display = 'none';
         }
       } catch (_) {
-        // Silently fail â€“ Spotify errors shouldn't disrupt the rest of the UI
+        // Silently fail – Spotify errors shouldn't disrupt the rest of the UI
       }
     }
 
@@ -1740,7 +1922,7 @@
       const btn       = document.getElementById('queue-search-btn');
       const resultsEl = document.getElementById('queue-results');
       btn.disabled    = true;
-      btn.textContent = 'â€¦';
+      btn.textContent = '…';
       resultsEl.innerHTML = '';
 
       try {
@@ -1776,7 +1958,7 @@
               <div class="queue-result-artist">${escHtmlNote(track.artists.join(', '))}</div>
             </div>
             <button class="control-btn queue-add-btn" type="button"
-                    aria-label="Add ${escHtmlNote(track.name)} to queue">Add ðŸŽµ</button>
+                    aria-label="Add ${escHtmlNote(track.name)} to queue">Add 🎵</button>
           `;
 
           const addBtn = item.querySelector('.queue-add-btn');
@@ -1787,7 +1969,7 @@
         resultsEl.innerHTML = '<span style="color:#9e7e82;font-size:.8rem;">Search failed.</span>';
       } finally {
         btn.disabled    = false;
-        btn.textContent = 'Search ðŸŽµ';
+        btn.textContent = 'Search 🎵';
       }
     }
 
@@ -1797,7 +1979,7 @@
 
       const origLabel  = btn.textContent;
       btn.disabled     = true;
-      btn.textContent  = 'â€¦';
+      btn.textContent  = '…';
 
       try {
         const resp = await fetch('/api/spotify/queue', {
@@ -1809,21 +1991,21 @@
         if (resp.status === 401) { clearToken(); showLogin(); return; }
 
         if (resp.ok) {
-          btn.textContent = 'âœ“ Added!';
+          btn.textContent = '✓ Added!';
           setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; }, 2000);
         } else {
           const err = await resp.json().catch(() => ({}));
-          btn.textContent = 'âœ— Error';
+          btn.textContent = '✗ Error';
           btn.title       = err.detail || 'Failed to add to queue.';
           setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; btn.title = ''; }, 3000);
         }
       } catch (_) {
-        btn.textContent = 'âœ— Error';
+        btn.textContent = '✗ Error';
         setTimeout(() => { btn.textContent = origLabel; btn.disabled = false; }, 3000);
       }
     }
 
-    // â”€â”€ Logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Logout ────────────────────────────────────────
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (activePc) { activePc.close(); activePc = null; }
       // Clear any active countdown timers and hide controls bar
@@ -1837,7 +2019,7 @@
       if (badge) badge.style.display = 'none';
       // Clear persisted cooldown timestamps so a fresh login starts clean
       ['pavlok', 'lovense'].forEach(d => sessionStorage.removeItem(`${d}_cooldown_until`));
-      // Hide the queue section and clear its state (bar keeps polling â€“ it's public)
+      // Hide the queue section and clear its state (bar keeps polling – it's public)
       const queueSection = document.getElementById('queue-section');
       if (queueSection) queueSection.style.display = 'none';
       document.getElementById('queue-results').innerHTML = '';
@@ -1855,7 +2037,7 @@
         .replace(/"/g, '&quot;');
     }
 
-    // â”€â”€ Auth form (login + register) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Auth form (login + register) ─────────────────
     (function initAuthForm() {
       const form       = document.getElementById('auth-form');
       const loginBtn   = document.getElementById('login-submit-btn');
@@ -1883,7 +2065,7 @@
 
           if (endpoint === '/api/auth/register') {
             if (resp.ok) {
-              showLogin('Account created! You can now sign in. ðŸ¾', 'info');
+              showLogin('Account created! You can now sign in.', 'info');
             } else {
               showLogin(data.detail || 'Registration failed. Please try again.', 'error');
             }
@@ -1900,7 +2082,7 @@
             initSpotify();
             loadGoalBar();
           } else if (resp.status === 401) {
-            showLogin('ðŸ¾ Bad Dog! Invalid username or password.', 'error');
+            showLogin('🐾 Bad Dog! Invalid username or password.', 'error');
           } else {
             showLogin(data.detail || 'Login failed. Please try again.', 'error');
           }
@@ -1922,7 +2104,7 @@
       });
     })();
 
-    // â”€â”€ Auth modal wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Auth modal wiring ─────────────────────────────
     document.getElementById('sign-in-btn').addEventListener('click', openAuthModal);
     document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
     document.getElementById('auth-modal-backdrop').addEventListener('click', (e) => {
@@ -1930,11 +2112,13 @@
     });
     document.getElementById('pub-days-add').addEventListener('click', () => adjustPublicDaysLocked(1));
     document.getElementById('pub-days-remove').addEventListener('click', () => adjustPublicDaysLocked(-1));
+    document.getElementById('booking-submit-btn').addEventListener('click', submitPublicBooking);
+    document.getElementById('mail-submit-btn').addEventListener('click', submitPublicMail);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
     });
 
-    // â”€â”€ Page initialisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Page initialisation ───────────────────────────
     (function init() {
       // Auto-login via one-time ?token= query parameter (generated by /token Discord command)
       const urlParams = new URLSearchParams(window.location.search);
@@ -1946,7 +2130,7 @@
         window.history.replaceState(null, '', cleanUrl);
       }
 
-      // Start Spotify now-playing polling unconditionally â€“ no auth required.
+      // Start Spotify now-playing polling unconditionally – no auth required.
       pollNowPlaying();
       _npPollInterval = setInterval(pollNowPlaying, 5000);
 
@@ -1965,7 +2149,7 @@
       }
     })();
 
-    // â”€â”€ Stream goal bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Stream goal bar ───────────────────────────────
     async function loadGoalBar() {
       try {
         const r = await fetch('/api/stream/goal');
@@ -1976,13 +2160,13 @@
         const pct = d.target_cents > 0 ? Math.min(100, Math.round(d.current_cents / d.target_cents * 100)) : 0;
         const fmt = c => (c / 100).toFixed(2);
         document.getElementById('goal-bar-text').textContent = d.label || 'Stream Goal';
-        document.getElementById('goal-bar-amounts').textContent = `Â£${fmt(d.current_cents)} / Â£${fmt(d.target_cents)}`;
+        document.getElementById('goal-bar-amounts').textContent = `£${fmt(d.current_cents)} / £${fmt(d.target_cents)}`;
         document.getElementById('goal-bar-fill').style.width = pct + '%';
         wrap.style.display = 'block';
       } catch (err) { console.warn('Goal bar:', err); }
     }
 
-    // â”€â”€ Viewer count polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Viewer count polling ──────────────────────────
     let _viewerPollInterval = null;
     let _currentStreamSlug = null;
 
@@ -2009,7 +2193,7 @@
         const info = d.streams && d.streams[_currentStreamSlug];
         const badge = document.getElementById('viewer-count-badge');
         if (info && info.viewer_count > 0) {
-          badge.textContent = `ðŸ‘€ ${info.viewer_count} watching`;
+          badge.textContent = `👀 ${info.viewer_count} watching`;
         } else {
           badge.textContent = '';
         }
@@ -2018,26 +2202,27 @@
 
   </script>
 
-  <!-- â”€â”€ Spotify bar (fixed bottom, all screens) â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Spotify bar (fixed bottom, all screens) ────── -->
   <div id="spotify-bar" aria-label="Spotify">
-    <h2>ðŸŽµ Now Playing</h2>
+    <h2>🎵 Now Playing</h2>
     <div id="now-playing-section" aria-live="polite" aria-label="Currently playing track">
       <img id="np-album-art" src="" alt="" style="display:none;" loading="lazy">
       <div id="np-info">
         <span id="np-track-name">Nothing playing</span>
         <span id="np-artist-name"></span>
       </div>
-      <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;" aria-label="Open in Spotify">â†— Spotify</a>
+      <a id="np-open-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;" aria-label="Open in Spotify">↗ Spotify</a>
     </div>
     <!-- Add to Queue: only shown for access_level >= 2 -->
     <div id="queue-section" style="display:none;" aria-label="Add to queue">
       <div id="queue-search-row">
-        <input id="queue-search-input" type="text" placeholder="Add a song to queueâ€¦" maxlength="200" autocomplete="off" aria-label="Search for a song to add to queue">
-        <button id="queue-search-btn" class="control-btn" type="button">Search ðŸŽµ</button>
+        <input id="queue-search-input" type="text" placeholder="Add a song to queue…" maxlength="200" autocomplete="off" aria-label="Search for a song to add to queue">
+        <button id="queue-search-btn" class="control-btn" type="button">Search 🎵</button>
       </div>
       <div id="queue-results" role="list" aria-label="Search results"></div>
     </div>
   </div>
 </body>
 </html>
+
 

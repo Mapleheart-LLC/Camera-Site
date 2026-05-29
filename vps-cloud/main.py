@@ -1072,6 +1072,15 @@ def get_my_cameras(
       handler / admin → minimum_access_level 3 (all streams)
     """
     role: str = current_user.get("role", "user")
+    public_screen_share_approved = (
+        (get_setting(db, "public_screen_share_approved", "false") or "false").strip().lower() == "true"
+    )
+    if role in {"user", "paid_user"} and not public_screen_share_approved:
+        raise HTTPException(
+            status_code=403,
+            detail="Screen share is not publicly approved right now. Please try again later.",
+        )
+
     # Derive the effective camera access tier from the user's role.
     effective_level: int = ROLE_ACCESS_LEVEL.get(role, 1)
     user_id: str = current_user["user_id"]
@@ -1110,6 +1119,15 @@ async def proxy_webrtc(
     hierarchy before checking stream eligibility.
     """
     role: str = current_user.get("role", "user")
+    public_screen_share_approved = (
+        (get_setting(db, "public_screen_share_approved", "false") or "false").strip().lower() == "true"
+    )
+    if role in {"user", "paid_user"} and not public_screen_share_approved:
+        raise HTTPException(
+            status_code=403,
+            detail="Screen share is not publicly approved right now.",
+        )
+
     effective_level: int = ROLE_ACCESS_LEVEL.get(role, 1)
 
     row = db.execute(

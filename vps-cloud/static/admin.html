@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live â€“ Alpha Kennel admin panel." />
+  <meta name="description" content="mochii.live – Alpha Kennel admin panel." />
   <meta name="robots" content="noindex, nofollow" />
-  <title>ðŸ¾ The Alpha Kennel</title>
+  <title>🐾 The Alpha Kennel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -20,7 +20,7 @@
       min-height: 100vh;
     }
 
-    /* â”€â”€ Login panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Login panel ─────────────────────────────────────── */
     #login-panel {
       display: flex;
       align-items: center;
@@ -83,7 +83,7 @@
       content: ''; flex: 1; height: 1px; background: #3d2a2e;
     }
 
-    /* â”€â”€ Admin shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Admin shell ─────────────────────────────────────── */
     #admin-panel { display: none; min-height: 100vh; }
 
     .admin-topbar {
@@ -116,10 +116,10 @@
     }
     #logout-admin-btn:hover { border-color: #e8aeb7; color: #e8aeb7; }
 
-    /* â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Layout ──────────────────────────────────────── */
     .admin-layout { display: flex; min-height: calc(100vh - 56px); }
 
-    /* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Sidebar ──────────────────────────────────────── */
     .sidebar {
       width: 220px; flex-shrink: 0;
       background: #1c1c1c; border-right: 1px solid #3d2a2e;
@@ -156,7 +156,7 @@
     }
     .nav-badge.visible { display: inline-block; }
 
-    /* â”€â”€ Main content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Main content ────────────────────────────────── */
     .admin-main { flex: 1; padding: 1.75rem 2rem; min-width: 0; }
 
     .section-heading {
@@ -167,7 +167,7 @@
     .admin-section { display: none; }
     .admin-section.active { display: block; }
 
-    /* â”€â”€ Sub-tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Sub-tabs ─────────────────────────────────────── */
     .sub-tabs {
       display: flex; gap: .5rem; margin-bottom: 1.25rem;
       border-bottom: 1px solid #3d2a2e; padding-bottom: .75rem;
@@ -182,7 +182,7 @@
     .sub-tab-content { display: none; }
     .sub-tab-content.active { display: block; }
 
-    /* â”€â”€ Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Cards ───────────────────────────────────────── */
     .card { background: #202020; border: 1px solid #3d2a2e; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
     .card-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -192,13 +192,13 @@
     .card-body { padding: 1.25rem; }
     .card-body.no-pad { padding: 0; }
 
-    /* â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Stats ───────────────────────────────────────── */
     .stats-row { display: flex; gap: 1rem; flex-wrap: wrap; }
     .stat-tile { flex: 1; min-width: 120px; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.25rem; text-align: center; }
     .stat-tile .stat-value { font-size: 2rem; font-weight: 800; color: #e8aeb7; line-height: 1; }
     .stat-tile .stat-label { font-size: .73rem; color: #9e7e82; margin-top: .35rem; text-transform: uppercase; letter-spacing: .05em; }
 
-    /* â”€â”€ Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Tables ──────────────────────────────────────── */
     .admin-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
     .admin-table th { text-align: left; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; padding: .6rem .85rem; border-bottom: 1px solid #3d2a2e; }
     .admin-table td { padding: .65rem .85rem; border-bottom: 1px solid #2a1e20; vertical-align: middle; }
@@ -206,7 +206,7 @@
     .admin-table tr:hover td { background: rgba(232,174,183,.04); }
     .empty-row td { color: #5a3a3e; text-align: center; padding: 1.5rem; }
 
-    /* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Buttons ─────────────────────────────────────── */
     .btn-sm { padding: .3rem .7rem; border-radius: 6px; font-family: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
     .btn-edit { background: transparent; border: 1px solid #e8aeb7; color: #e8aeb7; }
     .btn-edit:hover { background: #e8aeb7; color: #1a1a1a; }
@@ -214,13 +214,13 @@
     .btn-delete:hover { background: #f87171; color: #1a1a1a; }
     .action-cell { display: flex; gap: .4rem; flex-wrap: wrap; }
 
-    /* â”€â”€ Access level badges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Access level badges ─────────────────────────── */
     .badge-level { display: inline-block; padding: .15rem .55rem; border-radius: 6px; font-size: .75rem; font-weight: 700; }
     .badge-level.l1 { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
     .badge-level.l2 { background: rgba(216,167,177,.12); color: #d8a7b1; border: 1px solid #d8a7b1; }
     .badge-level.l3 { background: rgba(240,176,192,.15); color: #f0b0c0; border: 1px solid #f0b0c0; }
 
-    /* â”€â”€ Camera form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Camera form ─────────────────────────────────── */
     #camera-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
     #camera-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
     .form-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
@@ -232,7 +232,7 @@
     .form-actions { display: flex; gap: .5rem; align-items: flex-end; padding-bottom: 1px; }
     #form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
 
-    /* â”€â”€ IoT control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── IoT control ─────────────────────────────────── */
     .iot-grid { display: flex; gap: 1rem; flex-wrap: wrap; }
     .iot-card { flex: 1; min-width: 180px; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem 1.25rem; text-align: center; }
     .iot-card .iot-name { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #9e7e82; margin-bottom: .75rem; }
@@ -241,13 +241,13 @@
     .btn-iot:disabled { opacity: .5; cursor: not-allowed; }
     .iot-result { margin-top: .6rem; font-size: .78rem; color: #9e7e82; min-height: 1em; }
 
-    /* â”€â”€ Activations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Activations ─────────────────────────────────── */
     .ts-cell { font-size: .78rem; color: #9e7e82; font-family: monospace; }
     .device-tag { display: inline-block; padding: .1rem .45rem; border-radius: 5px; font-size: .75rem; font-weight: 700; }
     .device-tag.pavlok { background: rgba(240,176,64,.1); color: #f0b040; border: 1px solid #f0b040; }
     .device-tag.lovense { background: rgba(232,174,183,.1); color: #e8aeb7; border: 1px solid #e8aeb7; }
 
-    /* â”€â”€ Q&A â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Q&A ─────────────────────────────────────────── */
     .question-row td { vertical-align: top; }
     .question-row.deep-linked { outline: 2px solid #e8aeb7; background: rgba(232,174,183,.08); animation: pulsePink 1.6s ease-out 3; }
     @keyframes pulsePink { 0%,100% { background: rgba(232,174,183,.08); } 50% { background: rgba(232,174,183,.18); } }
@@ -255,7 +255,7 @@
     .q-answer-preview { font-size: .83rem; color: #9e7e82; max-width: 360px; word-break: break-word; font-style: italic; }
     .q-ts { font-size: .75rem; color: #9e7e82; font-family: monospace; white-space: nowrap; }
 
-    /* â”€â”€ Reply modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Reply modal ─────────────────────────────────── */
     #reply-modal-backdrop {
       display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
       z-index: 900; align-items: center; justify-content: center;
@@ -293,7 +293,7 @@
     .answer-form-actions { display: flex; gap: .5rem; }
     #answer-form-error { font-size: .78rem; color: #f87171; min-height: 1em; margin-top: .4rem; }
 
-    /* â”€â”€ Links management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Links management ────────────────────────────── */
     #link-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
     #link-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
     #link-form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
@@ -301,7 +301,7 @@
     .link-active-badge.on  { background: rgba(74,222,128,.1);  color: #4ade80; border: 1px solid #4ade80; }
     .link-active-badge.off { background: rgba(156,163,175,.1); color: #9ca3af; border: 1px solid #9ca3af; }
 
-    /* â”€â”€ Settings / Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Settings / Danger Zone ──────────────────────── */
     .danger-card { background: #1e1010; border: 1px solid #6b1f1f; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
     .danger-card .card-header { background: #2a1515; border-bottom: 1px solid #6b1f1f; }
     .danger-card .card-header h2 { color: #f87171; }
@@ -320,7 +320,7 @@
     .toggle-btn.disable { background: #4ade80; color: #1e1010; }
     .danger-note { font-size: .78rem; color: #9e7e82; margin-top: 1rem; padding: .65rem .9rem; background: rgba(248,113,113,.06); border: 1px solid #4b2020; border-radius: 8px; line-height: 1.5; }
 
-    /* â”€â”€ Store management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Store management ────────────────────────────── */
     #product-form { display: none; background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1.1rem; margin-bottom: 1rem; }
     #product-form h3 { font-size: .83rem; font-weight: 800; color: #e8aeb7; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .85rem; }
     #product-form-error { font-size: .8rem; color: #f87171; margin-top: .5rem; min-height: 1em; }
@@ -332,11 +332,11 @@
     .order-items-detail { font-size: .78rem; color: #9e7e82; }
     .printful-tag { display: inline-block; padding: .1rem .4rem; border-radius: 5px; font-size: .72rem; font-weight: 700; background: rgba(99,179,237,.12); color: #63b3ed; border: 1px solid #63b3ed; }
 
-    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast ───────────────────────────────────────── */
     .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #3d2028; border: 1px solid #e8aeb7; border-radius: 8px; padding: .65rem 1.1rem; font-size: .85rem; color: #e8aeb7; font-weight: 700; box-shadow: 0 4px 20px rgba(0,0,0,.4); opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 300; }
     .toast.show { opacity: 1; transform: translateY(0); }
 
-    /* â”€â”€ Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Analytics ───────────────────────────────────── */
     .analytics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem; }
     .analytics-stat { background: #1a1a1a; border: 1px solid #3d2a2e; border-radius: 10px; padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: .25rem; }
     .analytics-stat .as-label { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #9e7e82; }
@@ -349,7 +349,7 @@
     .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
     @media (max-width: 860px) { .chart-row { grid-template-columns: 1fr; } }
 
-    /* â”€â”€ Mobile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Mobile ──────────────────────────────────────── */
     @media (max-width: 740px) {
       #mob-menu-btn { display: flex; }
       .topbar-badge { display: none; }
@@ -363,10 +363,10 @@
 </head>
 <body>
 
-  <!-- â”€â”€ Login panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Login panel ──────────────────────────────────── -->
   <div id="login-panel">
     <div id="login-card">
-      <h1 aria-label="The Alpha Kennel">ðŸ¾ The Alpha Kennel</h1>
+      <h1 aria-label="The Alpha Kennel">🐾 The Alpha Kennel</h1>
       <p class="subtitle">Authorized Paws Only</p>
       <div class="field-group">
         <label for="admin-username">Username</label>
@@ -377,18 +377,18 @@
         <input id="admin-password" type="password" autocomplete="current-password" placeholder="Enter password" />
       </div>
       <p id="login-error" role="alert" aria-live="polite"></p>
-      <button id="login-btn" class="btn-primary">ðŸ¾ Enter the Kennel</button>
+      <button id="login-btn" class="btn-primary">🐾 Enter the Kennel</button>
     </div>
   </div>
 
-  <!-- â”€â”€ Admin panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Admin panel ──────────────────────────────────── -->
   <div id="admin-panel">
 
     <header class="admin-topbar">
-      <button id="mob-menu-btn" aria-label="Toggle navigation">â˜°</button>
-      <span class="topbar-title">ðŸ¾ The Alpha Kennel</span>
+      <button id="mob-menu-btn" aria-label="Toggle navigation">☰</button>
+      <span class="topbar-title">🐾 The Alpha Kennel</span>
       <span class="topbar-badge">Authorized Paws Only</span>
-      <button id="logout-admin-btn">Leave Kennel ðŸ¾</button>
+      <button id="logout-admin-btn">Leave Kennel 🐾</button>
     </header>
 
     <div id="mob-overlay"></div>
@@ -397,54 +397,54 @@
 
       <nav class="sidebar" id="sidebar" aria-label="Admin navigation">
         <div class="sidebar-section-label">Main</div>
-        <button class="nav-item active" data-target="s-dashboard">ðŸ“Š Dashboard</button>
-        <button class="nav-item" data-target="s-analytics">ðŸ“ˆ Analytics</button>
-        <button class="nav-item" data-target="s-cameras">ðŸ“· Cameras</button>
-        <button class="nav-item" data-target="s-stream">ðŸŽ¬ Stream</button>
+        <button class="nav-item active" data-target="s-dashboard">📊 Dashboard</button>
+        <button class="nav-item" data-target="s-analytics">📈 Analytics</button>
+        <button class="nav-item" data-target="s-cameras">📷 Cameras</button>
+        <button class="nav-item" data-target="s-stream">🎬 Stream</button>
         <button class="nav-item" data-target="s-qa">
-          ðŸ¾ Q&amp;A
+          🐾 Q&amp;A
           <span id="nav-unanswered-badge" class="nav-badge" aria-label="unanswered questions"></span>
         </button>
-        <button class="nav-item" data-target="s-devices">ðŸŽ® Devices</button>
-        <button class="nav-item" data-target="s-users">ðŸ‘¥ Users</button>
+        <button class="nav-item" data-target="s-devices">🎮 Devices</button>
+        <button class="nav-item" data-target="s-users">👥 Users</button>
         <div class="sidebar-section-label">Site</div>
-        <button class="nav-item" data-target="s-links">ðŸ”— Links</button>
-        <button class="nav-item" data-target="s-store">ðŸ›ï¸ Store</button>
-        <button class="nav-item" data-target="s-drool">ðŸ¾ Drool Log</button>
-        <button class="nav-item" data-target="s-spotify">ðŸŽµ Spotify</button>
-        <button class="nav-item" data-target="s-logs">ðŸ“‹ Logs</button>
-        <button class="nav-item" data-target="s-vault">ðŸ—„ï¸ Vault</button>
-        <button class="nav-item" data-target="s-vods">ðŸŽ¬ VODs</button>
+        <button class="nav-item" data-target="s-links">🔗 Links</button>
+        <button class="nav-item" data-target="s-store">🛍️ Store</button>
+        <button class="nav-item" data-target="s-drool">🐾 Drool Log</button>
+        <button class="nav-item" data-target="s-spotify">🎵 Spotify</button>
+        <button class="nav-item" data-target="s-logs">📋 Logs</button>
+        <button class="nav-item" data-target="s-vault">🗄️ Vault</button>
+        <button class="nav-item" data-target="s-vods">🎬 VODs</button>
         <div class="sidebar-section-label">System</div>
-        <button class="nav-item" data-target="s-discord">ðŸ¤– Discord Bot</button>
-        <button class="nav-item danger" data-target="s-settings">âš ï¸ Settings</button>
+        <button class="nav-item" data-target="s-discord">🤖 Discord Bot</button>
+        <button class="nav-item danger" data-target="s-settings">⚠️ Settings</button>
       </nav>
 
       <main class="admin-main">
 
-        <!-- â”€â”€ Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Dashboard ─────────────────────────────── -->
         <section id="s-dashboard" class="admin-section active">
           <h1 class="section-heading">
-            ðŸ“Š Dashboard
-            <button id="refresh-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">â†» Refresh All</button>
+            📊 Dashboard
+            <button id="refresh-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh All</button>
           </h1>
 
           <div class="card">
             <div class="card-header"><h2>Stats</h2></div>
             <div class="card-body">
               <div class="stats-row">
-                <div class="stat-tile"><div id="stat-users" class="stat-value">â€”</div><div class="stat-label">Total Users</div></div>
-                <div class="stat-tile"><div id="stat-cameras" class="stat-value">â€”</div><div class="stat-label">Total Cameras</div></div>
-                <div class="stat-tile"><div id="stat-unanswered" class="stat-value">â€”</div><div class="stat-label">Unanswered Q's</div></div>
-                <div class="stat-tile"><div id="stat-activations" class="stat-value">â€”</div><div class="stat-label">Recent Activations</div></div>
-                <div class="stat-tile"><div id="stat-camera-accesses" class="stat-value">â€”</div><div class="stat-label">Camera Accesses</div></div>
-                <div class="stat-tile"><div id="stat-orders" class="stat-value">â€”</div><div class="stat-label">Total Orders</div></div>
+                <div class="stat-tile"><div id="stat-users" class="stat-value">—</div><div class="stat-label">Total Users</div></div>
+                <div class="stat-tile"><div id="stat-cameras" class="stat-value">—</div><div class="stat-label">Total Cameras</div></div>
+                <div class="stat-tile"><div id="stat-unanswered" class="stat-value">—</div><div class="stat-label">Unanswered Q's</div></div>
+                <div class="stat-tile"><div id="stat-activations" class="stat-value">—</div><div class="stat-label">Recent Activations</div></div>
+                <div class="stat-tile"><div id="stat-camera-accesses" class="stat-value">—</div><div class="stat-label">Camera Accesses</div></div>
+                <div class="stat-tile"><div id="stat-orders" class="stat-value">—</div><div class="stat-label">Total Orders</div></div>
               </div>
             </div>
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸ“‹ Recent Activations</h2></div>
+            <div class="card-header"><h2>📋 Recent Activations</h2></div>
             <div class="card-body no-pad">
               <div style="overflow-x:auto">
                 <table class="admin-table" aria-label="Recent activations">
@@ -458,31 +458,31 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Analytics ─────────────────────────────── -->
         <section id="s-analytics" class="admin-section">
           <h1 class="section-heading">
-            ðŸ“ˆ Analytics
-            <button id="refresh-analytics-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">â†» Refresh</button>
+            📈 Analytics
+            <button id="refresh-analytics-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
           </h1>
 
           <!-- Summary tiles -->
           <div class="analytics-grid" id="analytics-tiles">
-            <div class="analytics-stat"><div class="as-label">Total Users</div><div id="an-users" class="as-value">â€”</div></div>
-            <div class="analytics-stat"><div class="as-label">Camera Accesses (30d)</div><div id="an-cam-30d" class="as-value">â€”</div></div>
-            <div class="analytics-stat"><div class="as-label">Device Activations (30d)</div><div id="an-act-30d" class="as-value">â€”</div></div>
-            <div class="analytics-stat"><div class="as-label">Total Revenue</div><div id="an-rev-total" class="as-value">â€”</div><div id="an-rev-30d" class="as-sub">â€” last 30 days</div></div>
-            <div class="analytics-stat"><div class="as-label">Questions</div><div id="an-q-total" class="as-value">â€”</div><div id="an-q-rate" class="as-sub">â€”% answer rate</div></div>
-            <div class="analytics-stat"><div class="as-label">Drool Posts</div><div id="an-drool-total" class="as-value">â€”</div><div id="an-drool-views" class="as-sub">â€” total views</div></div>
+            <div class="analytics-stat"><div class="as-label">Total Users</div><div id="an-users" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Camera Accesses (30d)</div><div id="an-cam-30d" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Device Activations (30d)</div><div id="an-act-30d" class="as-value">—</div></div>
+            <div class="analytics-stat"><div class="as-label">Total Revenue</div><div id="an-rev-total" class="as-value">—</div><div id="an-rev-30d" class="as-sub">— last 30 days</div></div>
+            <div class="analytics-stat"><div class="as-label">Questions</div><div id="an-q-total" class="as-value">—</div><div id="an-q-rate" class="as-sub">—% answer rate</div></div>
+            <div class="analytics-stat"><div class="as-label">Drool Posts</div><div id="an-drool-total" class="as-value">—</div><div id="an-drool-views" class="as-sub">— total views</div></div>
           </div>
 
           <!-- Charts row 1: Camera access & Activations -->
           <div class="chart-row">
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸŽ¥ Camera Accesses â€“ last 30 days</h2></div>
+              <div class="card-header"><h2>🎥 Camera Accesses – last 30 days</h2></div>
               <div class="chart-body"><canvas id="chart-cam-day" height="200"></canvas></div>
             </div>
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸŽ® Activations â€“ last 30 days</h2></div>
+              <div class="card-header"><h2>🎮 Activations – last 30 days</h2></div>
               <div class="chart-body"><canvas id="chart-act-day" height="200"></canvas></div>
             </div>
           </div>
@@ -490,11 +490,11 @@
           <!-- Charts row 2: Revenue & Q&A -->
           <div class="chart-row">
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸ’° Revenue (paid) â€“ last 30 days</h2></div>
+              <div class="card-header"><h2>💰 Revenue (paid) – last 30 days</h2></div>
               <div class="chart-body"><canvas id="chart-rev-day" height="200"></canvas></div>
             </div>
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸ¾ Questions â€“ last 30 days</h2></div>
+              <div class="card-header"><h2>🐾 Questions – last 30 days</h2></div>
               <div class="chart-body"><canvas id="chart-q-day" height="200"></canvas></div>
             </div>
           </div>
@@ -502,13 +502,13 @@
           <!-- Charts row 3: Breakdowns -->
           <div class="chart-row">
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸ‘¥ Users by Access Level</h2></div>
+              <div class="card-header"><h2>👥 Users by Access Level</h2></div>
               <div class="chart-body" style="max-height:240px;display:flex;align-items:center;justify-content:center">
                 <canvas id="chart-users-level" height="220"></canvas>
               </div>
             </div>
             <div class="chart-card">
-              <div class="card-header"><h2>ðŸ¾ Drool Posts by Platform</h2></div>
+              <div class="card-header"><h2>🐾 Drool Posts by Platform</h2></div>
               <div class="chart-body" style="max-height:240px;display:flex;align-items:center;justify-content:center">
                 <canvas id="chart-drool-platform" height="220"></canvas>
               </div>
@@ -517,38 +517,38 @@
 
           <!-- Drool 30-day chart -->
           <div class="chart-card">
-            <div class="card-header"><h2>ðŸ¾ Drool Posts â€“ last 30 days</h2></div>
+            <div class="card-header"><h2>🐾 Drool Posts – last 30 days</h2></div>
             <div class="chart-body"><canvas id="chart-drool-day" height="160"></canvas></div>
           </div>
 
           <!-- Cloudflare Traffic -->
           <div id="cf-analytics-section">
             <h2 style="font-size:.92rem;font-weight:800;color:#e8aeb7;text-transform:uppercase;letter-spacing:.06em;margin:1.5rem 0 .85rem;display:flex;align-items:center;gap:.5rem">
-              â˜ï¸ Cloudflare Traffic
+              ☁️ Cloudflare Traffic
               <span id="cf-config-badge"></span>
             </h2>
             <div id="cf-not-configured" style="display:none;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:10px;padding:1rem 1.25rem;font-size:.83rem;color:#9e7e82;margin-bottom:1.5rem">
-              â˜ï¸ Cloudflare analytics are not configured. Set <code style="color:#e8aeb7">CLAPI</code> and <code style="color:#e8aeb7">CLZONE</code> in your environment to enable Cloudflare traffic data.
+              ☁️ Cloudflare analytics are not configured. Set <code style="color:#e8aeb7">CLAPI</code> and <code style="color:#e8aeb7">CLZONE</code> in your environment to enable Cloudflare traffic data.
             </div>
             <div id="cf-configured-content" style="display:none">
               <div class="analytics-grid" style="margin-bottom:1.5rem">
-                <div class="analytics-stat"><div class="as-label">Total Requests (30d)</div><div id="cf-requests" class="as-value">â€”</div></div>
-                <div class="analytics-stat"><div class="as-label">Pageviews (30d)</div><div id="cf-pageviews" class="as-value">â€”</div></div>
-                <div class="analytics-stat"><div class="as-label">Unique Visitors (30d)</div><div id="cf-uniques" class="as-value">â€”</div></div>
-                <div class="analytics-stat"><div class="as-label">Bandwidth (30d)</div><div id="cf-bandwidth" class="as-value">â€”</div></div>
-                <div class="analytics-stat"><div class="as-label">Threats Blocked (30d)</div><div id="cf-threats" class="as-value">â€”</div></div>
+                <div class="analytics-stat"><div class="as-label">Total Requests (30d)</div><div id="cf-requests" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Pageviews (30d)</div><div id="cf-pageviews" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Unique Visitors (30d)</div><div id="cf-uniques" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Bandwidth (30d)</div><div id="cf-bandwidth" class="as-value">—</div></div>
+                <div class="analytics-stat"><div class="as-label">Threats Blocked (30d)</div><div id="cf-threats" class="as-value">—</div></div>
               </div>
               <div class="chart-card">
-                <div class="card-header"><h2>â˜ï¸ Cloudflare Requests &amp; Pageviews â€“ last 30 days</h2></div>
+                <div class="card-header"><h2>☁️ Cloudflare Requests &amp; Pageviews – last 30 days</h2></div>
                 <div class="chart-body"><canvas id="chart-cf-traffic" height="200"></canvas></div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Cameras â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Cameras ────────────────────────────────── -->
         <section id="s-cameras" class="admin-section">
-          <h1 class="section-heading">ðŸ“· Camera Management</h1>
+          <h1 class="section-heading">📷 Camera Management</h1>
 
           <div class="card">
             <div class="card-header">
@@ -564,17 +564,17 @@
                   <div class="form-field" style="max-width:150px">
                     <label for="f-level">Min Access Level</label>
                     <select id="f-level">
-                      <option value="1">1 â€“ Good Pupil</option>
-                      <option value="2">2 â€“ Loyal Doggo</option>
-                      <option value="3">3 â€“ Alpha Pack</option>
+                      <option value="1">1 – Good Pupil</option>
+                      <option value="2">2 – Loyal Doggo</option>
+                      <option value="3">3 – Alpha Pack</option>
                     </select>
                   </div>
                 </div>
                 <div class="form-row" style="align-items:center;gap:.75rem;margin:.6rem 0 .3rem">
                   <span style="font-size:.8rem;font-weight:700;color:#c49ea5">Stream Source</span>
-                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-tapo" value="tapo" checked /> ðŸ”Œ Tapo Camera</label>
-                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-rtsp" value="rtsp" /> ðŸŽ¥ Custom RTSP URL</label>
-                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-obs" value="obs" /> ðŸ–¥ï¸ OBS (Laptop/Desktop)</label>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-tapo" value="tapo" checked /> 🔌 Tapo Camera</label>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-rtsp" value="rtsp" /> 🎥 Custom RTSP URL</label>
+                  <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer"><input type="radio" name="source-type" id="src-obs" value="obs" /> 🖥️ OBS (Laptop/Desktop)</label>
                 </div>
                 <div id="tapo-fields" class="form-row">
                   <div class="form-field"><label for="f-tapo-ip">Tapo IP Address</label><input id="f-tapo-ip" type="text" placeholder="e.g. 192.168.1.100" /></div>
@@ -586,7 +586,7 @@
                 </div>
                 <div class="form-row" style="margin-top:.6rem">
                   <div class="form-actions">
-                    <button id="form-save-btn" class="btn-sm btn-edit">Save ðŸ¾</button>
+                    <button id="form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
                     <button id="form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
                   </div>
                 </div>
@@ -597,14 +597,14 @@
                 <table class="admin-table" aria-label="Cameras">
                   <thead><tr><th>ID</th><th>Name</th><th>Stream Slug</th><th>Source</th><th>Min Level</th><th>Actions</th></tr></thead>
                   <tbody id="cameras-body">
-                    <tr class="empty-row"><td colspan="6">Loading camerasâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="6">Loading cameras…</td></tr>
                   </tbody>
                 </table>
               </div>
               <div class="card" style="margin-top:1.5rem">
                 <div class="card-header" style="display:flex;align-items:center;gap:1rem">
                   <h2 style="margin:0">Discovered Edge Cameras</h2>
-                  <button class="btn-sm btn-edit" onclick="loadEdgeCameras()">ðŸ” Discover Edge Cameras</button>
+                  <button class="btn-sm btn-edit" onclick="loadEdgeCameras()">🔍 Discover Edge Cameras</button>
                 </div>
                 <div class="card-body" id="edge-camera-list">
                   <p style="color:#5a3a3e;font-size:.85rem">Click 'Discover Edge Cameras' to load from your edge agent.</p>
@@ -614,27 +614,27 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Stream â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Stream ────────────────────────────────── -->
         <section id="s-stream" class="admin-section">
-          <h1 class="section-heading">ðŸŽ¬ Stream Settings</h1>
+          <h1 class="section-heading">🎬 Stream Settings</h1>
 
           <!-- OBS / RTMP -->
           <div class="card">
-            <div class="card-header"><h2>ðŸ“¡ OBS / RTMP Setup</h2></div>
+            <div class="card-header"><h2>📡 OBS / RTMP Setup</h2></div>
             <div class="card-body">
               <p style="font-size:.85rem;color:#9e7e82;margin-bottom:1rem;">
                 Set OBS stream URL to <strong>rtmp://your-server:1935/&lt;stream_key&gt;</strong>.
                 Generate a key per camera below.
               </p>
               <div id="rtmp-camera-list">
-                <p style="color:#5a3a3e;font-size:.85rem">Loading camerasâ€¦</p>
+                <p style="color:#5a3a3e;font-size:.85rem">Loading cameras…</p>
               </div>
             </div>
           </div>
 
           <!-- Stream Goal -->
           <div class="card" style="margin-top:1rem">
-            <div class="card-header"><h2>ðŸŽ¯ Stream Goal</h2></div>
+            <div class="card-header"><h2>🎯 Stream Goal</h2></div>
             <div class="card-body">
               <div class="form-row" style="gap:.75rem;flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem">
@@ -653,7 +653,7 @@
                   <input id="goal-current-inp" type="number" min="0" placeholder="0" />
                 </div>
               </div>
-              <button id="goal-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">ðŸ’¾ Save Goal</button>
+              <button id="goal-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">💾 Save Goal</button>
               <p id="goal-msg" style="font-size:.8rem;color:#67d399;margin-top:.4rem"></p>
             </div>
           </div>
@@ -661,27 +661,27 @@
           <!-- Stream Schedule -->
           <div class="card" style="margin-top:1rem">
             <div class="card-header">
-              <h2>ðŸ“… Stream Schedule</h2>
+              <h2>📅 Stream Schedule</h2>
               <button id="schedule-add-btn" class="btn-sm btn-edit">+ Add Slot</button>
             </div>
             <div class="card-body">
               <div id="schedule-list"></div>
-              <button id="schedule-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">ðŸ’¾ Save Schedule</button>
+              <button id="schedule-save-btn" class="btn-sm btn-edit" style="margin-top:.75rem">💾 Save Schedule</button>
               <p id="schedule-msg" style="font-size:.8rem;color:#67d399;margin-top:.4rem"></p>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Q&A â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Q&A ───────────────────────────────────── -->
         <section id="s-qa" class="admin-section">
           <h1 class="section-heading">
-            ðŸ¾ Q&amp;A
-            <button id="refresh-questions-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">â†» Refresh</button>
+            🐾 Q&amp;A
+            <button id="refresh-questions-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
           </h1>
 
           <div class="sub-tabs">
-            <button class="sub-tab active" data-tab="unanswered">ðŸ“¬ Unanswered</button>
-            <button class="sub-tab" data-tab="answered">âœ… Answered</button>
+            <button class="sub-tab active" data-tab="unanswered">📬 Unanswered</button>
+            <button class="sub-tab" data-tab="answered">✅ Answered</button>
           </div>
 
           <!-- Unanswered -->
@@ -693,7 +693,7 @@
                   <table class="admin-table" aria-label="Unanswered questions">
                     <thead><tr><th>Question</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
                     <tbody id="questions-body">
-                      <tr class="empty-row"><td colspan="3">Loading questionsâ€¦</td></tr>
+                      <tr class="empty-row"><td colspan="3">Loading questions…</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -710,7 +710,7 @@
                   <table class="admin-table" aria-label="Answered questions">
                     <thead><tr><th>Question</th><th>Your Answer</th><th>Received (UTC)</th><th>Actions</th></tr></thead>
                     <tbody id="answered-questions-body">
-                      <tr class="empty-row"><td colspan="4">Loadingâ€¦</td></tr>
+                      <tr class="empty-row"><td colspan="4">Loading…</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -719,9 +719,9 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Devices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Devices ────────────────────────────────── -->
         <section id="s-devices" class="admin-section">
-          <h1 class="section-heading">ðŸŽ® Manual Device Control</h1>
+          <h1 class="section-heading">🎮 Manual Device Control</h1>
 
           <div class="card">
             <div class="card-header"><h2>IoT Devices</h2></div>
@@ -729,12 +729,12 @@
               <div class="iot-grid">
                 <div class="iot-card">
                   <div class="iot-name">Pavlok</div>
-                  <button id="admin-pavlok-btn" class="btn-iot">âš¡ Trigger Pavlok</button>
+                  <button id="admin-pavlok-btn" class="btn-iot">⚡ Trigger Pavlok</button>
                   <p id="pavlok-result" class="iot-result"></p>
                 </div>
                 <div class="iot-card">
                   <div class="iot-name">Lovense</div>
-                  <button id="admin-lovense-btn" class="btn-iot">ðŸ’œ Trigger Lovense</button>
+                  <button id="admin-lovense-btn" class="btn-iot">💜 Trigger Lovense</button>
                   <p id="lovense-result" class="iot-result"></p>
                 </div>
               </div>
@@ -742,9 +742,9 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Links ──────────────────────────────────── -->
         <section id="s-links" class="admin-section">
-          <h1 class="section-heading">ðŸ”— Links Management</h1>
+          <h1 class="section-heading">🔗 Links Management</h1>
 
           <div class="card">
             <div class="card-header">
@@ -756,18 +756,18 @@
                 <h3 id="link-form-title">Add Link</h3>
                 <div class="form-row">
                   <div class="form-field"><label for="lf-title">Title</label><input id="lf-title" type="text" placeholder="e.g. My Fanvue" /></div>
-                  <div class="form-field" style="max-width:90px"><label for="lf-emoji">Emoji / Icon</label><input id="lf-emoji" type="text" placeholder="e.g. ðŸ¾" maxlength="8" /></div>
+                  <div class="form-field" style="max-width:90px"><label for="lf-emoji">Emoji / Icon</label><input id="lf-emoji" type="text" placeholder="e.g. 🐾" maxlength="8" /></div>
                   <div class="form-field" style="max-width:110px"><label for="lf-order">Sort Order</label><input id="lf-order" type="number" value="0" min="0" /></div>
                 </div>
                 <div class="form-row" style="margin-top:.5rem">
-                  <div class="form-field" style="flex:1"><label for="lf-url">URL</label><input id="lf-url" type="url" placeholder="https://â€¦" /></div>
+                  <div class="form-field" style="flex:1"><label for="lf-url">URL</label><input id="lf-url" type="url" placeholder="https://…" /></div>
                   <div class="form-field" style="max-width:130px;display:flex;flex-direction:column;justify-content:flex-end">
                     <label style="cursor:pointer;display:flex;align-items:center;gap:.4rem;padding-bottom:6px"><input id="lf-active" type="checkbox" checked /> Active</label>
                   </div>
                 </div>
                 <div class="form-row" style="margin-top:.5rem">
                   <div class="form-actions">
-                    <button id="link-form-save-btn" class="btn-sm btn-edit">Save ðŸ¾</button>
+                    <button id="link-form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
                     <button id="link-form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
                   </div>
                 </div>
@@ -778,27 +778,27 @@
                 <table class="admin-table" aria-label="Links">
                   <thead><tr><th>ID</th><th>Icon</th><th>Title</th><th>URL</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody id="links-body">
-                    <tr class="empty-row"><td colspan="7">Loading linksâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="7">Loading links…</td></tr>
                   </tbody>
                 </table>
               </div>
               <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem;">
-                ðŸ”— Public links page: <a href="https://links.mochii.live" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">links.mochii.live</a>
+                🔗 Public links page: <a href="https://links.mochii.live" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">links.mochii.live</a>
               </p>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Store ──────────────────────────────────── -->
         <section id="s-store" class="admin-section">
           <h1 class="section-heading">
-            ðŸ›ï¸ Store Management
-            <button id="refresh-store-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">â†» Refresh</button>
+            🛍️ Store Management
+            <button id="refresh-store-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
           </h1>
 
           <div class="sub-tabs">
-            <button class="sub-tab active" data-store-tab="products">ðŸ“¦ Products</button>
-            <button class="sub-tab" data-store-tab="orders">ðŸ§¾ Orders</button>
+            <button class="sub-tab active" data-store-tab="products">📦 Products</button>
+            <button class="sub-tab" data-store-tab="orders">🧾 Orders</button>
           </div>
 
           <!-- Products -->
@@ -816,13 +816,13 @@
                   <div class="form-row">
                     <div class="form-field" style="flex:2"><label for="pf-name">Name</label><input id="pf-name" type="text" placeholder="e.g. Mochii Pack Tee" /></div>
                     <div class="form-field" style="max-width:130px"><label for="pf-price">Price (USD)</label><input id="pf-price" type="number" min="0" step="0.01" placeholder="24.99" /></div>
-                    <div class="form-field" style="max-width:120px"><label for="pf-stock">Stock (blank = âˆž)</label><input id="pf-stock" type="number" min="0" placeholder="leave blank" /></div>
+                    <div class="form-field" style="max-width:120px"><label for="pf-stock">Stock (blank = ∞)</label><input id="pf-stock" type="number" min="0" placeholder="leave blank" /></div>
                   </div>
                   <div class="form-row" style="margin-top:.5rem">
                     <div class="form-field" style="flex:1"><label for="pf-desc">Description (optional)</label><input id="pf-desc" type="text" placeholder="Short product description" /></div>
                   </div>
                   <div class="form-row" style="margin-top:.5rem">
-                    <div class="form-field" style="flex:1"><label for="pf-image">Image URL (optional)</label><input id="pf-image" type="url" placeholder="https://â€¦" /></div>
+                    <div class="form-field" style="flex:1"><label for="pf-image">Image URL (optional)</label><input id="pf-image" type="url" placeholder="https://…" /></div>
                   </div>
                   <div class="form-row" style="margin-top:.5rem;align-items:center;gap:1.25rem">
                     <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.85rem;font-weight:700;color:#9e7e82">
@@ -835,7 +835,7 @@
                   </div>
                   <div class="form-row" style="margin-top:.6rem">
                     <div class="form-actions">
-                      <button id="product-form-save-btn" class="btn-sm btn-edit">Save ðŸ¾</button>
+                      <button id="product-form-save-btn" class="btn-sm btn-edit">Save 🐾</button>
                       <button id="product-form-cancel-btn" class="btn-sm btn-delete">Cancel</button>
                     </div>
                   </div>
@@ -846,7 +846,7 @@
                   <table class="admin-table" aria-label="Products">
                     <thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Type</th><th>Actions</th></tr></thead>
                     <tbody id="products-admin-body">
-                      <tr class="empty-row"><td colspan="6">Loading productsâ€¦</td></tr>
+                      <tr class="empty-row"><td colspan="6">Loading products…</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -863,7 +863,7 @@
                   <table class="admin-table" aria-label="Orders">
                     <thead><tr><th>Date (UTC)</th><th>Customer</th><th>Items</th><th>Total</th><th>Provider</th><th>Status</th><th>Transaction ID</th></tr></thead>
                     <tbody id="orders-admin-body">
-                      <tr class="empty-row"><td colspan="7">Loading ordersâ€¦</td></tr>
+                      <tr class="empty-row"><td colspan="7">Loading orders…</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -872,17 +872,17 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Drool Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Drool Log ──────────────────────────────── -->
         <section id="s-drool" class="admin-section">
-          <h1 class="section-heading">ðŸ¾ Drool Log</h1>
+          <h1 class="section-heading">🐾 Drool Log</h1>
 
           <!-- Archive management -->
           <div class="card">
             <div class="card-header">
-              <h2>ðŸ—‚ï¸ Archive</h2>
+              <h2>🗂️ Archive</h2>
               <div style="display:flex;gap:.5rem;align-items:center">
-                <button id="purge-bad-drool-btn" class="btn-sm" style="background:#7a2020;color:#fecaca;border:1px solid #9b3030;border-radius:8px;padding:.3rem .75rem;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer">ðŸ—‘ï¸ Purge Bad Entries</button>
-                <button id="refresh-drool-archive-btn" class="btn-sm btn-edit" style="font-size:.75rem">â†» Refresh</button>
+                <button id="purge-bad-drool-btn" class="btn-sm" style="background:#7a2020;color:#fecaca;border:1px solid #9b3030;border-radius:8px;padding:.3rem .75rem;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer">🗑️ Purge Bad Entries</button>
+                <button id="refresh-drool-archive-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
               </div>
             </div>
             <div class="card-body" style="padding:0">
@@ -899,7 +899,7 @@
                     </tr>
                   </thead>
                   <tbody id="drool-archive-body">
-                    <tr class="empty-row"><td colspan="5">Loadingâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="5">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -908,8 +908,8 @@
 
           <div class="card">
             <div class="card-header">
-              <h2>ðŸ“¡ Sources</h2>
-              <button id="refresh-drool-btn" class="btn-sm btn-edit" style="font-size:.75rem">â†» Refresh</button>
+              <h2>📡 Sources</h2>
+              <button id="refresh-drool-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
             </div>
             <div class="card-body">
               <p style="font-size:.8rem;color:#9e7e82;margin-bottom:1rem">Toggle which platforms appear in the admin archive. Use the cards below to configure credentials for each source.</p>
@@ -918,21 +918,21 @@
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸŸ  Reddit</h2></div>
+            <div class="card-header"><h2>🟠 Reddit</h2></div>
             <div class="card-body">
               <!-- Mode toggle -->
               <div class="form-row" style="align-items:center;gap:1.25rem;margin-bottom:1rem">
                 <span style="font-size:.8rem;font-weight:700;color:#c49ea5;text-transform:uppercase;letter-spacing:.05em">Scrape Mode</span>
                 <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
-                  <input type="radio" name="reddit-mode" id="reddit-mode-api" value="api" checked /> ðŸ”‘ Reddit API (praw)
+                  <input type="radio" name="reddit-mode" id="reddit-mode-api" value="api" checked /> 🔑 Reddit API (praw)
                 </label>
                 <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
-                  <input type="radio" name="reddit-mode" id="reddit-mode-ifttt" value="ifttt" /> âš¡ IFTTT Webhook
+                  <input type="radio" name="reddit-mode" id="reddit-mode-ifttt" value="ifttt" /> ⚡ IFTTT Webhook
                 </label>
                 <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer">
-                  <input type="radio" name="reddit-mode" id="reddit-mode-gsheet" value="gsheet" /> ðŸ“Š Google Sheets
+                  <input type="radio" name="reddit-mode" id="reddit-mode-gsheet" value="gsheet" /> 📊 Google Sheets
                 </label>
-                <button id="dc-reddit-mode-save-btn" class="btn-sm btn-edit" style="margin-left:auto">Save Mode ðŸ¾</button>
+                <button id="dc-reddit-mode-save-btn" class="btn-sm btn-edit" style="margin-left:auto">Save Mode 🐾</button>
                 <p id="dc-reddit-mode-error" style="font-size:.82rem;color:#f87171;align-self:center"></p>
               </div>
 
@@ -948,7 +948,7 @@
                   <div class="form-field" style="flex:2"><label for="dc-reddit-user-agent">User Agent</label><input id="dc-reddit-user-agent" type="text" placeholder="e.g. drool-log/1.0 by u/yourname" autocomplete="off" /></div>
                 </div>
                 <div class="form-row" style="margin-top:.5rem">
-                  <button id="dc-reddit-save-btn" class="btn-sm btn-edit">Save Reddit API ðŸ¾</button>
+                  <button id="dc-reddit-save-btn" class="btn-sm btn-edit">Save Reddit API 🐾</button>
                   <p id="dc-reddit-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
                 </div>
               </div>
@@ -962,17 +962,17 @@
                   </div>
                 </div>
                 <div class="form-row" style="margin-top:.5rem">
-                  <button id="dc-reddit-ifttt-save-btn" class="btn-sm btn-edit">Save IFTTT Secret ðŸ¾</button>
+                  <button id="dc-reddit-ifttt-save-btn" class="btn-sm btn-edit">Save IFTTT Secret 🐾</button>
                   <p id="dc-reddit-ifttt-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
                 </div>
                 <div id="ifttt-webhook-url-box" style="margin-top:1rem;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:8px;padding:.75rem 1rem">
                   <p style="font-size:.78rem;font-weight:700;color:#c49ea5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem">Your IFTTT Webhook URL</p>
                   <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
                     <code id="ifttt-webhook-url" style="font-size:.78rem;color:#e8aeb7;word-break:break-all;flex:1">Set a secret above to generate the URL</code>
-                    <button id="copy-ifttt-url-btn" class="btn-sm btn-edit" style="flex-shrink:0">ðŸ“‹ Copy</button>
+                    <button id="copy-ifttt-url-btn" class="btn-sm btn-edit" style="flex-shrink:0">📋 Copy</button>
                   </div>
                   <p style="font-size:.75rem;color:#9e7e82;margin-top:.6rem">
-                    In your IFTTT applet: <strong>value1</strong> = Post URL &nbsp;Â·&nbsp; <strong>value2</strong> = Title &nbsp;Â·&nbsp; <strong>value3</strong> = Image URL (optional)
+                    In your IFTTT applet: <strong>value1</strong> = Post URL &nbsp;·&nbsp; <strong>value2</strong> = Title &nbsp;·&nbsp; <strong>value3</strong> = Image URL (optional)
                   </p>
                 </div>
               </div>
@@ -980,24 +980,24 @@
               <div id="reddit-gsheet-fields" style="display:none">
                 <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.75rem">
                   Share each Google Sheet as <em>Anyone with the link can view</em>, then publish it as CSV via
-                  <em>File â†’ Share â†’ Publish to web â†’ CSV</em> and paste the URL below.
+                  <em>File → Share → Publish to web → CSV</em> and paste the URL below.
                   Use a separate sheet for upvoted posts and saved posts (each needs its own IFTTT applet),
                   and configure both URLs here to capture everything.
                 </p>
                 <div class="form-row">
                   <div class="form-field" style="flex:1">
                     <label for="dc-reddit-gsheet-url">Sheet 1 CSV URL (e.g. upvotes)</label>
-                    <input id="dc-reddit-gsheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/â€¦/pub?output=csv" autocomplete="off" />
+                    <input id="dc-reddit-gsheet-url" type="text" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" autocomplete="off" />
                   </div>
                 </div>
                 <div class="form-row">
                   <div class="form-field" style="flex:1">
                     <label for="dc-reddit-gsheet-url-2">Sheet 2 CSV URL (e.g. saves, optional)</label>
-                    <input id="dc-reddit-gsheet-url-2" type="text" placeholder="https://docs.google.com/spreadsheets/d/â€¦/pub?output=csv" autocomplete="off" />
+                    <input id="dc-reddit-gsheet-url-2" type="text" placeholder="https://docs.google.com/spreadsheets/d/…/pub?output=csv" autocomplete="off" />
                   </div>
                 </div>
                 <div class="form-row" style="margin-top:.5rem">
-                  <button id="dc-reddit-gsheet-save-btn" class="btn-sm btn-edit">Save GSheet URLs ðŸ¾</button>
+                  <button id="dc-reddit-gsheet-save-btn" class="btn-sm btn-edit">Save GSheet URLs 🐾</button>
                   <p id="dc-reddit-gsheet-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
                 </div>
               </div>
@@ -1005,15 +1005,15 @@
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸ¦ Twitter / X</h2></div>
+            <div class="card-header"><h2>🐦 Twitter / X</h2></div>
             <div class="card-body">
-              <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">OAuth 2.0 â€” a single connection covers liked-tweet scraping, bookmark scraping, and auto-tweeting answers. Set your Client ID &amp; Secret first, then click <em>Connect</em>.</p>
+              <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">OAuth 2.0 — a single connection covers liked-tweet scraping, bookmark scraping, and auto-tweeting answers. Set your Client ID &amp; Secret first, then click <em>Connect</em>.</p>
               <div class="form-row">
                 <div class="form-field"><label for="dc-tw-client-id">Client ID</label><input id="dc-tw-client-id" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
                 <div class="form-field"><label for="dc-tw-client-secret">Client Secret</label><input id="dc-tw-client-secret" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
               </div>
               <div class="form-row" style="margin-top:.5rem">
-                <button id="dc-twitter2-save-btn" class="btn-sm btn-edit">Save Credentials ðŸ”‘</button>
+                <button id="dc-twitter2-save-btn" class="btn-sm btn-edit">Save Credentials 🔑</button>
                 <p id="dc-twitter2-cred-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
               </div>
               <div class="form-row" style="margin-top:.75rem">
@@ -1027,31 +1027,31 @@
           </div>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸ¦‹ Bluesky</h2></div>
+            <div class="card-header"><h2>🦋 Bluesky</h2></div>
             <div class="card-body">
               <div class="form-row">
                 <div class="form-field"><label for="dc-bsky-handle">Handle</label><input id="dc-bsky-handle" type="text" placeholder="leave blank to keep current" autocomplete="off" /></div>
                 <div class="form-field"><label for="dc-bsky-app-password">App Password</label><input id="dc-bsky-app-password" type="password" placeholder="leave blank to keep current" autocomplete="new-password" /></div>
               </div>
               <div class="form-row" style="margin-top:.5rem">
-                <button id="dc-bsky-save-btn" class="btn-sm btn-edit">Save Bluesky ðŸ¾</button>
+                <button id="dc-bsky-save-btn" class="btn-sm btn-edit">Save Bluesky 🐾</button>
                 <p id="dc-bsky-error" style="font-size:.82rem;color:#f87171;align-self:center;margin-left:.75rem"></p>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Spotify â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Spotify ─────────────────────────────────── -->
         <section id="s-spotify" class="admin-section">
-          <h1 class="section-heading">ðŸŽµ Spotify</h1>
+          <h1 class="section-heading">🎵 Spotify</h1>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸŽµ Spotify Now Playing</h2></div>
+            <div class="card-header"><h2>🎵 Spotify Now Playing</h2></div>
             <div class="card-body">
               <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.5rem">Connect your Spotify account so viewers can see the currently playing track. Requires <code>SPOTIFY_CLIENT_ID</code> and <code>SPOTIFY_CLIENT_SECRET</code> environment variables to be set. Register <code>{BASE_URL}/auth/spotify/callback</code> as a Redirect URI in your <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer" style="color:#1db954">Spotify app</a>.</p>
               <div class="form-row" style="margin-top:.75rem">
                 <a href="/auth/spotify/login" class="btn-sm btn-edit" style="text-decoration:none;display:inline-block">
-                  ðŸŽµ Connect Spotify
+                  🎵 Connect Spotify
                 </a>
                 <p style="font-size:.75rem;color:#8a7a7d;align-self:center;margin-left:.75rem">You will be redirected to Spotify to authorize the connection.</p>
               </div>
@@ -1059,7 +1059,7 @@
           </div>
 
           <div class="card" style="margin-top:1rem">
-            <div class="card-header"><h2>ðŸŽ§ Spotify Jam</h2></div>
+            <div class="card-header"><h2>🎧 Spotify Jam</h2></div>
             <div class="card-body">
               <p style="font-size:.82rem;color:#c4a0aa;margin-bottom:.75rem">
                 Start a Jam in your Spotify app, copy the invite link, then paste it here.
@@ -1070,21 +1070,21 @@
                 <input
                   id="jam-url-input"
                   type="url"
-                  placeholder="https://jam.spotify.com/session/â€¦"
+                  placeholder="https://jam.spotify.com/session/…"
                   style="flex:1;min-width:240px"
                   aria-label="Spotify Jam invite URL"
                 />
-                <button class="btn-sm btn-edit" onclick="saveJamUrl()">ðŸ’¾ Save</button>
-                <button class="btn-sm btn-delete" onclick="clearJamUrl()">âœ• Clear</button>
+                <button class="btn-sm btn-edit" onclick="saveJamUrl()">💾 Save</button>
+                <button class="btn-sm btn-delete" onclick="clearJamUrl()">✕ Clear</button>
               </div>
               <p id="jam-status" aria-live="polite" style="font-size:.75rem;color:#8a7a7d;margin-top:.5rem"></p>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Users â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Users ─────────────────────────────────── -->
         <section id="s-users" class="admin-section">
-          <h1 class="section-heading">ðŸ‘¥ User Management</h1>
+          <h1 class="section-heading">👥 User Management</h1>
 
           <!-- Create user card -->
           <div class="card" style="margin-bottom:1.25rem">
@@ -1104,10 +1104,10 @@
                 <div class="form-field" style="min-width:130px">
                   <label for="usr-new-level">Access Level</label>
                   <select id="usr-new-level">
-                    <option value="0">0 â€“ Registered</option>
-                    <option value="1">1 â€“ Free Tier</option>
-                    <option value="2">2 â€“ Tier 1</option>
-                    <option value="3">3 â€“ Tier 2</option>
+                    <option value="0">0 – Registered</option>
+                    <option value="1">1 – Free Tier</option>
+                    <option value="2">2 – Tier 1</option>
+                    <option value="3">3 – Tier 2</option>
                   </select>
                 </div>
                 <div class="form-field" style="min-width:110px">
@@ -1120,7 +1120,7 @@
                   </select>
                 </div>
                 <div class="form-field" style="min-width:110px;justify-content:flex-end">
-                  <button id="usr-create-btn" class="btn-sm btn-edit" style="margin-top:1.4rem">âž• Create</button>
+                  <button id="usr-create-btn" class="btn-sm btn-edit" style="margin-top:1.4rem">➕ Create</button>
                 </div>
               </div>
               <p id="usr-create-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
@@ -1131,7 +1131,7 @@
           <div class="card">
             <div class="card-header">
               <h2>All Users</h2>
-              <button id="usr-refresh-btn" class="btn-sm btn-edit" style="font-size:.75rem">â†» Refresh</button>
+              <button id="usr-refresh-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
             </div>
             <div class="card-body no-pad">
               <div style="overflow-x:auto">
@@ -1146,7 +1146,7 @@
                     </tr>
                   </thead>
                   <tbody id="usr-tbody">
-                    <tr class="empty-row"><td colspan="5">Loadingâ€¦</td></tr>
+                    <tr class="empty-row"><td colspan="5">Loading…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1154,12 +1154,12 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Logs ───────────────────────────────────── -->
         <section id="s-logs" class="admin-section">
-          <h1 class="section-heading">ðŸ“‹ Logs</h1>
+          <h1 class="section-heading">📋 Logs</h1>
 
           <div class="card">
-            <div class="card-header"><h2>ðŸŽ¥ Camera Service Logs</h2></div>
+            <div class="card-header"><h2>🎥 Camera Service Logs</h2></div>
             <div class="card-body no-pad">
               <div style="overflow-x:auto">
                 <table class="admin-table" aria-label="Camera service logs">
@@ -1173,9 +1173,9 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Vault â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Vault ──────────────────────────────────── -->
         <section id="s-vault" class="admin-section">
-          <h1 class="section-heading">ðŸ—„ï¸ File Vault</h1>
+          <h1 class="section-heading">🗄️ File Vault</h1>
           <div class="card">
             <div class="card-header">
               <h2>Content Drops</h2>
@@ -1190,7 +1190,7 @@
                 <div class="form-field" style="min-width:100px"><label>Min Level</label><input id="vault-new-level" type="number" value="1" min="0" max="3" /></div>
                 <div class="form-field" style="min-width:80px"><label>Sort Order</label><input id="vault-new-sort" type="number" value="0" /></div>
               </div>
-              <button id="vault-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">ðŸ’¾ Save</button>
+              <button id="vault-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">💾 Save</button>
               <p id="vault-add-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
             </div>
             <div class="card-body no-pad">
@@ -1204,9 +1204,9 @@
           </div>
         </section>
 
-        <!-- â”€â”€ VODs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── VODs ───────────────────────────────────── -->
         <section id="s-vods" class="admin-section">
-          <h1 class="section-heading">ðŸŽ¬ VOD Gallery</h1>
+          <h1 class="section-heading">🎬 VOD Gallery</h1>
           <div class="card">
             <div class="card-header">
               <h2>Recordings</h2>
@@ -1222,7 +1222,7 @@
                 <div class="form-field" style="min-width:100px"><label>Min Level</label><input id="vod-new-level" type="number" value="1" min="0" max="3" /></div>
                 <div class="form-field" style="min-width:100px"><label>Duration (s)</label><input id="vod-new-dur" type="number" min="0" /></div>
               </div>
-              <button id="vod-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">ðŸ’¾ Save</button>
+              <button id="vod-create-btn" class="btn-sm btn-edit" style="margin-top:.5rem">💾 Save</button>
               <p id="vod-add-msg" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
             </div>
             <div class="card-body no-pad">
@@ -1236,19 +1236,19 @@
           </div>
         </section>
 
-        <!-- â”€â”€ Discord Bot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Discord Bot ────────────────────────────── -->
         <section id="s-discord" class="admin-section">
-          <h1 class="section-heading">ðŸ¤– Discord Bot</h1>
+          <h1 class="section-heading">🤖 Discord Bot</h1>
 
           <!-- Bot Status -->
           <div class="card">
             <div class="card-header">
               <h2>Bot Status</h2>
-              <button id="discord-refresh-status-btn" class="btn-sm btn-edit">â†» Refresh</button>
+              <button id="discord-refresh-status-btn" class="btn-sm btn-edit">↻ Refresh</button>
             </div>
             <div class="card-body">
               <div class="settings-grid" id="discord-status-grid">
-                <div class="setting-tile"><div class="setting-label">Loadingâ€¦</div></div>
+                <div class="setting-tile"><div class="setting-label">Loading…</div></div>
               </div>
             </div>
           </div>
@@ -1282,7 +1282,7 @@
                 </div>
               </div>
               <div class="form-row" style="margin-top:.75rem;align-items:center">
-                <button id="discord-save-channels-btn" class="btn-sm btn-edit">Save Channel IDs ðŸ¾</button>
+                <button id="discord-save-channels-btn" class="btn-sm btn-edit">Save Channel IDs 🐾</button>
                 <span id="discord-channels-status" style="font-size:.82rem;color:#9e7e82;margin-left:.75rem"></span>
               </div>
             </div>
@@ -1317,17 +1317,17 @@
 
               <div class="form-field" style="max-width:600px;margin-bottom:.75rem">
                 <label for="dtemplate-live">Go-Live Message Template</label>
-                <input id="dtemplate-live" type="text" placeholder="@here ðŸ”´ **{title}** is now LIVE! {url}" />
+                <input id="dtemplate-live" type="text" placeholder="@here 🔴 **{title}** is now LIVE! {url}" />
                 <small style="color:#9e7e82;display:block;margin-top:.25rem">Variables: <code>{title}</code> (camera name), <code>{url}</code> (stream link)</small>
               </div>
 
               <div class="form-field" style="max-width:600px;margin-bottom:.75rem">
                 <label for="dtemplate-welcome">Welcome DM Template</label>
-                <textarea id="dtemplate-welcome" rows="3" placeholder="Hey, welcome to the pack! ðŸ¾"></textarea>
+                <textarea id="dtemplate-welcome" rows="3" placeholder="Hey, welcome to the pack! 🐾"></textarea>
               </div>
 
               <div class="form-row" style="margin-top:.5rem;align-items:center">
-                <button id="discord-save-settings-btn" class="btn-sm btn-edit">Save Notification Settings ðŸ¾</button>
+                <button id="discord-save-settings-btn" class="btn-sm btn-edit">Save Notification Settings 🐾</button>
                 <span id="discord-settings-status" style="font-size:.82rem;color:#9e7e82;margin-left:.75rem"></span>
               </div>
             </div>
@@ -1338,35 +1338,35 @@
             <div class="card-header"><h2>Actions</h2></div>
             <div class="card-body">
               <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
-                <button id="discord-test-btn" class="btn-sm btn-edit">ðŸ”” Send Test Notification</button>
+                <button id="discord-test-btn" class="btn-sm btn-edit">🔔 Send Test Notification</button>
               </div>
               <p id="discord-action-status" style="margin-top:.6rem;font-size:.82rem;color:#9e7e82;min-height:1.2em"></p>
               <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem">
-                ðŸ’¡ Slash commands (<code>/stream</code>, <code>/link</code>, <code>/ask</code>, <code>/tier</code>) are registered automatically when the <strong>discord-bot</strong> container starts.
+                💡 Slash commands (<code>/stream</code>, <code>/link</code>, <code>/ask</code>, <code>/tier</code>) are registered automatically when the <strong>discord-bot</strong> container starts.
                 Set <code>DISCORD_GUILD_ID</code> for instant guild sync during development, or leave it blank for global commands (up to 1 hour to propagate).
               </p>
             </div>
           </div>
         </section>
 
-        <!-- â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <!-- ── Settings ───────────────────────────────── -->
         <section id="s-settings" class="admin-section">
-          <h1 class="section-heading" style="color:#f87171">âš ï¸ Danger Zone</h1>
+          <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
 
           <div class="danger-card">
-            <div class="card-header"><h2>âš ï¸ Environment Settings</h2></div>
+            <div class="card-header"><h2>⚠️ Environment Settings</h2></div>
             <div class="card-body">
               <div class="settings-grid" id="settings-grid"></div>
 
               <div class="mock-toggle-row">
-                <span id="mock-auth-status-badge">â€”</span>
-                <button id="mock-toggle-btn" class="toggle-btn" disabled>Loadingâ€¦</button>
+                <span id="mock-auth-status-badge">—</span>
+                <button id="mock-toggle-btn" class="toggle-btn" disabled>Loading…</button>
               </div>
 
               <p class="danger-note">
-                ðŸ”’ <strong>SECRET_KEY</strong>, <strong>Fanvue OAuth credentials</strong>, and
+                🔒 <strong>SECRET_KEY</strong>, <strong>Fanvue OAuth credentials</strong>, and
                 <strong>ADMIN_PASSWORD</strong> must be changed via environment variables and a
-                container restart â€” they cannot be updated through this panel for security reasons.<br><br>
+                container restart — they cannot be updated through this panel for security reasons.<br><br>
                 The <strong>MOCK_AUTH</strong> toggle takes effect immediately without a restart.
                 All other settings are read-only here and reflect the current container environment.
               </p>
@@ -1380,15 +1380,15 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- â”€â”€ Reply modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Reply modal ──────────────────────────────────── -->
   <div id="reply-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="reply-modal-title">
     <div id="reply-modal">
-      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">âœ•</button>
+      <button class="modal-close" id="reply-modal-close-btn" aria-label="Close">✕</button>
       <h3 id="reply-modal-title">Reply to Note</h3>
       <p id="answer-question-preview"></p>
-      <textarea id="answer-textarea" placeholder="Write your answerâ€¦ ðŸ¾" maxlength="2000" aria-label="Answer"></textarea>
+      <textarea id="answer-textarea" placeholder="Write your answer… 🐾" maxlength="2000" aria-label="Answer"></textarea>
       <div class="answer-form-actions">
-        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public ðŸ¾</button>
+        <button id="answer-save-btn" class="btn-sm btn-edit">Save &amp; Make Public 🐾</button>
         <button id="answer-cancel-btn" class="btn-sm btn-delete">Cancel</button>
       </div>
       <p id="answer-form-error"></p>
@@ -1396,7 +1396,7 @@
   </div>
 
   <script>
-    // â”€â”€ Credential storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Credential storage ─────────────────────────────
     const CRED_KEY = 'mochii_admin_creds';
     const JWT_KEY  = 'mochii_admin_jwt';
     function saveCreds(user, pass) { sessionStorage.setItem(CRED_KEY, btoa(`${user}:${pass}`)); }
@@ -1415,7 +1415,7 @@
       return creds ? { 'Authorization': `Basic ${creds}` } : {};
     }
 
-    // â”€â”€ Toast helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Toast helper ───────────────────────────────────
     let _toastTimer = null;
     function showToast(msg) {
       const el = document.getElementById('toast');
@@ -1425,7 +1425,7 @@
       _toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
     }
 
-    // â”€â”€ Panel toggling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Panel toggling ─────────────────────────────────
     function showAdminPanel() {
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
@@ -1439,7 +1439,7 @@
       clearCreds();
     }
 
-    // â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── API helpers ────────────────────────────────────
     async function apiGet(path) {
       const resp = await fetch(path, { headers: authHeader() });
       if (resp.status === 401) { showLoginPanel('Session expired. Please log in again.'); throw new Error('401'); }
@@ -1479,14 +1479,14 @@
       return resp;
     }
 
-    // â”€â”€ HTML escape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── HTML escape ────────────────────────────────────
     function escHtml(str) {
       return String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // â”€â”€ Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Login ──────────────────────────────────────────
     document.getElementById('login-btn').addEventListener('click', async () => {
       const user  = document.getElementById('admin-username').value.trim();
       const pass  = document.getElementById('admin-password').value;
@@ -1495,17 +1495,17 @@
       errEl.textContent = '';
       if (!user || !pass) { errEl.textContent = 'Please enter your username and password.'; return; }
       btn.disabled = true;
-      btn.textContent = 'Sniffing credentialsâ€¦';
+      btn.textContent = 'Sniffing credentials…';
       saveCreds(user, pass);
       try {
         await apiGet('/api/admin/stats');
         showAdminPanel();
       } catch {
         clearCreds();
-        errEl.textContent = 'ðŸ¾ Bad Dog! Invalid credentials.';
+        errEl.textContent = '🐾 Bad Dog! Invalid credentials.';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'ðŸ¾ Enter the Kennel';
+        btn.textContent = '🐾 Enter the Kennel';
       }
     });
 
@@ -1515,13 +1515,13 @@
       });
     });
 
-    // â”€â”€ Logout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Logout ─────────────────────────────────────────
     document.getElementById('logout-admin-btn').addEventListener('click', () => {
       showLoginPanel('');
       document.getElementById('login-error').textContent = '';
     });
 
-    // â”€â”€ Sidebar navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Sidebar navigation ─────────────────────────────
     const SETUP_ONLY_TARGETS = new Set(['s-drool', 's-spotify']);
 
     function applySetupOnlyScope() {
@@ -1565,7 +1565,7 @@
       btn.addEventListener('click', () => navigate(btn.dataset.target));
     });
 
-    // â”€â”€ Mobile sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Mobile sidebar ─────────────────────────────────
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('mob-overlay');
     const menuBtn = document.getElementById('mob-menu-btn');
@@ -1580,7 +1580,7 @@
     });
     overlay.addEventListener('click', closeMobileSidebar);
 
-    // â”€â”€ Load everything â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Load everything ────────────────────────────────
     async function loadAll() {
       await Promise.all([
         loadDroolCredentials(),
@@ -1594,7 +1594,7 @@
       loadAnsweredQuestions();
     });
 
-    // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Stats ──────────────────────────────────────────
     async function loadStats() {
       try {
         const data = await apiGet('/api/admin/stats');
@@ -1621,7 +1621,7 @@
       }).join('');
     }
 
-    // â”€â”€ Camera Service Logs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Camera Service Logs ────────────────────────────
     async function loadCameraLogs() {
       try {
         const logs = await apiGet('/api/admin/camera-logs');
@@ -1639,7 +1639,7 @@
       }
     }
 
-    // â”€â”€ Cameras â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Cameras ────────────────────────────────────────
     let _editingId = null;
 
 
@@ -1660,7 +1660,7 @@
       const secret = prompt('Enter edge agent secret (X-Edge-Secret header)');
       if (!secret) return;
       const listDiv = document.getElementById('edge-camera-list');
-      listDiv.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">Loading edge camerasâ€¦</p>';
+      listDiv.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">Loading edge cameras…</p>';
       try {
         const resp = await fetch(edgeUrl + '/cameras', { headers: { 'X-Edge-Secret': secret } });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1676,7 +1676,7 @@
               <tr>
                 <td>${escHtml(cam.display_name || cam.name || '-') }</td>
                 <td><code>${escHtml(cam.rtsp_url || '-') }</code></td>
-                <td>${cam.status ? escHtml(cam.status) : 'â€”'}</td>
+                <td>${cam.status ? escHtml(cam.status) : '—'}</td>
                 <td><button class="btn-sm btn-edit" onclick="registerEdgeCamera('${cam.rtsp_url}', '${cam.display_name || cam.name || ''}')">Register</button></td>
               </tr>
             `).join('')}
@@ -1701,7 +1701,7 @@
           alert(data.detail || `Error ${resp.status}`);
           return;
         }
-        showToast('ðŸ¾ Edge camera registered!');
+        showToast('🐾 Edge camera registered!');
         await loadCameras();
       } catch (err) {
         alert('Failed to register camera.');
@@ -1719,9 +1719,9 @@
       return 'l1';
     }
     function sourceLabel(cam) {
-      if (cam.tapo_ip) return `ðŸ”Œ ${escHtml(cam.tapo_ip)}`;
-      if (cam.rtsp_url) return 'ðŸŽ¥ Custom RTSP';
-      return 'â€”';
+      if (cam.tapo_ip) return `🔌 ${escHtml(cam.tapo_ip)}`;
+      if (cam.rtsp_url) return '🎥 Custom RTSP';
+      return '—';
     }
 
     function renderCameras(cameras) {
@@ -1736,10 +1736,10 @@
           <td>${escHtml(cam.display_name)}</td>
           <td><code>${escHtml(cam.stream_slug)}</code></td>
           <td>${sourceLabel(cam)}</td>
-          <td><span class="badge-level ${tierClass(cam.minimum_access_level)}">${cam.minimum_access_level} â€“ ${tierLabel(cam.minimum_access_level)}</span></td>
+          <td><span class="badge-level ${tierClass(cam.minimum_access_level)}">${cam.minimum_access_level} – ${tierLabel(cam.minimum_access_level)}</span></td>
           <td><div class="action-cell">
-            <button class="btn-sm btn-edit edit-cam-btn" data-id="${cam.id}">âœï¸ Edit</button>
-            <button class="btn-sm btn-delete del-cam-btn" data-id="${cam.id}">ðŸ—‘ï¸ Delete</button>
+            <button class="btn-sm btn-edit edit-cam-btn" data-id="${cam.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-cam-btn" data-id="${cam.id}">🗑️ Delete</button>
           </div></td>
         </tr>`).join('');
       tbody.querySelectorAll('.edit-cam-btn').forEach(btn => {
@@ -1750,7 +1750,7 @@
       });
     }
 
-    // â”€â”€ Camera form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Camera form ────────────────────────────────────
     const cameraForm = document.getElementById('camera-form');
     let _slugManuallyEdited = false;
 
@@ -1845,7 +1845,7 @@
         closeForm();
         await loadCameras();
         await loadStats();
-        showToast(_editingId !== null ? 'ðŸ¾ Camera updated!' : 'ðŸ¾ Camera added!');
+        showToast(_editingId !== null ? '🐾 Camera updated!' : '🐾 Camera added!');
       } catch (err) {
         if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
       }
@@ -1874,20 +1874,20 @@
         }
         await loadCameras();
         await loadStats();
-        showToast('ðŸ—‘ï¸ Camera deleted.');
+        showToast('🗑️ Camera deleted.');
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
       }
     }
 
-    // â”€â”€ Manual IoT control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Manual IoT control ─────────────────────────────
     async function triggerDevice(device, btn, resultEl) {
       btn.disabled = true;
-      resultEl.textContent = 'Sending commandâ€¦';
+      resultEl.textContent = 'Sending command…';
       try {
         const resp = await apiPost(`/api/admin/control/${device}`);
         if (resp.ok) {
-          resultEl.textContent = 'âœ“ Activated';
+          resultEl.textContent = '✓ Activated';
           await loadStats();
         } else {
           const data = await resp.json().catch(() => ({}));
@@ -1907,7 +1907,7 @@
       triggerDevice('lovense', document.getElementById('admin-lovense-btn'), document.getElementById('lovense-result'));
     });
 
-    // â”€â”€ Q&A sub-tab switching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Q&A sub-tab switching ──────────────────────────
     document.querySelectorAll('.sub-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         const id = tab.dataset.tab;
@@ -1919,7 +1919,7 @@
       });
     });
 
-    // â”€â”€ Unanswered questions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Unanswered questions ───────────────────────────
     let _answeringId = null;
 
     async function loadQuestions() {
@@ -1965,7 +1965,7 @@
     function renderQuestions(questions) {
       const tbody = document.getElementById('questions-body');
       if (!questions.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No unanswered questions ðŸ¾</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="3">No unanswered questions 🐾</td></tr>';
         return;
       }
       tbody.innerHTML = questions.map(q => {
@@ -1975,7 +1975,7 @@
           <td class="q-ts">${escHtml(ts)}</td>
           <td><div class="action-cell">
             <button class="btn-sm btn-edit reply-btn" data-id="${escHtml(q.id)}" data-text="${escHtml(q.text)}">Reply &amp; Share</button>
-            <button class="btn-sm btn-delete del-question-btn" data-id="${escHtml(q.id)}">ðŸ—‘ï¸ Delete</button>
+            <button class="btn-sm btn-delete del-question-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
           </div></td>
         </tr>`;
       }).join('');
@@ -2028,7 +2028,7 @@
           closeAnswerForm();
           await loadQuestions();
           await loadAnsweredQuestions();
-          showToast(data.tweeted ? 'ðŸ¾ðŸ¦ Answer saved & tweeted!' : 'ðŸ¾ Answer saved!');
+          showToast(data.tweeted ? '🐾🐦 Answer saved & tweeted!' : '🐾 Answer saved!');
         } else {
           const data = await resp.json().catch(() => ({}));
           errEl.textContent = data.detail || `Error ${resp.status}`;
@@ -2040,7 +2040,7 @@
       }
     });
 
-    // â”€â”€ Answered questions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Answered questions ─────────────────────────────
     async function loadAnsweredQuestions() {
       try {
         const questions = await apiGet('/api/admin/questions/answered');
@@ -2053,19 +2053,19 @@
     function renderAnsweredQuestions(questions) {
       const tbody = document.getElementById('answered-questions-body');
       if (!questions.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No answered questions yet ðŸ¾</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No answered questions yet 🐾</td></tr>';
         return;
       }
       tbody.innerHTML = questions.map(q => {
         const ts      = (q.created_at || '').replace('T', ' ').replace(/\.\d+.*/, ' UTC');
-        const preview = q.answer.length > 90 ? escHtml(q.answer.slice(0, 87)) + 'â€¦' : escHtml(q.answer);
+        const preview = q.answer.length > 90 ? escHtml(q.answer.slice(0, 87)) + '…' : escHtml(q.answer);
         return `<tr class="question-row" data-id="${escHtml(q.id)}">
           <td><div class="q-text">${escHtml(q.text)}</div></td>
           <td><div class="q-answer-preview">${preview}</div></td>
           <td class="q-ts">${escHtml(ts)}</td>
           <td><div class="action-cell">
-            <a class="btn-sm btn-edit" href="/q/${encodeURIComponent(q.id)}" target="_blank" rel="noopener" style="text-decoration:none">ðŸ”— View</a>
-            <button class="btn-sm btn-delete del-answered-btn" data-id="${escHtml(q.id)}">ðŸ—‘ï¸ Delete</button>
+            <a class="btn-sm btn-edit" href="/q/${encodeURIComponent(q.id)}" target="_blank" rel="noopener" style="text-decoration:none">🔗 View</a>
+            <button class="btn-sm btn-delete del-answered-btn" data-id="${escHtml(q.id)}">🗑️ Delete</button>
           </div></td>
         </tr>`;
       }).join('');
@@ -2088,13 +2088,13 @@
         } else {
           await loadAnsweredQuestions();
         }
-        showToast('ðŸ—‘ï¸ Question deleted.');
+        showToast('🗑️ Question deleted.');
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
       }
     }
 
-    // â”€â”€ Settings / Danger Zone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Settings / Danger Zone ─────────────────────────
     let _settingsCache = null;
 
     function makeBadge(type, label) {
@@ -2106,14 +2106,14 @@
         const s = await apiGet('/api/admin/settings');
         _settingsCache = s;
         const skBadge = s.secret_key_status === 'custom'
-          ? makeBadge('ok', 'âœ” Custom key set')
+          ? makeBadge('ok', '✔ Custom key set')
           : s.secret_key_status === 'demo'
-            ? makeBadge('warn', 'âš  Demo key')
-            : makeBadge('error', 'âœ˜ Using default key');
+            ? makeBadge('warn', '⚠ Demo key')
+            : makeBadge('error', '✘ Using default key');
         const fanvueBadge = (s.fanvue_client_id_set && s.fanvue_client_secret_set)
-          ? makeBadge('ok', 'âœ” Configured') : makeBadge('warn', 'âš  Not configured');
+          ? makeBadge('ok', '✔ Configured') : makeBadge('warn', '⚠ Not configured');
         const adminBadge = s.admin_configured
-          ? makeBadge('ok', 'âœ” Configured') : makeBadge('error', 'âœ˜ Not configured');
+          ? makeBadge('ok', '✔ Configured') : makeBadge('error', '✘ Not configured');
         document.getElementById('settings-grid').innerHTML = `
           <div class="setting-tile"><div class="setting-label">Secret Key</div><div class="setting-value">${skBadge}</div></div>
           <div class="setting-tile"><div class="setting-label">Fanvue OAuth</div><div class="setting-value">${fanvueBadge}</div></div>
@@ -2130,11 +2130,11 @@
       const badge = document.getElementById('mock-auth-status-badge');
       const btn   = document.getElementById('mock-toggle-btn');
       if (enabled) {
-        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-error">âš  Mock Auth ENABLED</span>';
+        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-error">⚠ Mock Auth ENABLED</span>';
         btn.textContent = 'Disable Mock Auth';
         btn.className = 'toggle-btn disable';
       } else {
-        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-ok">âœ” Mock Auth Disabled</span>';
+        badge.outerHTML = '<span id="mock-auth-status-badge" class="badge-ok">✔ Mock Auth Disabled</span>';
         btn.textContent = 'Enable Mock Auth';
         btn.className = 'toggle-btn enable';
       }
@@ -2150,7 +2150,7 @@
         const resp = await apiPatch('/api/admin/settings', { mock_auth: newVal });
         if (resp.ok) {
           await loadSettings();
-          showToast(newVal ? 'âš ï¸ Mock Auth enabled.' : 'âœ” Mock Auth disabled.');
+          showToast(newVal ? '⚠️ Mock Auth enabled.' : '✔ Mock Auth disabled.');
         } else {
           showToast('Failed to update setting.');
           btn.disabled = false;
@@ -2161,7 +2161,7 @@
       }
     });
 
-    // â”€â”€ Links management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Links management ───────────────────────────────
     let _editingLinkId = null;
 
     async function loadLinks() {
@@ -2176,22 +2176,22 @@
     function renderLinks(links) {
       const tbody = document.getElementById('links-body');
       if (!links.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No links yet â€“ add one above!</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No links yet – add one above!</td></tr>';
         return;
       }
       tbody.innerHTML = links.map(l => {
         const activeBadge = l.is_active
           ? '<span class="link-active-badge on">Active</span>'
           : '<span class="link-active-badge off">Hidden</span>';
-        const emoji      = l.emoji ? escHtml(l.emoji) : 'â€”';
-        const urlDisplay = escHtml(l.url.length > 45 ? l.url.slice(0, 42) + 'â€¦' : l.url);
+        const emoji      = l.emoji ? escHtml(l.emoji) : '—';
+        const urlDisplay = escHtml(l.url.length > 45 ? l.url.slice(0, 42) + '…' : l.url);
         return `<tr data-id="${l.id}">
           <td>${l.id}</td><td>${emoji}</td><td>${escHtml(l.title)}</td>
           <td><a href="${escHtml(l.url)}" target="_blank" rel="noopener" style="color:#c49a9f;text-decoration:none;">${urlDisplay}</a></td>
           <td>${l.sort_order}</td><td>${activeBadge}</td>
           <td><div class="action-cell">
-            <button class="btn-sm btn-edit edit-link-btn" data-id="${l.id}">âœï¸ Edit</button>
-            <button class="btn-sm btn-delete del-link-btn" data-id="${l.id}">ðŸ—‘ï¸ Delete</button>
+            <button class="btn-sm btn-edit edit-link-btn" data-id="${l.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-link-btn" data-id="${l.id}">🗑️ Delete</button>
           </div></td>
         </tr>`;
       }).join('');
@@ -2250,7 +2250,7 @@
         }
         closeLinkForm();
         await loadLinks();
-        showToast(_editingLinkId !== null ? 'ðŸ”— Link updated!' : 'ðŸ”— Link added!');
+        showToast(_editingLinkId !== null ? '🔗 Link updated!' : '🔗 Link added!');
       } catch (err) {
         if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
       }
@@ -2278,13 +2278,13 @@
           return;
         }
         await loadLinks();
-        showToast('ðŸ—‘ï¸ Link deleted.');
+        showToast('🗑️ Link deleted.');
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
       }
     }
 
-    // â”€â”€ Store sub-tab switching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Store sub-tab switching ────────────────────────
     document.querySelectorAll('.sub-tab[data-store-tab]').forEach(tab => {
       tab.addEventListener('click', () => {
         const id = tab.dataset.storeTab;
@@ -2301,7 +2301,7 @@
       loadOrders();
     });
 
-    // â”€â”€ Products â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Products ───────────────────────────────────────
     let _editingProductId = null;
 
     async function loadProducts() {
@@ -2316,11 +2316,11 @@
     function renderProducts(products) {
       const tbody = document.getElementById('products-admin-body');
       if (!products.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No products yet â€“ add one above!</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No products yet – add one above!</td></tr>';
         return;
       }
       tbody.innerHTML = products.map(p => {
-        const stock = p.stock_count === null ? '<span style="color:#9e7e82">âˆž</span>' : escHtml(String(p.stock_count));
+        const stock = p.stock_count === null ? '<span style="color:#9e7e82">∞</span>' : escHtml(String(p.stock_count));
         const type  = p.is_printful
           ? '<span class="printful-tag">Printful</span>'
           : '<span style="color:#9e7e82;font-size:.78rem">Manual</span>';
@@ -2331,8 +2331,8 @@
           <td>${stock}</td>
           <td>${type}</td>
           <td><div class="action-cell">
-            <button class="btn-sm btn-edit edit-product-btn" data-id="${p.id}">âœï¸ Edit</button>
-            <button class="btn-sm btn-delete del-product-btn" data-id="${p.id}">ðŸ—‘ï¸ Delete</button>
+            <button class="btn-sm btn-edit edit-product-btn" data-id="${p.id}">✏️ Edit</button>
+            <button class="btn-sm btn-delete del-product-btn" data-id="${p.id}">🗑️ Delete</button>
           </div></td>
         </tr>`;
       }).join('');
@@ -2407,7 +2407,7 @@
         }
         closeProductForm();
         await loadProducts();
-        showToast(_editingProductId !== null ? 'ðŸ¾ Product updated!' : 'ðŸ¾ Product added!');
+        showToast(_editingProductId !== null ? '🐾 Product updated!' : '🐾 Product added!');
       } catch (err) {
         if (err.message !== '401') errEl.textContent = 'Request failed. Please try again.';
       }
@@ -2435,13 +2435,13 @@
           return;
         }
         await loadProducts();
-        showToast('ðŸ—‘ï¸ Product deleted.');
+        showToast('🗑️ Product deleted.');
       } catch (err) {
         if (err.message !== '401') showToast('Delete failed.');
       }
     }
 
-    // â”€â”€ Orders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Orders ─────────────────────────────────────────
     async function loadOrders() {
       try {
         const orders = await apiGet('/api/admin/store/orders');
@@ -2463,11 +2463,11 @@
         const statusCls = ['pending','paid','failed'].includes(o.status) ? o.status : 'unknown';
         const statusBadge = `<span class="order-status-badge ${statusCls}">${escHtml(o.status)}</span>`;
         const itemsText = (o.items || []).map(i =>
-          `${escHtml(String(i.quantity))}Ã— ${escHtml(i.product_name)}`
-        ).join(', ') || 'â€”';
+          `${escHtml(String(i.quantity))}× ${escHtml(i.product_name)}`
+        ).join(', ') || '—';
         const txId = o.external_transaction_id
           ? `<code style="font-size:.75rem;word-break:break-all">${escHtml(o.external_transaction_id)}</code>`
-          : '<span style="color:#5a3a3e">â€”</span>';
+          : '<span style="color:#5a3a3e">—</span>';
         return `<tr>
           <td class="ts-cell">${escHtml(ts)}</td>
           <td>${escHtml(o.customer_email)}</td>
@@ -2480,7 +2480,7 @@
       }).join('');
     }
 
-    // â”€â”€ Drool Log credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Drool Log credentials ─────────────────────────
     function _redditModeSwitch(mode) {
       const isIfttt  = mode === 'ifttt';
       const isGsheet = mode === 'gsheet';
@@ -2517,17 +2517,17 @@
         };
         const _SOURCES = [
           {
-            key: 'reddit',  label: 'ðŸŸ  Reddit',      enabled_field: 'reddit_enabled',
+            key: 'reddit',  label: '🟠 Reddit',      enabled_field: 'reddit_enabled',
             cred_fields: _redditCredFields[mode] || _redditCredFields.api,
             acct_field: 'reddit_username', acct_prefix: 'u/',
           },
           {
-            key: 'twitter', label: 'ðŸ¦ Twitter / X',  enabled_field: 'twitter_enabled',
+            key: 'twitter', label: '🐦 Twitter / X',  enabled_field: 'twitter_enabled',
             cred_fields: ['twitter_user_id','twitter_client_id','twitter_client_secret','twitter_oauth2_access_token'],
             acct_field: 'twitter_user_id', acct_prefix: 'ID ',
           },
           {
-            key: 'bluesky', label: 'ðŸ¦‹ Bluesky',      enabled_field: 'bsky_enabled',
+            key: 'bluesky', label: '🦋 Bluesky',      enabled_field: 'bsky_enabled',
             cred_fields: ['bsky_handle','bsky_app_password'],
             acct_field: 'bsky_handle', acct_prefix: '',
           },
@@ -2538,10 +2538,10 @@
           const isEnabled  = enabledVal !== '0';
           const credsOk    = src.cred_fields.every(f => data[f]?.effective_set);
           const acctVal    = data[src.acct_field]?.value;
-          const statusBadge = isEnabled ? makeBadge('ok', 'âœ” Enabled') : makeBadge('warn', 'âœ˜ Disabled');
-          const credBadge   = credsOk   ? makeBadge('ok', 'ðŸ”‘ Configured') : makeBadge('warn', 'âš  No credentials');
+          const statusBadge = isEnabled ? makeBadge('ok', '✔ Enabled') : makeBadge('warn', '✘ Disabled');
+          const credBadge   = credsOk   ? makeBadge('ok', '🔑 Configured') : makeBadge('warn', '⚠ No credentials');
           const acctLine    = acctVal
-            ? `<span style="font-size:.78rem;color:#c49ea5">ðŸŽ¯ ${escHtml(src.acct_prefix)}${escHtml(acctVal)}</span>`
+            ? `<span style="font-size:.78rem;color:#c49ea5">🎯 ${escHtml(src.acct_prefix)}${escHtml(acctVal)}</span>`
             : '';
           return `<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem .65rem;border-radius:8px;background:rgba(255,255,255,.03)">
             <span style="font-weight:700;min-width:7.5rem;font-size:.9rem">${escHtml(src.label)}</span>
@@ -2562,7 +2562,7 @@
 
     function _refreshIftttUrl() {
       const urlEl = document.getElementById('ifttt-webhook-url');
-      const secret = ''; // secret is never returned â€“ show placeholder
+      const secret = ''; // secret is never returned – show placeholder
       const base = window.location.origin;
       urlEl.textContent = `${base}/api/drool/ifttt/reddit?secret=<your-secret>`;
     }
@@ -2570,7 +2570,7 @@
     document.getElementById('copy-ifttt-url-btn').addEventListener('click', () => {
       const base = window.location.origin;
       const text = `${base}/api/drool/ifttt/reddit?secret=<your-secret>`;
-      navigator.clipboard.writeText(text).then(() => showToast('ðŸ“‹ URL copied!'));
+      navigator.clipboard.writeText(text).then(() => showToast('📋 URL copied!'));
     });
 
     async function saveDroolCreds(fields, errElId) {
@@ -2592,7 +2592,7 @@
             document.getElementById(inputId).value = '';
           }
           await loadDroolCredentials();
-          showToast('ðŸ¾ Credentials saved!');
+          showToast('🐾 Credentials saved!');
         } else {
           const data = await resp.json().catch(() => ({}));
           errEl.textContent = data.detail || `Error ${resp.status}`;
@@ -2618,14 +2618,14 @@
         if (resp.ok) {
           await loadDroolCredentials();
           await loadDroolArchive();
-          showToast(newVal === '1' ? `âœ” ${source} enabled.` : `âœ˜ ${source} disabled.`);
+          showToast(newVal === '1' ? `✔ ${source} enabled.` : `✘ ${source} disabled.`);
         } else {
           const data = await resp.json().catch(() => ({}));
-          showToast('âŒ ' + (data.detail || `Error ${resp.status}`));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
           btn.disabled = false;
         }
       } catch (err) {
-        if (err.message !== '401') showToast('âŒ Request failed.');
+        if (err.message !== '401') showToast('❌ Request failed.');
         btn.disabled = false;
       }
     });
@@ -2639,7 +2639,7 @@
         const resp = await apiPut('/api/admin/drool/credentials', { reddit_mode: mode });
         if (resp.ok) {
           await loadDroolCredentials();
-          showToast(`ðŸ¾ Reddit mode set to ${mode}!`);
+          showToast(`🐾 Reddit mode set to ${mode}!`);
         } else {
           const data = await resp.json().catch(() => ({}));
           errEl.textContent = data.detail || `Error ${resp.status}`;
@@ -2676,8 +2676,8 @@
       bsky_app_password: 'dc-bsky-app-password',
     }, 'dc-bsky-error'));
 
-    // â”€â”€ Drool Archive management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    // Map from platform DB value â†’ enabled_field key returned by credentials API
+    // ── Drool Archive management ───────────────────────
+    // Map from platform DB value → enabled_field key returned by credentials API
     const _PLATFORM_ENABLED_FIELD = {
       reddit:  'reddit_enabled',
       twitter: 'twitter_enabled',
@@ -2726,7 +2726,7 @@
             <td style="font-size:.78rem;color:#9e7e82;white-space:nowrap">${ts}</td>
             <td>
               <button class="btn-sm btn-delete drool-delete-btn" data-id="${item.id}"
-                      style="font-size:.75rem;padding:.25rem .55rem">ðŸ—‘ï¸</button>
+                      style="font-size:.75rem;padding:.25rem .55rem">🗑️</button>
             </td>
           </tr>`;
         }).join('');
@@ -2747,14 +2747,14 @@
         const resp = await apiDelete(`/api/admin/drool/${id}`);
         if (resp.ok) {
           btn.closest('tr').remove();
-          showToast(`ðŸ—‘ï¸ Entry #${id} deleted.`);
+          showToast(`🗑️ Entry #${id} deleted.`);
         } else {
           const data = await resp.json().catch(() => ({}));
-          showToast('âŒ ' + (data.detail || `Error ${resp.status}`));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
           btn.disabled = false;
         }
       } catch (err) {
-        if (err.message !== '401') showToast('âŒ Delete failed.');
+        if (err.message !== '401') showToast('❌ Delete failed.');
         btn.disabled = false;
       }
     });
@@ -2765,21 +2765,21 @@
         const resp = await apiPost('/api/admin/drool/purge-bad', {});
         if (resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          showToast(`ðŸ§¹ Purged ${data.deleted ?? 0} bad entr${data.deleted === 1 ? 'y' : 'ies'}.`);
+          showToast(`🧹 Purged ${data.deleted ?? 0} bad entr${data.deleted === 1 ? 'y' : 'ies'}.`);
           await loadDroolArchive();
         } else {
           const data = await resp.json().catch(() => ({}));
-          showToast('âŒ ' + (data.detail || `Error ${resp.status}`));
+          showToast('❌ ' + (data.detail || `Error ${resp.status}`));
         }
       } catch (err) {
-        if (err.message !== '401') showToast('âŒ Purge failed.');
+        if (err.message !== '401') showToast('❌ Purge failed.');
       }
     });
 
     document.getElementById('refresh-drool-archive-btn').addEventListener('click', loadDroolArchive);
 
 
-    // â”€â”€ Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Analytics ──────────────────────────────────────
     const _CHART_DEFAULTS = {
       responsive: true,
       maintainAspectRatio: true,
@@ -2874,7 +2874,7 @@
       try {
         const d = await apiGet('/api/admin/analytics');
 
-        // â”€â”€ Tiles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Tiles ───────────────────────────────────────
         document.getElementById('an-users').textContent = d.users.total;
         document.getElementById('an-cam-30d').textContent = d.camera_access.total_30d;
         document.getElementById('an-act-30d').textContent = d.activations.total_30d;
@@ -2888,45 +2888,45 @@
         document.getElementById('an-drool-total').textContent = d.drool.total;
         document.getElementById('an-drool-views').textContent = d.drool.total_views.toLocaleString() + ' total views';
 
-        // â”€â”€ Camera access by day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Camera access by day ─────────────────────────
         _makeOrUpdate('chart-cam-day', _buildLineConfig(
           _dayLabels(d.camera_access.by_day_30d),
           [{ label: 'Camera Accesses', data: d.camera_access.by_day_30d.map(x => x.count) }]
         ));
 
-        // â”€â”€ Activations by day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Activations by day ───────────────────────────
         _makeOrUpdate('chart-act-day', _buildLineConfig(
           _dayLabels(d.activations.by_day_30d),
           [{ label: 'Activations', data: d.activations.by_day_30d.map(x => x.count) }]
         ));
 
-        // â”€â”€ Revenue by day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Revenue by day ───────────────────────────────
         _makeOrUpdate('chart-rev-day', _buildBarConfig(
           _dayLabels(d.orders.by_day_30d),
           [{ label: 'Revenue ($)', data: d.orders.by_day_30d.map(x => x.revenue) }]
         ));
 
-        // â”€â”€ Questions by day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Questions by day ─────────────────────────────
         _makeOrUpdate('chart-q-day', _buildLineConfig(
           _dayLabels(d.questions.by_day_30d),
           [{ label: 'Questions', data: d.questions.by_day_30d.map(x => x.count) }]
         ));
 
-        // â”€â”€ Users by access level (doughnut) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Users by access level (doughnut) ─────────────
         const userLevelEntries = Object.entries(d.users.by_access_level);
         _makeOrUpdate('chart-users-level', _buildDoughnutConfig(
           userLevelEntries.map(([k]) => _ACCESS_LABELS[k] || 'Level ' + k),
           userLevelEntries.map(([, v]) => v)
         ));
 
-        // â”€â”€ Drool by platform (doughnut) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Drool by platform (doughnut) ─────────────────
         const droolPlatEntries = Object.entries(d.drool.by_platform);
         _makeOrUpdate('chart-drool-platform', _buildDoughnutConfig(
           droolPlatEntries.map(([k]) => k.charAt(0).toUpperCase() + k.slice(1)),
           droolPlatEntries.map(([, v]) => v)
         ));
 
-        // â”€â”€ Drool posts by day â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ── Drool posts by day ────────────────────────────
         _makeOrUpdate('chart-drool-day', _buildLineConfig(
           _dayLabels(d.drool.by_day_30d),
           [{ label: 'Drool Posts', data: d.drool.by_day_30d.map(x => x.count) }]
@@ -2939,7 +2939,7 @@
 
     document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
 
-    // â”€â”€ Cloudflare Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Cloudflare Analytics ───────────────────────────
     function _fmtBytes(bytes) {
       if (bytes >= 1e9) return (bytes / 1e9).toFixed(2) + ' GB';
       if (bytes >= 1e6) return (bytes / 1e6).toFixed(2) + ' MB';
@@ -2962,13 +2962,13 @@
         if (!d.configured) {
           notCfg.style.display = '';
           cfContent.style.display = 'none';
-          badge.innerHTML = '<span class="badge-warn">âš  Not configured</span>';
+          badge.innerHTML = '<span class="badge-warn">⚠ Not configured</span>';
           return;
         }
 
         notCfg.style.display = 'none';
         cfContent.style.display = '';
-        badge.innerHTML = '<span class="badge-ok">âœ” Connected</span>';
+        badge.innerHTML = '<span class="badge-ok">✔ Connected</span>';
 
         document.getElementById('cf-requests').textContent  = _fmtNum(d.totals.requests);
         document.getElementById('cf-pageviews').textContent = _fmtNum(d.totals.pageviews);
@@ -3024,15 +3024,15 @@
             if (r.ok) {
               showAdminPanel();
               if (spotifyConnected === 'connected') {
-                showToast('ðŸŽµ Spotify connected! Now Playing is live.');
+                showToast('🎵 Spotify connected! Now Playing is live.');
               } else if (twitter2Connected === '1') {
                 if (oauthWarn === 'user_id_missing') {
-                  showToast('ðŸ¦ Twitter/X tokens saved! User ID could not be fetched automatically â€” set it manually in the Twitter credentials form.');
+                  showToast('🐦 Twitter/X tokens saved! User ID could not be fetched automatically — set it manually in the Twitter credentials form.');
                 } else {
-                  showToast('ðŸ¦ Twitter/X connected! Likes, bookmarks & tweeting enabled.');
+                  showToast('🐦 Twitter/X connected! Likes, bookmarks & tweeting enabled.');
                 }
               } else if (oauthError) {
-                showToast('âŒ ' + (_oauthMessages[oauthError] || `OAuth error: ${oauthError}`));
+                showToast('❌ ' + (_oauthMessages[oauthError] || `OAuth error: ${oauthError}`));
               }
             } else {
               clearCreds();
@@ -3070,15 +3070,15 @@
         const data = await res.json();
         if (res.ok) {
           status.style.color = '#1db954';
-          status.textContent = 'âœ“ Jam link saved. Viewers will see the button on the next poll.';
-          showToast('ðŸŽ§ Jam link saved!');
+          status.textContent = '✓ Jam link saved. Viewers will see the button on the next poll.';
+          showToast('🎧 Jam link saved!');
         } else {
           status.style.color = '#e05c7a';
-          status.textContent = 'âœ— ' + (data.detail || 'Failed to save.');
+          status.textContent = '✗ ' + (data.detail || 'Failed to save.');
         }
       } catch (e) {
         status.style.color = '#e05c7a';
-        status.textContent = 'âœ— Network error.';
+        status.textContent = '✗ Network error.';
       }
     }
 
@@ -3093,32 +3093,32 @@
           document.getElementById('jam-url-input').value = '';
           status.style.color = '#8a7a7d';
           status.textContent = 'Jam link cleared. Button will disappear for viewers on the next poll.';
-          showToast('ðŸŽ§ Jam link cleared.');
+          showToast('🎧 Jam link cleared.');
         } else {
           const data = await res.json().catch(() => ({}));
           status.style.color = '#e05c7a';
-          status.textContent = 'âœ— ' + (data.detail || 'Failed to clear.');
+          status.textContent = '✗ ' + (data.detail || 'Failed to clear.');
         }
       } catch (e) {
         status.style.color = '#e05c7a';
-        status.textContent = 'âœ— Network error.';
+        status.textContent = '✗ Network error.';
       }
     }
 
-    // â”€â”€ Discord Bot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Discord Bot ────────────────────────────────────
 
     async function loadDiscordStatus() {
       const grid = document.getElementById('discord-status-grid');
       if (!grid) return;
-      grid.innerHTML = '<div class="setting-tile"><div class="setting-label">Loadingâ€¦</div></div>';
+      grid.innerHTML = '<div class="setting-tile"><div class="setting-label">Loading…</div></div>';
       try {
         const d = await apiGet('/api/admin/discord/status');
         const tiles = [
-          { label: 'Bot Token',   value: d.bot_token_set ? (d.bot_valid ? 'âœ… Valid' : 'âŒ Invalid') : 'â€” Not set' },
-          { label: 'Bot Username', value: d.bot_username ? `@${escHtml(d.bot_username)}` : 'â€”' },
-          { label: 'Guild ID',    value: d.guild_id_set  ? 'âœ… Set' : 'â€” Not set' },
-          { label: 'Guild Name',  value: d.guild_name   ? escHtml(d.guild_name)   : 'â€”' },
-          { label: 'Members (approx)', value: d.guild_member_count != null ? String(d.guild_member_count) : 'â€”' },
+          { label: 'Bot Token',   value: d.bot_token_set ? (d.bot_valid ? '✅ Valid' : '❌ Invalid') : '— Not set' },
+          { label: 'Bot Username', value: d.bot_username ? `@${escHtml(d.bot_username)}` : '—' },
+          { label: 'Guild ID',    value: d.guild_id_set  ? '✅ Set' : '— Not set' },
+          { label: 'Guild Name',  value: d.guild_name   ? escHtml(d.guild_name)   : '—' },
+          { label: 'Members (approx)', value: d.guild_member_count != null ? String(d.guild_member_count) : '—' },
         ];
         grid.innerHTML = tiles.map(t =>
           `<div class="setting-tile">
@@ -3154,7 +3154,7 @@
 
     document.getElementById('discord-save-channels-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('discord-channels-status');
-      statusEl.textContent = 'Savingâ€¦';
+      statusEl.textContent = 'Saving…';
       try {
         const res = await apiPatch('/api/admin/discord/settings', {
           discord_question_channel_id:     document.getElementById('dch-question').value.trim()     || null,
@@ -3164,21 +3164,21 @@
         });
         if (res.ok) {
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = 'âœ“ Saved';
-          showToast('Discord channel IDs saved ðŸ¾');
+          statusEl.textContent = '✓ Saved';
+          showToast('Discord channel IDs saved 🐾');
         } else {
           statusEl.style.color = '#f87171';
-          statusEl.textContent = 'âœ— Failed';
+          statusEl.textContent = '✗ Failed';
         }
       } catch {
         statusEl.style.color = '#f87171';
-        statusEl.textContent = 'âœ— Network error';
+        statusEl.textContent = '✗ Network error';
       }
     });
 
     document.getElementById('discord-save-settings-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('discord-settings-status');
-      statusEl.textContent = 'Savingâ€¦';
+      statusEl.textContent = 'Saving…';
       try {
         const res = await apiPatch('/api/admin/discord/settings', {
           discord_notify_questions:             document.getElementById('dtoggle-questions').checked,
@@ -3191,15 +3191,15 @@
         });
         if (res.ok) {
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = 'âœ“ Saved';
-          showToast('Discord notification settings saved ðŸ¾');
+          statusEl.textContent = '✓ Saved';
+          showToast('Discord notification settings saved 🐾');
         } else {
           statusEl.style.color = '#f87171';
-          statusEl.textContent = 'âœ— Failed';
+          statusEl.textContent = '✗ Failed';
         }
       } catch {
         statusEl.style.color = '#f87171';
-        statusEl.textContent = 'âœ— Network error';
+        statusEl.textContent = '✗ Network error';
       }
     });
 
@@ -3208,26 +3208,26 @@
     document.getElementById('discord-test-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('discord-action-status');
       statusEl.style.color = '#9e7e82';
-      statusEl.textContent = 'Sendingâ€¦';
+      statusEl.textContent = 'Sending…';
       try {
         const res = await apiPost('/api/admin/discord/test');
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = 'âœ“ Test notification sent to admin channel ðŸ¾';
+          statusEl.textContent = '✓ Test notification sent to admin channel 🐾';
           showToast('Discord test notification sent!');
         } else {
           statusEl.style.color = '#f87171';
-          statusEl.textContent = 'âœ— ' + (data.detail || 'Failed to send.');
+          statusEl.textContent = '✗ ' + (data.detail || 'Failed to send.');
         }
       } catch {
         statusEl.style.color = '#f87171';
-        statusEl.textContent = 'âœ— Network error.';
+        statusEl.textContent = '✗ Network error.';
       }
     });
 
     // Load Discord status when the Discord section is navigated to
-    // (lazy: only on first visit; use the â†» Refresh button afterwards)
+    // (lazy: only on first visit; use the ↻ Refresh button afterwards)
     let _discordStatusLoaded = false;
     document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
       if (btn.dataset.target === 's-discord') {
@@ -3260,7 +3260,7 @@
       }
     });
 
-    // â”€â”€ Stream Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Stream Section ────────────────────────────────────────────────────
 
     async function loadStreamSection() {
       // Load RTMP camera list
@@ -3274,7 +3274,7 @@
               const url = `rtmp://your-server:1935/${c.rtmp_key || ''}`;
               return `
                 <div style="display:flex;flex-direction:column;gap:.3rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
-                  <span style="font-size:.95rem;color:#e8ddd5;font-weight:700">ðŸ–¥ï¸ OBS: ${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
+                  <span style="font-size:.95rem;color:#e8ddd5;font-weight:700">🖥️ OBS: ${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
                   <div style="display:flex;align-items:center;gap:.5rem">
                     <span style="font-size:.85rem;color:#e8ddd5">RTMP URL:</span>
                     <code style="font-size:.85rem;color:#9e7e82">${url}</code>
@@ -3282,9 +3282,9 @@
                   </div>
                   <div style="display:flex;align-items:center;gap:.5rem">
                     <span style="font-size:.85rem;color:#e8ddd5">Stream Key:</span>
-                    <code style="font-size:.85rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : 'â€”'}</code>
+                    <code style="font-size:.85rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
                     <button class="btn-sm btn-edit" onclick="navigator.clipboard.writeText('${c.rtmp_key || ''}')">Copy</button>
-                    <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">ðŸ”‘ Regenerate</button>
+                    <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Regenerate</button>
                   </div>
                 </div>
               `;
@@ -3292,8 +3292,8 @@
               return `
                 <div style="display:flex;align-items:center;gap:.75rem;padding:.4rem 0;border-bottom:1px solid #2a1520">
                   <span style="flex:1;font-size:.85rem;color:#e8ddd5">${esc(c.display_name)} <code style="color:#9e7e82">${esc(c.stream_slug)}</code></span>
-                  <code style="font-size:.78rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : 'â€”'}</code>
-                  <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">ðŸ”‘ Generate Key</button>
+                  <code style="font-size:.78rem;color:#9e7e82" id="rtmp-key-${c.id}">${c.rtmp_key ? esc(c.rtmp_key) : '—'}</code>
+                  <button class="btn-sm btn-edit" onclick="generateRtmpKey(${c.id})">🔑 Generate Key</button>
                 </div>`;
             }
           }).join('');
@@ -3336,7 +3336,7 @@
           target_cents: parseInt(document.getElementById('goal-target-inp').value) || 0,
           current_cents: parseInt(document.getElementById('goal-current-inp').value) || 0,
         });
-        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = 'âœ“ Saved'; }
+        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = '✓ Saved'; }
         else { msg.style.color = '#f87171'; msg.textContent = 'Error: ' + resp.status; }
       } catch(e) {
         msg.style.color = '#f87171';
@@ -3358,7 +3358,7 @@
           <input type="text" placeholder="Day" value="${esc(s.day||'')}" onchange="_scheduleSlots[${i}].day=this.value" style="width:100px" />
           <input type="text" placeholder="Time" value="${esc(s.time||'')}" onchange="_scheduleSlots[${i}].time=this.value" style="width:80px" />
           <input type="text" placeholder="Note" value="${esc(s.note||'')}" onchange="_scheduleSlots[${i}].note=this.value" style="flex:1" />
-          <button class="btn-sm btn-danger" onclick="removeScheduleSlot(${i})">âœ•</button>
+          <button class="btn-sm btn-danger" onclick="removeScheduleSlot(${i})">✕</button>
         </div>`).join('');
     }
 
@@ -3377,7 +3377,7 @@
       msg.textContent = '';
       try {
         const resp = await apiPatch('/api/admin/schedule', {schedule: _scheduleSlots});
-        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = 'âœ“ Saved'; }
+        if (resp.ok) { msg.style.color = '#67d399'; msg.textContent = '✓ Saved'; }
         else { msg.style.color = '#f87171'; msg.textContent = 'Error: ' + resp.status; }
       } catch(e) {
         msg.style.color = '#f87171';
@@ -3385,7 +3385,7 @@
       }
     });
 
-    // â”€â”€ Vault Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Vault Admin ───────────────────────────────────────────────────────
 
     document.getElementById('vault-add-toggle-btn').addEventListener('click', () => {
       const f = document.getElementById('vault-add-form');
@@ -3421,9 +3421,9 @@
         tbody.innerHTML = items.map(it => `
           <tr>
             <td>${esc(it.title)}</td>
-            <td><a href="${esc(it.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(it.file_url.slice(0,40))}â€¦</a></td>
+            <td><a href="${esc(it.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(it.file_url.slice(0,40))}…</a></td>
             <td>${it.minimum_access_level}</td>
-            <td>${it.is_active ? 'âœ“' : 'â€”'}</td>
+            <td>${it.is_active ? '✓' : '—'}</td>
             <td>
               <button class="btn-sm btn-danger" onclick="deleteVaultItem(${it.id})">Delete</button>
             </td>
@@ -3439,7 +3439,7 @@
       } catch(e) { alert('Error: ' + e.message); }
     }
 
-    // â”€â”€ VODs Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── VODs Admin ────────────────────────────────────────────────────────
 
     document.getElementById('vod-add-toggle-btn').addEventListener('click', () => {
       const f = document.getElementById('vod-add-form');
@@ -3476,10 +3476,10 @@
         tbody.innerHTML = vods.map(v => `
           <tr>
             <td>${esc(v.title)}</td>
-            <td><a href="${esc(v.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(v.file_url.slice(0,40))}â€¦</a></td>
+            <td><a href="${esc(v.file_url)}" target="_blank" rel="noopener" style="color:#9e7e82;font-size:.78rem">${esc(v.file_url.slice(0,40))}…</a></td>
             <td>${v.minimum_access_level}</td>
-            <td>${v.duration_seconds ? v.duration_seconds + 's' : 'â€”'}</td>
-            <td>${v.is_active ? 'âœ“' : 'â€”'}</td>
+            <td>${v.duration_seconds ? v.duration_seconds + 's' : '—'}</td>
+            <td>${v.is_active ? '✓' : '—'}</td>
             <td>
               <button class="btn-sm btn-danger" onclick="deleteVod(${v.id})">Delete</button>
             </td>
@@ -3495,9 +3495,9 @@
       } catch(e) { alert('Error: ' + e.message); }
     }
 
-    // â”€â”€ Users Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Users Admin ───────────────────────────────────────────────────────
 
-    const ACCESS_LEVEL_LABELS = ['0 â€“ Registered', '1 â€“ Free Tier', '2 â€“ Tier 1', '3 â€“ Tier 2'];
+    const ACCESS_LEVEL_LABELS = ['0 – Registered', '1 – Free Tier', '2 – Tier 1', '3 – Tier 2'];
 
     function roleBadge(role) {
       const r = role || 'user';
@@ -3534,10 +3534,10 @@
                 <div class="form-field" style="min-width:130px">
                   <label>Access Level</label>
                   <select id="usr-edit-level-${esc(u.id)}">
-                    <option value="0">0 â€“ Registered</option>
-                    <option value="1">1 â€“ Free Tier</option>
-                    <option value="2">2 â€“ Tier 1</option>
-                    <option value="3">3 â€“ Tier 2</option>
+                    <option value="0">0 – Registered</option>
+                    <option value="1">1 – Free Tier</option>
+                    <option value="2">2 – Tier 1</option>
+                    <option value="3">3 – Tier 2</option>
                   </select>
                 </div>
                 <div class="form-field" style="min-width:110px">
@@ -3549,7 +3549,7 @@
                     <option value="admin">Admin</option>
                   </select>
                 </div>
-                <button class="btn-sm btn-edit" onclick="saveUsrEdit('${esc(u.id)}')">ðŸ’¾ Save</button>
+                <button class="btn-sm btn-edit" onclick="saveUsrEdit('${esc(u.id)}')">💾 Save</button>
                 <button class="btn-sm btn-delete" onclick="hideUsrEdit('${esc(u.id)}')">Cancel</button>
               </div>
               <p id="usr-edit-msg-${esc(u.id)}" style="font-size:.8rem;color:#f87171;margin-top:.3rem"></p>
@@ -3650,4 +3650,5 @@
   </script>
 </body>
 </html>
+
 
