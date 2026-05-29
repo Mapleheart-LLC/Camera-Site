@@ -5686,7 +5686,23 @@ def handler_approve_social_post_draft(
         )
 
     result = execute_post_social_update(platform=row["platform"], content=row["content"])
-    new_status = "failed" if result.get("any_error") else "approved"
+    any_error = bool(result.get("any_error", False))
+    new_status = "failed" if any_error else "approved"
+
+    # Log per-platform outcomes server-side.  Exception strings and post
+    # identifiers are kept in the server log and the DB only – they are not
+    # forwarded to the API response to avoid leaking internal details.
+    for r in result.get("results", []):
+        if r.get("status") == "error":
+            logger.warning(
+                "Social post draft %d failed on %s: %s",
+                draft_id, r.get("platform"), r.get("error"),
+            )
+        else:
+            logger.info(
+                "Social post draft %d posted on %s",
+                draft_id, r.get("platform"),
+            )
 
     db.execute(
         """
@@ -5698,27 +5714,12 @@ def handler_approve_social_post_draft(
     )
     db.commit()
 
-    # Build a sanitized per-platform summary for the API response.  Raw
-    # exception strings are logged server-side only and not forwarded to the
-    # client to avoid leaking internal details.
-    per_platform = []
-    for r in result.get("results", []):
-        entry: dict = {"platform": r.get("platform"), "status": r.get("status")}
-        if r.get("status") == "posted":
-            # Include post identifiers so the handler can verify the post.
-            if r.get("tweet_id"):
-                entry["tweet_id"] = r["tweet_id"]
-            if r.get("post_uri"):
-                entry["post_uri"] = r["post_uri"]
-        if r.get("status") == "error":
-            logger.warning(
-                "Social post draft %s failed on %s: %s",
-                draft_id, r.get("platform"), r.get("error"),
-            )
-            entry["error"] = "Posting failed; check server logs for details."
-        per_platform.append(entry)
-
-    return {"draft_id": draft_id, "status": new_status, "platforms": per_platform}
+    message = (
+        "Post published successfully."
+        if new_status == "approved"
+        else "Posting failed on one or more platforms. Check server logs for details."
+    )
+    return {"draft_id": draft_id, "status": new_status, "message": message}
 
 
 @router.delete("/api/handler/social-post-drafts/{draft_id}", status_code=200)
