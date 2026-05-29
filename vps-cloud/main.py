@@ -60,6 +60,12 @@ from routers.tpe import (
 from routers.handler import router as handler_router, migrate_handler
 from routers.vitals import router as vitals_router, migrate_vitals
 from routers.public_control import router as public_control_router, migrate_public_control
+from routers.sms_proxy import (
+    webhook_router as sms_webhook_router,
+    agent_router as sms_agent_router,
+    admin_sms_router,
+    migrate_sms_proxy,
+)
 from redis_client import close_redis
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -777,6 +783,7 @@ async def lifespan(app: FastAPI):
     migrate_handler(get_db_connection())
     migrate_vitals(get_db_connection())
     migrate_public_control(get_db_connection())
+    migrate_sms_proxy(get_db_connection())
     mqtt_db = get_db_connection()
     try:
         initialize_mqtt(mqtt_db)
@@ -1179,6 +1186,9 @@ app.include_router(tpe_admin_router)
 app.include_router(handler_router)
 app.include_router(vitals_router)
 app.include_router(public_control_router)
+app.include_router(sms_webhook_router)
+app.include_router(sms_agent_router)
+app.include_router(admin_sms_router)
 
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.

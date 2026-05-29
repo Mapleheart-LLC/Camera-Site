@@ -407,6 +407,7 @@
         </button>
         <button class="nav-item" data-target="s-devices">🎮 Devices</button>
         <button class="nav-item" data-target="s-users">👥 Users</button>
+        <button class="nav-item" data-target="s-sms">💬 SMS Proxy</button>
         <div class="sidebar-section-label">Site</div>
         <button class="nav-item" data-target="s-links">🔗 Links</button>
         <button class="nav-item" data-target="s-store">🛍️ Store</button>
@@ -1350,6 +1351,81 @@
         </section>
 
         <!-- ── Settings ───────────────────────────────── -->
+        <section id="s-sms" class="admin-section">
+          <h1 class="section-heading">
+            💬 SMS Proxy
+            <button id="refresh-sms-btn" class="btn-sm btn-edit" style="margin-left:.75rem;font-size:.75rem">↻ Refresh</button>
+          </h1>
+
+          <!-- ── Direct send bypass ──────────────────────────── -->
+          <div class="card">
+            <div class="card-header"><h2>📤 Admin Direct Send</h2></div>
+            <div class="card-body">
+              <p style="font-size:.85rem;color:#9e7e82;margin-bottom:1rem">
+                Sends immediately to the client via Twilio, bypassing all filters and the moderation queue.
+              </p>
+              <div class="field-group">
+                <label>To Number (E.164)</label>
+                <input type="text" id="sms-direct-to" placeholder="+15551234567" />
+              </div>
+              <div class="field-group">
+                <label>Thread ID (optional – leave blank to auto-create)</label>
+                <input type="text" id="sms-direct-thread" placeholder="thread id" />
+              </div>
+              <div class="field-group">
+                <label>Message Body</label>
+                <textarea id="sms-direct-body" rows="3" style="width:100%;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:8px;color:#f0e6e8;font-family:inherit;font-size:.95rem;padding:.6rem .85rem;resize:vertical" placeholder="Type your message…"></textarea>
+              </div>
+              <button id="sms-direct-send-btn" class="btn-sm btn-edit">Send Now 📤</button>
+              <p id="sms-direct-error" style="font-size:.82rem;color:#f87171;min-height:1.2em;margin-top:.5rem"></p>
+            </div>
+          </div>
+
+          <!-- ── Moderation queue ────────────────────────────── -->
+          <div class="card">
+            <div class="card-header">
+              <h2>🗂️ Moderation Queue</h2>
+              <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem">
+                <button class="btn-sm btn-edit sms-queue-filter active" data-status="">All</button>
+                <button class="btn-sm btn-edit sms-queue-filter" data-status="pending">Pending</button>
+                <button class="btn-sm btn-edit sms-queue-filter" data-status="approved">Approved</button>
+                <button class="btn-sm btn-edit sms-queue-filter" data-status="rejected">Rejected</button>
+              </div>
+            </div>
+            <div class="card-body no-pad">
+              <div id="sms-queue-list" style="padding:.75rem">
+                <p style="color:#5a3a3e;font-size:.85rem">Loading queue…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Thread viewer ───────────────────────────────── -->
+          <div class="card">
+            <div class="card-header">
+              <h2>🧵 Threads</h2>
+            </div>
+            <div class="card-body no-pad">
+              <div style="overflow-x:auto">
+                <table class="admin-table" id="sms-threads-table" aria-label="SMS Threads">
+                  <thead><tr><th>From</th><th>To</th><th>Updated</th><th>Actions</th></tr></thead>
+                  <tbody id="sms-threads-body">
+                    <tr class="empty-row"><td colspan="4">No threads yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Thread message drawer ───────────────────────── -->
+          <div id="sms-thread-detail" class="card" style="display:none">
+            <div class="card-header">
+              <h2 id="sms-thread-detail-title">Thread Messages</h2>
+              <button id="sms-thread-detail-close" class="btn-sm btn-delete" style="float:right">Close ✕</button>
+            </div>
+            <div class="card-body" id="sms-thread-messages" style="max-height:400px;overflow-y:auto"></div>
+          </div>
+        </section>
+
         <section id="s-settings" class="admin-section">
           <h1 class="section-heading" style="color:#f87171">⚠️ Danger Zone</h1>
 
@@ -1522,7 +1598,7 @@
     });
 
     // ── Sidebar navigation ─────────────────────────────
-    const SETUP_ONLY_TARGETS = new Set(['s-drool', 's-spotify']);
+    const SETUP_ONLY_TARGETS = new Set(['s-drool', 's-spotify', 's-sms']);
 
     function applySetupOnlyScope() {
       document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
@@ -1559,6 +1635,7 @@
       const btn = document.querySelector(`.nav-item[data-target="${targetId}"]`);
       if (btn) btn.classList.add('active');
       closeMobileSidebar();
+      if (targetId === 's-sms') loadSmsSection();
     }
 
     document.querySelectorAll('.nav-item[data-target]').forEach(btn => {
@@ -3646,6 +3723,166 @@
         }).join('; ');
       }
       return detail || `Error ${status}`;
+    }
+
+    // ── SMS Proxy ──────────────────────────────────────
+    let _smsQueueFilter = '';
+
+    async function loadSmsQueue() {
+      const listEl = document.getElementById('sms-queue-list');
+      const url = _smsQueueFilter
+        ? `/api/admin/sms/queue?queue_status=${encodeURIComponent(_smsQueueFilter)}`
+        : '/api/admin/sms/queue';
+      try {
+        const items = await apiGet(url);
+        if (!items.length) {
+          listEl.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No queue items.</p>';
+          return;
+        }
+        listEl.innerHTML = items.map(item => `
+          <div style="border:1px solid #3d2a2e;border-radius:8px;padding:.75rem;margin-bottom:.75rem">
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem">
+              <strong style="color:#e8aeb7">${escHtml(item.from_number)} → ${escHtml(item.to_number)}</strong>
+              <span style="font-size:.75rem;padding:.15rem .45rem;border-radius:20px;background:${item.queue_status==='pending'?'#7c3a3a':item.queue_status==='approved'?'#2a5c3a':'#3a3a5c'};color:#f0e6e8">${escHtml(item.queue_status)}</span>
+              <span style="font-size:.75rem;color:#9e7e82">${escHtml((item.created_at||'').replace('T',' ').replace(/\.\d+/,'').replace('Z',' UTC'))}</span>
+            </div>
+            <div style="margin-bottom:.4rem">
+              <span style="font-size:.78rem;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em">Original</span><br>
+              <span style="font-size:.9rem">${escHtml(item.original_body)}</span>
+            </div>
+            <div style="margin-bottom:.5rem">
+              <span style="font-size:.78rem;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em">After Tone Compliance</span><br>
+              <span style="font-size:.9rem;color:#b8d4b8">${escHtml(item.rewritten_body)}</span>
+            </div>
+            ${item.queue_status === 'pending' ? `
+            <div style="margin-bottom:.5rem">
+              <label style="font-size:.78rem;color:#9e7e82;text-transform:uppercase;letter-spacing:.05em">Edit Before Sending (optional)</label>
+              <textarea id="sms-edit-${escHtml(item.queue_id)}" rows="2" style="width:100%;background:#1a1a1a;border:1px solid #3d2a2e;border-radius:6px;color:#f0e6e8;font-family:inherit;font-size:.9rem;padding:.4rem .6rem;resize:vertical;margin-top:.25rem">${escHtml(item.rewritten_body)}</textarea>
+            </div>
+            <div style="display:flex;gap:.5rem">
+              <button class="btn-sm btn-edit" onclick="smsApprove('${escHtml(item.queue_id)}')">✅ Approve &amp; Send</button>
+              <button class="btn-sm btn-delete" onclick="smsReject('${escHtml(item.queue_id)}')">🚫 Reject</button>
+            </div>
+            ` : item.final_body ? `<div style="font-size:.8rem;color:#9e7e82">Sent: ${escHtml(item.final_body)}</div>` : ''}
+          </div>
+        `).join('');
+      } catch (err) {
+        if (err.message !== '401') listEl.innerHTML = '<p style="color:#f87171">Failed to load queue.</p>';
+      }
+    }
+
+    window.smsApprove = async function(queueId) {
+      const editEl = document.getElementById(`sms-edit-${queueId}`);
+      const finalBody = editEl ? editEl.value.trim() : '';
+      try {
+        const resp = await apiPost(`/api/admin/sms/queue/${queueId}/approve`, { final_body: finalBody || null });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { showToast('Approve failed: ' + (data.detail || resp.status)); return; }
+        showToast('✅ Message approved and sent.');
+        loadSmsQueue();
+      } catch { showToast('Approve failed.'); }
+    };
+
+    window.smsReject = async function(queueId) {
+      try {
+        const resp = await apiPost(`/api/admin/sms/queue/${queueId}/reject`);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { showToast('Reject failed: ' + (data.detail || resp.status)); return; }
+        showToast('🚫 Message rejected.');
+        loadSmsQueue();
+      } catch { showToast('Reject failed.'); }
+    };
+
+    async function loadSmsThreads() {
+      const tbody = document.getElementById('sms-threads-body');
+      try {
+        const threads = await apiGet('/api/admin/sms/threads');
+        if (!threads.length) {
+          tbody.innerHTML = '<tr class="empty-row"><td colspan="4">No threads yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = threads.map(t => {
+          const ts = (t.updated_at || '').replace('T', ' ').replace(/\.\d+/, '').replace('Z', ' UTC');
+          return `<tr>
+            <td>${escHtml(t.from_number)}</td>
+            <td>${escHtml(t.to_number)}</td>
+            <td class="ts-cell">${escHtml(ts)}</td>
+            <td><button class="btn-sm btn-edit" onclick="viewThread('${escHtml(t.thread_id)}', '${escHtml(t.from_number)}')">View 💬</button></td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') tbody.innerHTML = '<tr class="empty-row"><td colspan="4" style="color:#f87171">Failed to load threads.</td></tr>';
+      }
+    }
+
+    window.viewThread = async function(threadId, fromNumber) {
+      const detail = document.getElementById('sms-thread-detail');
+      const title  = document.getElementById('sms-thread-detail-title');
+      const body   = document.getElementById('sms-thread-messages');
+      title.textContent = `Thread with ${fromNumber}`;
+      body.innerHTML = '<p style="color:#9e7e82;font-size:.85rem">Loading…</p>';
+      detail.style.display = 'block';
+      try {
+        const data = await apiGet(`/api/admin/sms/threads/${encodeURIComponent(threadId)}/messages`);
+        const msgs = data.messages || [];
+        if (!msgs.length) { body.innerHTML = '<p style="color:#5a3a3e;font-size:.85rem">No messages.</p>'; return; }
+        body.innerHTML = msgs.map(m => {
+          const isIn = m.direction === 'inbound';
+          const mediaHtml = (m.media_urls || []).map(url =>
+            `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:.8rem;color:#e8aeb7;margin-top:.25rem">🖼 ${escHtml(url)}</a>`
+          ).join('');
+          return `<div style="margin-bottom:.75rem;display:flex;flex-direction:column;align-items:${isIn?'flex-start':'flex-end'}">
+            <div style="max-width:80%;background:${isIn?'#2a2a2a':'#3d2a2e'};border-radius:10px;padding:.5rem .75rem">
+              <span style="font-size:.75rem;color:#9e7e82">${isIn?'Inbound':'Outbound'} · ${escHtml((m.created_at||'').replace('T',' ').replace(/\.\d+/,'').replace('Z',' UTC'))}</span><br>
+              <span style="font-size:.9rem">${escHtml(m.body || '')}</span>
+              ${mediaHtml}
+            </div>
+          </div>`;
+        }).join('');
+        body.scrollTop = body.scrollHeight;
+      } catch (err) {
+        if (err.message !== '401') body.innerHTML = '<p style="color:#f87171">Failed to load messages.</p>';
+      }
+    };
+
+    document.getElementById('sms-thread-detail-close').addEventListener('click', () => {
+      document.getElementById('sms-thread-detail').style.display = 'none';
+    });
+
+    document.getElementById('sms-direct-send-btn').addEventListener('click', async () => {
+      const toNum  = document.getElementById('sms-direct-to').value.trim();
+      const thId   = document.getElementById('sms-direct-thread').value.trim();
+      const body   = document.getElementById('sms-direct-body').value.trim();
+      const errEl  = document.getElementById('sms-direct-error');
+      errEl.textContent = '';
+      if (!toNum)  { errEl.textContent = 'To Number is required.'; return; }
+      if (!body)   { errEl.textContent = 'Message body is required.'; return; }
+      try {
+        const resp = await apiPost('/api/admin/sms/send', { to_number: toNum, body, thread_id: thId || null });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { errEl.textContent = data.detail || `Error ${resp.status}`; return; }
+        showToast('📤 Message sent!');
+        document.getElementById('sms-direct-body').value = '';
+        loadSmsThreads();
+      } catch { errEl.textContent = 'Failed to send message.'; }
+    });
+
+    document.querySelectorAll('.sms-queue-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sms-queue-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _smsQueueFilter = btn.dataset.status;
+        loadSmsQueue();
+      });
+    });
+
+    document.getElementById('refresh-sms-btn').addEventListener('click', () => {
+      loadSmsQueue();
+      loadSmsThreads();
+    });
+
+    async function loadSmsSection() {
+      await Promise.all([loadSmsQueue(), loadSmsThreads()]);
     }
   </script>
 </body>
