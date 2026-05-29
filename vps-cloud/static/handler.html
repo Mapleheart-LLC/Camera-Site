@@ -693,9 +693,14 @@
       <span class="topbar-title">Handler Control</span>
       <span class="topbar-badge">ADMIN</span>
       <button id="back-to-kennel-btn">← Back to Kennel</button>
+      <button id="mode-toggle-btn" title="Switch between beginner and advanced layouts">Simple Mode: ON</button>
       <div id="ws-status-dot" title="WebSocket connection status"></div>
       <span id="ws-status-label">Connecting…</span>
       <button id="logout-btn">Logout</button>
+    </div>
+    <div id="helper-strip">
+      <div><strong>Start here:</strong> choose a device, then use Overview → Quick Actions. Switch to Advanced Mode when you want deeper controls.</div>
+      <div id="helper-strip-state">Beginner layout active</div>
     </div>
 
     <!-- ═══════════════ KENNEL OVERVIEW ═══════════════ -->
@@ -778,17 +783,17 @@
           </div>
 
           <div class="sidebar-section-label">Navigation</div>
-          <button class="nav-item active" data-target="sec-overview">📊 Overview</button>
-          <button class="nav-item" data-target="sec-vitals">💓 Vitals</button>
-          <button class="nav-item" data-target="sec-map">🗺️ GPS Map</button>
-          <button class="nav-item" data-target="sec-actions">⚡ Quick Actions</button>
-          <button class="nav-item" data-target="sec-questions">💬 Questions</button>
-          <button class="nav-item" data-target="sec-limbo">🫧 Limbo Queue</button>
-          <button class="nav-item" data-target="sec-booking">📅 Booking Intake</button>
-          <button class="nav-item" data-target="sec-mail">📬 Puppy Mail</button>
-          <button class="nav-item" data-target="sec-commands">📡 Commands</button>
-          <button class="nav-item" data-target="sec-logs">📜 Logs</button>
-          <button class="nav-item" data-target="sec-screenshare">📺 Screen Share</button>
+          <button class="nav-item active" data-target="sec-overview">1) Snapshot</button>
+          <button class="nav-item" data-target="sec-actions">2) Common Actions</button>
+          <button class="nav-item" data-target="sec-questions">3) Public Page + Questions</button>
+          <button class="nav-item" data-target="sec-screenshare">4) Screen Share</button>
+          <button class="nav-item" data-target="sec-vitals">Vitals History</button>
+          <button class="nav-item" data-target="sec-map">Live Map</button>
+          <button class="nav-item" data-target="sec-booking">Booking Requests</button>
+          <button class="nav-item" data-target="sec-mail">Puppy Mail Inbox</button>
+          <button class="nav-item" data-target="sec-limbo" data-advanced="true">Limbo Queue (Advanced)</button>
+          <button class="nav-item" data-target="sec-commands" data-advanced="true">Raw Commands (Advanced)</button>
+          <button class="nav-item" data-target="sec-logs" data-advanced="true">Behavior Logs (Advanced)</button>
         </aside>
 
         <!-- ── Main ── -->
@@ -801,7 +806,36 @@
 
           <!-- ═══════════════ OVERVIEW ═══════════════ -->
           <section id="sec-overview" class="handler-section active">
-            <h2 class="section-heading">📊 Overview</h2>
+            <h2 class="section-heading">📊 Snapshot</h2>
+            <p class="section-help">This is your at-a-glance status. If anything looks off, go to Common Actions for quick fixes.</p>
+
+            <div class="card" style="margin-bottom:1rem">
+              <div class="card-header"><h2>🧭 Quick Start Workflows</h2></div>
+              <div class="card-body">
+                <div class="onboarding-grid">
+                  <div class="onboarding-step">
+                    <h3>Get control fast</h3>
+                    <p>Open common one-tap actions like lock, check-in, and toy commands.</p>
+                    <button class="btn-action" data-open-section="sec-actions">Open Common Actions</button>
+                  </div>
+                  <div class="onboarding-step">
+                    <h3>Set public sharing</h3>
+                    <p>Enable visibility and share controls safely with presets and scope toggles.</p>
+                    <button class="btn-action" data-open-section="sec-questions">Open Public Controls</button>
+                  </div>
+                  <div class="onboarding-step">
+                    <h3>Check location + health</h3>
+                    <p>Review map and vitals when you need reassurance before taking action.</p>
+                    <button class="btn-action" data-open-section="sec-vitals">Open Vitals</button>
+                  </div>
+                  <div class="onboarding-step">
+                    <h3>Handle incoming requests</h3>
+                    <p>Review booking intake and puppy mail in one pass.</p>
+                    <button class="btn-action" data-open-section="sec-booking">Open Requests</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="stats-row">
               <div class="stat-tile">
@@ -849,6 +883,7 @@
           <!-- ═══════════════ VITALS ═══════════════ -->
           <section id="sec-vitals" class="handler-section">
             <h2 class="section-heading">💓 Vitals</h2>
+            <p class="section-help">Use this when behavior feels unusual and you want context before sending commands.</p>
 
             <!-- Alert status indicator -->
             <div id="vitals-alert-banner" role="alert" style="
@@ -898,6 +933,7 @@
           <!-- ═══════════════ GPS MAP ═══════════════ -->
           <section id="sec-map" class="handler-section">
             <h2 class="section-heading">🗺️ GPS Map</h2>
+            <p class="section-help">Latest known location and coordinates from device check-ins.</p>
             <div class="card">
               <div class="card-header">
                 <h2>Device Location</h2>
@@ -913,7 +949,8 @@
 
           <!-- ═══════════════ QUICK ACTIONS ═══════════════ -->
           <section id="sec-actions" class="handler-section">
-            <h2 class="section-heading">⚡ Quick Actions</h2>
+            <h2 class="section-heading">⚡ Common Actions</h2>
+            <p class="section-help">Most-used controls for day-to-day handling. Safe place to start if you are new.</p>
             <div class="action-grid">
               <div class="action-card">
                 <div class="ac-icon">🔒</div>
@@ -930,14 +967,14 @@
               <div class="action-card">
                 <div class="ac-icon">⚡</div>
                 <div class="ac-label">Pavlok</div>
-                <button class="btn-action" id="btn-pavlok">Send Shock</button>
-                <div class="ac-result" id="res-pavlok"></div>
+                <button class="btn-action" id="btn-pavlok-shock">Send Shock</button>
+                <div class="ac-result" id="res-pavlok-shock"></div>
               </div>
               <div class="action-card">
                 <div class="ac-icon">🌀</div>
                 <div class="ac-label">Pavlok</div>
-                <button class="btn-action" id="btn-pavlok">Vibrate (Full)</button>
-                <div class="ac-result" id="res-pavlok"></div>
+                <button class="btn-action" id="btn-pavlok-vibrate">Vibrate (Full)</button>
+                <div class="ac-result" id="res-pavlok-vibrate"></div>
               </div>
               <div class="action-card">
                 <div class="ac-icon">📋</div>
@@ -968,7 +1005,8 @@
 
           <!-- ═══════════════ QUESTIONS + PUBLIC STATUS ═══════════════ -->
           <section id="sec-questions" class="handler-section">
-            <h2 class="section-heading">💬 Questions + Public Status</h2>
+            <h2 class="section-heading">💬 Public Page + Questions</h2>
+            <p class="section-help">Manage what the public can see and answer incoming questions in one place.</p>
 
             <div class="card">
               <div class="card-header">
@@ -1087,7 +1125,7 @@
           </section>
 
           <!-- ═══════════════ LIMBO QUEUE ═══════════════ -->
-          <section id="sec-limbo" class="handler-section">
+          <section id="sec-limbo" class="handler-section" data-advanced="true">
             <h2 class="section-heading">🫧 Limbo Queue</h2>
 
             <div class="card">
@@ -1139,7 +1177,8 @@
 
           <!-- ═══════════════ BOOKING INTAKE ═══════════════ -->
           <section id="sec-booking" class="handler-section">
-            <h2 class="section-heading">📅 Booking Intake</h2>
+            <h2 class="section-heading">📅 Booking Requests</h2>
+            <p class="section-help">Review new submissions, qualify leads, and schedule from a single queue.</p>
 
             <div class="card">
               <div class="card-header">
@@ -1170,7 +1209,8 @@
 
           <!-- ═══════════════ PUPPY MAIL ═══════════════ -->
           <section id="sec-mail" class="handler-section">
-            <h2 class="section-heading">📬 Puppy Mail</h2>
+            <h2 class="section-heading">📬 Puppy Mail Inbox</h2>
+            <p class="section-help">Handle private threads and follow up quickly.</p>
 
             <div class="card">
               <div class="card-header">
@@ -1213,7 +1253,7 @@
           </section>
 
           <!-- ═══════════════ REMOTE COMMANDS ═══════════════ -->
-          <section id="sec-commands" class="handler-section">
+          <section id="sec-commands" class="handler-section" data-advanced="true">
             <h2 class="section-heading">📡 Remote Commands</h2>
 
             <div class="cmd-toolbar" aria-label="Command center tools">
@@ -2035,7 +2075,7 @@
           </section>
 
           <!-- ═══════════════ LOGS ═══════════════ -->
-          <section id="sec-logs" class="handler-section">
+          <section id="sec-logs" class="handler-section" data-advanced="true">
             <h2 class="section-heading">📜 Logs</h2>
             <div class="card">
               <div class="card-header">
@@ -2095,6 +2135,7 @@
           <!-- ═══════════════ SCREEN SHARE ═══════════════ -->
           <section id="sec-screenshare" class="handler-section">
             <h2 class="section-heading">📺 Screen Share</h2>
+            <p class="section-help">Start viewing the device screen live when approval is enabled.</p>
             <div class="card">
               <div class="card-header">
                 <h2>Remote Device Screen</h2>
@@ -2375,11 +2416,7 @@
       setText('sb-device-name', deviceLabel(cached) || deviceId);
 
       // Reset to overview section
-      document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
-      document.getElementById('sec-overview').classList.add('active');
-      document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
-      var overviewNav = document.querySelector('.nav-item[data-target="sec-overview"]');
-      if (overviewNav) overviewNav.classList.add('active');
+      activateSection('sec-overview');
 
       // Render immediately from cache, or fetch
       cached = _deviceCache[deviceId];
@@ -2481,34 +2518,71 @@
     document.getElementById('back-to-kennel-btn').addEventListener('click', showKennelOverview);
     document.getElementById('open-global-controls-btn').addEventListener('click', showGlobalControls);
 
+    function activateSection(targetId) {
+      if (!targetId) return;
+      document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
+      document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
+      var sec = document.getElementById(targetId);
+      if (sec) sec.classList.add('active');
+      var nav = document.querySelector('.nav-item[data-target="' + targetId + '"]');
+      if (nav) nav.classList.add('active');
+
+      if (targetId === 'sec-map') initDetailMap();
+      if (targetId === 'sec-logs') loadLogs();
+      if (targetId === 'sec-vitals') loadVitalsHistory();
+      if (targetId === 'sec-questions') {
+        loadHandlerPublicStatus();
+        loadHandlerQuestions();
+      }
+      if (targetId === 'sec-limbo') {
+        loadLimboItems();
+      }
+      if (targetId === 'sec-booking') {
+        loadPublicBookingVisibility();
+        loadBookingQueue();
+      }
+      if (targetId === 'sec-mail') {
+        loadMailThreads();
+      }
+      if (targetId === 'sec-screenshare') {
+        loadScreenShareApprovalStatus();
+      }
+    }
+
+    var _simpleModeEnabled = true;
+    function applySimpleMode(enabled) {
+      _simpleModeEnabled = !!enabled;
+      document.body.classList.toggle('simple-mode', _simpleModeEnabled);
+      var modeBtn = document.getElementById('mode-toggle-btn');
+      var stateEl = document.getElementById('helper-strip-state');
+      if (modeBtn) modeBtn.textContent = _simpleModeEnabled ? 'Simple Mode: ON' : 'Advanced Mode: ON';
+      if (stateEl) stateEl.textContent = _simpleModeEnabled ? 'Beginner layout active' : 'Advanced layout active';
+
+      if (_simpleModeEnabled) {
+        var current = document.querySelector('.handler-section.active');
+        if (current && current.dataset.advanced === 'true') {
+          activateSection('sec-overview');
+        }
+      }
+    }
+
+    var modeBtnEl = document.getElementById('mode-toggle-btn');
+    if (modeBtnEl) {
+      modeBtnEl.addEventListener('click', function() {
+        applySimpleMode(!_simpleModeEnabled);
+      });
+    }
+
+    document.querySelectorAll('[data-open-section]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        activateSection(btn.dataset.openSection || 'sec-overview');
+      });
+    });
+
     // ── Sidebar navigation ─────────────────────────────
     document.querySelectorAll('.nav-item[data-target]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.handler-section').forEach(function(s) { s.classList.remove('active'); });
-        document.querySelectorAll('.nav-item').forEach(function(b) { b.classList.remove('active'); });
-        var sec = document.getElementById(btn.dataset.target);
-        if (sec) sec.classList.add('active');
-        btn.classList.add('active');
-        if (btn.dataset.target === 'sec-map') initDetailMap();
-        if (btn.dataset.target === 'sec-logs') loadLogs();
-        if (btn.dataset.target === 'sec-vitals') loadVitalsHistory();
-        if (btn.dataset.target === 'sec-questions') {
-          loadHandlerPublicStatus();
-          loadHandlerQuestions();
-        }
-        if (btn.dataset.target === 'sec-limbo') {
-          loadLimboItems();
-        }
-        if (btn.dataset.target === 'sec-booking') {
-          loadPublicBookingVisibility();
-          loadBookingQueue();
-        }
-        if (btn.dataset.target === 'sec-mail') {
-          loadMailThreads();
-        }
-        if (btn.dataset.target === 'sec-screenshare') {
-          loadScreenShareApprovalStatus();
-        }
+        activateSection(btn.dataset.target);
       });
     });
 
@@ -3011,8 +3085,8 @@
     }
 
     async function sendShockPavlok() {
-      var btn = document.getElementById('btn-pavlok');
-      var res = document.getElementById('res-pavlok');
+      var btn = document.getElementById('btn-pavlok-shock');
+      var res = document.getElementById('res-pavlok-shock');
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
@@ -3027,8 +3101,8 @@
     }
 
     async function sendVibratePavlok() {
-      var btn = document.getElementById('btn-pavlok');
-      var res = document.getElementById('res-pavlok');
+      var btn = document.getElementById('btn-pavlok-vibrate');
+      var res = document.getElementById('res-pavlok-vibrate');
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
@@ -3103,8 +3177,8 @@
 
     document.getElementById('btn-lock').addEventListener('click',     sendLock);
     document.getElementById('btn-lovense').addEventListener('click',  sendVibrateLovense);
-    document.getElementById('btn-pavlok').addEventListener('click',  sendShockPavlok);
-    document.getElementById('btn-pavlok').addEventListener('click',   sendVibratePavlok);
+    document.getElementById('btn-pavlok-shock').addEventListener('click',  sendShockPavlok);
+    document.getElementById('btn-pavlok-vibrate').addEventListener('click', sendVibratePavlok);
     document.getElementById('btn-checkin').addEventListener('click',  requestCheckin);
     document.getElementById('btn-delete-device').addEventListener('click', deleteCurrentDevice);
     document.getElementById('btn-live-listen-sidebar').addEventListener('click', toggleLiveListen);
@@ -4851,6 +4925,7 @@
 
     function initPanel() {
       _handlerNoAssignmentHint = null;
+      applySimpleMode(true);
       initCommandCenter();
       loadPublicBookingVisibility();
       loadScreenShareApprovalStatus();
