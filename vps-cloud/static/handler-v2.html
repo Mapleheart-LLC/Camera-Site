@@ -529,11 +529,12 @@
                     <option value="UNSUSPEND_APP">Unsuspend App</option>
                   </select>
                 </label>
-                <label class="hp2-control-field" for="hp2-appctl-name">
+                <label class="hp2-control-field" id="hp2-appctl-name-field" for="hp2-appctl-name">
                   <span>App Name</span>
                   <input id="hp2-appctl-name" type="text" placeholder="Instagram" list="hp2-appctl-name-list" />
                 </label>
               </div>
+              <div id="hp2-appctl-dynamic-fields" class="hp2-control-grid-2 hp2-hidden"></div>
               <datalist id="hp2-appctl-name-list">
                 <option value="Instagram"></option>
                 <option value="TikTok"></option>

@@ -5370,11 +5370,86 @@ def handler_tpe_push_schema(
             "UNSUSPEND_APP",
         }
     ]
+    action_fields = {
+        "OPEN_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "FORCE_STOP_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "DISABLE_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "ENABLE_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "CLEAR_APP_CACHE": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "UNINSTALL_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "SUSPEND_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+        "UNSUSPEND_APP": [
+            {
+                "name": "app_name",
+                "label": "App Name",
+                "type": "text",
+                "required": True,
+                "placeholder": "Instagram",
+            }
+        ],
+    }
     return {
         "actions": sorted(_VALID_TPE_ACTIONS),
         "groups": {
             "app_actions": app_actions,
         },
+        "action_fields": action_fields,
     }
 
 

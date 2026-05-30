@@ -255,6 +255,22 @@
     if (touched) renderCommandHistory();
   }
 
+  function markCommandFailed(commandId, reason) {
+    if (!commandId) return;
+    let touched = false;
+    state.commands.history = state.commands.history.map((row) => {
+      if (row.commandId !== commandId) return row;
+      touched = true;
+      return {
+        ...row,
+        ok: false,
+        statusLabel: 'failed',
+        detail: reason ? `${row.detail} | ${reason}` : row.detail,
+      };
+    });
+    if (touched) renderCommandHistory();
+  }
+
   function quickTapActionsForTarget(target) {
     if (target === 'pavlok') {
       return ['shock', 'vibrate', 'beep', 'stop'];
@@ -513,6 +529,77 @@
       const first = Array.from(select.options).find((opt) => !opt.hidden);
       if (first) select.value = first.value;
     }
+    renderAppActionFieldInputs();
+  }
+
+  function appActionFieldSpecs(action) {
+    const fields = state.commands.schema?.action_fields?.[action];
+    return Array.isArray(fields) ? fields : [];
+  }
+
+  function renderAppActionFieldInputs() {
+    const action = String(byId('hp2-appctl-action')?.value || '').trim();
+    const host = byId('hp2-appctl-dynamic-fields');
+    const legacyNameWrap = byId('hp2-appctl-name-field');
+    if (!host) return;
+
+    const specs = appActionFieldSpecs(action);
+    if (!specs.length) {
+      host.innerHTML = '';
+      host.classList.add('hp2-hidden');
+      if (legacyNameWrap) legacyNameWrap.classList.remove('hp2-hidden');
+      return;
+    }
+
+    if (legacyNameWrap) legacyNameWrap.classList.add('hp2-hidden');
+    host.classList.remove('hp2-hidden');
+    host.innerHTML = specs.map((spec) => {
+      const name = String(spec.name || '').trim();
+      const label = String(spec.label || name || 'Field').trim();
+      const type = String(spec.type || 'text').trim();
+      const required = !!spec.required;
+      const placeholder = String(spec.placeholder || '').trim();
+      const inputId = `hp2-appctl-param-${name}`;
+
+      if (type === 'select' && Array.isArray(spec.options)) {
+        const options = spec.options.map((opt) => {
+          const value = typeof opt === 'string' ? opt : String(opt?.value || '');
+          const text = typeof opt === 'string' ? opt : String(opt?.label || value);
+          return `<option value="${escapeHtml(value)}">${escapeHtml(text)}</option>`;
+        }).join('');
+        return `<label class="hp2-control-field" for="${escapeHtml(inputId)}">
+          <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
+          <select id="${escapeHtml(inputId)}" data-app-param="${escapeHtml(name)}" ${required ? 'required' : ''}>${options}</select>
+        </label>`;
+      }
+
+      const htmlType = ['number', 'url', 'text'].includes(type) ? type : 'text';
+      const min = spec.min !== undefined ? ` min="${escapeHtml(String(spec.min))}"` : '';
+      const max = spec.max !== undefined ? ` max="${escapeHtml(String(spec.max))}"` : '';
+      return `<label class="hp2-control-field" for="${escapeHtml(inputId)}">
+        <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
+        <input id="${escapeHtml(inputId)}" type="${escapeHtml(htmlType)}" data-app-param="${escapeHtml(name)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}${min}${max} />
+      </label>`;
+    }).join('');
+  }
+
+  function readAppActionFieldValues(action) {
+    const specs = appActionFieldSpecs(action);
+    const out = {};
+    for (const spec of specs) {
+      const name = String(spec?.name || '').trim();
+      if (!name) continue;
+      const el = byId(`hp2-appctl-param-${name}`);
+      const raw = String(el?.value || '').trim();
+      if (!raw) {
+        if (spec.required) {
+          throw new Error(`${spec.label || name} is required.`);
+        }
+        continue;
+      }
+      out[name] = raw;
+    }
+    return out;
   }
 
   async function loadPushSchema() {
@@ -536,7 +623,8 @@
           const id = Number(row?.id || 0);
           if (!id || id <= Number(state.commands.lastAckEventId || 0)) return;
           state.commands.lastAckEventId = id;
-          if (String(row?.event || '') !== 'mdm_executed') return;
+          const eventType = String(row?.event || '').trim();
+          if (eventType !== 'mdm_executed' && eventType !== 'mdm_failed') return;
           let payload = null;
           try {
             payload = typeof row.payload_json === 'string' ? JSON.parse(row.payload_json) : null;
@@ -545,8 +633,14 @@
           }
           const commandId = String(payload?.command_id || '').trim();
           const command = String(payload?.command || row?.reason || '').trim();
+          const reason = String(payload?.reason || row?.reason || '').trim();
+          const status = String(payload?.status || '').trim().toLowerCase();
           if (!commandId) return;
-          markCommandExecuted(commandId, command ? `${command} executed` : 'executed');
+          if (eventType === 'mdm_failed' || status === 'failed') {
+            markCommandFailed(commandId, reason || (command ? `${command} failed` : 'failed'));
+          } else {
+            markCommandExecuted(commandId, command ? `${command} executed` : 'executed');
+          }
         });
     } catch (_err) {
       // Ignore intermittent polling errors; next tick can recover.
@@ -2704,21 +2798,35 @@
 
   async function sendAppLifecycleCommand() {
     const action = String(byId('hp2-appctl-action')?.value || '').trim();
-    const appName = String(byId('hp2-appctl-name')?.value || '').trim();
     if (!action) {
       setInlineResult('hp2-appctl-result', 'Choose an app action first.');
       return;
     }
-    if (!appName) {
+
+    let dynamicFields = {};
+    try {
+      dynamicFields = readAppActionFieldValues(action);
+    } catch (err) {
+      setInlineResult('hp2-appctl-result', err?.message || 'Required app fields are missing.');
+      return;
+    }
+
+    const legacyAppName = String(byId('hp2-appctl-name')?.value || '').trim();
+    if (!dynamicFields.app_name && legacyAppName) {
+      dynamicFields.app_name = legacyAppName;
+    }
+    if (!dynamicFields.app_name) {
       setInlineResult('hp2-appctl-result', 'App name is required.');
       return;
     }
+
+    const appName = String(dynamicFields.app_name || '').trim();
     const title = action.replaceAll('_', ' ');
     const dangerActions = new Set(['FORCE_STOP_APP', 'DISABLE_APP', 'UNINSTALL_APP', 'SUSPEND_APP']);
     await sendControlCommand({
       title,
       action,
-      fields: { app_name: appName },
+      fields: dynamicFields,
       resultId: 'hp2-appctl-result',
       confirmText: 'Send',
       danger: dangerActions.has(action),
@@ -3287,6 +3395,7 @@
     byId('hp2-lovense-schedule-send-btn').addEventListener('click', () => sendLovenseSchedule().catch(() => {}));
     byId('hp2-pavlok-send-btn').addEventListener('click', () => sendPavlokPrecision().catch(() => {}));
     byId('hp2-appctl-send-btn').addEventListener('click', () => sendAppLifecycleCommand().catch(() => {}));
+    byId('hp2-appctl-action').addEventListener('change', renderAppActionFieldInputs);
     byId('hp2-screenctl-lock-btn').addEventListener('click', () => sendScreenLockAction('LOCK_DEVICE', {
       title: 'Lock Device',
       danger: true,
@@ -3341,6 +3450,10 @@
     document.querySelectorAll('[data-app-preset]').forEach((button) => {
       button.addEventListener('click', () => {
         byId('hp2-appctl-name').value = button.dataset.appPreset || '';
+        const dynamicName = byId('hp2-appctl-param-app_name');
+        if (dynamicName) {
+          dynamicName.value = button.dataset.appPreset || '';
+        }
       });
     });
 
