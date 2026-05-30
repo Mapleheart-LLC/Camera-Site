@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 _PRESENCE_QUEUE_MAX_SIZE = 10000
 _PRESENCE_QUEUE_TIMEOUT_SECONDS = 1.0
 _MQTT_CONNECT_WAIT_SECONDS = 5.0
+_MQTT_PUBLISH_ACK_WAIT_SECONDS = 2.0
+_MQTT_PUBLISH_RETRY_COUNT = 3
 
 
 def _as_bool(value: str) -> bool:
@@ -47,6 +49,8 @@ class _MqttClientService:
         self._presence_heartbeat_topic = "tpeapp/device/+/heartbeat"
         self._presence_status_topic = "tpeapp/device/+/status"
         self._telemetry_topic = "tpeapp/device/+/telemetry"
+        self._publish_ack_wait_seconds = _MQTT_PUBLISH_ACK_WAIT_SECONDS
+        self._publish_retry_count = _MQTT_PUBLISH_RETRY_COUNT
 
         self._status_topic_re: Optional[re.Pattern[str]] = None
         self._heartbeat_topic_re: Optional[re.Pattern[str]] = None
@@ -153,6 +157,26 @@ class _MqttClientService:
                 "tpe_mqtt_telemetry_topic",
                 self._telemetry_topic,
             )
+            publish_ack_wait = self._setting(
+                db,
+                "MQTT_PUBLISH_ACK_WAIT_SECONDS",
+                "tpe_mqtt_publish_ack_wait_seconds",
+                str(self._publish_ack_wait_seconds),
+            )
+            publish_retry_count = self._setting(
+                db,
+                "MQTT_PUBLISH_RETRY_COUNT",
+                "tpe_mqtt_publish_retry_count",
+                str(self._publish_retry_count),
+            )
+            try:
+                self._publish_ack_wait_seconds = max(0.2, float(publish_ack_wait))
+            except Exception:
+                self._publish_ack_wait_seconds = _MQTT_PUBLISH_ACK_WAIT_SECONDS
+            try:
+                self._publish_retry_count = max(1, int(publish_retry_count))
+            except Exception:
+                self._publish_retry_count = _MQTT_PUBLISH_RETRY_COUNT
             self._compile_presence_regexes()
 
             if not host:
@@ -386,19 +410,66 @@ class _MqttClientService:
                 logger.debug("MQTT listener callback failed: %s", listener_name, exc_info=True)
 
     def publish_json(self, topic: str, payload: dict[str, Any], qos: int = 1, retain: bool = False) -> bool:
-        client = self._client
-        if not self._enabled or client is None:
+        if not self._enabled:
             return False
+
         try:
-            message = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
-            info = client.publish(topic, message, qos=qos, retain=retain)
-            if info.rc != 0:
-                logger.warning("MQTT publish failed rc=%s topic=%s", info.rc, topic)
-                return False
-            return True
+            payload_text = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
         except Exception as exc:
-            logger.warning("MQTT publish exception topic=%s: %s", topic, exc)
+            logger.warning("MQTT payload serialization failed topic=%s: %s", topic, exc)
             return False
+
+        qos_level = max(0, min(2, int(qos)))
+        attempts = max(1, self._publish_retry_count)
+        for attempt in range(1, attempts + 1):
+            client = self._client
+            if client is None:
+                return False
+            if not self._connected and not self.wait_until_connected(timeout=self._publish_ack_wait_seconds):
+                logger.warning(
+                    "MQTT publish skipped while disconnected topic=%s attempt=%s/%s",
+                    topic,
+                    attempt,
+                    attempts,
+                )
+                continue
+
+            try:
+                info = client.publish(topic, payload_text, qos=qos_level, retain=retain)
+                if info.rc != 0:
+                    logger.warning(
+                        "MQTT publish failed rc=%s topic=%s attempt=%s/%s",
+                        info.rc,
+                        topic,
+                        attempt,
+                        attempts,
+                    )
+                    continue
+
+                if qos_level > 0:
+                    try:
+                        info.wait_for_publish(timeout=self._publish_ack_wait_seconds)
+                    except TypeError:
+                        info.wait_for_publish()
+                    if not info.is_published():
+                        logger.warning(
+                            "MQTT publish ack timeout topic=%s attempt=%s/%s",
+                            topic,
+                            attempt,
+                            attempts,
+                        )
+                        continue
+                return True
+            except Exception as exc:
+                logger.warning(
+                    "MQTT publish exception topic=%s attempt=%s/%s: %s",
+                    topic,
+                    attempt,
+                    attempts,
+                    exc,
+                )
+
+        return False
 
     def topic_for_device_command(self, device_id: str) -> str:
         return self._command_topic_template.format(device_id=device_id)
