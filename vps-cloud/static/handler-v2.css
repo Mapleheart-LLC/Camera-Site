@@ -996,7 +996,12 @@ button:focus-visible {
 #hp2-settings-result,
 #hp2-command-result,
 #hp2-device-detail-result,
-#hp2-action-result {
+#hp2-action-result,
+#hp2-quicktap-result,
+#hp2-lovense-result,
+#hp2-pavlok-result,
+#hp2-appctl-result,
+#hp2-screenctl-result {
   min-height: 1.2em;
 }
 

@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530r" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530s" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -498,6 +498,104 @@
 
           <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
+              <h4>App Lifecycle</h4>
+              <span class="hp2-muted">Open, stop, suspend</span>
+            </div>
+            <p class="hp2-muted">Choose an app action, set the app name, and send. Use quick chips for common targets during live operations.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-appctl-action">
+                  <span>Action</span>
+                  <select id="hp2-appctl-action">
+                    <option value="OPEN_APP">Open App</option>
+                    <option value="FORCE_STOP_APP">Force Stop App</option>
+                    <option value="DISABLE_APP">Disable App</option>
+                    <option value="ENABLE_APP">Enable App</option>
+                    <option value="CLEAR_APP_CACHE">Clear App Cache</option>
+                    <option value="UNINSTALL_APP">Uninstall App</option>
+                    <option value="SUSPEND_APP">Suspend App</option>
+                    <option value="UNSUSPEND_APP">Unsuspend App</option>
+                  </select>
+                </label>
+                <label class="hp2-control-field" for="hp2-appctl-name">
+                  <span>App Name</span>
+                  <input id="hp2-appctl-name" type="text" placeholder="Instagram" list="hp2-appctl-name-list" />
+                </label>
+              </div>
+              <datalist id="hp2-appctl-name-list">
+                <option value="Instagram"></option>
+                <option value="TikTok"></option>
+                <option value="Chrome"></option>
+                <option value="Telegram"></option>
+                <option value="Discord"></option>
+              </datalist>
+              <div class="hp2-segmented-row hp2-segmented-row-3">
+                <button class="hp2-btn hp2-btn-ghost" type="button" data-app-preset="Instagram">Instagram</button>
+                <button class="hp2-btn hp2-btn-ghost" type="button" data-app-preset="TikTok">TikTok</button>
+                <button class="hp2-btn hp2-btn-ghost" type="button" data-app-preset="Chrome">Chrome</button>
+              </div>
+              <div class="hp2-action-row">
+                <button id="hp2-appctl-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send App Command</button>
+              </div>
+            </div>
+            <p id="hp2-appctl-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
+              <h4>Screen and Lock</h4>
+              <span class="hp2-muted">Display + access</span>
+            </div>
+            <p class="hp2-muted">Fast screen and access controls for active handling: lock, wake/sleep, brightness, timeout, and orientation behavior.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-action-row">
+                <button id="hp2-screenctl-lock-btn" class="hp2-btn hp2-btn-warn" type="button">Lock Device</button>
+                <button id="hp2-screenctl-dismiss-keyguard-btn" class="hp2-btn hp2-btn-ghost" type="button">Dismiss Keyguard</button>
+                <button id="hp2-screenctl-on-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen On</button>
+                <button id="hp2-screenctl-off-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen Off</button>
+              </div>
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-screenctl-brightness">
+                  <span>Brightness</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-screenctl-brightness" type="range" min="0" max="255" value="150" />
+                    <output id="hp2-screenctl-brightness-value">150</output>
+                  </div>
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-brightness-send-btn" class="hp2-btn hp2-btn-primary" type="button">Apply Brightness</button>
+                </div>
+                <label class="hp2-control-field" for="hp2-screenctl-timeout">
+                  <span>Screen Timeout ms</span>
+                  <input id="hp2-screenctl-timeout" type="number" min="1000" max="86400000" step="1000" value="120000" />
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-timeout-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Timeout</button>
+                </div>
+                <label class="hp2-control-field" for="hp2-screenctl-autorotate">
+                  <span>Auto Rotate</span>
+                  <select id="hp2-screenctl-autorotate">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-autorotate-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Auto Rotate</button>
+                </div>
+              </div>
+              <label class="hp2-control-field" for="hp2-screenctl-url">
+                <span>Open URL</span>
+                <input id="hp2-screenctl-url" type="url" placeholder="https://example.com" />
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-screenctl-url-send-btn" class="hp2-btn hp2-btn-primary" type="button">Open URL</button>
+              </div>
+            </div>
+            <p id="hp2-screenctl-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>
             </div>
@@ -560,6 +658,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530r" defer></script>
+  <script src="/handler-v2.js?v=20260530s" defer></script>
 </body>
 </html>

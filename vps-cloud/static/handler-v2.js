@@ -244,6 +244,7 @@
       ['hp2-lovense-ramp-min', 'hp2-lovense-ramp-min-value'],
       ['hp2-lovense-ramp-max', 'hp2-lovense-ramp-max-value'],
       ['hp2-pavlok-intensity', 'hp2-pavlok-intensity-value'],
+      ['hp2-screenctl-brightness', 'hp2-screenctl-brightness-value'],
     ];
     pairs.forEach(([inputId, outputId]) => {
       const input = byId(inputId);
@@ -2281,6 +2282,84 @@
     }
   }
 
+  async function sendControlCommand({
+    title,
+    action,
+    fields = {},
+    resultId,
+    confirmText = 'Send',
+    danger = false,
+    message,
+    historyDetail,
+  }) {
+    if (!state.selectedDeviceId) {
+      setInlineResult(resultId, 'Select a device first.');
+      return;
+    }
+
+    const confirmed = await askInlineConfirm({
+      title,
+      message: message || `${title} for ${selectedDeviceLabel()}?`,
+      confirmText,
+      danger,
+    });
+    if (!confirmed.confirmed) return;
+
+    setInlineResult(resultId, `${title} sending...`);
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action,
+        ...fields,
+      });
+      setInlineResult(resultId, `${title} sent.`);
+      recordCommandHistory(title, historyDetail || `${action} for ${selectedDeviceLabel()}`, true);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult(resultId, `Failed: ${err.message}`);
+        recordCommandHistory(title, `${title} failed: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendAppLifecycleCommand() {
+    const action = String(byId('hp2-appctl-action')?.value || '').trim();
+    const appName = String(byId('hp2-appctl-name')?.value || '').trim();
+    if (!action) {
+      setInlineResult('hp2-appctl-result', 'Choose an app action first.');
+      return;
+    }
+    if (!appName) {
+      setInlineResult('hp2-appctl-result', 'App name is required.');
+      return;
+    }
+    const title = action.replaceAll('_', ' ');
+    const dangerActions = new Set(['FORCE_STOP_APP', 'DISABLE_APP', 'UNINSTALL_APP', 'SUSPEND_APP']);
+    await sendControlCommand({
+      title,
+      action,
+      fields: { app_name: appName },
+      resultId: 'hp2-appctl-result',
+      confirmText: 'Send',
+      danger: dangerActions.has(action),
+      message: `${title} for ${appName} on ${selectedDeviceLabel()}?`,
+      historyDetail: `${title} app=${appName}`,
+    });
+  }
+
+  async function sendScreenLockAction(action, opts = {}) {
+    await sendControlCommand({
+      title: opts.title || action.replaceAll('_', ' '),
+      action,
+      fields: opts.fields || {},
+      resultId: 'hp2-screenctl-result',
+      confirmText: opts.confirmText || 'Send',
+      danger: !!opts.danger,
+      message: opts.message,
+      historyDetail: opts.historyDetail,
+    });
+  }
+
   async function sendQuickTapCommand() {
     if (!state.selectedDeviceId) {
       setInlineResult('hp2-quicktap-result', 'Select a device first.');
@@ -2509,6 +2588,50 @@
     }
   }
 
+  async function sendScreenBrightness() {
+    const value = Math.max(0, Math.min(255, Number(byId('hp2-screenctl-brightness')?.value || 150)));
+    await sendScreenLockAction('SET_BRIGHTNESS', {
+      title: 'Set Brightness',
+      fields: { value: String(value) },
+      message: `Set brightness to ${value} for ${selectedDeviceLabel()}?`,
+      historyDetail: `SET_BRIGHTNESS value=${value}`,
+    });
+  }
+
+  async function sendScreenTimeout() {
+    const timeoutMs = Math.max(1000, Math.min(86400000, Number(byId('hp2-screenctl-timeout')?.value || 120000)));
+    await sendScreenLockAction('SET_SCREEN_TIMEOUT', {
+      title: 'Set Screen Timeout',
+      fields: { timeout_ms: String(timeoutMs) },
+      message: `Set timeout to ${timeoutMs}ms for ${selectedDeviceLabel()}?`,
+      historyDetail: `SET_SCREEN_TIMEOUT timeout_ms=${timeoutMs}`,
+    });
+  }
+
+  async function sendAutoRotate() {
+    const enabled = String(byId('hp2-screenctl-autorotate')?.value || 'true') === 'true';
+    await sendScreenLockAction('SET_AUTO_ROTATE', {
+      title: 'Set Auto Rotate',
+      fields: { enabled: enabled ? 'true' : 'false' },
+      message: `${enabled ? 'Enable' : 'Disable'} auto-rotate for ${selectedDeviceLabel()}?`,
+      historyDetail: `SET_AUTO_ROTATE enabled=${enabled}`,
+    });
+  }
+
+  async function sendOpenUrl() {
+    const url = String(byId('hp2-screenctl-url')?.value || '').trim();
+    if (!url) {
+      setInlineResult('hp2-screenctl-result', 'URL is required.');
+      return;
+    }
+    await sendScreenLockAction('OPEN_URL', {
+      title: 'Open URL',
+      fields: { url },
+      message: `Open URL on ${selectedDeviceLabel()}?`,
+      historyDetail: `OPEN_URL ${url}`,
+    });
+  }
+
   async function quickBuzz() {
     await sendQuickActionCommand({
       title: 'Quick Buzz',
@@ -2639,6 +2762,29 @@
     byId('hp2-lovense-ramp-start-btn').addEventListener('click', () => sendLovenseRamp().catch(() => {}));
     byId('hp2-lovense-schedule-send-btn').addEventListener('click', () => sendLovenseSchedule().catch(() => {}));
     byId('hp2-pavlok-send-btn').addEventListener('click', () => sendPavlokPrecision().catch(() => {}));
+    byId('hp2-appctl-send-btn').addEventListener('click', () => sendAppLifecycleCommand().catch(() => {}));
+    byId('hp2-screenctl-lock-btn').addEventListener('click', () => sendScreenLockAction('LOCK_DEVICE', {
+      title: 'Lock Device',
+      danger: true,
+      confirmText: 'Lock',
+      historyDetail: 'LOCK_DEVICE',
+    }).catch(() => {}));
+    byId('hp2-screenctl-dismiss-keyguard-btn').addEventListener('click', () => sendScreenLockAction('DISMISS_KEYGUARD', {
+      title: 'Dismiss Keyguard',
+      historyDetail: 'DISMISS_KEYGUARD',
+    }).catch(() => {}));
+    byId('hp2-screenctl-on-btn').addEventListener('click', () => sendScreenLockAction('SCREEN_ON', {
+      title: 'Screen On',
+      historyDetail: 'SCREEN_ON',
+    }).catch(() => {}));
+    byId('hp2-screenctl-off-btn').addEventListener('click', () => sendScreenLockAction('SCREEN_OFF', {
+      title: 'Screen Off',
+      historyDetail: 'SCREEN_OFF',
+    }).catch(() => {}));
+    byId('hp2-screenctl-brightness-send-btn').addEventListener('click', () => sendScreenBrightness().catch(() => {}));
+    byId('hp2-screenctl-timeout-send-btn').addEventListener('click', () => sendScreenTimeout().catch(() => {}));
+    byId('hp2-screenctl-autorotate-send-btn').addEventListener('click', () => sendAutoRotate().catch(() => {}));
+    byId('hp2-screenctl-url-send-btn').addEventListener('click', () => sendOpenUrl().catch(() => {}));
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
@@ -2661,7 +2807,13 @@
       });
     });
 
-    ['hp2-quicktap-intensity', 'hp2-lovense-live-level', 'hp2-lovense-ramp-min', 'hp2-lovense-ramp-max', 'hp2-pavlok-intensity', 'hp2-pavlok-command']
+    document.querySelectorAll('[data-app-preset]').forEach((button) => {
+      button.addEventListener('click', () => {
+        byId('hp2-appctl-name').value = button.dataset.appPreset || '';
+      });
+    });
+
+    ['hp2-quicktap-intensity', 'hp2-lovense-live-level', 'hp2-lovense-ramp-min', 'hp2-lovense-ramp-max', 'hp2-pavlok-intensity', 'hp2-pavlok-command', 'hp2-screenctl-brightness']
       .forEach((id) => {
         const el = byId(id);
         if (!el) return;
