@@ -128,6 +128,10 @@ TOY_SHARE_SCOPE_PROFILE_OPTIONS = {
     "custom",
 }
 
+HANDLER_PANEL_MACROS_SETTINGS_KEY = "handler_panel_v2_macros_json"
+HANDLER_PANEL_MACROS_MAX_ITEMS = 20
+HANDLER_PANEL_MACRO_STEPS_MAX_LEN = 4000
+
 
 # ---------------------------------------------------------------------------
 # DB migration
@@ -995,6 +999,20 @@ class PublicStatusUpdateRequest(BaseModel):
     public_toy_control_enabled: Optional[bool] = None
     public_exposure_level: Optional[str] = None
     public_toy_queue_cooldown_sec: Optional[int] = None
+
+
+class PanelMacroItem(BaseModel):
+    id: str
+    name: str
+    steps_text: str = Field(
+        default="",
+        validation_alias=AliasChoices("stepsText", "steps_text"),
+        serialization_alias="stepsText",
+    )
+
+
+class PanelMacrosUpdateRequest(BaseModel):
+    macros: List[PanelMacroItem] = Field(default_factory=list)
 
 
 class PublicExposureProfileRequest(BaseModel):
@@ -3231,6 +3249,29 @@ def _safe_choice(value: Optional[str], allowed: List[str], default: str) -> str:
     return raw if raw in allowed else default
 
 
+def _normalize_panel_macros(raw: Any) -> List[dict]:
+    if not isinstance(raw, list):
+        return []
+
+    normalized: List[dict] = []
+    for entry in raw[:HANDLER_PANEL_MACROS_MAX_ITEMS]:
+        if not isinstance(entry, dict):
+            continue
+        macro_id = str(entry.get("id") or "").strip()
+        name = str(entry.get("name") or "").strip()
+        steps_text = str(entry.get("stepsText") or entry.get("steps_text") or "").strip()
+        if not macro_id or not name:
+            continue
+        normalized.append(
+            {
+                "id": macro_id[:120],
+                "name": name[:120],
+                "stepsText": steps_text[:HANDLER_PANEL_MACRO_STEPS_MAX_LEN],
+            }
+        )
+    return normalized
+
+
 def _public_setting_enabled(db: sqlite3.Connection, key: str, default: bool = False) -> bool:
     return _safe_bool(get_setting(db, key, "true" if default else "false"), default)
 
@@ -3355,6 +3396,39 @@ def handler_get_public_status(
         "public_live_control_label": (live["label"] if live else None),
         "public_live_control_expires_at": (live["expires_at"] if live else None),
     }
+
+
+@router.get("/api/handler/panel-macros")
+def handler_get_panel_macros(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    raw = get_setting(db, HANDLER_PANEL_MACROS_SETTINGS_KEY, "[]")
+    try:
+        parsed = json.loads(str(raw or "[]"))
+    except Exception:
+        parsed = []
+    return {"macros": _normalize_panel_macros(parsed)}
+
+
+@router.post("/api/handler/panel-macros")
+def handler_save_panel_macros(
+    payload: PanelMacrosUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    normalized = _normalize_panel_macros(
+        [
+            {
+                "id": row.id,
+                "name": row.name,
+                "stepsText": row.steps_text,
+            }
+            for row in payload.macros
+        ]
+    )
+    set_setting(db, HANDLER_PANEL_MACROS_SETTINGS_KEY, json.dumps(normalized, ensure_ascii=True))
+    return {"ok": True, "count": len(normalized), "macros": normalized}
 
 
 @router.post("/api/handler/public-status")

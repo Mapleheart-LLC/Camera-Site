@@ -736,6 +736,37 @@
 
           <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
+              <h4>Simple Macros</h4>
+              <span class="hp2-muted">Handler-only automation</span>
+            </div>
+            <p class="hp2-muted">Create lightweight multi-step command macros directly in this panel. One step per line: ACTION key=value key2=value2.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-macro-name">
+                  <span>Macro Name</span>
+                  <input id="hp2-macro-name" type="text" placeholder="Night Lockdown" />
+                </label>
+                <label class="hp2-control-field" for="hp2-macro-select">
+                  <span>Saved Macros</span>
+                  <select id="hp2-macro-select"></select>
+                </label>
+              </div>
+              <label class="hp2-control-field" for="hp2-macro-steps">
+                <span>Steps</span>
+                <textarea id="hp2-macro-steps" rows="6" placeholder="LOCK_DEVICE&#10;SET_BRIGHTNESS value=40&#10;SEND_NOTIFICATION title=Focus body=Stay still"></textarea>
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-macro-save-btn" class="hp2-btn hp2-btn-primary" type="button">Save Macro</button>
+                <button id="hp2-macro-run-btn" class="hp2-btn hp2-btn-warn" type="button">Run Macro</button>
+                <button id="hp2-macro-delete-btn" class="hp2-btn hp2-btn-ghost" type="button">Delete Macro</button>
+              </div>
+            </div>
+            <p id="hp2-macro-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
+            <p id="hp2-macro-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>
             </div>

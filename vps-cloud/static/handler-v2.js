@@ -3,6 +3,7 @@
 
   const JWT_KEY = 'handler_panel_jwt';
   const SETTINGS_KEY = 'handler_panel_v2_settings';
+  const MACROS_KEY = 'handler_panel_v2_macros';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
   const QUEUE_AUTO_REFRESH_MS = 30000;
   const AUTH_REFRESH_MS = 8 * 60 * 1000;
@@ -82,6 +83,7 @@
       lastAckEventId: 0,
       schema: null,
       smsThreadPresets: ['default'],
+      macros: [],
       liveControl: {
         quickTapTarget: 'lovense',
         quickTapAction: 'vibrate',
@@ -145,6 +147,227 @@
 
   function saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  }
+
+  function loadMacrosLocal() {
+    let parsed = [];
+    try {
+      parsed = JSON.parse(localStorage.getItem(MACROS_KEY) || '[]') || [];
+    } catch (_err) {
+      parsed = [];
+    }
+    state.commands.macros = Array.isArray(parsed)
+      ? parsed
+          .map((row) => ({
+            id: String(row?.id || '').trim(),
+            name: String(row?.name || '').trim(),
+            stepsText: String(row?.stepsText || '').trim(),
+          }))
+          .filter((row) => row.id && row.name)
+      : [];
+  }
+
+  function saveMacrosLocal() {
+    localStorage.setItem(MACROS_KEY, JSON.stringify(state.commands.macros));
+  }
+
+  async function loadMacrosFromServer() {
+    try {
+      const response = await apiGet('/api/handler/panel-macros');
+      const macros = Array.isArray(response?.macros) ? response.macros : [];
+      state.commands.macros = macros
+        .map((row) => ({
+          id: String(row?.id || '').trim(),
+          name: String(row?.name || '').trim(),
+          stepsText: String(row?.stepsText || row?.steps_text || '').trim(),
+        }))
+        .filter((row) => row.id && row.name)
+        .slice(0, 20);
+      saveMacrosLocal();
+      renderMacroSelect();
+      if (state.commands.macros.length) {
+        selectMacroById(state.commands.macros[0].id);
+      }
+      return true;
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-macro-result', 'Using local macros (panel sync unavailable).');
+      }
+      return false;
+    }
+  }
+
+  async function syncMacrosToServer() {
+    await apiPost('/api/handler/panel-macros', {
+      macros: (state.commands.macros || []).map((row) => ({
+        id: String(row.id || '').trim(),
+        name: String(row.name || '').trim(),
+        stepsText: String(row.stepsText || '').trim(),
+      })),
+    });
+  }
+
+  function renderMacroSelect() {
+    const select = byId('hp2-macro-select');
+    if (!select) return;
+    const macros = Array.isArray(state.commands.macros) ? state.commands.macros : [];
+    if (!macros.length) {
+      select.innerHTML = '<option value="">No macros saved</option>';
+      return;
+    }
+    select.innerHTML = macros.map((macro) => `<option value="${escapeHtml(macro.id)}">${escapeHtml(macro.name)}</option>`).join('');
+  }
+
+  function selectMacroById(macroId) {
+    const id = String(macroId || '').trim();
+    const macro = (state.commands.macros || []).find((row) => row.id === id);
+    if (!macro) return;
+    if (byId('hp2-macro-name')) byId('hp2-macro-name').value = macro.name;
+    if (byId('hp2-macro-steps')) byId('hp2-macro-steps').value = macro.stepsText;
+    if (byId('hp2-macro-select')) byId('hp2-macro-select').value = macro.id;
+  }
+
+  function parseMacroSteps(raw) {
+    return String(raw || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(/\s+/).filter(Boolean);
+        const action = String(parts.shift() || '').trim().toUpperCase();
+        const fields = {};
+        parts.forEach((token) => {
+          const idx = token.indexOf('=');
+          if (idx <= 0) return;
+          const key = token.slice(0, idx).trim();
+          const value = token.slice(idx + 1).trim();
+          if (!key || !value) return;
+          fields[key] = value;
+        });
+        return { action, fields, source: line };
+      })
+      .filter((step) => step.action);
+  }
+
+  async function saveMacroFromInputs() {
+    const name = String(byId('hp2-macro-name')?.value || '').trim();
+    const stepsText = String(byId('hp2-macro-steps')?.value || '').trim();
+    if (!name) {
+      setInlineResult('hp2-macro-result', 'Macro name is required.');
+      return;
+    }
+    const steps = parseMacroSteps(stepsText);
+    if (!steps.length) {
+      setInlineResult('hp2-macro-result', 'Add at least one macro step.');
+      return;
+    }
+
+    const selectedId = String(byId('hp2-macro-select')?.value || '').trim();
+    const existingIndex = state.commands.macros.findIndex((row) => row.id === selectedId);
+    if (existingIndex >= 0) {
+      state.commands.macros[existingIndex] = {
+        ...state.commands.macros[existingIndex],
+        name,
+        stepsText,
+      };
+    } else {
+      state.commands.macros.unshift({
+        id: makeCommandId('macro'),
+        name,
+        stepsText,
+      });
+      state.commands.macros = state.commands.macros.slice(0, 20);
+    }
+
+    saveMacrosLocal();
+    renderMacroSelect();
+    selectMacroById(existingIndex >= 0 ? selectedId : state.commands.macros[0].id);
+    try {
+      await syncMacrosToServer();
+      setInlineResult('hp2-macro-result', 'Macro saved.');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-macro-result', 'Macro saved locally. Server sync failed.');
+      }
+    }
+  }
+
+  async function deleteSelectedMacro() {
+    const selectedId = String(byId('hp2-macro-select')?.value || '').trim();
+    if (!selectedId) {
+      setInlineResult('hp2-macro-result', 'Select a macro first.');
+      return;
+    }
+    state.commands.macros = state.commands.macros.filter((row) => row.id !== selectedId);
+    saveMacrosLocal();
+    renderMacroSelect();
+    const first = state.commands.macros[0];
+    if (first) {
+      selectMacroById(first.id);
+    } else {
+      if (byId('hp2-macro-name')) byId('hp2-macro-name').value = '';
+      if (byId('hp2-macro-steps')) byId('hp2-macro-steps').value = '';
+    }
+    try {
+      await syncMacrosToServer();
+      setInlineResult('hp2-macro-result', 'Macro deleted.');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-macro-result', 'Macro deleted locally. Server sync failed.');
+      }
+    }
+  }
+
+  async function runSelectedMacro() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-macro-result', 'Select a device first.');
+      return;
+    }
+    const selectedId = String(byId('hp2-macro-select')?.value || '').trim();
+    const macro = state.commands.macros.find((row) => row.id === selectedId);
+    if (!macro) {
+      setInlineResult('hp2-macro-result', 'Select a macro first.');
+      return;
+    }
+
+    const steps = parseMacroSteps(macro.stepsText);
+    if (!steps.length) {
+      setInlineResult('hp2-macro-result', 'This macro has no valid steps.');
+      return;
+    }
+
+    const confirm = await askInlineConfirm({
+      title: 'Run Macro',
+      message: `Run ${macro.name} (${steps.length} steps) on ${selectedDeviceLabel()}?`,
+      confirmText: 'Run',
+      danger: steps.some((step) => ['LOCK_DEVICE', 'UNINSTALL_APP', 'DISABLE_APP', 'FORCE_STOP_APP'].includes(step.action)),
+    });
+    if (!confirm.confirmed) return;
+
+    setInlineResult('hp2-macro-result', `Running ${macro.name}...`);
+    let success = 0;
+    for (const step of steps) {
+      try {
+        await apiPost('/api/handler/tpe/push', {
+          device_id: state.selectedDeviceId,
+          command_id: makeCommandId('macro-step'),
+          action: step.action,
+          ...step.fields,
+        });
+        success += 1;
+      } catch (err) {
+        if (err.message !== AUTH_EXPIRED_ERROR) {
+          setInlineResult('hp2-macro-result', `Macro stopped at step ${success + 1}: ${step.source}`);
+          recordCommandHistory(`Macro: ${macro.name}`, `Failed at step ${success + 1}: ${step.source}`, false);
+        }
+        return;
+      }
+    }
+
+    setInlineResult('hp2-macro-result', `Macro complete: ${success}/${steps.length} steps sent.`);
+    recordCommandHistory(`Macro: ${macro.name}`, `${steps.length} steps sent to ${selectedDeviceLabel()}`, true, {
+      statusLabel: 'sent',
+    });
   }
 
   function renderSettingsForm() {
@@ -903,6 +1126,7 @@
     setDisabledHint('hp2-appctl-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
     setDisabledHint('hp2-screenctl-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
     setDisabledHint('hp2-notify-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
+    setDisabledHint('hp2-macro-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
     setDisabledHint('hp2-clipboard-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
 
     renderCommandReadiness();
@@ -3583,6 +3807,12 @@
     byId('hp2-sms-inject-btn').addEventListener('click', () => injectProxySmsCommand().catch(() => {}));
     byId('hp2-sms-reply-toggle-btn').addEventListener('click', () => setSmsReplyPermissionCommand().catch(() => {}));
     byId('hp2-sms-thread-refresh-btn').addEventListener('click', () => refreshSmsThreadPresets().catch(() => {}));
+    byId('hp2-macro-save-btn').addEventListener('click', () => saveMacroFromInputs().catch(() => {}));
+    byId('hp2-macro-run-btn').addEventListener('click', () => runSelectedMacro().catch(() => {}));
+    byId('hp2-macro-delete-btn').addEventListener('click', () => deleteSelectedMacro().catch(() => {}));
+    byId('hp2-macro-select').addEventListener('change', (event) => {
+      selectMacroById(event.target.value || '');
+    });
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
@@ -3736,12 +3966,17 @@
 
   async function boot() {
     loadSettings();
+    loadMacrosLocal();
     bindEvents();
     syncSharedControls();
     setQuickTapTarget('lovense');
     renderQuickTapActionButtons();
     syncControlReadouts();
     renderSmsThreadPresetList();
+    renderMacroSelect();
+    if (state.commands.macros.length) {
+      selectMacroById(state.commands.macros[0].id);
+    }
     renderSettingsForm();
     applyCommandDefaults();
     renderCommandHistory();
@@ -3764,6 +3999,7 @@
       state.role = me?.role || state.role || 'handler';
       byId('hp2-role').textContent = String(state.role || 'handler').toUpperCase();
       showApp();
+      await loadMacrosFromServer();
       await hydrateApp();
     } catch (err) {
       if (err && err.message === AUTH_EXPIRED_ERROR) {
@@ -3775,6 +4011,7 @@
       showApp();
       byId('hp2-role').textContent = String(state.role || 'handler').toUpperCase();
       pushFeed('Restored session with limited data.');
+      await loadMacrosFromServer();
       await hydrateApp();
     }
   }

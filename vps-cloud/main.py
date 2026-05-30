@@ -1342,8 +1342,8 @@ def admin_page():
 
 @app.get("/handler", include_in_schema=False)
 def handler_panel_page():
-    """Serve the handler panel at /handler without a .html extension."""
-    return FileResponse("static/handler.html")
+    """Serve Handler V2 at /handler as the default operator panel."""
+    return FileResponse("static/handler-v2.html")
 
 
 @app.get("/handler-v2", include_in_schema=False)
