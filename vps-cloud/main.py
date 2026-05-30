@@ -1346,6 +1346,12 @@ def handler_panel_page():
     return FileResponse("static/handler.html")
 
 
+@app.get("/handler-v2", include_in_schema=False)
+def handler_panel_v2_page():
+    """Serve the parallel handler v2 preview at /handler-v2."""
+    return FileResponse("static/handler-v2.html")
+
+
 @app.get("/drool", include_in_schema=False)
 def drool_page_redirect():
     """Redirect /drool to the static drool.html page (Shame Gallery)."""
