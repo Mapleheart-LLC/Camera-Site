@@ -43,11 +43,32 @@
     queue: {
       selectedMailThreadId: null,
       mailMessagesById: {},
+      mailThreadIds: [],
+      mailThreadsById: {},
+      mailSeenAtByThread: {},
+      pendingMessagesByThread: {},
+      selectedMailMessages: [],
       autoRefreshTimer: null,
       openQuestions: [],
       answeredQuestions: [],
       openVisible: 3,
       answeredVisible: 3,
+      sharedFilter: 'all',
+      sharedSort: 'newest',
+    },
+    telemetry: {
+      hydratedAt: 0,
+      devicesAt: 0,
+      intelligenceAt: 0,
+      queueAt: 0,
+      drawerAt: 0,
+      freshnessTimer: null,
+    },
+    modal: {
+      resolver: null,
+      requireInput: false,
+      allowEmpty: false,
+      multiline: false,
     },
   };
 
@@ -148,6 +169,10 @@
 
   function showLogin(message = '') {
     disconnectWs();
+    if (state.telemetry.freshnessTimer) {
+      clearInterval(state.telemetry.freshnessTimer);
+      state.telemetry.freshnessTimer = null;
+    }
     document.body.classList.remove('hp2-authenticated');
     setVisible('hp2-app', false);
     setVisible('hp2-login', true);
@@ -185,6 +210,195 @@
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '-';
     return d.toLocaleString();
+  }
+
+  function parseTimeValue(iso) {
+    const value = new Date(iso || '').getTime();
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function fmtChatTime(iso) {
+    const d = new Date(iso || '');
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function fmtChatDayLabel(iso) {
+    const d = new Date(iso || '');
+    if (Number.isNaN(d.getTime())) return 'Unknown day';
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffDays = Math.round((today.getTime() - day.getTime()) / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    return day.toLocaleDateString();
+  }
+
+  function sharedSortSign() {
+    return state.queue.sharedSort === 'oldest' ? 1 : -1;
+  }
+
+  function compareByTimeDescOrAsc(aIso, bIso) {
+    const sign = sharedSortSign();
+    return (parseTimeValue(aIso) - parseTimeValue(bIso)) * sign;
+  }
+
+  function isResolvedStatus(status) {
+    const s = String(status || '').toLowerCase();
+    return s === 'resolved' || s === 'done' || s === 'answered' || s === 'dismissed';
+  }
+
+  function includeBySharedFilter(status, mode = null) {
+    const shared = state.queue.sharedFilter;
+    if (shared === 'all') return true;
+    if (shared === 'open') {
+      if (mode === 'open-only') return true;
+      if (mode === 'resolved-only') return false;
+      return !isResolvedStatus(status);
+    }
+    if (shared === 'resolved') {
+      if (mode === 'open-only') return false;
+      if (mode === 'resolved-only') return true;
+      return isResolvedStatus(status);
+    }
+    return true;
+  }
+
+  function syncSharedControls() {
+    const fQueue = byId('hp2-shared-filter-queue');
+    const fDrawer = byId('hp2-shared-filter-drawer');
+    const sQueue = byId('hp2-shared-sort-queue');
+    const sDrawer = byId('hp2-shared-sort-drawer');
+    [fQueue, fDrawer].forEach((el) => {
+      if (el) el.value = state.queue.sharedFilter;
+    });
+    [sQueue, sDrawer].forEach((el) => {
+      if (el) el.value = state.queue.sharedSort;
+    });
+  }
+
+  function updateSharedControls({ filter, sort }) {
+    if (filter) state.queue.sharedFilter = filter;
+    if (sort) state.queue.sharedSort = sort;
+    syncSharedControls();
+
+    const queueActive = byId('hp2-view-queue')?.classList.contains('hp2-view-active');
+    const drawerActive = byId('hp2-view-drawer')?.classList.contains('hp2-view-active');
+    if (queueActive) loadQueueHub().catch(() => {});
+    if (drawerActive) loadEvidenceDrawer().catch(() => {});
+  }
+
+  function showToast(message, tone = 'info') {
+    const host = byId('hp2-toast-stack');
+    if (!host || !message) return;
+    const toast = document.createElement('div');
+    toast.className = `hp2-toast ${tone === 'ok' ? 'hp2-toast-ok' : tone === 'warn' ? 'hp2-toast-warn' : tone === 'bad' ? 'hp2-toast-bad' : ''}`.trim();
+    toast.textContent = message;
+    host.prepend(toast);
+    while (host.children.length > 4) {
+      host.removeChild(host.lastChild);
+    }
+    setTimeout(() => {
+      if (toast.parentElement === host) {
+        host.removeChild(toast);
+      }
+    }, 3600);
+  }
+
+  function setInlineResult(id, message) {
+    const el = byId(id);
+    if (el) el.textContent = message || '';
+    if (!message) return;
+    if (String(message).endsWith('...')) return;
+    const lower = String(message).toLowerCase();
+    const tone = lower.includes('failed') || lower.includes('error') ? 'bad' : (lower.includes('warning') ? 'warn' : 'ok');
+    showToast(message, tone);
+  }
+
+  function renderFreshness() {
+    const pill = byId('hp2-freshness-pill');
+    const note = byId('hp2-freshness-note');
+    if (!pill || !note) return;
+
+    const now = Date.now();
+    const ages = [state.telemetry.devicesAt, state.telemetry.intelligenceAt].filter((v) => Number(v) > 0).map((v) => Math.max(0, Math.round((now - v) / 1000)));
+    if (!ages.length) {
+      pill.textContent = 'Data age: -';
+      note.textContent = 'Waiting for telemetry...';
+      return;
+    }
+
+    const maxAge = Math.max(...ages);
+    let tone = 'fresh';
+    if (maxAge >= 180) tone = 'stale';
+    else if (maxAge >= 60) tone = 'aging';
+
+    pill.textContent = `Data age: ${maxAge}s`;
+    pill.classList.toggle('hp2-pill-online', tone === 'fresh');
+    pill.classList.toggle('hp2-pill-offline', tone === 'stale');
+    note.textContent = tone === 'fresh'
+      ? 'Telemetry is current.'
+      : (tone === 'aging' ? 'Telemetry is aging. Consider refresh.' : 'Telemetry is stale. Refresh recommended.');
+  }
+
+  function markThreadSeen(threadId, iso) {
+    const id = Number(threadId || 0);
+    if (!id) return;
+    const ts = parseTimeValue(iso) || Date.now();
+    const prev = Number(state.queue.mailSeenAtByThread[id] || 0);
+    state.queue.mailSeenAtByThread[id] = Math.max(prev, ts);
+  }
+
+  function getPendingMessages(threadId) {
+    const id = Number(threadId || 0);
+    return Array.isArray(state.queue.pendingMessagesByThread[id]) ? state.queue.pendingMessagesByThread[id] : [];
+  }
+
+  function setPendingMessages(threadId, rows) {
+    const id = Number(threadId || 0);
+    if (!id) return;
+    state.queue.pendingMessagesByThread[id] = Array.isArray(rows) ? rows : [];
+  }
+
+  function addPendingMessage(threadId, body) {
+    const id = Number(threadId || 0);
+    if (!id) return '';
+    const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const rows = getPendingMessages(id);
+    rows.push({
+      tempId,
+      body,
+      author: 'Handler',
+      created_at: new Date().toISOString(),
+      delivery: 'sending',
+      error: '',
+    });
+    setPendingMessages(id, rows);
+    return tempId;
+  }
+
+  function patchPendingMessage(threadId, tempId, patch) {
+    const rows = getPendingMessages(threadId);
+    const next = rows.map((row) => (row.tempId === tempId ? { ...row, ...(patch || {}) } : row));
+    setPendingMessages(threadId, next);
+  }
+
+  function removePendingMessage(threadId, tempId) {
+    const rows = getPendingMessages(threadId).filter((row) => row.tempId !== tempId);
+    setPendingMessages(threadId, rows);
+  }
+
+  function selectAdjacentMailThread(direction) {
+    if (!byId('hp2-view-queue').classList.contains('hp2-view-active')) return;
+    const ids = state.queue.mailThreadIds;
+    if (!ids.length) return;
+    const current = Number(state.queue.selectedMailThreadId || 0);
+    const at = ids.indexOf(current);
+    const base = at >= 0 ? at : 0;
+    const target = ids[Math.max(0, Math.min(ids.length - 1, base + direction))];
+    if (!target || target === current) return;
+    loadQueueMailThread(target).catch(() => {});
   }
 
   function setActiveView(viewName) {
@@ -444,6 +658,8 @@
     if (state.selectedDeviceId) {
       await refreshSelectedStatus();
     }
+    state.telemetry.devicesAt = Date.now();
+    renderFreshness();
   }
 
   async function refreshSelectedStatus() {
@@ -504,6 +720,8 @@
         renderKpis();
         renderDeviceList();
         renderSelectedDevice();
+        state.telemetry.devicesAt = Date.now();
+        renderFreshness();
         pushFeed(`Snapshot received (${msg.devices.length} devices).`);
         return;
       }
@@ -517,6 +735,8 @@
         renderKpis();
         renderDeviceList();
         renderSelectedDevice();
+        state.telemetry.devicesAt = Date.now();
+        renderFreshness();
         pushFeed(`Status updated: ${msg.device_id}`);
         return;
       }
@@ -616,17 +836,16 @@
       loadQueueHub(),
     ];
     const results = await Promise.allSettled(jobs);
+    state.telemetry.hydratedAt = Date.now();
     connectWs();
     pushFeed('Session ready.');
 
     const failed = results.filter((r) => r.status === 'rejected');
     if (failed.length) {
       pushFeed(`Loaded with ${failed.length} warning(s).`);
-      const result = byId('hp2-action-result');
-      if (result) {
-        result.textContent = 'Signed in with partial data. Use refresh if a panel is empty.';
-      }
+      setInlineResult('hp2-action-result', 'Signed in with partial data. Use refresh if a panel is empty.');
     }
+    renderFreshness();
   }
 
   function severityClass(level) {
@@ -923,12 +1142,95 @@
     await loadBehaviorPulse();
     renderDashboardIntelligence();
     renderDashboardAlerts();
+    state.telemetry.intelligenceAt = Date.now();
+    renderFreshness();
   }
 
   function setQueueResult(message) {
-    const el = byId('hp2-queue-result');
-    if (!el) return;
-    el.textContent = message || '';
+    setInlineResult('hp2-queue-result', message || '');
+  }
+
+  function isInlineModalOpen() {
+    const modal = byId('hp2-modal');
+    return !!modal && !modal.classList.contains('hp2-hidden');
+  }
+
+  function closeInlineModal(result) {
+    const modal = byId('hp2-modal');
+    if (!modal) return;
+    modal.classList.add('hp2-hidden');
+    document.body.classList.remove('hp2-modal-open');
+    const resolver = state.modal.resolver;
+    state.modal.resolver = null;
+    state.modal.requireInput = false;
+    state.modal.allowEmpty = false;
+    state.modal.multiline = false;
+    if (resolver) resolver(result || { confirmed: false, value: '' });
+  }
+
+  function showInlineModal(options = {}) {
+    const modal = byId('hp2-modal');
+    const titleEl = byId('hp2-modal-title');
+    const msgEl = byId('hp2-modal-message');
+    const fieldWrap = byId('hp2-modal-input-wrap');
+    const fieldLabel = byId('hp2-modal-input-label');
+    const field = byId('hp2-modal-input');
+    const cancelBtn = byId('hp2-modal-cancel-btn');
+    const confirmBtn = byId('hp2-modal-confirm-btn');
+
+    if (!modal || !titleEl || !msgEl || !fieldWrap || !fieldLabel || !field || !cancelBtn || !confirmBtn) {
+      return Promise.resolve({ confirmed: false, value: '' });
+    }
+
+    const wantsInput = !!options.withInput;
+    state.modal.requireInput = wantsInput;
+    state.modal.allowEmpty = !!options.allowEmpty;
+    state.modal.multiline = !!options.multiline;
+
+    titleEl.textContent = options.title || 'Confirm action';
+    msgEl.textContent = options.message || '';
+    fieldWrap.classList.toggle('hp2-hidden', !wantsInput);
+    fieldLabel.textContent = options.inputLabel || 'Value';
+    field.value = options.inputValue || '';
+    field.placeholder = options.inputPlaceholder || '';
+    field.rows = state.modal.multiline ? 4 : 1;
+
+    cancelBtn.textContent = options.cancelText || 'Cancel';
+    cancelBtn.classList.toggle('hp2-hidden', !!options.confirmOnly);
+    confirmBtn.textContent = options.confirmText || 'Confirm';
+    confirmBtn.classList.toggle('hp2-btn-warn', !!options.danger);
+    confirmBtn.classList.toggle('hp2-btn-primary', !options.danger);
+
+    modal.classList.remove('hp2-hidden');
+    document.body.classList.add('hp2-modal-open');
+    setTimeout(() => {
+      if (wantsInput) {
+        field.focus();
+        field.selectionStart = field.value.length;
+        field.selectionEnd = field.value.length;
+      } else {
+        confirmBtn.focus();
+      }
+    }, 0);
+
+    return new Promise((resolve) => {
+      state.modal.resolver = resolve;
+    });
+  }
+
+  async function askInlineText(options = {}) {
+    const result = await showInlineModal({ withInput: true, ...options });
+    if (!result.confirmed) return { confirmed: false, value: '' };
+    const value = String(result.value || '');
+    const normalized = value.trim();
+    if (!options.allowEmpty && !normalized) {
+      return { confirmed: true, invalidEmpty: true, value: '' };
+    }
+    return { confirmed: true, value: options.allowEmpty ? value : normalized };
+  }
+
+  function askInlineConfirm(options = {}) {
+    return showInlineModal({ withInput: false, ...options });
   }
 
   function setMailDetailsVisible(visible) {
@@ -957,11 +1259,17 @@
 
     try {
       const items = await apiGet(`/api/handler/booking?status=${encodeURIComponent(filter)}&limit=200`);
-      if (!Array.isArray(items) || !items.length) {
+      let rows = Array.isArray(items) ? items : [];
+      if (filter === 'all') {
+        rows = rows.filter((item) => includeBySharedFilter(item.status || 'new'));
+      }
+      rows.sort((a, b) => compareByTimeDescOrAsc(a.updated_at || a.created_at, b.updated_at || b.created_at));
+
+      if (!rows.length) {
         listEl.innerHTML = queueListEmpty('No booking items in this filter.');
         return;
       }
-      listEl.innerHTML = items.map((item) => {
+      listEl.innerHTML = rows.map((item) => {
         const id = Number(item.id || 0);
         return `<li>
           <div class="hp2-feed-item-row">
@@ -1006,18 +1314,42 @@
 
     try {
       const items = await apiGet(`/api/handler/puppy-mail/threads?status=${encodeURIComponent(filter)}&limit=200`);
-      if (!Array.isArray(items) || !items.length) {
+      let rows = Array.isArray(items) ? items : [];
+      if (filter === 'all') {
+        rows = rows.filter((thread) => includeBySharedFilter(thread.status || 'open'));
+      }
+      rows.sort((a, b) => compareByTimeDescOrAsc(a.latest_message_at || a.updated_at || a.created_at, b.latest_message_at || b.updated_at || b.created_at));
+
+      if (!rows.length) {
+        state.queue.mailThreadIds = [];
+        state.queue.mailThreadsById = {};
         listEl.innerHTML = queueListEmpty('No puppy mail threads in this filter.');
         return;
       }
-      listEl.innerHTML = items.map((thread) => {
+
+      state.queue.mailThreadIds = rows.map((thread) => Number(thread.id || 0)).filter((id) => id > 0);
+      state.queue.mailThreadsById = {};
+      rows.forEach((thread) => {
+        const id = Number(thread.id || 0);
+        if (id) state.queue.mailThreadsById[id] = thread;
+      });
+
+      listEl.innerHTML = rows.map((thread) => {
         const id = Number(thread.id || 0);
         const selected = state.queue.selectedMailThreadId === id;
         const senderName = String(thread.sender_name || 'Anonymous').trim() || 'Anonymous';
         const avatar = senderName.charAt(0).toUpperCase();
         const latest = escapeHtml(thread.latest_message || 'No messages yet');
-        const updatedAt = escapeHtml(fmtDate(thread.latest_message_at || thread.updated_at || thread.created_at));
+        const latestIso = thread.latest_message_at || thread.updated_at || thread.created_at;
+        const latestTs = parseTimeValue(latestIso);
+        const seenTs = Number(state.queue.mailSeenAtByThread[id] || 0);
+        const unread = latestTs > seenTs && !selected;
+        const updatedAt = escapeHtml(fmtChatTime(latestIso));
         const selectedClass = selected ? 'hp2-chat-thread-btn-active' : '';
+        const status = String(thread.status || 'open').toLowerCase();
+        const rowActionStatus = status === 'resolved' ? 'open' : 'resolved';
+        const rowActionLabel = status === 'resolved' ? 'Reopen' : 'Resolve';
+        const unreadBadge = unread ? '<span class="hp2-chat-unread-badge">New</span>' : '';
         return `<li>
           <button type="button" class="hp2-chat-thread-btn ${selectedClass}" data-q-action="mail-open" data-id="${id}">
             <div class="hp2-chat-thread-row">
@@ -1026,9 +1358,15 @@
                 <p class="hp2-chat-thread-name">${escapeHtml(senderName)}</p>
                 <p class="hp2-chat-thread-preview">${latest}</p>
               </div>
-              <span class="hp2-chat-thread-time">${updatedAt}</span>
+              <div class="hp2-chat-thread-side">
+                <span class="hp2-chat-thread-time">${updatedAt}</span>
+                ${unreadBadge}
+              </div>
             </div>
           </button>
+          <div class="hp2-chat-thread-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-row-status" data-id="${id}" data-status="${rowActionStatus}">${rowActionLabel}</button>
+          </div>
         </li>`;
       }).join('');
     } catch (err) {
@@ -1040,23 +1378,89 @@
 
   function renderQueueMailMessages(messages) {
     const host = byId('hp2-queue-mail-messages');
+    const threadId = Number(state.queue.selectedMailThreadId || 0);
     state.queue.mailMessagesById = {};
-    if (!Array.isArray(messages) || !messages.length) {
+    const safeMessages = Array.isArray(messages) ? messages : [];
+    const pending = getPendingMessages(threadId);
+    if (!safeMessages.length && !pending.length) {
       host.innerHTML = queueListEmpty('No messages in this thread.');
       return;
     }
-    host.innerHTML = messages.map((m) => {
+
+    const timeline = [];
+    safeMessages.forEach((m) => {
       const id = Number(m.id || 0);
-      state.queue.mailMessagesById[id] = m;
+      if (id) state.queue.mailMessagesById[id] = m;
       const author = String(m.author || '').trim() || 'Unknown';
       const lower = author.toLowerCase();
       const authoredByHandler = lower.includes('handler') || lower.includes('admin') || lower.includes('operator');
-      const ownClass = authoredByHandler ? 'hp2-chat-self' : '';
-      return `<li class="${ownClass}">
-        <p class="hp2-chat-message-body">${escapeHtml(m.body || '')}</p>
-        <div class="hp2-chat-message-meta">${escapeHtml(author)} • ${escapeHtml(fmtDate(m.created_at))} • <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${id}">Edit</button></div>
-        </li>`;
-    }).join('');
+      timeline.push({
+        key: `srv-${id || Math.random().toString(36).slice(2, 8)}`,
+        id,
+        author,
+        body: String(m.body || ''),
+        createdAt: String(m.created_at || ''),
+        own: authoredByHandler,
+        pending: false,
+        delivery: 'sent',
+      });
+    });
+
+    pending.forEach((m) => {
+      timeline.push({
+        key: m.tempId,
+        id: 0,
+        tempId: m.tempId,
+        author: String(m.author || 'Handler'),
+        body: String(m.body || ''),
+        createdAt: String(m.created_at || ''),
+        own: true,
+        pending: true,
+        delivery: String(m.delivery || 'sending'),
+        error: String(m.error || ''),
+      });
+    });
+
+    timeline.sort((a, b) => parseTimeValue(a.createdAt) - parseTimeValue(b.createdAt));
+
+    const html = [];
+    let previousDay = '';
+    for (let i = 0; i < timeline.length; i += 1) {
+      const row = timeline[i];
+      const prev = timeline[i - 1] || null;
+      const next = timeline[i + 1] || null;
+      const dayLabel = fmtChatDayLabel(row.createdAt);
+      if (dayLabel !== previousDay) {
+        previousDay = dayLabel;
+        html.push(`<li class="hp2-chat-date-separator"><span>${escapeHtml(dayLabel)}</span></li>`);
+      }
+
+      const groupedWithPrev = !!prev && prev.own === row.own && prev.author === row.author && (parseTimeValue(row.createdAt) - parseTimeValue(prev.createdAt)) < 300000;
+      const groupedWithNext = !!next && next.own === row.own && next.author === row.author && (parseTimeValue(next.createdAt) - parseTimeValue(row.createdAt)) < 300000;
+      const bubbleClass = `${row.own ? 'hp2-chat-self' : ''} ${groupedWithPrev ? 'hp2-chat-bubble-grouped' : ''}`.trim();
+
+      let deliveryText = 'Sent';
+      if (row.pending && row.delivery === 'sending') deliveryText = 'Sending...';
+      if (row.pending && row.delivery === 'failed') deliveryText = 'Failed';
+
+      const editAction = (!row.pending && row.id)
+        ? ` • <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${row.id}">Edit</button>`
+        : '';
+      const retryAction = (row.pending && row.delivery === 'failed')
+        ? ` • <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-retry" data-temp-id="${escapeHtml(row.tempId || '')}">Retry</button>`
+        : '';
+
+      const meta = groupedWithNext
+        ? ''
+        : `<div class="hp2-chat-message-meta">${escapeHtml(row.author)} • ${escapeHtml(fmtChatTime(row.createdAt))} • ${escapeHtml(deliveryText)}${editAction}${retryAction}</div>`;
+
+      html.push(`<li class="${bubbleClass}">
+        <p class="hp2-chat-message-body">${escapeHtml(row.body)}</p>
+        ${meta}
+      </li>`);
+    }
+
+    host.innerHTML = html.join('');
     host.scrollTop = host.scrollHeight;
   }
 
@@ -1071,13 +1475,19 @@
       const thread = data.thread || {};
       if (title) title.textContent = thread.sender_name || `Thread #${thread.id || threadId}`;
       meta.textContent = `Thread #${thread.id || threadId} • ${thread.status || 'open'}`;
-      renderQueueMailMessages(data.messages || []);
+      state.queue.selectedMailMessages = Array.isArray(data.messages) ? data.messages : [];
+      const newest = state.queue.selectedMailMessages.length
+        ? state.queue.selectedMailMessages[state.queue.selectedMailMessages.length - 1].created_at
+        : (thread.latest_message_at || thread.updated_at || thread.created_at || new Date().toISOString());
+      markThreadSeen(threadId, newest);
+      renderQueueMailMessages(state.queue.selectedMailMessages);
       await loadQueueMailThreads();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         if (title) title.textContent = 'Thread Detail';
         meta.textContent = 'Failed to load thread.';
-        renderQueueMailMessages([]);
+        state.queue.selectedMailMessages = [];
+        renderQueueMailMessages(state.queue.selectedMailMessages);
       }
     }
   }
@@ -1094,9 +1504,12 @@
       setQueueResult('Reply body cannot be empty.');
       return;
     }
+    const tempId = addPendingMessage(threadId, body);
+    renderQueueMailMessages(state.queue.selectedMailMessages);
     setQueueResult('Sending reply...');
     try {
       await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/reply`, { body });
+      removePendingMessage(threadId, tempId);
       if (input) {
         input.value = '';
         autoSizeMailComposer();
@@ -1106,7 +1519,55 @@
       await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
+        patchPendingMessage(threadId, tempId, {
+          delivery: 'failed',
+          error: err.message,
+        });
+        renderQueueMailMessages(state.queue.selectedMailMessages);
         setQueueResult(`Failed to send reply: ${err.message}`);
+      }
+    }
+  }
+
+  async function retryQueuePendingMail(tempId) {
+    const threadId = Number(state.queue.selectedMailThreadId || 0);
+    if (!threadId || !tempId) return;
+    const row = getPendingMessages(threadId).find((m) => m.tempId === tempId);
+    if (!row) return;
+    patchPendingMessage(threadId, tempId, { delivery: 'sending', error: '' });
+    renderQueueMailMessages(state.queue.selectedMailMessages);
+    setQueueResult('Retrying message...');
+    try {
+      await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/reply`, { body: row.body });
+      removePendingMessage(threadId, tempId);
+      setQueueResult('Reply sent.');
+      await loadQueueMailThread(threadId);
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        patchPendingMessage(threadId, tempId, { delivery: 'failed', error: err.message });
+        renderQueueMailMessages(state.queue.selectedMailMessages);
+        setQueueResult(`Retry failed: ${err.message}`);
+      }
+    }
+  }
+
+  async function updateQueueMailStatusForThread(threadId, status) {
+    const id = Number(threadId || 0);
+    if (!id) return;
+    setQueueResult('Saving thread status...');
+    try {
+      await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(id))}/status`, { status });
+      setQueueResult(`Thread marked ${status}.`);
+      if (state.queue.selectedMailThreadId === id) {
+        await loadQueueMailThread(id);
+      } else {
+        await loadQueueMailThreads();
+      }
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to update thread: ${err.message}`);
       }
     }
   }
@@ -1118,13 +1579,20 @@
       setQueueResult('Select a thread message first.');
       return;
     }
-    const nextBody = window.prompt('Edit message text:', String(message.body || ''));
-    if (nextBody == null) return;
-    const normalized = String(nextBody).trim();
-    if (!normalized) {
+    const response = await askInlineText({
+      title: 'Edit Puppy Mail Message',
+      message: 'Update this message text.',
+      inputLabel: 'Message',
+      inputValue: String(message.body || ''),
+      multiline: true,
+      confirmText: 'Save',
+    });
+    if (!response.confirmed) return;
+    if (response.invalidEmpty) {
       setQueueResult('Edited message cannot be empty.');
       return;
     }
+    const normalized = response.value;
     setQueueResult('Saving edit...');
     try {
       await apiPost(`/api/handler/puppy-mail/messages/${encodeURIComponent(String(messageId))}/edit`, {
@@ -1169,8 +1637,14 @@
         apiGet('/api/handler/questions').catch(() => []),
         apiGet('/api/handler/questions/answered').catch(() => []),
       ]);
-      const open = Array.isArray(openRows) ? openRows : [];
-      const answered = Array.isArray(answeredRows) ? answeredRows : [];
+      let open = Array.isArray(openRows) ? openRows : [];
+      let answered = Array.isArray(answeredRows) ? answeredRows : [];
+
+      open = open.filter((q) => includeBySharedFilter('open', 'open-only'));
+      answered = answered.filter((q) => includeBySharedFilter('answered', 'resolved-only'));
+
+      open.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
+      answered.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
 
       state.queue.openQuestions = open;
       state.queue.answeredQuestions = answered;
@@ -1228,13 +1702,20 @@
   }
 
   async function answerQueueQuestion(questionId) {
-    const answer = window.prompt('Write answer:');
-    if (answer == null) return;
-    const normalized = String(answer).trim();
-    if (!normalized) {
+    const response = await askInlineText({
+      title: 'Answer Question',
+      message: 'Write an answer to publish to this question.',
+      inputLabel: 'Answer',
+      inputPlaceholder: 'Type answer...',
+      multiline: true,
+      confirmText: 'Publish',
+    });
+    if (!response.confirmed) return;
+    if (response.invalidEmpty) {
       setQueueResult('Answer cannot be empty.');
       return;
     }
+    const normalized = response.value;
     setQueueResult('Publishing answer...');
     try {
       await apiPost(`/api/handler/questions/${encodeURIComponent(String(questionId))}/answer`, { answer: normalized });
@@ -1249,7 +1730,13 @@
   }
 
   async function deleteQueueQuestion(questionId) {
-    if (!window.confirm('Delete this question permanently?')) return;
+    const response = await askInlineConfirm({
+      title: 'Delete Question',
+      message: 'Delete this question permanently? This cannot be undone.',
+      confirmText: 'Delete',
+      danger: true,
+    });
+    if (!response.confirmed) return;
     setQueueResult('Deleting question...');
     try {
       await apiFetch(`/api/handler/questions/${encodeURIComponent(String(questionId))}`, { method: 'DELETE' });
@@ -1273,9 +1760,15 @@
         apiGet('/api/handler/limbo?status=pending&limit=200').catch(() => []),
         apiGet('/api/handler/limbo?status=all&limit=300').catch(() => []),
       ]);
-      const pending = Array.isArray(pendingRows) ? pendingRows : [];
+      let pending = Array.isArray(pendingRows) ? pendingRows : [];
       const all = Array.isArray(allRows) ? allRows : [];
-      const resolved = all.filter((item) => item.status !== 'pending');
+      let resolved = all.filter((item) => item.status !== 'pending');
+
+      pending = pending.filter((item) => includeBySharedFilter(item.status || 'pending', 'open-only'));
+      resolved = resolved.filter((item) => includeBySharedFilter(item.status || 'resolved', 'resolved-only'));
+
+      pending.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
+      resolved.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
 
       pendingEl.innerHTML = pending.length ? pending.map((item) => {
         const id = Number(item.id || 0);
@@ -1306,6 +1799,7 @@
           </div>
         </li>`;
       }).join('') : queueListEmpty('No resolved limbo items.');
+      state.telemetry.drawerAt = Date.now();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         pendingEl.innerHTML = queueListEmpty('Failed to load pending limbo.');
@@ -1315,13 +1809,20 @@
   }
 
   async function answerQueueLimbo(itemId) {
-    const answer = window.prompt('Answer text:');
-    if (answer == null) return;
-    const normalized = String(answer).trim();
-    if (!normalized) {
+    const response = await askInlineText({
+      title: 'Answer Evidence Drawer Item',
+      message: 'Add an answer for this pending item.',
+      inputLabel: 'Answer',
+      inputPlaceholder: 'Type answer...',
+      multiline: true,
+      confirmText: 'Save Answer',
+    });
+    if (!response.confirmed) return;
+    if (response.invalidEmpty) {
       setQueueResult('Limbo answer cannot be empty.');
       return;
     }
+    const normalized = response.value;
     setQueueResult('Saving limbo answer...');
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/answer`, { answer_text: normalized });
@@ -1336,7 +1837,18 @@
   }
 
   async function dismissQueueLimbo(itemId) {
-    const reason = window.prompt('Dismiss reason (optional):', '') || '';
+    const response = await askInlineText({
+      title: 'Dismiss Evidence Drawer Item',
+      message: 'Optionally provide a reason for dismissal.',
+      inputLabel: 'Reason (optional)',
+      inputValue: '',
+      multiline: true,
+      allowEmpty: true,
+      confirmText: 'Dismiss',
+      danger: true,
+    });
+    if (!response.confirmed) return;
+    const reason = response.value || '';
     setQueueResult('Dismissing limbo item...');
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/dismiss`, { reason });
@@ -1375,6 +1887,7 @@
       loadQueueMailThreads(),
       loadQueueQuestions(),
     ]);
+    state.telemetry.queueAt = Date.now();
   }
 
   async function handleQueueActionClick(event) {
@@ -1392,6 +1905,14 @@
     }
     if (action === 'mail-edit') {
       await editQueueMailMessage(id);
+      return;
+    }
+    if (action === 'mail-retry') {
+      await retryQueuePendingMail(btn.dataset.tempId || '');
+      return;
+    }
+    if (action === 'mail-row-status') {
+      await updateQueueMailStatusForThread(id, btn.dataset.status || 'open');
       return;
     }
     if (action === 'question-answer') {
@@ -1430,45 +1951,57 @@
   }
 
   async function lockSelected() {
-    const result = byId('hp2-action-result');
     if (!state.selectedDeviceId) {
-      result.textContent = 'Select a device first.';
+      setInlineResult('hp2-action-result', 'Select a device first.');
       return;
     }
-    result.textContent = 'Sending lock...';
+    const confirm = await askInlineConfirm({
+      title: 'Lock Device',
+      message: `Lock ${state.selectedDeviceId}?`,
+      confirmText: 'Lock',
+      danger: true,
+    });
+    if (!confirm.confirmed) return;
+
+    setInlineResult('hp2-action-result', 'Sending lock...');
     try {
       await apiPost('/api/handler/lock', { device_id: state.selectedDeviceId });
-      result.textContent = 'Lock sent.';
+      setInlineResult('hp2-action-result', 'Lock sent.');
       pushFeed(`Lock command sent for ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        result.textContent = `Failed: ${err.message}`;
+        setInlineResult('hp2-action-result', `Failed: ${err.message}`);
       }
     }
   }
 
   async function requestCheckin() {
-    const result = byId('hp2-action-result');
     if (!state.selectedDeviceId) {
-      result.textContent = 'Select a device first.';
+      setInlineResult('hp2-action-result', 'Select a device first.');
       return;
     }
-    result.textContent = 'Requesting check-in...';
+    const confirm = await askInlineConfirm({
+      title: 'Request Check-In',
+      message: `Send check-in request to ${state.selectedDeviceId}?`,
+      confirmText: 'Request',
+    });
+    if (!confirm.confirmed) return;
+
+    setInlineResult('hp2-action-result', 'Requesting check-in...');
     try {
       await apiPost('/api/handler/tpe/checkins/request', { device_id: state.selectedDeviceId });
-      result.textContent = 'Check-in requested.';
+      setInlineResult('hp2-action-result', 'Check-in requested.');
       pushFeed(`Check-in requested for ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        result.textContent = `Failed: ${err.message}`;
+        setInlineResult('hp2-action-result', `Failed: ${err.message}`);
       }
     }
   }
 
   async function sendToyCommand() {
-    const result = byId('hp2-command-result');
     if (!state.selectedDeviceId) {
-      result.textContent = 'Select a device first.';
+      setInlineResult('hp2-command-result', 'Select a device first.');
       return;
     }
 
@@ -1489,22 +2022,28 @@
       },
     };
 
-    result.textContent = 'Sending command...';
+    const confirm = await askInlineConfirm({
+      title: 'Send Toy Command',
+      message: `${action} ${mode} intensity ${intensity} length ${length}ms for ${state.selectedDeviceId}?`,
+      confirmText: 'Send',
+    });
+    if (!confirm.confirmed) return;
+
+    setInlineResult('hp2-command-result', 'Sending command...');
     try {
       await apiPost('/api/handler/tpe/push', payload);
-      result.textContent = 'Command sent.';
+      setInlineResult('hp2-command-result', 'Command sent.');
       pushFeed(`${action} ${mode} sent to ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        result.textContent = `Failed: ${err.message}`;
+        setInlineResult('hp2-command-result', `Failed: ${err.message}`);
       }
     }
   }
 
   async function quickBuzz() {
-    const result = byId('hp2-action-result');
     if (!state.selectedDeviceId) {
-      result.textContent = 'Select a device first.';
+      setInlineResult('hp2-action-result', 'Select a device first.');
       return;
     }
 
@@ -1520,14 +2059,21 @@
       },
     };
 
-    result.textContent = 'Sending quick buzz...';
+    const confirm = await askInlineConfirm({
+      title: 'Quick Buzz',
+      message: `Send quick buzz to ${state.selectedDeviceId}?`,
+      confirmText: 'Buzz',
+    });
+    if (!confirm.confirmed) return;
+
+    setInlineResult('hp2-action-result', 'Sending quick buzz...');
     try {
       await apiPost('/api/handler/tpe/push', payload);
-      result.textContent = 'Quick buzz sent.';
+      setInlineResult('hp2-action-result', 'Quick buzz sent.');
       pushFeed(`Quick buzz sent to ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        result.textContent = `Failed: ${err.message}`;
+        setInlineResult('hp2-action-result', `Failed: ${err.message}`);
       }
     }
   }
@@ -1564,6 +2110,20 @@
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+
+    byId('hp2-shared-filter-queue').addEventListener('change', (event) => {
+      updateSharedControls({ filter: event.target.value });
+    });
+    byId('hp2-shared-sort-queue').addEventListener('change', (event) => {
+      updateSharedControls({ sort: event.target.value });
+    });
+    byId('hp2-shared-filter-drawer').addEventListener('change', (event) => {
+      updateSharedControls({ filter: event.target.value });
+    });
+    byId('hp2-shared-sort-drawer').addEventListener('change', (event) => {
+      updateSharedControls({ sort: event.target.value });
+    });
+
     byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
     byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
     byId('hp2-queue-mail-reply-btn').addEventListener('click', () => sendQueueMailReply().catch(() => {}));
@@ -1581,6 +2141,51 @@
       }
     });
     byId('hp2-queue-mail-reply').addEventListener('input', autoSizeMailComposer);
+
+    byId('hp2-modal-cancel-btn').addEventListener('click', () => {
+      closeInlineModal({ confirmed: false, value: '' });
+    });
+    byId('hp2-modal-confirm-btn').addEventListener('click', () => {
+      const value = byId('hp2-modal-input')?.value || '';
+      closeInlineModal({ confirmed: true, value });
+    });
+    byId('hp2-modal').addEventListener('click', (event) => {
+      if (event.target && event.target.dataset && event.target.dataset.modalDismiss === 'true') {
+        closeInlineModal({ confirmed: false, value: '' });
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (isInlineModalOpen()) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeInlineModal({ confirmed: false, value: '' });
+          return;
+        }
+        if (event.key === 'Enter' && !state.modal.multiline && !event.shiftKey) {
+          event.preventDefault();
+          const value = byId('hp2-modal-input')?.value || '';
+          closeInlineModal({ confirmed: true, value });
+          return;
+        }
+      }
+      if (isInlineModalOpen()) return;
+      if (!byId('hp2-view-queue').classList.contains('hp2-view-active')) return;
+      if (event.ctrlKey && event.key === 'ArrowDown') {
+        event.preventDefault();
+        selectAdjacentMailThread(1);
+      }
+      if (event.ctrlKey && event.key === 'ArrowUp') {
+        event.preventDefault();
+        selectAdjacentMailThread(-1);
+      }
+      if (event.key === '/') {
+        const target = event.target;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+        event.preventDefault();
+        byId('hp2-queue-mail-reply')?.focus();
+      }
+    });
     byId('hp2-queue-questions-open-older').addEventListener('click', () => {
       state.queue.openVisible += 3;
       renderQueueQuestions();
@@ -1606,8 +2211,14 @@
 
   async function boot() {
     bindEvents();
+    syncSharedControls();
     setMailDetailsVisible(false);
     autoSizeMailComposer();
+    renderFreshness();
+    if (state.telemetry.freshnessTimer) {
+      clearInterval(state.telemetry.freshnessTimer);
+    }
+    state.telemetry.freshnessTimer = setInterval(renderFreshness, 15000);
     renderAutoFollowButton();
     const jwt = getJwt();
     if (!jwt) {

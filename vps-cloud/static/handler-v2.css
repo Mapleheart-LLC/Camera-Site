@@ -37,6 +37,10 @@ body {
   font-family: "Plus Jakarta Sans", "Space Grotesk", sans-serif;
 }
 
+body.hp2-modal-open {
+  overflow: hidden;
+}
+
 button,
 input,
 textarea,
@@ -127,6 +131,92 @@ button:focus-visible {
   background: #13262a;
   color: var(--hp2-text);
   border-color: var(--hp2-line);
+}
+
+.hp2-toast-stack {
+  position: fixed;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 130;
+  display: grid;
+  gap: 0.4rem;
+  width: min(360px, calc(100vw - 1.8rem));
+}
+
+.hp2-toast {
+  border: 1px solid var(--hp2-line);
+  border-radius: 11px;
+  background: #0f2024;
+  color: var(--hp2-text);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.hp2-toast.hp2-toast-ok {
+  border-color: color-mix(in srgb, var(--hp2-ok) 45%, #fff);
+}
+
+.hp2-toast.hp2-toast-warn {
+  border-color: color-mix(in srgb, var(--hp2-warn) 45%, #fff);
+}
+
+.hp2-toast.hp2-toast-bad {
+  border-color: color-mix(in srgb, var(--hp2-bad) 45%, #fff);
+}
+
+.hp2-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.hp2-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 10, 11, 0.66);
+  backdrop-filter: blur(2px);
+}
+
+.hp2-modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  border: 1px solid var(--hp2-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #173136 0%, #13262a 100%);
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.58rem;
+}
+
+.hp2-modal-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.hp2-modal-input-wrap {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hp2-modal-input-wrap label {
+  color: var(--hp2-muted);
+  font-size: 0.78rem;
+}
+
+#hp2-modal-input {
+  resize: vertical;
+  min-height: 76px;
+  max-height: 220px;
+}
+
+.hp2-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
 }
 
 .hp2-app {
@@ -266,6 +356,22 @@ button:focus-visible {
   padding: 0.74rem;
 }
 
+.hp2-shared-controls-panel {
+  margin-top: 0.7rem;
+}
+
+.hp2-shared-controls {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.hp2-shared-controls select {
+  width: auto;
+  min-width: 100px;
+}
+
 .hp2-panel-head {
   display: flex;
   justify-content: space-between;
@@ -328,6 +434,14 @@ button:focus-visible {
   margin: 0.2rem 0 0;
   font-size: 1.04rem;
   font-family: "Space Grotesk", sans-serif;
+}
+
+.hp2-freshness-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
 }
 
 .hp2-live-map {
@@ -454,6 +568,39 @@ button:focus-visible {
   align-items: start;
 }
 
+.hp2-chat-thread-side {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+}
+
+.hp2-chat-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #072019;
+  background: #60e2b3;
+}
+
+.hp2-chat-thread-actions {
+  margin-top: 0.24rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hp2-chat-thread-actions .hp2-btn {
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+  font-size: 0.68rem;
+}
+
 .hp2-chat-avatar {
   width: 28px;
   height: 28px;
@@ -513,6 +660,34 @@ button:focus-visible {
   border-bottom: 1px solid #2a474f;
   background: #102126;
   transform: rotate(45deg);
+}
+
+.hp2-chat-messages li.hp2-chat-date-separator {
+  max-width: none;
+  margin: 0.38rem auto 0.2rem;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--hp2-muted);
+  text-align: center;
+}
+
+.hp2-chat-messages li.hp2-chat-date-separator::after {
+  display: none;
+}
+
+.hp2-chat-date-separator span {
+  display: inline-block;
+  border: 1px solid var(--hp2-line);
+  border-radius: 999px;
+  background: #0e1d20;
+  padding: 0.08rem 0.55rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+.hp2-chat-messages li.hp2-chat-bubble-grouped::after {
+  display: none;
 }
 
 .hp2-chat-messages li.hp2-chat-self {

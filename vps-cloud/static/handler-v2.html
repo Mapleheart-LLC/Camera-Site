@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530g" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530j" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -75,6 +75,10 @@
                 <p>Connection</p>
                 <h3 id="hp2-dashboard-connection">-</h3>
               </article>
+            </div>
+            <div class="hp2-freshness-row">
+              <span id="hp2-freshness-pill" class="hp2-pill">Data age: -</span>
+              <span id="hp2-freshness-note" class="hp2-muted">Waiting for telemetry...</span>
             </div>
             <ul id="hp2-alert-list" class="hp2-feed"></ul>
           </section>
@@ -187,6 +191,21 @@
       </section>
 
       <section id="hp2-view-queue" class="hp2-view">
+        <div class="hp2-panel hp2-shared-controls-panel">
+          <div class="hp2-shared-controls">
+            <label for="hp2-shared-filter-queue" class="hp2-muted">Scope</label>
+            <select id="hp2-shared-filter-queue">
+              <option value="all" selected>all</option>
+              <option value="open">open</option>
+              <option value="resolved">resolved</option>
+            </select>
+            <label for="hp2-shared-sort-queue" class="hp2-muted">Sort</label>
+            <select id="hp2-shared-sort-queue">
+              <option value="newest" selected>newest</option>
+              <option value="oldest">oldest</option>
+            </select>
+          </div>
+        </div>
         <div class="hp2-section-grid hp2-queue-grid">
           <section class="hp2-panel">
             <div class="hp2-panel-head">
@@ -219,6 +238,7 @@
                     <span class="hp2-muted">Thread status</span>
                     <button id="hp2-queue-mail-resolve-btn" class="hp2-btn hp2-btn-ghost" type="button">Resolve</button>
                     <button id="hp2-queue-mail-open-btn" class="hp2-btn hp2-btn-ghost" type="button">Reopen</button>
+                    <span class="hp2-muted">Shortcuts: Ctrl+Up/Ctrl+Down to switch threads, / to focus compose.</span>
                   </div>
                 </div>
               </section>
@@ -261,6 +281,21 @@
       </section>
 
       <section id="hp2-view-drawer" class="hp2-view">
+        <div class="hp2-panel hp2-shared-controls-panel">
+          <div class="hp2-shared-controls">
+            <label for="hp2-shared-filter-drawer" class="hp2-muted">Scope</label>
+            <select id="hp2-shared-filter-drawer">
+              <option value="all" selected>all</option>
+              <option value="open">open</option>
+              <option value="resolved">resolved</option>
+            </select>
+            <label for="hp2-shared-sort-drawer" class="hp2-muted">Sort</label>
+            <select id="hp2-shared-sort-drawer">
+              <option value="newest" selected>newest</option>
+              <option value="oldest">oldest</option>
+            </select>
+          </div>
+        </div>
         <div class="hp2-section-grid">
           <section class="hp2-panel">
             <div class="hp2-panel-head">
@@ -342,7 +377,25 @@
     </main>
   </div>
 
+  <div id="hp2-modal" class="hp2-modal hp2-hidden" role="dialog" aria-modal="true" aria-labelledby="hp2-modal-title">
+    <div class="hp2-modal-backdrop" data-modal-dismiss="true"></div>
+    <section class="hp2-modal-card">
+      <h3 id="hp2-modal-title">Confirm action</h3>
+      <p id="hp2-modal-message" class="hp2-muted"></p>
+      <div id="hp2-modal-input-wrap" class="hp2-modal-input-wrap hp2-hidden">
+        <label id="hp2-modal-input-label" for="hp2-modal-input">Value</label>
+        <textarea id="hp2-modal-input" rows="3"></textarea>
+      </div>
+      <div class="hp2-modal-actions">
+        <button id="hp2-modal-cancel-btn" class="hp2-btn hp2-btn-ghost" type="button">Cancel</button>
+        <button id="hp2-modal-confirm-btn" class="hp2-btn hp2-btn-primary" type="button">Confirm</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530g" defer></script>
+  <script src="/handler-v2.js?v=20260530j" defer></script>
 </body>
 </html>
