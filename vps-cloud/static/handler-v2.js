@@ -742,7 +742,33 @@
     }
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      const message = body.detail || `Request failed (${response.status})`;
+      const detail = body?.detail;
+      let message = `Request failed (${response.status})`;
+      if (typeof detail === 'string' && detail.trim()) {
+        message = detail;
+      } else if (Array.isArray(detail) && detail.length) {
+        message = detail
+          .map((item) => {
+            if (!item || typeof item !== 'object') return String(item || 'Validation error');
+            const loc = Array.isArray(item.loc) ? item.loc.join('.') : '';
+            const msg = String(item.msg || '').trim();
+            if (loc && msg) return `${loc}: ${msg}`;
+            if (msg) return msg;
+            try {
+              return JSON.stringify(item);
+            } catch (_err) {
+              return 'Validation error';
+            }
+          })
+          .filter((entry) => String(entry || '').trim())
+          .join('; ');
+      } else if (detail && typeof detail === 'object') {
+        try {
+          message = JSON.stringify(detail);
+        } catch (_err) {
+          message = String(detail);
+        }
+      }
       throw new Error(message);
     }
     return response;
@@ -3976,12 +4002,12 @@
     setInlineResult('hp2-action-result', `${title} sending...`);
     const commandId = makeCommandId('quick');
     try {
+      const normalizedPayload = normalizePushFields(payload);
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
         command_id: commandId,
         action,
-        payload,
-        ...payload,
+        ...normalizedPayload,
       });
       setInlineResult('hp2-action-result', successMessage);
       recordCommandHistory(title, historyDetail || `${title} for ${label}`, true, {
@@ -3995,6 +4021,38 @@
         recordCommandHistory(title, `${title} failed for ${label}: ${err.message}`, false);
       }
     }
+  }
+
+  function normalizePushFields(fields) {
+    if (!fields || typeof fields !== 'object') return {};
+    const normalized = {};
+    Object.entries(fields).forEach(([rawKey, rawValue]) => {
+      const key = String(rawKey || '').trim();
+      if (!key || rawValue == null) return;
+      if (typeof rawValue === 'string') {
+        normalized[key] = rawValue;
+      } else if (typeof rawValue === 'number' || typeof rawValue === 'boolean') {
+        normalized[key] = String(rawValue);
+      } else {
+        try {
+          normalized[key] = JSON.stringify(rawValue);
+        } catch (_err) {
+          normalized[key] = String(rawValue);
+        }
+      }
+    });
+
+    // Legacy convenience aliases for clients that still provide generic keys.
+    if (!normalized.toy_command && normalized.command) {
+      normalized.toy_command = normalized.command;
+    }
+    if (!normalized.toy_level && normalized.intensity) {
+      normalized.toy_level = normalized.intensity;
+    }
+    if (!normalized.toy_duration_ms && normalized.duration_ms) {
+      normalized.toy_duration_ms = normalized.duration_ms;
+    }
+    return normalized;
   }
 
   async function sendControlCommand({
@@ -4616,11 +4674,9 @@
       confirmText: 'Buzz',
       action: 'LOVENSE_COMMAND',
       payload: {
-        command: 'vibrate',
-        intensity: 8,
-        length: 700,
-        level: 8,
-        duration_ms: 700,
+        toy_command: 'vibrate',
+        toy_level: '8',
+        toy_duration_ms: '700',
       },
       successMessage: 'Quick buzz sent.',
       historyDetail: `Buzz to ${selectedDeviceLabel()} intensity 8 length 700ms`,
@@ -4633,11 +4689,9 @@
       confirmText: 'Startle',
       action: 'LOVENSE_COMMAND',
       payload: {
-        command: 'vibrate',
-        intensity: 20,
-        length: 500,
-        level: 20,
-        duration_ms: 500,
+        toy_command: 'vibrate',
+        toy_level: '20',
+        toy_duration_ms: '500',
       },
       successMessage: 'Startle sent.',
       historyDetail: `Startle to ${selectedDeviceLabel()} at 100% for 500ms`,

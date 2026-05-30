@@ -71,7 +71,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, root_validator, validator
 
 from db import get_db, get_db_connection
 from dependencies import get_admin_user
@@ -1240,6 +1240,47 @@ class TpePushRequest(BaseModel):
     action: str
     device_id: Optional[str] = None  # target a specific device; omit to broadcast
     command_id: Optional[str] = None  # client-generated correlation ID for execution ACK
+    payload: Optional[Dict[str, Any]] = None  # legacy nested payload shape from older panels
+
+    @root_validator(pre=True)
+    def _normalize_legacy_payload(cls, values: Any) -> Any:
+        """Accept legacy nested payloads and coerce primitive values to strings.
+
+        Older clients may send ``{"payload": {...}}`` and/or numeric/boolean
+        values for fields that are stored as strings in FCM data payloads.
+        """
+        if not isinstance(values, dict):
+            return values
+
+        data = dict(values)
+        payload = data.get("payload")
+        if isinstance(payload, dict):
+            for key, raw_value in payload.items():
+                key_text = str(key).strip()
+                if not key_text:
+                    continue
+                if data.get(key_text) is None:
+                    data[key_text] = raw_value
+
+        # Map common legacy keys used by quick-action clients.
+        if data.get("toy_command") is None and data.get("command") is not None:
+            data["toy_command"] = data.get("command")
+        if data.get("toy_level") is None and data.get("intensity") is not None:
+            data["toy_level"] = data.get("intensity")
+        if data.get("toy_duration_ms") is None and data.get("duration_ms") is not None:
+            data["toy_duration_ms"] = data.get("duration_ms")
+
+        for key, raw_value in list(data.items()):
+            if key == "payload" or raw_value is None:
+                continue
+            if isinstance(raw_value, str):
+                continue
+            if isinstance(raw_value, (dict, list)):
+                data[key] = json.dumps(raw_value, ensure_ascii=False)
+            else:
+                data[key] = str(raw_value)
+
+        return data
 
     # UPDATE_SETTINGS / NudeNet
     threshold: Optional[str] = None
