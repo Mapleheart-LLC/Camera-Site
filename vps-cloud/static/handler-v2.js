@@ -2602,9 +2602,9 @@
     const timeoutMs = Math.max(1000, Math.min(86400000, Number(byId('hp2-screenctl-timeout')?.value || 120000)));
     await sendScreenLockAction('SET_SCREEN_TIMEOUT', {
       title: 'Set Screen Timeout',
-      fields: { timeout_ms: String(timeoutMs) },
+      fields: { ms: String(timeoutMs) },
       message: `Set timeout to ${timeoutMs}ms for ${selectedDeviceLabel()}?`,
-      historyDetail: `SET_SCREEN_TIMEOUT timeout_ms=${timeoutMs}`,
+      historyDetail: `SET_SCREEN_TIMEOUT ms=${timeoutMs}`,
     });
   }
 
@@ -2629,6 +2629,55 @@
       fields: { url },
       message: `Open URL on ${selectedDeviceLabel()}?`,
       historyDetail: `OPEN_URL ${url}`,
+    });
+  }
+
+  async function sendNotificationCommand() {
+    const title = String(byId('hp2-notify-title')?.value || '').trim();
+    const body = String(byId('hp2-notify-body')?.value || '').trim();
+    const channelId = String(byId('hp2-notify-channel')?.value || '').trim();
+    if (!title) {
+      setInlineResult('hp2-notify-result', 'Notification title is required.');
+      return;
+    }
+    await sendControlCommand({
+      title: 'Send Notification',
+      action: 'SEND_NOTIFICATION',
+      fields: {
+        title,
+        ...(body ? { body } : {}),
+        ...(channelId ? { channel_id: channelId } : {}),
+      },
+      resultId: 'hp2-notify-result',
+      message: `Send notification to ${selectedDeviceLabel()}?`,
+      historyDetail: `SEND_NOTIFICATION title=${title}`,
+    });
+  }
+
+  async function clearNotificationsCommand() {
+    await sendControlCommand({
+      title: 'Clear Notifications',
+      action: 'CLEAR_NOTIFICATIONS',
+      resultId: 'hp2-notify-result',
+      confirmText: 'Clear',
+      message: `Clear all notifications on ${selectedDeviceLabel()}?`,
+      historyDetail: 'CLEAR_NOTIFICATIONS',
+    });
+  }
+
+  async function speakTextCommand() {
+    const text = String(byId('hp2-speak-text')?.value || '').trim();
+    if (!text) {
+      setInlineResult('hp2-notify-result', 'Speak text is required.');
+      return;
+    }
+    await sendControlCommand({
+      title: 'Speak Text',
+      action: 'SPEAK_TEXT',
+      fields: { text },
+      resultId: 'hp2-notify-result',
+      message: `Speak this on ${selectedDeviceLabel()}?`,
+      historyDetail: `SPEAK_TEXT ${text.slice(0, 64)}`,
     });
   }
 
@@ -2785,6 +2834,9 @@
     byId('hp2-screenctl-timeout-send-btn').addEventListener('click', () => sendScreenTimeout().catch(() => {}));
     byId('hp2-screenctl-autorotate-send-btn').addEventListener('click', () => sendAutoRotate().catch(() => {}));
     byId('hp2-screenctl-url-send-btn').addEventListener('click', () => sendOpenUrl().catch(() => {}));
+    byId('hp2-notify-send-btn').addEventListener('click', () => sendNotificationCommand().catch(() => {}));
+    byId('hp2-notify-clear-btn').addEventListener('click', () => clearNotificationsCommand().catch(() => {}));
+    byId('hp2-speak-send-btn').addEventListener('click', () => speakTextCommand().catch(() => {}));
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));

@@ -1001,7 +1001,8 @@ button:focus-visible {
 #hp2-lovense-result,
 #hp2-pavlok-result,
 #hp2-appctl-result,
-#hp2-screenctl-result {
+#hp2-screenctl-result,
+#hp2-notify-result {
   min-height: 1.2em;
 }
 

@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530s" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530t" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -596,6 +596,42 @@
 
           <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
+              <h4>Notifications and Voice</h4>
+              <span class="hp2-muted">Prompt + interrupt</span>
+            </div>
+            <p class="hp2-muted">Push high-signal prompts and spoken cues quickly during handling. Keep titles short and voice text direct.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-notify-title">
+                  <span>Notification Title</span>
+                  <input id="hp2-notify-title" type="text" maxlength="80" placeholder="Handler Notice" />
+                </label>
+                <label class="hp2-control-field" for="hp2-notify-channel">
+                  <span>Channel ID (optional)</span>
+                  <input id="hp2-notify-channel" type="text" placeholder="handler_alerts" />
+                </label>
+              </div>
+              <label class="hp2-control-field" for="hp2-notify-body">
+                <span>Notification Body</span>
+                <textarea id="hp2-notify-body" rows="3" placeholder="Please check in now."></textarea>
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-notify-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Notification</button>
+                <button id="hp2-notify-clear-btn" class="hp2-btn hp2-btn-ghost" type="button">Clear Notifications</button>
+              </div>
+              <label class="hp2-control-field" for="hp2-speak-text">
+                <span>Speak Text</span>
+                <textarea id="hp2-speak-text" rows="2" placeholder="Take a breath and focus."></textarea>
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-speak-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Speak on Device</button>
+              </div>
+            </div>
+            <p id="hp2-notify-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>
             </div>
@@ -658,6 +694,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530s" defer></script>
+  <script src="/handler-v2.js?v=20260530t" defer></script>
 </body>
 </html>
