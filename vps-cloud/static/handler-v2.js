@@ -12,6 +12,16 @@
     wsReconnectTimer: null,
     devices: {},
     feed: [],
+    intelligence: {
+      alerts: [],
+      transport: {
+        mqtt: 0,
+        wsFallback: 0,
+        failures: 0,
+        recent: [],
+      },
+      staleRisk: [],
+    },
   };
 
   function byId(id) {
@@ -370,8 +380,239 @@
   async function hydrateApp() {
     await loadDevices();
     await loadQueueKpis();
+    await loadDashboardIntelligence();
     connectWs();
     pushFeed('Session ready.');
+  }
+
+  function severityClass(level) {
+    if (level === 'critical') return 'hp2-severity hp2-severity-critical';
+    if (level === 'warning') return 'hp2-severity hp2-severity-warning';
+    return 'hp2-severity hp2-severity-info';
+  }
+
+  function readPayloadJson(rawPayload) {
+    if (!rawPayload) return {};
+    if (typeof rawPayload === 'object') return rawPayload;
+    try {
+      return JSON.parse(rawPayload);
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function minutesSince(iso) {
+    const ms = Date.parse(iso || '');
+    if (!Number.isFinite(ms)) return null;
+    return Math.max(0, Math.round((Date.now() - ms) / 60000));
+  }
+
+  function deriveStaleRisk() {
+    const rows = Object.values(state.devices).map((device) => {
+      const mins = minutesSince(device.last_seen);
+      const battery = Number(device.battery_pct);
+      let severity = 'info';
+      const notes = [];
+
+      if (!Number.isFinite(mins) || mins >= 30) {
+        severity = 'critical';
+        notes.push('stale telemetry');
+      } else if (mins >= 10) {
+        severity = 'warning';
+        notes.push('aging telemetry');
+      }
+
+      if (Number.isFinite(battery) && battery <= 20) {
+        if (severity !== 'critical') severity = 'warning';
+        notes.push(`low battery ${battery}%`);
+      }
+
+      if (Number(device.ai_alert || 0) === 1 || device.ai_alert === true) {
+        severity = 'critical';
+        notes.push('ai alert');
+      }
+
+      return {
+        deviceId: device.device_id || 'unknown',
+        label: device.device_name || device.device_id || 'Unknown',
+        minutes: mins,
+        severity,
+        notes,
+      };
+    });
+
+    rows.sort((a, b) => {
+      const sevRank = { critical: 3, warning: 2, info: 1 };
+      if (sevRank[b.severity] !== sevRank[a.severity]) {
+        return sevRank[b.severity] - sevRank[a.severity];
+      }
+      return (b.minutes || 0) - (a.minutes || 0);
+    });
+
+    state.intelligence.staleRisk = rows.slice(0, 8);
+  }
+
+  function deriveTransportOutcomes(events) {
+    let mqtt = 0;
+    let wsFallback = 0;
+    let failures = 0;
+
+    const recent = [];
+    (Array.isArray(events) ? events : []).forEach((eventRow) => {
+      const payload = readPayloadJson(eventRow.payload_json);
+      const reasonText = String(eventRow.reason || '').toLowerCase();
+      const eventText = String(eventRow.event || '').toLowerCase();
+
+      let transport = 'unknown';
+      let level = 'info';
+
+      if (payload.transport === 'mqtt' || Number(payload?.mqtt?.sent || 0) > 0) {
+        transport = 'mqtt';
+        mqtt += 1;
+      } else if (
+        payload.transport === 'ws_fallback' ||
+        Number(payload?.ws_fallback?.sent || 0) > 0 ||
+        reasonText.includes('ws_fallback')
+      ) {
+        transport = 'ws_fallback';
+        wsFallback += 1;
+        level = 'warning';
+      }
+
+      if (
+        reasonText.includes('unavailable') ||
+        reasonText.includes('failed') ||
+        reasonText.includes('error') ||
+        eventText.includes('failed')
+      ) {
+        failures += 1;
+        level = 'critical';
+      }
+
+      if (recent.length < 8) {
+        recent.push({
+          at: eventRow.received_at,
+          text: `${eventRow.event || 'event'} (${transport})`,
+          reason: eventRow.reason || '',
+          level,
+        });
+      }
+    });
+
+    state.intelligence.transport = {
+      mqtt,
+      wsFallback,
+      failures,
+      recent,
+    };
+  }
+
+  function deriveAlertsTimeline(events, audits) {
+    const timeline = [];
+
+    (Array.isArray(events) ? events : []).slice(0, 16).forEach((row) => {
+      const eventName = String(row.event || 'event');
+      const reason = String(row.reason || 'No reason provided');
+      let level = 'info';
+      const reasonLower = reason.toLowerCase();
+
+      if (eventName.toLowerCase().includes('punish') || reasonLower.includes('alert')) {
+        level = 'warning';
+      }
+      if (reasonLower.includes('failed') || reasonLower.includes('error')) {
+        level = 'critical';
+      }
+
+      timeline.push({
+        at: row.received_at,
+        title: eventName,
+        subtitle: reason,
+        level,
+      });
+    });
+
+    (Array.isArray(audits) ? audits : []).slice(0, 12).forEach((row) => {
+      const ratio = Number(row.detection_ratio);
+      if (!Number.isFinite(ratio)) return;
+      const level = ratio >= 0.6 ? 'critical' : ratio >= 0.35 ? 'warning' : 'info';
+      timeline.push({
+        at: row.received_at,
+        title: `Audit ${row.last_label || 'signal'}`,
+        subtitle: `Detection ratio ${(ratio * 100).toFixed(1)}%`,
+        level,
+      });
+    });
+
+    timeline.sort((a, b) => (Date.parse(b.at || '') || 0) - (Date.parse(a.at || '') || 0));
+    state.intelligence.alerts = timeline.slice(0, 12);
+  }
+
+  function renderDashboardIntelligence() {
+    const alertsEl = byId('hp2-alert-timeline');
+    const transportEl = byId('hp2-transport-list');
+    const staleEl = byId('hp2-stale-risk');
+
+    byId('hp2-transport-mqtt').textContent = String(state.intelligence.transport.mqtt || 0);
+    byId('hp2-transport-ws').textContent = String(state.intelligence.transport.wsFallback || 0);
+    byId('hp2-transport-fail').textContent = String(state.intelligence.transport.failures || 0);
+
+    if (!state.intelligence.alerts.length) {
+      alertsEl.innerHTML = '<li class="hp2-muted">No alert events yet.</li>';
+    } else {
+      alertsEl.innerHTML = state.intelligence.alerts
+        .map((item) => `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span class="${severityClass(item.level)}">${escapeHtml(item.level)}</span>
+            </div>
+            <div class="hp2-muted">${escapeHtml(item.subtitle)}</div>
+            <div class="hp2-muted">${escapeHtml(fmtDate(item.at))}</div>
+          </li>`)
+        .join('');
+    }
+
+    if (!state.intelligence.transport.recent.length) {
+      transportEl.innerHTML = '<li class="hp2-muted">No transport outcomes yet.</li>';
+    } else {
+      transportEl.innerHTML = state.intelligence.transport.recent
+        .map((item) => `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(item.text)}</strong>
+              <span class="${severityClass(item.level)}">${escapeHtml(item.level)}</span>
+            </div>
+            <div class="hp2-muted">${escapeHtml(item.reason || 'No reason provided')}</div>
+            <div class="hp2-muted">${escapeHtml(fmtDate(item.at))}</div>
+          </li>`)
+        .join('');
+    }
+
+    if (!state.intelligence.staleRisk.length) {
+      staleEl.innerHTML = '<li class="hp2-muted">No stale risk data yet.</li>';
+    } else {
+      staleEl.innerHTML = state.intelligence.staleRisk
+        .map((item) => `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(item.label)}</strong>
+              <span class="${severityClass(item.severity)}">${escapeHtml(item.severity)}</span>
+            </div>
+            <div class="hp2-muted">${escapeHtml(item.deviceId)}</div>
+            <div class="hp2-muted">${item.minutes != null ? `${item.minutes} min since last seen` : 'No last_seen timestamp'}</div>
+            <div class="hp2-muted">${escapeHtml(item.notes.length ? item.notes.join(' | ') : 'No active risk flags')}</div>
+          </li>`)
+        .join('');
+    }
+  }
+
+  async function loadDashboardIntelligence() {
+    const [events, audits] = await Promise.all([
+      apiGet('/api/handler/tpe/events?limit=120').catch(() => []),
+      apiGet('/api/handler/tpe/audits?limit=80').catch(() => []),
+    ]);
+
+    deriveTransportOutcomes(events);
+    deriveAlertsTimeline(events, audits);
+    deriveStaleRisk();
+    renderDashboardIntelligence();
   }
 
   async function loadQueueKpis() {
@@ -487,6 +728,7 @@
     byId('hp2-checkin-btn').addEventListener('click', () => requestCheckin().catch(() => {}));
     byId('hp2-send-toy-btn').addEventListener('click', () => sendToyCommand().catch(() => {}));
     byId('hp2-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+    byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
 
     byId('hp2-device-list').addEventListener('click', handleDeviceListClick);

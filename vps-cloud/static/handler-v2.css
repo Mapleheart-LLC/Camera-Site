@@ -205,6 +205,10 @@ button:focus-visible {
   gap: 0.8rem;
 }
 
+.hp2-intelligence-grid {
+  margin-top: 0.9rem;
+}
+
 .hp2-panel {
   padding: 0.74rem;
 }
@@ -244,6 +248,67 @@ button:focus-visible {
   background: #102126;
   border-radius: 10px;
   padding: 0.5rem 0.6rem;
+}
+
+.hp2-feed-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.hp2-severity {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.hp2-severity-critical {
+  color: #ffd4d4;
+  border-color: #9c4a4a;
+  background: #442323;
+}
+
+.hp2-severity-warning {
+  color: #ffe7b8;
+  border-color: #8b7133;
+  background: #3e3318;
+}
+
+.hp2-severity-info {
+  color: #c8e6ff;
+  border-color: #406684;
+  background: #182f42;
+}
+
+.hp2-transport-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.hp2-transport-kpis article {
+  border: 1px solid var(--hp2-line);
+  border-radius: 10px;
+  background: #102126;
+  padding: 0.45rem 0.5rem;
+}
+
+.hp2-transport-kpis p {
+  margin: 0;
+  color: var(--hp2-muted);
+  font-size: 0.72rem;
+}
+
+.hp2-transport-kpis h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1.12rem;
+  font-family: "Space Grotesk", sans-serif;
 }
 
 .hp2-device-list button {
