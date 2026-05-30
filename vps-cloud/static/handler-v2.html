@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530u" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530v" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -648,7 +648,7 @@
               <div class="hp2-control-grid-2">
                 <label class="hp2-control-field" for="hp2-sms-thread-id">
                   <span>SMS Thread ID</span>
-                  <input id="hp2-sms-thread-id" type="text" placeholder="default" value="default" />
+                  <input id="hp2-sms-thread-id" type="text" placeholder="default" value="default" list="hp2-sms-thread-list" />
                 </label>
                 <label class="hp2-control-field" for="hp2-sms-can-reply">
                   <span>Can Reply</span>
@@ -657,6 +657,12 @@
                     <option value="false">Disabled</option>
                   </select>
                 </label>
+              </div>
+              <datalist id="hp2-sms-thread-list">
+                <option value="default"></option>
+              </datalist>
+              <div class="hp2-action-row">
+                <button id="hp2-sms-thread-refresh-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh Thread Presets</button>
               </div>
               <label class="hp2-control-field" for="hp2-sms-body">
                 <span>Inject Proxy SMS Message</span>
@@ -738,6 +744,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530u" defer></script>
+  <script src="/handler-v2.js?v=20260530v" defer></script>
 </body>
 </html>

@@ -75,6 +75,7 @@
     settings: { ...defaultSettings },
     commands: {
       history: [],
+      smsThreadPresets: ['default'],
       liveControl: {
         quickTapTarget: 'lovense',
         quickTapAction: 'vibrate',
@@ -297,6 +298,42 @@
     });
     setSegmentActive(host, state.commands.liveControl.quickTapAction);
     syncControlReadouts();
+  }
+
+  function renderSmsThreadPresetList() {
+    const list = byId('hp2-sms-thread-list');
+    if (!list) return;
+    const values = Array.isArray(state.commands.smsThreadPresets) ? state.commands.smsThreadPresets : ['default'];
+    const uniq = Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+    if (!uniq.includes('default')) uniq.unshift('default');
+    list.innerHTML = uniq.map((threadId) => `<option value="${escapeHtml(threadId)}"></option>`).join('');
+    state.commands.smsThreadPresets = uniq;
+  }
+
+  async function loadSmsThreadPresets() {
+    const presetSet = new Set(['default']);
+
+    const [smsThreads, puppyThreads] = await Promise.all([
+      apiGet('/api/admin/sms/threads').catch(() => []),
+      apiGet('/api/handler/puppy-mail/threads?status=all&limit=200').catch(() => []),
+    ]);
+
+    if (Array.isArray(smsThreads)) {
+      smsThreads.forEach((row) => {
+        const id = String(row?.thread_id || '').trim();
+        if (id) presetSet.add(id);
+      });
+    }
+
+    if (Array.isArray(puppyThreads)) {
+      puppyThreads.forEach((row) => {
+        const id = String(row?.id || '').trim();
+        if (id) presetSet.add(id);
+      });
+    }
+
+    state.commands.smsThreadPresets = Array.from(presetSet);
+    renderSmsThreadPresetList();
   }
 
   function setQuickTapTarget(target) {
@@ -1098,6 +1135,7 @@
       loadDevices(),
       loadDashboardIntelligence(),
       loadQueueHub(),
+      loadSmsThreadPresets(),
     ];
     const results = await Promise.allSettled(jobs);
     state.telemetry.hydratedAt = Date.now();
@@ -2737,6 +2775,18 @@
     });
   }
 
+  async function refreshSmsThreadPresets() {
+    setInlineResult('hp2-clipboard-sms-result', 'Refreshing thread presets...');
+    try {
+      await loadSmsThreadPresets();
+      setInlineResult('hp2-clipboard-sms-result', `Thread presets refreshed (${state.commands.smsThreadPresets.length}).`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-clipboard-sms-result', `Failed to refresh presets: ${err.message}`);
+      }
+    }
+  }
+
   async function quickBuzz() {
     await sendQuickActionCommand({
       title: 'Quick Buzz',
@@ -2896,6 +2946,7 @@
     byId('hp2-clipboard-send-btn').addEventListener('click', () => sendClipboardCommand().catch(() => {}));
     byId('hp2-sms-inject-btn').addEventListener('click', () => injectProxySmsCommand().catch(() => {}));
     byId('hp2-sms-reply-toggle-btn').addEventListener('click', () => setSmsReplyPermissionCommand().catch(() => {}));
+    byId('hp2-sms-thread-refresh-btn').addEventListener('click', () => refreshSmsThreadPresets().catch(() => {}));
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
@@ -3050,6 +3101,7 @@
     setQuickTapTarget('lovense');
     renderQuickTapActionButtons();
     syncControlReadouts();
+    renderSmsThreadPresetList();
     renderSettingsForm();
     applyCommandDefaults();
     renderCommandHistory();
