@@ -562,6 +562,25 @@
             </div>
             <p class="hp2-muted">Fast screen and access controls for active handling: lock, wake/sleep, brightness, timeout, and orientation behavior.</p>
             <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-screenctl-action">
+                  <span>Schema Action</span>
+                  <select id="hp2-screenctl-action">
+                    <option value="LOCK_DEVICE">Lock Device</option>
+                    <option value="DISMISS_KEYGUARD">Dismiss Keyguard</option>
+                    <option value="SCREEN_ON">Screen On</option>
+                    <option value="SCREEN_OFF">Screen Off</option>
+                    <option value="SET_BRIGHTNESS">Set Brightness</option>
+                    <option value="SET_SCREEN_TIMEOUT">Set Screen Timeout</option>
+                    <option value="SET_AUTO_ROTATE">Set Auto Rotate</option>
+                    <option value="OPEN_URL">Open URL</option>
+                  </select>
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-send-schema-btn" class="hp2-btn hp2-btn-primary" type="button">Send Selected Screen Action</button>
+                </div>
+              </div>
+              <div id="hp2-screenctl-dynamic-fields" class="hp2-control-grid-2 hp2-hidden"></div>
               <div class="hp2-action-row">
                 <button id="hp2-screenctl-lock-btn" class="hp2-btn hp2-btn-warn" type="button">Lock Device</button>
                 <button id="hp2-screenctl-dismiss-keyguard-btn" class="hp2-btn hp2-btn-ghost" type="button">Dismiss Keyguard</button>
@@ -616,6 +635,20 @@
             </div>
             <p class="hp2-muted">Push high-signal prompts and spoken cues quickly during handling. Keep titles short and voice text direct.</p>
             <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-notify-action">
+                  <span>Schema Action</span>
+                  <select id="hp2-notify-action">
+                    <option value="SEND_NOTIFICATION">Send Notification</option>
+                    <option value="CLEAR_NOTIFICATIONS">Clear Notifications</option>
+                    <option value="SPEAK_TEXT">Speak Text</option>
+                  </select>
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-notify-send-schema-btn" class="hp2-btn hp2-btn-primary" type="button">Send Selected Notify Action</button>
+                </div>
+              </div>
+              <div id="hp2-notify-dynamic-fields" class="hp2-control-grid-2 hp2-hidden"></div>
               <div class="hp2-control-grid-2">
                 <label class="hp2-control-field" for="hp2-notify-title">
                   <span>Notification Title</span>

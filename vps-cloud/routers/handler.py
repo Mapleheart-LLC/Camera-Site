@@ -5370,6 +5370,29 @@ def handler_tpe_push_schema(
             "UNSUSPEND_APP",
         }
     ]
+    screen_actions = [
+        action
+        for action in sorted(_VALID_TPE_ACTIONS)
+        if action in {
+            "LOCK_DEVICE",
+            "DISMISS_KEYGUARD",
+            "SCREEN_ON",
+            "SCREEN_OFF",
+            "SET_BRIGHTNESS",
+            "SET_SCREEN_TIMEOUT",
+            "SET_AUTO_ROTATE",
+            "OPEN_URL",
+        }
+    ]
+    notify_actions = [
+        action
+        for action in sorted(_VALID_TPE_ACTIONS)
+        if action in {
+            "SEND_NOTIFICATION",
+            "CLEAR_NOTIFICATIONS",
+            "SPEAK_TEXT",
+        }
+    ]
     action_fields = {
         "OPEN_APP": [
             {
@@ -5443,11 +5466,90 @@ def handler_tpe_push_schema(
                 "placeholder": "Instagram",
             }
         ],
+        "SET_BRIGHTNESS": [
+            {
+                "name": "value",
+                "label": "Brightness",
+                "type": "number",
+                "required": True,
+                "min": 0,
+                "max": 255,
+                "placeholder": "150",
+            }
+        ],
+        "SET_SCREEN_TIMEOUT": [
+            {
+                "name": "ms",
+                "label": "Timeout ms",
+                "type": "number",
+                "required": True,
+                "min": 1000,
+                "max": 86400000,
+                "placeholder": "120000",
+            }
+        ],
+        "SET_AUTO_ROTATE": [
+            {
+                "name": "enabled",
+                "label": "Auto Rotate",
+                "type": "select",
+                "required": True,
+                "options": [
+                    {"value": "true", "label": "Enabled"},
+                    {"value": "false", "label": "Disabled"},
+                ],
+            }
+        ],
+        "OPEN_URL": [
+            {
+                "name": "url",
+                "label": "URL",
+                "type": "url",
+                "required": True,
+                "placeholder": "https://example.com",
+            }
+        ],
+        "SEND_NOTIFICATION": [
+            {
+                "name": "title",
+                "label": "Notification Title",
+                "type": "text",
+                "required": True,
+                "placeholder": "Handler Notice",
+            },
+            {
+                "name": "body",
+                "label": "Notification Body",
+                "type": "textarea",
+                "required": False,
+                "placeholder": "Please check in now.",
+                "rows": 3,
+            },
+            {
+                "name": "channel_id",
+                "label": "Channel ID",
+                "type": "text",
+                "required": False,
+                "placeholder": "handler_alerts",
+            },
+        ],
+        "SPEAK_TEXT": [
+            {
+                "name": "text",
+                "label": "Speak Text",
+                "type": "textarea",
+                "required": True,
+                "placeholder": "Take a breath and focus.",
+                "rows": 2,
+            }
+        ],
     }
     return {
         "actions": sorted(_VALID_TPE_ACTIONS),
         "groups": {
             "app_actions": app_actions,
+            "screen_actions": screen_actions,
+            "notify_actions": notify_actions,
         },
         "action_fields": action_fields,
     }

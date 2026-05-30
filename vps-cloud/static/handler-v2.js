@@ -516,11 +516,20 @@
   }
 
   function applyPushSchemaToUi(schema) {
-    const select = byId('hp2-appctl-action');
+    applyActionGroupOptions('hp2-appctl-action', schema?.groups?.app_actions);
+    applyActionGroupOptions('hp2-screenctl-action', schema?.groups?.screen_actions);
+    applyActionGroupOptions('hp2-notify-action', schema?.groups?.notify_actions);
+    renderAppActionFieldInputs();
+    renderScreenActionFieldInputs();
+    renderNotifyActionFieldInputs();
+  }
+
+  function applyActionGroupOptions(selectId, rawActions) {
+    const select = byId(selectId);
     if (!select) return;
-    const appActions = Array.isArray(schema?.groups?.app_actions) ? schema.groups.app_actions : [];
-    if (!appActions.length) return;
-    const allowed = new Set(appActions.map((v) => String(v)));
+    const actions = Array.isArray(rawActions) ? rawActions : [];
+    if (!actions.length) return;
+    const allowed = new Set(actions.map((v) => String(v)));
     const current = String(select.value || '');
     Array.from(select.options).forEach((opt) => {
       opt.hidden = !allowed.has(String(opt.value || ''));
@@ -529,29 +538,24 @@
       const first = Array.from(select.options).find((opt) => !opt.hidden);
       if (first) select.value = first.value;
     }
-    renderAppActionFieldInputs();
   }
 
-  function appActionFieldSpecs(action) {
+  function actionFieldSpecs(action) {
     const fields = state.commands.schema?.action_fields?.[action];
     return Array.isArray(fields) ? fields : [];
   }
 
-  function renderAppActionFieldInputs() {
-    const action = String(byId('hp2-appctl-action')?.value || '').trim();
-    const host = byId('hp2-appctl-dynamic-fields');
-    const legacyNameWrap = byId('hp2-appctl-name-field');
+  function renderDynamicActionFieldInputs(action, hostId, prefix) {
+    const host = byId(hostId);
     if (!host) return;
 
-    const specs = appActionFieldSpecs(action);
+    const specs = actionFieldSpecs(action);
     if (!specs.length) {
       host.innerHTML = '';
       host.classList.add('hp2-hidden');
-      if (legacyNameWrap) legacyNameWrap.classList.remove('hp2-hidden');
       return;
     }
 
-    if (legacyNameWrap) legacyNameWrap.classList.add('hp2-hidden');
     host.classList.remove('hp2-hidden');
     host.innerHTML = specs.map((spec) => {
       const name = String(spec.name || '').trim();
@@ -559,7 +563,7 @@
       const type = String(spec.type || 'text').trim();
       const required = !!spec.required;
       const placeholder = String(spec.placeholder || '').trim();
-      const inputId = `hp2-appctl-param-${name}`;
+      const inputId = `${prefix}-${name}`;
 
       if (type === 'select' && Array.isArray(spec.options)) {
         const options = spec.options.map((opt) => {
@@ -569,7 +573,15 @@
         }).join('');
         return `<label class="hp2-control-field" for="${escapeHtml(inputId)}">
           <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
-          <select id="${escapeHtml(inputId)}" data-app-param="${escapeHtml(name)}" ${required ? 'required' : ''}>${options}</select>
+          <select id="${escapeHtml(inputId)}" data-param="${escapeHtml(name)}" ${required ? 'required' : ''}>${options}</select>
+        </label>`;
+      }
+
+      if (type === 'textarea') {
+        const rows = Number(spec.rows || 2);
+        return `<label class="hp2-control-field" for="${escapeHtml(inputId)}">
+          <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
+          <textarea id="${escapeHtml(inputId)}" data-param="${escapeHtml(name)}" rows="${escapeHtml(String(Math.max(2, Math.min(8, rows))))}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}></textarea>
         </label>`;
       }
 
@@ -578,18 +590,18 @@
       const max = spec.max !== undefined ? ` max="${escapeHtml(String(spec.max))}"` : '';
       return `<label class="hp2-control-field" for="${escapeHtml(inputId)}">
         <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
-        <input id="${escapeHtml(inputId)}" type="${escapeHtml(htmlType)}" data-app-param="${escapeHtml(name)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}${min}${max} />
+        <input id="${escapeHtml(inputId)}" type="${escapeHtml(htmlType)}" data-param="${escapeHtml(name)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}${min}${max} />
       </label>`;
     }).join('');
   }
 
-  function readAppActionFieldValues(action) {
-    const specs = appActionFieldSpecs(action);
+  function readDynamicActionFieldValues(action, prefix) {
+    const specs = actionFieldSpecs(action);
     const out = {};
     for (const spec of specs) {
       const name = String(spec?.name || '').trim();
       if (!name) continue;
-      const el = byId(`hp2-appctl-param-${name}`);
+      const el = byId(`${prefix}-${name}`);
       const raw = String(el?.value || '').trim();
       if (!raw) {
         if (spec.required) {
@@ -600,6 +612,46 @@
       out[name] = raw;
     }
     return out;
+  }
+
+  function renderAppActionFieldInputs() {
+    const action = String(byId('hp2-appctl-action')?.value || '').trim();
+    const legacyNameWrap = byId('hp2-appctl-name-field');
+    const specs = actionFieldSpecs(action);
+    if (!specs.length) {
+      const host = byId('hp2-appctl-dynamic-fields');
+      if (host) {
+        host.innerHTML = '';
+        host.classList.add('hp2-hidden');
+      }
+      if (legacyNameWrap) legacyNameWrap.classList.remove('hp2-hidden');
+      return;
+    }
+
+    if (legacyNameWrap) legacyNameWrap.classList.add('hp2-hidden');
+    renderDynamicActionFieldInputs(action, 'hp2-appctl-dynamic-fields', 'hp2-appctl-param');
+  }
+
+  function readAppActionFieldValues(action) {
+    return readDynamicActionFieldValues(action, 'hp2-appctl-param');
+  }
+
+  function renderScreenActionFieldInputs() {
+    const action = String(byId('hp2-screenctl-action')?.value || '').trim();
+    renderDynamicActionFieldInputs(action, 'hp2-screenctl-dynamic-fields', 'hp2-screenctl-param');
+  }
+
+  function readScreenActionFieldValues(action) {
+    return readDynamicActionFieldValues(action, 'hp2-screenctl-param');
+  }
+
+  function renderNotifyActionFieldInputs() {
+    const action = String(byId('hp2-notify-action')?.value || '').trim();
+    renderDynamicActionFieldInputs(action, 'hp2-notify-dynamic-fields', 'hp2-notify-param');
+  }
+
+  function readNotifyActionFieldValues(action) {
+    return readDynamicActionFieldValues(action, 'hp2-notify-param');
   }
 
   async function loadPushSchema() {
@@ -2848,6 +2900,55 @@
     });
   }
 
+  function summarizeFieldsForHistory(fields) {
+    const keys = Object.keys(fields || {});
+    if (!keys.length) return '';
+    return keys
+      .slice(0, 3)
+      .map((key) => `${key}=${String(fields[key]).slice(0, 40)}`)
+      .join(' ');
+  }
+
+  async function sendSchemaScreenAction() {
+    const action = String(byId('hp2-screenctl-action')?.value || '').trim();
+    if (!action) {
+      setInlineResult('hp2-screenctl-result', 'Choose a screen action first.');
+      return;
+    }
+
+    let fields = {};
+    try {
+      fields = readScreenActionFieldValues(action);
+    } catch (err) {
+      setInlineResult('hp2-screenctl-result', err?.message || 'Required screen fields are missing.');
+      return;
+    }
+
+    if (action === 'SET_BRIGHTNESS' && !fields.value) {
+      fields.value = String(Math.max(0, Math.min(255, Number(byId('hp2-screenctl-brightness')?.value || 150))));
+    }
+    if (action === 'SET_SCREEN_TIMEOUT' && !fields.ms) {
+      fields.ms = String(Math.max(1000, Math.min(86400000, Number(byId('hp2-screenctl-timeout')?.value || 120000))));
+    }
+    if (action === 'SET_AUTO_ROTATE' && !fields.enabled) {
+      fields.enabled = String(byId('hp2-screenctl-autorotate')?.value || 'true') === 'true' ? 'true' : 'false';
+    }
+    if (action === 'OPEN_URL' && !fields.url) {
+      fields.url = String(byId('hp2-screenctl-url')?.value || '').trim();
+    }
+
+    const title = action.replaceAll('_', ' ');
+    const fieldSummary = summarizeFieldsForHistory(fields);
+    await sendScreenLockAction(action, {
+      title,
+      fields,
+      danger: action === 'LOCK_DEVICE',
+      confirmText: action === 'LOCK_DEVICE' ? 'Lock' : 'Send',
+      message: `${title} for ${selectedDeviceLabel()}?`,
+      historyDetail: fieldSummary ? `${action} ${fieldSummary}` : action,
+    });
+  }
+
   async function sendQuickTapCommand() {
     if (!state.selectedDeviceId) {
       setInlineResult('hp2-quicktap-result', 'Select a device first.');
@@ -3147,6 +3248,53 @@
     });
   }
 
+  async function sendSchemaNotifyAction() {
+    const action = String(byId('hp2-notify-action')?.value || '').trim();
+    if (!action) {
+      setInlineResult('hp2-notify-result', 'Choose a notify action first.');
+      return;
+    }
+
+    let fields = {};
+    try {
+      fields = readNotifyActionFieldValues(action);
+    } catch (err) {
+      setInlineResult('hp2-notify-result', err?.message || 'Required notify fields are missing.');
+      return;
+    }
+
+    if (action === 'SEND_NOTIFICATION') {
+      if (!fields.title) fields.title = String(byId('hp2-notify-title')?.value || '').trim();
+      if (!fields.body) fields.body = String(byId('hp2-notify-body')?.value || '').trim();
+      if (!fields.channel_id) fields.channel_id = String(byId('hp2-notify-channel')?.value || '').trim();
+      if (!fields.title) {
+        setInlineResult('hp2-notify-result', 'Notification title is required.');
+        return;
+      }
+      if (!fields.body) delete fields.body;
+      if (!fields.channel_id) delete fields.channel_id;
+    }
+
+    if (action === 'SPEAK_TEXT') {
+      if (!fields.text) fields.text = String(byId('hp2-speak-text')?.value || '').trim();
+      if (!fields.text) {
+        setInlineResult('hp2-notify-result', 'Speak text is required.');
+        return;
+      }
+    }
+
+    const title = action.replaceAll('_', ' ');
+    const fieldSummary = summarizeFieldsForHistory(fields);
+    await sendControlCommand({
+      title,
+      action,
+      fields,
+      resultId: 'hp2-notify-result',
+      message: `${title} for ${selectedDeviceLabel()}?`,
+      historyDetail: fieldSummary ? `${action} ${fieldSummary}` : action,
+    });
+  }
+
   async function sendNotificationCommand() {
     const title = String(byId('hp2-notify-title')?.value || '').trim();
     const body = String(byId('hp2-notify-body')?.value || '').trim();
@@ -3396,6 +3544,8 @@
     byId('hp2-pavlok-send-btn').addEventListener('click', () => sendPavlokPrecision().catch(() => {}));
     byId('hp2-appctl-send-btn').addEventListener('click', () => sendAppLifecycleCommand().catch(() => {}));
     byId('hp2-appctl-action').addEventListener('change', renderAppActionFieldInputs);
+    byId('hp2-screenctl-send-schema-btn').addEventListener('click', () => sendSchemaScreenAction().catch(() => {}));
+    byId('hp2-screenctl-action').addEventListener('change', renderScreenActionFieldInputs);
     byId('hp2-screenctl-lock-btn').addEventListener('click', () => sendScreenLockAction('LOCK_DEVICE', {
       title: 'Lock Device',
       danger: true,
@@ -3418,6 +3568,8 @@
     byId('hp2-screenctl-timeout-send-btn').addEventListener('click', () => sendScreenTimeout().catch(() => {}));
     byId('hp2-screenctl-autorotate-send-btn').addEventListener('click', () => sendAutoRotate().catch(() => {}));
     byId('hp2-screenctl-url-send-btn').addEventListener('click', () => sendOpenUrl().catch(() => {}));
+    byId('hp2-notify-send-schema-btn').addEventListener('click', () => sendSchemaNotifyAction().catch(() => {}));
+    byId('hp2-notify-action').addEventListener('change', renderNotifyActionFieldInputs);
     byId('hp2-notify-send-btn').addEventListener('click', () => sendNotificationCommand().catch(() => {}));
     byId('hp2-notify-clear-btn').addEventListener('click', () => clearNotificationsCommand().catch(() => {}));
     byId('hp2-speak-send-btn').addEventListener('click', () => speakTextCommand().catch(() => {}));
