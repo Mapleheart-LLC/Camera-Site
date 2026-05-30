@@ -1239,6 +1239,7 @@ class TpePushRequest(BaseModel):
 
     action: str
     device_id: Optional[str] = None  # target a specific device; omit to broadcast
+    command_id: Optional[str] = None  # client-generated correlation ID for execution ACK
 
     # UPDATE_SETTINGS / NudeNet
     threshold: Optional[str] = None
@@ -1739,6 +1740,8 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
     """
     data: dict[str, str] = {"action": body.action}
     field_map = {
+        # Correlation
+        "command_id":         body.command_id,
         # UPDATE_SETTINGS / NudeNet
         "threshold":          body.threshold,
         "strict":             body.strict,

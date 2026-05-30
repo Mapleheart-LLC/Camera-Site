@@ -153,6 +153,7 @@ _CREATE_TABLE_SQL = """
         lat         REAL,
         lon         REAL,
         toy_info_json TEXT,
+        capabilities_json TEXT,
         ai_alert    INTEGER NOT NULL DEFAULT 0,
         ai_label    TEXT,
         ai_score    REAL,
@@ -598,6 +599,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE handler_device_status ADD COLUMN device_name TEXT")
     if "toy_info_json" not in col_names:
         conn.execute("ALTER TABLE handler_device_status ADD COLUMN toy_info_json TEXT")
+    if "capabilities_json" not in col_names:
+        conn.execute("ALTER TABLE handler_device_status ADD COLUMN capabilities_json TEXT")
 
     _ensure_limbo_table(conn)
     _ensure_limbo_columns(conn)
@@ -844,6 +847,10 @@ class DeviceStatusReport(BaseModel):
     toy_info: Optional[dict] = Field(
         default=None,
         validation_alias=AliasChoices("toy_info", "toyInfo"),
+    )
+    capabilities: Optional[dict] = Field(
+        default=None,
+        validation_alias=AliasChoices("capabilities", "capabilities_json"),
     )
     ai_alert: Optional[bool] = Field(
         default=None,
@@ -1822,14 +1829,15 @@ async def handler_device_status(
 
     resolved_device_name = (body.device_name or "").strip() or None
     toy_info_json = json.dumps(body.toy_info) if isinstance(body.toy_info, dict) else None
+    capabilities_json = json.dumps(body.capabilities) if isinstance(body.capabilities, dict) else None
 
     now = _now_iso()
     db.execute(
         """
         INSERT INTO handler_device_status
-            (device_id, device_name, fcm_token, battery_pct, lat, lon, toy_info_json, ai_alert, ai_label, ai_score,
+            (device_id, device_name, fcm_token, battery_pct, lat, lon, toy_info_json, capabilities_json, ai_alert, ai_label, ai_score,
              is_locked, is_online, last_seen, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
             device_name = COALESCE(excluded.device_name, device_name),
             fcm_token   = COALESCE(excluded.fcm_token,   fcm_token),
@@ -1837,6 +1845,7 @@ async def handler_device_status(
             lat         = COALESCE(excluded.lat,         lat),
             lon         = COALESCE(excluded.lon,         lon),
             toy_info_json = COALESCE(excluded.toy_info_json, toy_info_json),
+            capabilities_json = COALESCE(excluded.capabilities_json, capabilities_json),
             ai_alert    = COALESCE(excluded.ai_alert,    ai_alert),
             ai_label    = COALESCE(excluded.ai_label,    ai_label),
             ai_score    = COALESCE(excluded.ai_score,    ai_score),
@@ -1852,6 +1861,7 @@ async def handler_device_status(
             body.lat,
             body.lon,
             toy_info_json,
+            capabilities_json,
             1 if body.ai_alert else 0,
             body.ai_label,
             body.ai_score,
@@ -1873,6 +1883,7 @@ async def handler_device_status(
                     "lat": body.lat,
                     "lon": body.lon,
                     "toy_info": body.toy_info,
+                    "capabilities": body.capabilities,
                     "ai_alert": bool(body.ai_alert),
                     "ai_label": body.ai_label,
                     "ai_score": body.ai_score,
@@ -5338,6 +5349,33 @@ def handler_tpe_events(
         (min(limit, 500),),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@router.get("/api/handler/tpe/schema")
+@router.get("/api/handler/tpe/push/schema")
+def handler_tpe_push_schema(
+    current_user: dict = Depends(role_required("admin", "handler")),
+) -> dict:
+    app_actions = [
+        action
+        for action in sorted(_VALID_TPE_ACTIONS)
+        if action in {
+            "OPEN_APP",
+            "FORCE_STOP_APP",
+            "DISABLE_APP",
+            "ENABLE_APP",
+            "CLEAR_APP_CACHE",
+            "UNINSTALL_APP",
+            "SUSPEND_APP",
+            "UNSUSPEND_APP",
+        }
+    ]
+    return {
+        "actions": sorted(_VALID_TPE_ACTIONS),
+        "groups": {
+            "app_actions": app_actions,
+        },
+    }
 
 
 @router.get("/api/handler/tpe/audits")

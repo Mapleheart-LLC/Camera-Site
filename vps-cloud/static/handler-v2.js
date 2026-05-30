@@ -5,6 +5,8 @@
   const SETTINGS_KEY = 'handler_panel_v2_settings';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
   const QUEUE_AUTO_REFRESH_MS = 30000;
+  const AUTH_REFRESH_MS = 8 * 60 * 1000;
+  const COMMAND_ACK_POLL_MS = 7000;
   const views = ['dashboard', 'stats', 'queue', 'drawer', 'devices', 'commands', 'settings'];
   const MAX_BREADCRUMBS = 6;
   const defaultSettings = {
@@ -71,10 +73,14 @@
       queueAt: 0,
       drawerAt: 0,
       freshnessTimer: null,
+      authRefreshTimer: null,
+      commandAckTimer: null,
     },
     settings: { ...defaultSettings },
     commands: {
       history: [],
+      lastAckEventId: 0,
+      schema: null,
       smsThreadPresets: ['default'],
       liveControl: {
         quickTapTarget: 'lovense',
@@ -205,22 +211,48 @@
     host.innerHTML = state.commands.history.map((row) => `<li>
       <div class="hp2-feed-item-row">
         <strong>${escapeHtml(row.title)}</strong>
-        <span class="${severityClass(row.ok ? 'info' : 'critical')}">${row.ok ? 'ok' : 'failed'}</span>
+        <span class="${severityClass(row.ok ? 'info' : 'critical')}">${escapeHtml(row.statusLabel || (row.ok ? 'ok' : 'failed'))}</span>
       </div>
       <div class="hp2-muted">${escapeHtml(row.detail)}</div>
       <div class="hp2-muted">${escapeHtml(fmtDate(row.at))}</div>
     </li>`).join('');
   }
 
-  function recordCommandHistory(title, detail, ok) {
-    state.commands.history.unshift({
+  function makeCommandId(prefix = 'hp2') {
+    const now = Date.now().toString(36);
+    const rand = Math.random().toString(36).slice(2, 8);
+    return `${prefix}-${now}-${rand}`;
+  }
+
+  function recordCommandHistory(title, detail, ok, options = {}) {
+    const row = {
       title,
       detail,
       ok: !!ok,
+      statusLabel: options.statusLabel || (ok ? 'ok' : 'failed'),
+      commandId: options.commandId || null,
       at: new Date().toISOString(),
-    });
+    };
+    state.commands.history.unshift(row);
     state.commands.history = state.commands.history.slice(0, 12);
     renderCommandHistory();
+    return row;
+  }
+
+  function markCommandExecuted(commandId, reason) {
+    if (!commandId) return;
+    let touched = false;
+    state.commands.history = state.commands.history.map((row) => {
+      if (row.commandId !== commandId) return row;
+      touched = true;
+      return {
+        ...row,
+        ok: true,
+        statusLabel: 'executed',
+        detail: reason ? `${row.detail} | ${reason}` : row.detail,
+      };
+    });
+    if (touched) renderCommandHistory();
   }
 
   function quickTapActionsForTarget(target) {
@@ -386,7 +418,38 @@
     return jwt ? { Authorization: `Bearer ${jwt}` } : {};
   }
 
-  async function apiFetch(path, options = {}) {
+  let authRefreshPromise = null;
+
+  async function refreshAuthToken() {
+    if (authRefreshPromise) return authRefreshPromise;
+    const jwt = getJwt();
+    if (!jwt) return false;
+
+    authRefreshPromise = (async () => {
+      try {
+        const response = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: {
+            ...authHeader(),
+          },
+        });
+        if (!response.ok) return false;
+        const payload = await response.json().catch(() => ({}));
+        const nextToken = String(payload?.access_token || '').trim();
+        if (!nextToken) return false;
+        saveJwt(nextToken);
+        return true;
+      } catch (_err) {
+        return false;
+      } finally {
+        authRefreshPromise = null;
+      }
+    })();
+
+    return authRefreshPromise;
+  }
+
+  async function apiFetch(path, options = {}, retryAfterRefresh = true) {
     const merged = {
       ...options,
       headers: {
@@ -396,6 +459,12 @@
     };
     const response = await fetch(path, merged);
     if (response.status === 401) {
+      if (retryAfterRefresh && path !== '/api/auth/refresh') {
+        const refreshed = await refreshAuthToken();
+        if (refreshed) {
+          return apiFetch(path, options, false);
+        }
+      }
       showLogin('Session expired.');
       throw new Error(AUTH_EXPIRED_ERROR);
     }
@@ -430,6 +499,79 @@
     return response.json().catch(() => ({}));
   }
 
+  function applyPushSchemaToUi(schema) {
+    const select = byId('hp2-appctl-action');
+    if (!select) return;
+    const appActions = Array.isArray(schema?.groups?.app_actions) ? schema.groups.app_actions : [];
+    if (!appActions.length) return;
+    const allowed = new Set(appActions.map((v) => String(v)));
+    const current = String(select.value || '');
+    Array.from(select.options).forEach((opt) => {
+      opt.hidden = !allowed.has(String(opt.value || ''));
+    });
+    if (!allowed.has(current)) {
+      const first = Array.from(select.options).find((opt) => !opt.hidden);
+      if (first) select.value = first.value;
+    }
+  }
+
+  async function loadPushSchema() {
+    try {
+      const schema = await apiGet('/api/handler/tpe/schema');
+      state.commands.schema = schema;
+      applyPushSchemaToUi(schema);
+    } catch (_err) {
+      // Keep built-in static action options as fallback.
+    }
+  }
+
+  async function pollCommandAcks() {
+    try {
+      const rows = await apiGet('/api/handler/tpe/events?limit=200');
+      if (!Array.isArray(rows)) return;
+      rows
+        .slice()
+        .reverse()
+        .forEach((row) => {
+          const id = Number(row?.id || 0);
+          if (!id || id <= Number(state.commands.lastAckEventId || 0)) return;
+          state.commands.lastAckEventId = id;
+          if (String(row?.event || '') !== 'mdm_executed') return;
+          let payload = null;
+          try {
+            payload = typeof row.payload_json === 'string' ? JSON.parse(row.payload_json) : null;
+          } catch (_err) {
+            payload = null;
+          }
+          const commandId = String(payload?.command_id || '').trim();
+          const command = String(payload?.command || row?.reason || '').trim();
+          if (!commandId) return;
+          markCommandExecuted(commandId, command ? `${command} executed` : 'executed');
+        });
+    } catch (_err) {
+      // Ignore intermittent polling errors; next tick can recover.
+    }
+  }
+
+  function startAuthRefreshTimer() {
+    if (state.telemetry.authRefreshTimer) {
+      clearInterval(state.telemetry.authRefreshTimer);
+    }
+    state.telemetry.authRefreshTimer = setInterval(() => {
+      refreshAuthToken().catch(() => {});
+    }, AUTH_REFRESH_MS);
+  }
+
+  function startCommandAckPoller() {
+    if (state.telemetry.commandAckTimer) {
+      clearInterval(state.telemetry.commandAckTimer);
+    }
+    pollCommandAcks().catch(() => {});
+    state.telemetry.commandAckTimer = setInterval(() => {
+      pollCommandAcks().catch(() => {});
+    }, COMMAND_ACK_POLL_MS);
+  }
+
   function selectedDevice() {
     return state.selectedDeviceId ? state.devices[state.selectedDeviceId] : null;
   }
@@ -453,6 +595,20 @@
     return {};
   }
 
+  function parseCapabilities(device) {
+    if (!device) return {};
+    if (device.capabilities && typeof device.capabilities === 'object') return device.capabilities;
+    if (device.capabilities_json && typeof device.capabilities_json === 'string') {
+      try {
+        const parsed = JSON.parse(device.capabilities_json);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (_err) {
+        return {};
+      }
+    }
+    return {};
+  }
+
   function hasToyCapability(device, mode) {
     const info = parseToyInfo(device);
     const text = JSON.stringify(info || {}).toLowerCase();
@@ -466,14 +622,23 @@
 
   function commandCapabilities(device) {
     const online = deviceOnline(device);
-    const lovense = hasToyCapability(device, 'lovense');
-    const pavlok = hasToyCapability(device, 'pavlok');
+    const capabilityMap = parseCapabilities(device);
+    const explicitLovense = capabilityMap.lovense_available;
+    const explicitPavlok = capabilityMap.pavlok_available;
+    const lovense = typeof explicitLovense === 'boolean' ? explicitLovense : hasToyCapability(device, 'lovense');
+    const pavlok = typeof explicitPavlok === 'boolean' ? explicitPavlok : hasToyCapability(device, 'pavlok');
     const toyInfoKnown = JSON.stringify(parseToyInfo(device)).length > 2;
+    const rootAvailable = capabilityMap.root_available === true;
+    const accessibilityEnabled = capabilityMap.accessibility_enabled === true;
+    const deviceAdminActive = capabilityMap.device_admin_active === true;
     return {
       online,
       lovense,
       pavlok,
       toyInfoKnown,
+      rootAvailable,
+      accessibilityEnabled,
+      deviceAdminActive,
       selected: !!device,
     };
   }
@@ -516,6 +681,9 @@
       { label: 'Lovense', on: caps.lovense },
       { label: 'Pavlok', on: caps.pavlok },
       { label: 'Toy Info', on: caps.toyInfoKnown },
+      { label: 'Root', on: caps.rootAvailable },
+      { label: 'Accessibility', on: caps.accessibilityEnabled },
+      { label: 'Device Admin', on: caps.deviceAdminActive },
     ];
     chipsHost.innerHTML = rows
       .map((row) => `<span class="hp2-capability-chip ${row.on ? 'hp2-capability-on' : 'hp2-capability-off'}">${escapeHtml(row.label)} ${row.on ? 'Ready' : 'Missing'}</span>`)
@@ -626,6 +794,14 @@
       clearInterval(state.telemetry.freshnessTimer);
       state.telemetry.freshnessTimer = null;
     }
+    if (state.telemetry.authRefreshTimer) {
+      clearInterval(state.telemetry.authRefreshTimer);
+      state.telemetry.authRefreshTimer = null;
+    }
+    if (state.telemetry.commandAckTimer) {
+      clearInterval(state.telemetry.commandAckTimer);
+      state.telemetry.commandAckTimer = null;
+    }
     document.body.classList.remove('hp2-authenticated');
     setVisible('hp2-app', false);
     setVisible('hp2-login', true);
@@ -637,6 +813,8 @@
     document.body.classList.add('hp2-authenticated');
     setVisible('hp2-login', false);
     setVisible('hp2-app', true);
+    startAuthRefreshTimer();
+    startCommandAckPoller();
   }
 
   function pushFeed(text) {
@@ -1289,6 +1467,7 @@
       loadDashboardIntelligence(),
       loadQueueHub(),
       loadSmsThreadPresets(),
+      loadPushSchema(),
     ];
     const results = await Promise.allSettled(jobs);
     state.telemetry.hydratedAt = Date.now();
@@ -2455,15 +2634,20 @@
     if (!confirmed.confirmed) return;
 
     setInlineResult('hp2-action-result', `${title} sending...`);
+    const commandId = makeCommandId('quick');
     try {
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action,
         payload,
         ...payload,
       });
       setInlineResult('hp2-action-result', successMessage);
-      recordCommandHistory(title, historyDetail || `${title} for ${label}`, true);
+      recordCommandHistory(title, historyDetail || `${title} for ${label}`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
       pushFeed(`${title} sent to ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
@@ -2497,14 +2681,19 @@
     if (!confirmed.confirmed) return;
 
     setInlineResult(resultId, `${title} sending...`);
+    const commandId = makeCommandId('cmd');
     try {
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action,
         ...fields,
       });
       setInlineResult(resultId, `${title} sent.`);
-      recordCommandHistory(title, historyDetail || `${action} for ${selectedDeviceLabel()}`, true);
+      recordCommandHistory(title, historyDetail || `${action} for ${selectedDeviceLabel()}`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult(resultId, `Failed: ${err.message}`);
@@ -2572,10 +2761,13 @@
 
     setInlineResult('hp2-quicktap-result', 'Sending quick tap...');
     try {
+      const baseCommandId = makeCommandId('quicktap');
       for (let i = 0; i < loop; i += 1) {
+        const loopCommandId = `${baseCommandId}-${i + 1}`;
         if (target === 'pavlok') {
           await apiPost('/api/handler/tpe/push', {
             device_id: state.selectedDeviceId,
+            command_id: loopCommandId,
             action: 'PAVLOK_COMMAND',
             payload: {
               pavlok_cmd: action,
@@ -2601,6 +2793,7 @@
         } else {
           await apiPost('/api/handler/tpe/push', {
             device_id: state.selectedDeviceId,
+            command_id: loopCommandId,
             action: 'LOVENSE_COMMAND',
             payload: {
               command: action,
@@ -2624,7 +2817,10 @@
         }
       }
       setInlineResult('hp2-quicktap-result', `Quick tap sent (${loop}x).`);
-      recordCommandHistory('Quick Tap', `${target} ${action} intensity ${intensity}${action !== 'shock' ? ` length ${length}ms` : ''} loop ${loop}`, true);
+      recordCommandHistory('Quick Tap', `${target} ${action} intensity ${intensity}${action !== 'shock' ? ` length ${length}ms` : ''} loop ${loop}`, true, {
+        commandId: `${baseCommandId}-1`,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-quicktap-result', `Failed: ${err.message}`);
@@ -2643,8 +2839,10 @@
     const duration = Math.max(500, Number(byId('hp2-lovense-live-duration')?.value || 5000));
     setInlineResult('hp2-lovense-result', 'Sending Lovense live pattern...');
     try {
+      const commandId = makeCommandId('lovense-live');
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action: 'toy.live.control',
         toy_mode: 'lovense',
         toy_command: 'vibrate',
@@ -2653,7 +2851,10 @@
         ...(pattern ? { toy_pattern: pattern } : {}),
       });
       setInlineResult('hp2-lovense-result', 'Lovense live pattern sent.');
-      recordCommandHistory('Lovense Live', `${pattern || 'steady'} level ${level} duration ${duration}ms`, true);
+      recordCommandHistory('Lovense Live', `${pattern || 'steady'} level ${level} duration ${duration}ms`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
@@ -2687,8 +2888,10 @@
 
     setInlineResult('hp2-lovense-result', 'Sending live up/down ramp...');
     try {
+      const commandId = makeCommandId('lovense-ramp');
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action: 'toy.live.control',
         toy_mode: 'lovense',
         toy_command: 'vibrate',
@@ -2696,7 +2899,10 @@
         toy_sequence: JSON.stringify(full),
       });
       setInlineResult('hp2-lovense-result', 'Live up/down ramp sent.');
-      recordCommandHistory('Lovense Ramp', `min ${minLevel} max ${maxLevel} step ${stepMs}ms loops ${loops}`, true);
+      recordCommandHistory('Lovense Ramp', `min ${minLevel} max ${maxLevel} step ${stepMs}ms loops ${loops}`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
@@ -2719,13 +2925,18 @@
 
     setInlineResult('hp2-lovense-result', 'Sending Lovense schedule...');
     try {
+      const commandId = makeCommandId('lovense-schedule');
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action: 'SET_LOVENSE_SCHEDULES',
         schedules: JSON.stringify(parsed),
       });
       setInlineResult('hp2-lovense-result', 'Lovense schedule sent.');
-      recordCommandHistory('Lovense Timed', `${parsed.length} schedule row(s)`, true);
+      recordCommandHistory('Lovense Timed', `${parsed.length} schedule row(s)`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
@@ -2745,8 +2956,10 @@
 
     setInlineResult('hp2-pavlok-result', 'Sending Pavlok command...');
     try {
+      const commandId = makeCommandId('pavlok');
       await apiPost('/api/handler/tpe/push', {
         device_id: state.selectedDeviceId,
+        command_id: commandId,
         action: 'PAVLOK_COMMAND',
         payload: {
           pavlok_cmd: cmd,
@@ -2770,7 +2983,10 @@
         } : {}),
       });
       setInlineResult('hp2-pavlok-result', 'Pavlok command sent.');
-      recordCommandHistory('Pavlok Precision', `${cmd} intensity ${intensity}${cmd !== 'shock' && cmd !== 'stop' ? ` duration ${duration}ms` : ''}`, true);
+      recordCommandHistory('Pavlok Precision', `${cmd} intensity ${intensity}${cmd !== 'shock' && cmd !== 'stop' ? ` duration ${duration}ms` : ''}`, true, {
+        commandId,
+        statusLabel: 'sent',
+      });
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-pavlok-result', `Failed: ${err.message}`);
