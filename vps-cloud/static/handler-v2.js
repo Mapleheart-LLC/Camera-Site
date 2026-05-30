@@ -45,6 +45,13 @@
     return document.getElementById(id);
   }
 
+  function setVisible(id, visible) {
+    const el = byId(id);
+    if (!el) return;
+    el.hidden = !visible;
+    el.classList.toggle('hp2-hidden', !visible);
+  }
+
   function saveJwt(token) {
     sessionStorage.setItem(JWT_KEY, token);
   }
@@ -131,19 +138,15 @@
 
   function showLogin(message = '') {
     disconnectWs();
-    byId('hp2-app').hidden = true;
-    byId('hp2-login').hidden = false;
-    byId('hp2-app').style.display = 'none';
-    byId('hp2-login').style.display = 'grid';
+    setVisible('hp2-app', false);
+    setVisible('hp2-login', true);
     byId('hp2-login-error').textContent = message;
     clearJwt();
   }
 
   function showApp() {
-    byId('hp2-login').hidden = true;
-    byId('hp2-app').hidden = false;
-    byId('hp2-login').style.display = 'none';
-    byId('hp2-app').style.display = 'block';
+    setVisible('hp2-login', false);
+    setVisible('hp2-app', true);
   }
 
   function pushFeed(text) {

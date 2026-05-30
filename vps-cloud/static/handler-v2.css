@@ -17,6 +17,11 @@
   box-sizing: border-box;
 }
 
+[hidden],
+.hp2-hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: radial-gradient(circle at 12% 0%, #193036 0%, var(--hp2-bg) 42%), linear-gradient(180deg, #091012 0%, #081012 100%);
