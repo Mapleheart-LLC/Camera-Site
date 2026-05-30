@@ -3,7 +3,7 @@
 
   const JWT_KEY = 'handler_panel_jwt';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
-  const views = ['dashboard', 'stats', 'devices', 'commands', 'settings'];
+  const views = ['dashboard', 'stats', 'queue', 'devices', 'commands', 'settings'];
   const MAX_BREADCRUMBS = 6;
 
   const state = {
@@ -38,6 +38,10 @@
         moodDelta: null,
         signals: [],
       },
+    },
+    queue: {
+      selectedMailThreadId: null,
+      mailMessagesById: {},
     },
   };
 
@@ -184,6 +188,9 @@
     document.querySelectorAll('.hp2-tab-btn').forEach((button) => {
       button.classList.toggle('hp2-tab-active', button.dataset.view === viewName);
     });
+    if (viewName === 'queue') {
+      loadQueueHub().catch(() => {});
+    }
   }
 
   function renderKpis() {
@@ -586,6 +593,7 @@
       loadDevices(),
       loadQueueKpis(),
       loadDashboardIntelligence(),
+      loadQueueHub(),
     ];
     const results = await Promise.allSettled(jobs);
     connectWs();
@@ -897,6 +905,450 @@
     renderDashboardAlerts();
   }
 
+  function setQueueResult(message) {
+    const el = byId('hp2-queue-result');
+    if (!el) return;
+    el.textContent = message || '';
+  }
+
+  function queueListEmpty(message) {
+    return `<li class="hp2-muted">${escapeHtml(message)}</li>`;
+  }
+
+  async function loadQueueBooking() {
+    const listEl = byId('hp2-queue-booking-list');
+    const filter = byId('hp2-queue-booking-filter')?.value || 'new';
+    listEl.innerHTML = queueListEmpty('Loading booking queue...');
+
+    try {
+      const items = await apiGet(`/api/handler/booking?status=${encodeURIComponent(filter)}&limit=200`);
+      if (!Array.isArray(items) || !items.length) {
+        listEl.innerHTML = queueListEmpty('No booking items in this filter.');
+        return;
+      }
+      listEl.innerHTML = items.map((item) => {
+        const id = Number(item.id || 0);
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(item.contact_handle || 'Unknown contact')}</strong>
+            <span class="${severityClass(item.status === 'done' ? 'info' : 'warning')}">${escapeHtml(item.status || 'new')}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(item.session_intent || 'No session intent')}</div>
+          <div class="hp2-muted">${escapeHtml(item.location_text || item.availability_window || 'No location')}</div>
+          <div class="hp2-queue-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="booking-status" data-id="${id}" data-status="qualified">Qualified</button>
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="booking-status" data-id="${id}" data-status="scheduled">Scheduled</button>
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="booking-status" data-id="${id}" data-status="done">Done</button>
+          </div>
+        </li>`;
+      }).join('');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        listEl.innerHTML = queueListEmpty('Failed to load booking queue.');
+      }
+    }
+  }
+
+  async function updateBookingStatus(id, status) {
+    if (!id || !status) return;
+    setQueueResult('Updating booking status...');
+    try {
+      await apiPost(`/api/handler/booking/${encodeURIComponent(String(id))}/status`, { status });
+      setQueueResult(`Booking #${id} marked ${status}.`);
+      await loadQueueBooking();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to update booking: ${err.message}`);
+      }
+    }
+  }
+
+  async function loadQueueMailThreads() {
+    const listEl = byId('hp2-queue-mail-list');
+    const filter = byId('hp2-queue-mail-filter')?.value || 'open';
+    listEl.innerHTML = queueListEmpty('Loading mail threads...');
+
+    try {
+      const items = await apiGet(`/api/handler/puppy-mail/threads?status=${encodeURIComponent(filter)}&limit=200`);
+      if (!Array.isArray(items) || !items.length) {
+        listEl.innerHTML = queueListEmpty('No puppy mail threads in this filter.');
+        return;
+      }
+      listEl.innerHTML = items.map((thread) => {
+        const id = Number(thread.id || 0);
+        const selected = state.queue.selectedMailThreadId === id;
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(thread.sender_name || 'Anonymous')}</strong>
+            <span class="${severityClass(thread.status === 'resolved' ? 'info' : 'warning')}">${escapeHtml(thread.status || 'open')}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(thread.latest_message || 'No messages yet')}</div>
+          <div class="hp2-muted">${escapeHtml(fmtDate(thread.latest_message_at || thread.updated_at || thread.created_at))}</div>
+          <div class="hp2-queue-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-open" data-id="${id}">${selected ? 'Selected' : 'Open'}</button>
+          </div>
+        </li>`;
+      }).join('');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        listEl.innerHTML = queueListEmpty('Failed to load puppy mail threads.');
+      }
+    }
+  }
+
+  function renderQueueMailMessages(messages) {
+    const host = byId('hp2-queue-mail-messages');
+    state.queue.mailMessagesById = {};
+    if (!Array.isArray(messages) || !messages.length) {
+      host.innerHTML = queueListEmpty('No messages in this thread.');
+      return;
+    }
+    host.innerHTML = messages.map((m) => {
+      const id = Number(m.id || 0);
+      state.queue.mailMessagesById[id] = m;
+      return `<li>
+        <div class="hp2-feed-item-row">
+          <strong>${escapeHtml(m.author || 'Unknown')}</strong>
+          <span class="hp2-muted">${escapeHtml(fmtDate(m.created_at))}</span>
+        </div>
+        <div>${escapeHtml(m.body || '')}</div>
+        <div class="hp2-queue-actions">
+          <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${id}">Edit</button>
+        </div>
+      </li>`;
+    }).join('');
+  }
+
+  async function loadQueueMailThread(threadId) {
+    state.queue.selectedMailThreadId = threadId;
+    const meta = byId('hp2-queue-mail-meta');
+    meta.textContent = 'Loading thread...';
+    try {
+      const data = await apiGet(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}`);
+      const thread = data.thread || {};
+      meta.textContent = `Thread #${thread.id || threadId} • ${thread.status || 'open'} • ${thread.sender_name || 'Anonymous'}`;
+      renderQueueMailMessages(data.messages || []);
+      await loadQueueMailThreads();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        meta.textContent = 'Failed to load thread.';
+        renderQueueMailMessages([]);
+      }
+    }
+  }
+
+  async function sendQueueMailReply() {
+    const threadId = state.queue.selectedMailThreadId;
+    if (!threadId) {
+      setQueueResult('Select a mail thread first.');
+      return;
+    }
+    const input = byId('hp2-queue-mail-reply');
+    const body = String(input?.value || '').trim();
+    if (!body) {
+      setQueueResult('Reply body cannot be empty.');
+      return;
+    }
+    setQueueResult('Sending reply...');
+    try {
+      await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/reply`, { body });
+      if (input) input.value = '';
+      setQueueResult('Reply sent.');
+      await loadQueueMailThread(threadId);
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to send reply: ${err.message}`);
+      }
+    }
+  }
+
+  async function editQueueMailMessage(messageId) {
+    const threadId = state.queue.selectedMailThreadId;
+    const message = state.queue.mailMessagesById[Number(messageId)] || null;
+    if (!threadId || !message) {
+      setQueueResult('Select a thread message first.');
+      return;
+    }
+    const nextBody = window.prompt('Edit message text:', String(message.body || ''));
+    if (nextBody == null) return;
+    const normalized = String(nextBody).trim();
+    if (!normalized) {
+      setQueueResult('Edited message cannot be empty.');
+      return;
+    }
+    setQueueResult('Saving edit...');
+    try {
+      await apiPost(`/api/handler/puppy-mail/messages/${encodeURIComponent(String(messageId))}/edit`, {
+        body: normalized,
+        author: String(message.author || 'Puppy').trim() || 'Puppy',
+      });
+      setQueueResult('Message updated.');
+      await loadQueueMailThread(threadId);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to edit message: ${err.message}`);
+      }
+    }
+  }
+
+  async function updateQueueMailStatus(status) {
+    const threadId = state.queue.selectedMailThreadId;
+    if (!threadId) {
+      setQueueResult('Select a mail thread first.');
+      return;
+    }
+    setQueueResult('Saving thread status...');
+    try {
+      await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/status`, { status });
+      setQueueResult(`Thread marked ${status}.`);
+      await loadQueueMailThread(threadId);
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to update thread: ${err.message}`);
+      }
+    }
+  }
+
+  async function loadQueueQuestions() {
+    const openEl = byId('hp2-queue-questions-open');
+    const answeredEl = byId('hp2-queue-questions-answered');
+    openEl.innerHTML = queueListEmpty('Loading unanswered questions...');
+    answeredEl.innerHTML = queueListEmpty('Loading answered questions...');
+    try {
+      const [openRows, answeredRows] = await Promise.all([
+        apiGet('/api/handler/questions').catch(() => []),
+        apiGet('/api/handler/questions/answered').catch(() => []),
+      ]);
+      const open = Array.isArray(openRows) ? openRows : [];
+      const answered = Array.isArray(answeredRows) ? answeredRows : [];
+
+      openEl.innerHTML = open.length ? open.map((q) => {
+        const id = Number(q.id || 0);
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(q.text || '')}</strong>
+            <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
+          </div>
+          <div class="hp2-queue-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-answer" data-id="${id}">Answer</button>
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
+          </div>
+        </li>`;
+      }).join('') : queueListEmpty('No unanswered questions.');
+
+      answeredEl.innerHTML = answered.length ? answered.map((q) => {
+        const id = Number(q.id || 0);
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(q.text || '')}</strong>
+            <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(q.answer || '')}</div>
+          <div class="hp2-queue-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
+          </div>
+        </li>`;
+      }).join('') : queueListEmpty('No answered questions.');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        openEl.innerHTML = queueListEmpty('Failed to load questions.');
+        answeredEl.innerHTML = queueListEmpty('Failed to load answered questions.');
+      }
+    }
+  }
+
+  async function answerQueueQuestion(questionId) {
+    const answer = window.prompt('Write answer:');
+    if (answer == null) return;
+    const normalized = String(answer).trim();
+    if (!normalized) {
+      setQueueResult('Answer cannot be empty.');
+      return;
+    }
+    setQueueResult('Publishing answer...');
+    try {
+      await apiPost(`/api/handler/questions/${encodeURIComponent(String(questionId))}/answer`, { answer: normalized });
+      setQueueResult('Answer published.');
+      await loadQueueQuestions();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to answer question: ${err.message}`);
+      }
+    }
+  }
+
+  async function deleteQueueQuestion(questionId) {
+    if (!window.confirm('Delete this question permanently?')) return;
+    setQueueResult('Deleting question...');
+    try {
+      await apiFetch(`/api/handler/questions/${encodeURIComponent(String(questionId))}`, { method: 'DELETE' });
+      setQueueResult('Question deleted.');
+      await loadQueueQuestions();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to delete question: ${err.message}`);
+      }
+    }
+  }
+
+  async function loadQueueLimbo() {
+    const pendingEl = byId('hp2-queue-limbo-pending');
+    const resolvedEl = byId('hp2-queue-limbo-resolved');
+    pendingEl.innerHTML = queueListEmpty('Loading pending limbo items...');
+    resolvedEl.innerHTML = queueListEmpty('Loading resolved limbo items...');
+    try {
+      const [pendingRows, allRows] = await Promise.all([
+        apiGet('/api/handler/limbo?status=pending&limit=200').catch(() => []),
+        apiGet('/api/handler/limbo?status=all&limit=300').catch(() => []),
+      ]);
+      const pending = Array.isArray(pendingRows) ? pendingRows : [];
+      const all = Array.isArray(allRows) ? allRows : [];
+      const resolved = all.filter((item) => item.status !== 'pending');
+
+      pendingEl.innerHTML = pending.length ? pending.map((item) => {
+        const id = Number(item.id || 0);
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(item.prompt_text || '')}</strong>
+            <span class="${severityClass('warning')}">${escapeHtml(item.source || 'handler')}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(fmtDate(item.created_at))}</div>
+          <div class="hp2-queue-actions">
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-answer" data-id="${id}">Answer</button>
+            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-dismiss" data-id="${id}">Dismiss</button>
+          </div>
+        </li>`;
+      }).join('') : queueListEmpty('No pending limbo items.');
+
+      resolvedEl.innerHTML = resolved.length ? resolved.slice(0, 120).map((item) => {
+        const id = Number(item.id || 0);
+        const resolution = item.status === 'answered' ? (item.answer_text || 'Answered') : (item.dismissed_reason || 'Dismissed');
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(item.prompt_text || '')}</strong>
+            <span class="${severityClass(item.status === 'answered' ? 'info' : 'warning')}">${escapeHtml(item.status || 'resolved')}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(resolution)}</div>
+          <div class="hp2-queue-actions">
+            ${item.status === 'answered' && !item.published_question_id ? `<button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-publish" data-id="${id}">Publish</button>` : ''}
+          </div>
+        </li>`;
+      }).join('') : queueListEmpty('No resolved limbo items.');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        pendingEl.innerHTML = queueListEmpty('Failed to load pending limbo.');
+        resolvedEl.innerHTML = queueListEmpty('Failed to load resolved limbo.');
+      }
+    }
+  }
+
+  async function answerQueueLimbo(itemId) {
+    const answer = window.prompt('Answer text:');
+    if (answer == null) return;
+    const normalized = String(answer).trim();
+    if (!normalized) {
+      setQueueResult('Limbo answer cannot be empty.');
+      return;
+    }
+    setQueueResult('Saving limbo answer...');
+    try {
+      await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/answer`, { answer_text: normalized });
+      setQueueResult('Limbo item answered.');
+      await loadQueueLimbo();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to answer limbo item: ${err.message}`);
+      }
+    }
+  }
+
+  async function dismissQueueLimbo(itemId) {
+    const reason = window.prompt('Dismiss reason (optional):', '') || '';
+    setQueueResult('Dismissing limbo item...');
+    try {
+      await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/dismiss`, { reason });
+      setQueueResult('Limbo item dismissed.');
+      await loadQueueLimbo();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to dismiss limbo item: ${err.message}`);
+      }
+    }
+  }
+
+  async function publishQueueLimbo(itemId) {
+    setQueueResult('Publishing limbo item...');
+    try {
+      const result = await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/publish`, {});
+      if (result && result.already_published) {
+        setQueueResult('Limbo item was already published.');
+      } else {
+        setQueueResult('Limbo item published.');
+      }
+      await loadQueueLimbo();
+      await loadQueueQuestions();
+      await loadQueueKpis();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to publish limbo item: ${err.message}`);
+      }
+    }
+  }
+
+  async function loadQueueHub() {
+    await Promise.allSettled([
+      loadQueueBooking(),
+      loadQueueMailThreads(),
+      loadQueueQuestions(),
+      loadQueueLimbo(),
+    ]);
+  }
+
+  async function handleQueueActionClick(event) {
+    const btn = event.target.closest('button[data-q-action]');
+    if (!btn) return;
+    const action = btn.dataset.qAction;
+    const id = Number(btn.dataset.id || 0);
+    if (action === 'booking-status') {
+      await updateBookingStatus(id, btn.dataset.status || 'new');
+      return;
+    }
+    if (action === 'mail-open') {
+      await loadQueueMailThread(id);
+      return;
+    }
+    if (action === 'mail-edit') {
+      await editQueueMailMessage(id);
+      return;
+    }
+    if (action === 'question-answer') {
+      await answerQueueQuestion(id);
+      return;
+    }
+    if (action === 'question-delete') {
+      await deleteQueueQuestion(id);
+      return;
+    }
+    if (action === 'limbo-answer') {
+      await answerQueueLimbo(id);
+      return;
+    }
+    if (action === 'limbo-dismiss') {
+      await dismissQueueLimbo(id);
+      return;
+    }
+    if (action === 'limbo-publish') {
+      await publishQueueLimbo(id);
+    }
+  }
+
   async function loadQueueKpis() {
     const [booking, mail, questions, limbo] = await Promise.all([
       apiGet('/api/handler/booking?status=new&limit=200').catch(() => []),
@@ -1046,6 +1498,19 @@
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+    byId('hp2-queue-refresh-btn').addEventListener('click', () => loadQueueHub().catch(() => {}));
+    byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
+    byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
+    byId('hp2-queue-mail-reply-btn').addEventListener('click', () => sendQueueMailReply().catch(() => {}));
+    byId('hp2-queue-mail-resolve-btn').addEventListener('click', () => updateQueueMailStatus('resolved').catch(() => {}));
+    byId('hp2-queue-mail-open-btn').addEventListener('click', () => updateQueueMailStatus('open').catch(() => {}));
+
+    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-queue-limbo-pending', 'hp2-queue-limbo-resolved']
+      .forEach((id) => {
+        byId(id).addEventListener('click', (event) => {
+          handleQueueActionClick(event).catch(() => {});
+        });
+      });
 
     byId('hp2-device-list').addEventListener('click', handleDeviceListClick);
 

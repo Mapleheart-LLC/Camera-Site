@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530b" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530c" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -37,6 +37,7 @@
       <nav class="hp2-header-tabs">
         <button class="hp2-tab-btn hp2-tab-active" data-view="dashboard">Dashboard</button>
         <button class="hp2-tab-btn" data-view="stats">Stats</button>
+        <button class="hp2-tab-btn" data-view="queue">Queue Hub</button>
         <button class="hp2-tab-btn" data-view="devices">Devices</button>
         <button class="hp2-tab-btn" data-view="commands">Commands</button>
         <button class="hp2-tab-btn" data-view="settings">Settings</button>
@@ -184,6 +185,82 @@
         </div>
       </section>
 
+      <section id="hp2-view-queue" class="hp2-view">
+        <section class="hp2-panel">
+          <div class="hp2-panel-head">
+            <h4>Queue Hub</h4>
+            <button id="hp2-queue-refresh-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh Queue</button>
+          </div>
+          <p id="hp2-queue-result" class="hp2-muted"></p>
+        </section>
+
+        <div class="hp2-section-grid hp2-queue-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Booking</h4>
+              <div class="hp2-map-controls">
+                <select id="hp2-queue-booking-filter">
+                  <option value="all">all</option>
+                  <option value="new" selected>new</option>
+                  <option value="qualified">qualified</option>
+                  <option value="scheduled">scheduled</option>
+                  <option value="done">done</option>
+                </select>
+              </div>
+            </div>
+            <ul id="hp2-queue-booking-list" class="hp2-feed"></ul>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Puppy Mail</h4>
+              <div class="hp2-map-controls">
+                <select id="hp2-queue-mail-filter">
+                  <option value="all">all</option>
+                  <option value="open" selected>open</option>
+                  <option value="resolved">resolved</option>
+                </select>
+              </div>
+            </div>
+            <ul id="hp2-queue-mail-list" class="hp2-feed"></ul>
+            <div class="hp2-panel-head">
+              <h4>Thread Detail</h4>
+              <span id="hp2-queue-mail-meta" class="hp2-muted">Select a thread</span>
+            </div>
+            <ul id="hp2-queue-mail-messages" class="hp2-feed"></ul>
+            <div class="hp2-form-grid">
+              <label for="hp2-queue-mail-reply">Reply</label>
+              <input id="hp2-queue-mail-reply" type="text" placeholder="Reply to selected thread..." />
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-queue-mail-reply-btn" class="hp2-btn hp2-btn-primary" type="button">Send Reply</button>
+              <button id="hp2-queue-mail-resolve-btn" class="hp2-btn hp2-btn-ghost" type="button">Mark Resolved</button>
+              <button id="hp2-queue-mail-open-btn" class="hp2-btn hp2-btn-ghost" type="button">Mark Open</button>
+            </div>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Questions</h4>
+            </div>
+            <h5 class="hp2-subhead">Unanswered</h5>
+            <ul id="hp2-queue-questions-open" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Answered</h5>
+            <ul id="hp2-queue-questions-answered" class="hp2-feed"></ul>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Limbo</h4>
+            </div>
+            <h5 class="hp2-subhead">Pending</h5>
+            <ul id="hp2-queue-limbo-pending" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Resolved</h5>
+            <ul id="hp2-queue-limbo-resolved" class="hp2-feed"></ul>
+          </section>
+        </div>
+      </section>
+
       <section id="hp2-view-devices" class="hp2-view">
         <div class="hp2-section-grid">
           <section class="hp2-panel">
@@ -252,6 +329,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530b" defer></script>
+  <script src="/handler-v2.js?v=20260530c" defer></script>
 </body>
 </html>
