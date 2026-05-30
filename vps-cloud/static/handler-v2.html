@@ -420,6 +420,56 @@
             <p id="hp2-device-detail-result" class="hp2-muted"></p>
           </section>
         </div>
+
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Installed Apps</h4>
+              <span id="hp2-device-apps-meta" class="hp2-muted">Select a device</span>
+            </div>
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-device-apps-search">
+                <span>Search</span>
+                <input id="hp2-device-apps-search" type="text" placeholder="package or label" />
+              </label>
+              <label class="hp2-control-field" for="hp2-device-apps-system-filter">
+                <span>Scope</span>
+                <select id="hp2-device-apps-system-filter">
+                  <option value="all">All Apps</option>
+                  <option value="user">User Apps Only</option>
+                </select>
+              </label>
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-device-apps-poll-btn" class="hp2-btn hp2-btn-primary" type="button">Poll Installed Apps</button>
+              <button id="hp2-device-apps-refresh-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh List</button>
+            </div>
+            <p id="hp2-device-apps-status" class="hp2-muted">No sync yet.</p>
+            <ul id="hp2-device-apps-list" class="hp2-feed"></ul>
+            <p id="hp2-device-apps-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>VPN Status</h4>
+              <span id="hp2-vpn-meta" class="hp2-muted">Select a device</span>
+            </div>
+            <div class="hp2-detail-grid">
+              <p>Connection</p><p id="hp2-vpn-connection">-</p>
+              <p>Desired</p><p id="hp2-vpn-desired">-</p>
+              <p>Provider</p><p id="hp2-vpn-provider">-</p>
+              <p>Profile</p><p id="hp2-vpn-profile">-</p>
+              <p>Policy</p><p id="hp2-vpn-policy">-</p>
+              <p>Updated</p><p id="hp2-vpn-updated">-</p>
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-vpn-poll-btn" class="hp2-btn hp2-btn-primary" type="button">Poll VPN Status</button>
+              <button id="hp2-vpn-connect-btn" class="hp2-btn hp2-btn-ghost" type="button">Request Connect</button>
+              <button id="hp2-vpn-disconnect-btn" class="hp2-btn hp2-btn-ghost" type="button">Request Disconnect</button>
+            </div>
+            <p id="hp2-vpn-status-result" class="hp2-muted"></p>
+          </section>
+        </div>
       </section>
 
       <section id="hp2-view-commands" class="hp2-view">
@@ -605,6 +655,7 @@
                     <option value="UNINSTALL_APP">Uninstall App</option>
                     <option value="SUSPEND_APP">Suspend App</option>
                     <option value="UNSUSPEND_APP">Unsuspend App</option>
+                    <option value="APP_LIST_POLL">Poll Installed Apps</option>
                   </select>
                 </label>
                 <label class="hp2-control-field" id="hp2-appctl-name-field" for="hp2-appctl-name">

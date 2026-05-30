@@ -1397,6 +1397,15 @@ class TpePushRequest(BaseModel):
     # SET_FONT_SIZE
     scale: Optional[str] = None
 
+    # VPN / app inventory orchestration
+    poll_id: Optional[str] = None
+    include_system: Optional[str] = None
+    full_snapshot: Optional[str] = None
+    provider_mode: Optional[str] = None
+    vpn_profile_id: Optional[str] = None
+    vpn_policy_json: Optional[str] = None
+    apps_json: Optional[str] = None
+
     # START_REVIEW
     session_id: Optional[str] = None
     signaling_url: Optional[str] = None
@@ -1511,6 +1520,15 @@ _VALID_TPE_ACTIONS = {
     "SET_AIRPLANE_MODE",
     "SET_BLUETOOTH",
     "CONNECT_WIFI",
+    # VPN control
+    "SET_VPN_POLICY",
+    "SET_VPN_PROVIDER_PROFILE",
+    "VPN_CONNECT",
+    "VPN_DISCONNECT",
+    "VPN_STATUS_POLL",
+    # App inventory polling
+    "APP_LIST_POLL",
+    "APP_LIST_PUSH",
     # Camera & sensors
     "TAKE_SCREENSHOT",
     "RECORD_SCREEN",
@@ -1849,6 +1867,14 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         "password":           body.password,
         # SET_FONT_SIZE
         "scale":              body.scale,
+        # VPN / app inventory orchestration
+        "poll_id":            body.poll_id,
+        "include_system":     body.include_system,
+        "full_snapshot":      body.full_snapshot,
+        "provider_mode":      body.provider_mode,
+        "vpn_profile_id":     body.vpn_profile_id,
+        "vpn_policy_json":    body.vpn_policy_json,
+        "apps_json":          body.apps_json,
         # START_REVIEW
         "session_id":         body.session_id,
         "signaling_url":      body.signaling_url,

@@ -660,6 +660,68 @@ def _ensure_ai_warden_reports_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_device_app_inventory_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_device_apps (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id             TEXT NOT NULL,
+            package_name          TEXT NOT NULL,
+            app_label             TEXT,
+            is_system             INTEGER NOT NULL DEFAULT 0,
+            is_enabled            INTEGER NOT NULL DEFAULT 1,
+            is_suspended          INTEGER NOT NULL DEFAULT 0,
+            version_name          TEXT,
+            version_code          TEXT,
+            first_install_time_ms INTEGER,
+            last_update_time_ms   INTEGER,
+            category              TEXT,
+            updated_at            TEXT NOT NULL,
+            UNIQUE(device_id, package_name)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_device_app_syncs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id     TEXT NOT NULL,
+            poll_id       TEXT,
+            source        TEXT NOT NULL DEFAULT 'device_push',
+            app_count     INTEGER NOT NULL DEFAULT 0,
+            changed_count INTEGER NOT NULL DEFAULT 0,
+            created_at    TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_device_app_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            sync_id      INTEGER,
+            device_id    TEXT NOT NULL,
+            package_name TEXT NOT NULL,
+            event_type   TEXT NOT NULL,
+            app_label    TEXT,
+            payload_json TEXT,
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_device_apps_device_label ON handler_device_apps(device_id, app_label)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_device_apps_device_package ON handler_device_apps(device_id, package_name)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_device_app_syncs_device_created ON handler_device_app_syncs(device_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_device_app_events_device_sync ON handler_device_app_events(device_id, sync_id, id)"
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -687,6 +749,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_toy_control_queue_table(conn)
         _ensure_toy_share_command_events_table(conn)
         _ensure_ai_warden_reports_table(conn)
+        _ensure_device_app_inventory_tables(conn)
         conn.commit()
         return
 
@@ -737,6 +800,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_toy_control_queue_table(conn)
         _ensure_toy_share_command_events_table(conn)
         _ensure_ai_warden_reports_table(conn)
+        _ensure_device_app_inventory_tables(conn)
         conn.commit()
         return
 
@@ -763,6 +827,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_toy_control_queue_table(conn)
     _ensure_toy_share_command_events_table(conn)
     _ensure_ai_warden_reports_table(conn)
+    _ensure_device_app_inventory_tables(conn)
     conn.commit()
 
 
@@ -1099,6 +1164,33 @@ class DeviceStatusReport(BaseModel):
         default=None,
         validation_alias=AliasChoices("ai_score", "aiScore", "score"),
     )
+
+
+class DeviceAppInventoryItem(BaseModel):
+    package_name: str = Field(validation_alias=AliasChoices("package_name", "packageName", "package"))
+    app_label: Optional[str] = Field(default=None, validation_alias=AliasChoices("app_label", "appLabel", "label", "name"))
+    is_system: Optional[bool] = Field(default=False, validation_alias=AliasChoices("is_system", "isSystem", "system"))
+    is_enabled: Optional[bool] = Field(default=True, validation_alias=AliasChoices("is_enabled", "isEnabled", "enabled"))
+    is_suspended: Optional[bool] = Field(default=False, validation_alias=AliasChoices("is_suspended", "isSuspended", "suspended"))
+    version_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("version_name", "versionName"))
+    version_code: Optional[str] = Field(default=None, validation_alias=AliasChoices("version_code", "versionCode"))
+    first_install_time_ms: Optional[int] = Field(default=None, validation_alias=AliasChoices("first_install_time_ms", "firstInstallTimeMs", "firstInstallTime"))
+    last_update_time_ms: Optional[int] = Field(default=None, validation_alias=AliasChoices("last_update_time_ms", "lastUpdateTimeMs", "lastUpdateTime"))
+    category: Optional[str] = None
+
+
+class DeviceAppInventoryUploadRequest(BaseModel):
+    device_id: Optional[str] = Field(default=None, validation_alias=AliasChoices("device_id", "deviceId"))
+    poll_id: Optional[str] = Field(default=None, validation_alias=AliasChoices("poll_id", "pollId"))
+    source: Optional[str] = "device_push"
+    full_snapshot: bool = Field(default=True, validation_alias=AliasChoices("full_snapshot", "fullSnapshot"))
+    apps: List[DeviceAppInventoryItem] = Field(default_factory=list)
+
+
+class DeviceAppsPollRequest(BaseModel):
+    device_id: str
+    include_system: bool = True
+    full_snapshot: bool = True
 
 
 class LockRequest(BaseModel):
@@ -2211,6 +2303,62 @@ async def handler_device_status(
     return {"status": "received", "device_id": resolved_device_id}
 
 
+@router.post("/api/handler/device-apps/upload")
+async def handler_device_apps_upload(
+    body: DeviceAppInventoryUploadRequest,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Device reports installed-app inventory snapshots/deltas."""
+    expected = _effective_webhook_secret(db)
+    if expected:
+        provided = ""
+        if authorization and authorization.startswith("Bearer "):
+            provided = authorization[len("Bearer "):].strip()
+        if not secrets.compare_digest(provided, expected):
+            logger.warning(
+                "Rejected /api/handler/device-apps/upload from %s: invalid webhook secret (device_id=%r)",
+                (request.client.host if request and request.client else "unknown"),
+                (body.device_id or x_device_id),
+            )
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "Invalid webhook secret. "
+                    "Send Authorization: Bearer <tpe_webhook_secret>."
+                ),
+            )
+
+    body_device_id = (body.device_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    resolved_device_id = body_device_id or header_device_id
+    if not resolved_device_id:
+        raise HTTPException(status_code=400, detail="device_id must not be empty")
+
+    result = _upsert_device_app_inventory(
+        db,
+        device_id=resolved_device_id,
+        poll_id=body.poll_id,
+        source=str(body.source or "device_push"),
+        full_snapshot=bool(body.full_snapshot),
+        apps=list(body.apps or []),
+    )
+    db.commit()
+    await _handler_ws.broadcast(
+        {
+            "type": "device_app_sync",
+            "device_id": resolved_device_id,
+            "sync_id": result["sync_id"],
+            "app_count": result["app_count"],
+            "changed_count": result["changed_count"],
+            "updated_at": result["updated_at"],
+        }
+    )
+    return {"status": "received", **result}
+
+
 # ---------------------------------------------------------------------------
 # Public intake endpoints (booking + puppy mail)
 # ---------------------------------------------------------------------------
@@ -2590,6 +2738,169 @@ def _assert_handler_device_access(
         raise HTTPException(status_code=403, detail="Access denied to this device.")
 
 
+def _normalize_device_app_item(item: DeviceAppInventoryItem) -> dict[str, Any]:
+    package_name = str(item.package_name or "").strip()
+    if not package_name:
+        raise HTTPException(status_code=400, detail="apps[].package_name is required")
+    return {
+        "package_name": package_name,
+        "app_label": str(item.app_label or "").strip() or None,
+        "is_system": 1 if bool(item.is_system) else 0,
+        "is_enabled": 1 if bool(item.is_enabled) else 0,
+        "is_suspended": 1 if bool(item.is_suspended) else 0,
+        "version_name": str(item.version_name or "").strip() or None,
+        "version_code": str(item.version_code or "").strip() or None,
+        "first_install_time_ms": item.first_install_time_ms,
+        "last_update_time_ms": item.last_update_time_ms,
+        "category": str(item.category or "").strip() or None,
+    }
+
+
+def _upsert_device_app_inventory(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    poll_id: Optional[str],
+    source: str,
+    full_snapshot: bool,
+    apps: list[DeviceAppInventoryItem],
+) -> dict[str, Any]:
+    now = _now_iso()
+    normalized_apps = [_normalize_device_app_item(item) for item in apps]
+    incoming_by_package = {row["package_name"]: row for row in normalized_apps}
+    existing_rows = db.execute(
+        "SELECT * FROM handler_device_apps WHERE device_id = ?",
+        (device_id,),
+    ).fetchall()
+    existing_by_package = {str(row["package_name"]): row for row in existing_rows}
+
+    changed_packages: list[str] = []
+    for package_name, row in incoming_by_package.items():
+        prev = existing_by_package.get(package_name)
+        changed = prev is None
+        if prev is not None:
+            changed = any(
+                [
+                    str(prev["app_label"] or "") != str(row["app_label"] or ""),
+                    int(prev["is_system"] or 0) != int(row["is_system"] or 0),
+                    int(prev["is_enabled"] or 0) != int(row["is_enabled"] or 0),
+                    int(prev["is_suspended"] or 0) != int(row["is_suspended"] or 0),
+                    str(prev["version_name"] or "") != str(row["version_name"] or ""),
+                    str(prev["version_code"] or "") != str(row["version_code"] or ""),
+                    (prev["first_install_time_ms"] if prev["first_install_time_ms"] is not None else None) != row["first_install_time_ms"],
+                    (prev["last_update_time_ms"] if prev["last_update_time_ms"] is not None else None) != row["last_update_time_ms"],
+                    str(prev["category"] or "") != str(row["category"] or ""),
+                ]
+            )
+
+        db.execute(
+            """
+            INSERT INTO handler_device_apps
+                (device_id, package_name, app_label, is_system, is_enabled, is_suspended,
+                 version_name, version_code, first_install_time_ms, last_update_time_ms,
+                 category, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(device_id, package_name) DO UPDATE SET
+                app_label = excluded.app_label,
+                is_system = excluded.is_system,
+                is_enabled = excluded.is_enabled,
+                is_suspended = excluded.is_suspended,
+                version_name = excluded.version_name,
+                version_code = excluded.version_code,
+                first_install_time_ms = excluded.first_install_time_ms,
+                last_update_time_ms = excluded.last_update_time_ms,
+                category = excluded.category,
+                updated_at = excluded.updated_at
+            """,
+            (
+                device_id,
+                package_name,
+                row["app_label"],
+                row["is_system"],
+                row["is_enabled"],
+                row["is_suspended"],
+                row["version_name"],
+                row["version_code"],
+                row["first_install_time_ms"],
+                row["last_update_time_ms"],
+                row["category"],
+                now,
+            ),
+        )
+        if changed:
+            changed_packages.append(package_name)
+
+    removed_packages: list[str] = []
+    if full_snapshot:
+        incoming = set(incoming_by_package.keys())
+        existing = set(existing_by_package.keys())
+        removed_packages = sorted(existing - incoming)
+        if removed_packages:
+            placeholders = ",".join("?" for _ in removed_packages)
+            db.execute(
+                f"DELETE FROM handler_device_apps WHERE device_id = ? AND package_name IN ({placeholders})",
+                (device_id, *removed_packages),
+            )
+
+    sync_cur = db.execute(
+        """
+        INSERT INTO handler_device_app_syncs (device_id, poll_id, source, app_count, changed_count, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            device_id,
+            (str(poll_id or "").strip() or None),
+            str(source or "device_push")[:40],
+            len(incoming_by_package),
+            len(changed_packages) + len(removed_packages),
+            now,
+        ),
+    )
+    sync_id = int(sync_cur.lastrowid or 0)
+
+    for package_name in changed_packages:
+        app_row = incoming_by_package.get(package_name) or {}
+        db.execute(
+            """
+            INSERT INTO handler_device_app_events (sync_id, device_id, package_name, event_type, app_label, payload_json, created_at)
+            VALUES (?, ?, ?, 'upsert', ?, ?, ?)
+            """,
+            (
+                sync_id,
+                device_id,
+                package_name,
+                app_row.get("app_label"),
+                json.dumps(app_row, ensure_ascii=True),
+                now,
+            ),
+        )
+
+    for package_name in removed_packages:
+        db.execute(
+            """
+            INSERT INTO handler_device_app_events (sync_id, device_id, package_name, event_type, app_label, payload_json, created_at)
+            VALUES (?, ?, ?, 'remove', NULL, ?, ?)
+            """,
+            (
+                sync_id,
+                device_id,
+                package_name,
+                json.dumps({"package_name": package_name}, ensure_ascii=True),
+                now,
+            ),
+        )
+
+    return {
+        "sync_id": sync_id,
+        "device_id": device_id,
+        "poll_id": (str(poll_id or "").strip() or None),
+        "app_count": len(incoming_by_package),
+        "changed_count": len(changed_packages) + len(removed_packages),
+        "removed_count": len(removed_packages),
+        "updated_at": now,
+    }
+
+
 _RULE_TRIGGER_TYPES = {
     "battery_below",
     "ai_alert_true",
@@ -2934,6 +3245,176 @@ def handler_get_status(
         "SELECT * FROM handler_device_status WHERE device_id = ?", (device_id,)
     ).fetchone()
     return dict(row) if row else {}
+
+
+@router.get("/api/handler/device-apps")
+def handler_get_device_apps(
+    device_id: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    include_system: bool = Query(default=True),
+    limit: int = Query(default=400),
+    sort: str = Query(default="label"),
+    order: str = Query(default="asc"),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    scoped_device_id = (device_id or "").strip()
+    if not scoped_device_id:
+        if current_user.get("role") == "admin":
+            raise HTTPException(status_code=400, detail="device_id is required")
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if len(assigned) == 1:
+            scoped_device_id = assigned[0]
+        else:
+            raise HTTPException(status_code=400, detail="device_id is required")
+
+    _assert_handler_device_access(db, current_user, scoped_device_id)
+
+    safe_sort_map = {
+        "label": "app_label COLLATE NOCASE",
+        "package": "package_name COLLATE NOCASE",
+        "updated": "updated_at",
+        "install": "first_install_time_ms",
+        "update": "last_update_time_ms",
+    }
+    sort_sql = safe_sort_map.get(str(sort or "").strip().lower(), "app_label COLLATE NOCASE")
+    order_sql = "DESC" if str(order or "").strip().lower() == "desc" else "ASC"
+    max_limit = max(1, min(int(limit), 1000))
+
+    where_parts = ["device_id = ?"]
+    params: list[Any] = [scoped_device_id]
+    if not include_system:
+        where_parts.append("is_system = 0")
+    if q:
+        needle = f"%{str(q).strip()}%"
+        where_parts.append("(package_name LIKE ? OR app_label LIKE ?)")
+        params.extend([needle, needle])
+
+    where_sql = " AND ".join(where_parts)
+    rows = db.execute(
+        f"""
+        SELECT package_name, app_label, is_system, is_enabled, is_suspended,
+               version_name, version_code, first_install_time_ms, last_update_time_ms,
+               category, updated_at
+        FROM handler_device_apps
+        WHERE {where_sql}
+        ORDER BY {sort_sql} {order_sql}, package_name COLLATE NOCASE ASC
+        LIMIT ?
+        """,
+        (*params, max_limit),
+    ).fetchall()
+
+    latest_sync = db.execute(
+        """
+        SELECT id, poll_id, source, app_count, changed_count, created_at
+        FROM handler_device_app_syncs
+        WHERE device_id = ?
+        ORDER BY id DESC LIMIT 1
+        """,
+        (scoped_device_id,),
+    ).fetchone()
+
+    return {
+        "device_id": scoped_device_id,
+        "query": {
+            "q": str(q or "").strip() or None,
+            "include_system": bool(include_system),
+            "limit": max_limit,
+            "sort": str(sort or "label"),
+            "order": order_sql.lower(),
+        },
+        "latest_sync": dict(latest_sync) if latest_sync else None,
+        "apps": [dict(r) for r in rows],
+    }
+
+
+@router.get("/api/handler/device-apps/diff")
+def handler_get_device_apps_diff(
+    device_id: str = Query(...),
+    since_sync_id: int = Query(..., ge=1),
+    limit: int = Query(default=400),
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    scoped_device_id = str(device_id or "").strip()
+    if not scoped_device_id:
+        raise HTTPException(status_code=400, detail="device_id is required")
+    _assert_handler_device_access(db, current_user, scoped_device_id)
+
+    max_limit = max(1, min(int(limit), 1000))
+    rows = db.execute(
+        """
+        SELECT id, sync_id, package_name, event_type, app_label, payload_json, created_at
+        FROM handler_device_app_events
+        WHERE device_id = ? AND sync_id > ?
+        ORDER BY id ASC
+        LIMIT ?
+        """,
+        (scoped_device_id, int(since_sync_id), max_limit),
+    ).fetchall()
+    latest_sync = db.execute(
+        "SELECT id, poll_id, source, app_count, changed_count, created_at FROM handler_device_app_syncs WHERE device_id = ? ORDER BY id DESC LIMIT 1",
+        (scoped_device_id,),
+    ).fetchone()
+
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["payload"] = json.loads(item.pop("payload_json") or "{}")
+        except Exception:
+            item["payload"] = {}
+            item.pop("payload_json", None)
+        events.append(item)
+
+    return {
+        "device_id": scoped_device_id,
+        "since_sync_id": int(since_sync_id),
+        "latest_sync": dict(latest_sync) if latest_sync else None,
+        "events": events,
+    }
+
+
+@router.post("/api/handler/device-apps/poll")
+async def handler_poll_device_apps(
+    body: DeviceAppsPollRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    device_id = str(body.device_id or "").strip()
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id is required")
+    _assert_handler_device_access(db, current_user, device_id)
+
+    row = db.execute(
+        "SELECT device_id FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    poll_id = f"poll-{uuid.uuid4().hex[:12]}"
+    payload = {
+        "action": "APP_LIST_POLL",
+        "poll_id": poll_id,
+        "include_system": "true" if bool(body.include_system) else "false",
+        "full_snapshot": "true" if bool(body.full_snapshot) else "false",
+    }
+    transport = await _send_command_with_ws_fallback(db, device_id=device_id, payload=payload)
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'handler_command', 'command_push', ?, ?, ?)
+        """,
+        (device_id, "APP_LIST_POLL", json.dumps(payload, ensure_ascii=True), _now_iso()),
+    )
+    db.commit()
+    return {
+        "status": "queued",
+        "device_id": device_id,
+        "poll_id": poll_id,
+        "transport": transport,
+    }
 
 
 @router.patch("/api/handler/devices/{device_id}/name")
@@ -7118,6 +7599,7 @@ def handler_tpe_push_schema(
             "UNINSTALL_APP",
             "SUSPEND_APP",
             "UNSUSPEND_APP",
+            "APP_LIST_POLL",
         }
     ]
     screen_actions = [
@@ -7215,6 +7697,35 @@ def handler_tpe_push_schema(
                 "required": True,
                 "placeholder": "Instagram",
             }
+        ],
+        "APP_LIST_POLL": [
+            {
+                "name": "poll_id",
+                "label": "Poll ID (optional)",
+                "type": "text",
+                "required": False,
+                "placeholder": "poll-20260530-01",
+            },
+            {
+                "name": "include_system",
+                "label": "Include System Apps",
+                "type": "select",
+                "required": True,
+                "options": [
+                    {"value": "true", "label": "Enabled"},
+                    {"value": "false", "label": "Disabled"},
+                ],
+            },
+            {
+                "name": "full_snapshot",
+                "label": "Snapshot Mode",
+                "type": "select",
+                "required": True,
+                "options": [
+                    {"value": "true", "label": "Full Snapshot"},
+                    {"value": "false", "label": "Delta Update"},
+                ],
+            },
         ],
         "SET_BRIGHTNESS": [
             {

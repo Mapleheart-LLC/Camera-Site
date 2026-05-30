@@ -81,6 +81,21 @@
     publicUse: {
       config: null,
     },
+    appInventory: {
+      latestSyncId: 0,
+      latestSyncAt: null,
+      latestPollId: null,
+      latestChangedCount: 0,
+      latestSource: null,
+      apps: [],
+      query: {
+        search: '',
+        includeSystem: true,
+      },
+    },
+    vpnStatus: {
+      byDevice: {},
+    },
     telemetry: {
       hydratedAt: 0,
       devicesAt: 0,
@@ -921,11 +936,55 @@
           const command = String(payload?.command || row?.reason || '').trim();
           const reason = String(payload?.reason || row?.reason || '').trim();
           const status = String(payload?.status || '').trim().toLowerCase();
+          let detailsPayload = null;
+          let detailsText = '';
+          if (payload?.details_json && typeof payload.details_json === 'object') {
+            detailsPayload = payload.details_json;
+          } else if (typeof payload?.details_json === 'string') {
+            try {
+              detailsPayload = JSON.parse(payload.details_json);
+            } catch (_parseErr) {
+              detailsPayload = null;
+            }
+          }
+          if (detailsPayload && typeof detailsPayload === 'object') {
+            const details = detailsPayload;
+            const state = String(details.connection_state || '').trim();
+            const desired = String(details.desired_state || '').trim();
+            const mode = String(details.provider_mode || '').trim();
+            const profile = String(details.vpn_profile_id || '').trim();
+            const implemented = details.implemented === true ? 'yes' : 'no';
+            detailsText = [
+              state ? `state=${state}` : '',
+              desired ? `desired=${desired}` : '',
+              mode ? `mode=${mode}` : '',
+              profile ? `profile=${profile}` : '',
+              `implemented=${implemented}`,
+            ].filter(Boolean).join(' ');
+          }
+          const vpnCommands = new Set(['SET_VPN_POLICY', 'SET_VPN_PROVIDER_PROFILE', 'VPN_CONNECT', 'VPN_DISCONNECT', 'VPN_STATUS_POLL']);
+          if (detailsPayload && vpnCommands.has(command)) {
+            const detailDeviceId = String(payload?.device_id || row?.device_id || state.selectedDeviceId || '').trim();
+            if (detailDeviceId) {
+              state.vpnStatus.byDevice[detailDeviceId] = {
+                connection_state: String(detailsPayload.connection_state || '').trim() || 'unknown',
+                desired_state: String(detailsPayload.desired_state || '').trim() || 'unknown',
+                provider_mode: String(detailsPayload.provider_mode || '').trim() || 'unknown',
+                vpn_profile_id: String(detailsPayload.vpn_profile_id || '').trim() || null,
+                policy_configured: detailsPayload.policy_configured === true,
+                updated_at_ms: Number(detailsPayload.updated_at_ms || 0),
+                implemented: detailsPayload.implemented === true,
+              };
+              if (state.selectedDeviceId === detailDeviceId) {
+                renderVpnStatus();
+              }
+            }
+          }
           if (!commandId) return;
           if (eventType === 'mdm_failed' || status === 'failed') {
-            markCommandFailed(commandId, reason || (command ? `${command} failed` : 'failed'));
+            markCommandFailed(commandId, (reason || (command ? `${command} failed` : 'failed')) + (detailsText ? ` | ${detailsText}` : ''));
           } else {
-            markCommandExecuted(commandId, command ? `${command} executed` : 'executed');
+            markCommandExecuted(commandId, (command ? `${command} executed` : 'executed') + (detailsText ? ` | ${detailsText}` : ''));
           }
         });
     } catch (_err) {
@@ -1527,6 +1586,174 @@
     renderDashboardAlerts();
     renderLiveMap();
     applyCommandGating();
+    renderDeviceApps();
+    renderVpnStatus();
+  }
+
+  function renderDeviceApps() {
+    const listEl = byId('hp2-device-apps-list');
+    const metaEl = byId('hp2-device-apps-meta');
+    const statusEl = byId('hp2-device-apps-status');
+    if (!listEl || !metaEl) return;
+
+    const selectedId = state.selectedDeviceId;
+    if (!selectedId) {
+      metaEl.textContent = 'Select a device';
+      if (statusEl) statusEl.textContent = 'No sync yet.';
+      listEl.innerHTML = '<li class="hp2-muted">Select a device to load installed apps.</li>';
+      return;
+    }
+
+    const syncAt = state.appInventory.latestSyncAt ? fmtDate(state.appInventory.latestSyncAt) : 'never';
+    const pollTag = state.appInventory.latestPollId ? ` poll=${state.appInventory.latestPollId}` : '';
+    metaEl.textContent = `Device ${selectedId} | ${state.appInventory.apps.length} apps | last sync ${syncAt}${pollTag}`;
+    if (statusEl) {
+      const changed = Number(state.appInventory.latestChangedCount || 0);
+      const source = String(state.appInventory.latestSource || 'unknown');
+      statusEl.textContent = `Latest sync source=${source} changed=${changed}`;
+    }
+
+    const rows = Array.isArray(state.appInventory.apps) ? state.appInventory.apps : [];
+    if (!rows.length) {
+      listEl.innerHTML = '<li class="hp2-muted">No app inventory yet. Run Poll Installed Apps.</li>';
+      return;
+    }
+
+    listEl.innerHTML = rows.map((app) => {
+      const label = String(app.app_label || app.package_name || 'Unknown');
+      const pkg = String(app.package_name || '');
+      const flags = [
+        Number(app.is_system || 0) === 1 ? 'system' : 'user',
+        Number(app.is_enabled || 0) === 1 ? 'enabled' : 'disabled',
+        Number(app.is_suspended || 0) === 1 ? 'suspended' : null,
+      ].filter(Boolean).join(' | ');
+      const version = String(app.version_name || app.version_code || '').trim();
+      return `<li>
+        <div class="hp2-feed-item-row">
+          <strong>${escapeHtml(label)}</strong>
+          <span class="hp2-muted">${escapeHtml(flags)}</span>
+        </div>
+        <div class="hp2-meta-mono">${escapeHtml(pkg)}</div>
+        <div class="hp2-muted">${escapeHtml(version ? `v${version}` : 'version n/a')}</div>
+      </li>`;
+    }).join('');
+  }
+
+  function renderVpnStatus() {
+    const metaEl = byId('hp2-vpn-meta');
+    const connectionEl = byId('hp2-vpn-connection');
+    const desiredEl = byId('hp2-vpn-desired');
+    const providerEl = byId('hp2-vpn-provider');
+    const profileEl = byId('hp2-vpn-profile');
+    const policyEl = byId('hp2-vpn-policy');
+    const updatedEl = byId('hp2-vpn-updated');
+    if (!metaEl || !connectionEl || !desiredEl || !providerEl || !profileEl || !policyEl || !updatedEl) return;
+
+    const selectedId = state.selectedDeviceId;
+    if (!selectedId) {
+      metaEl.textContent = 'Select a device';
+      connectionEl.textContent = '-';
+      desiredEl.textContent = '-';
+      providerEl.textContent = '-';
+      profileEl.textContent = '-';
+      policyEl.textContent = '-';
+      updatedEl.textContent = '-';
+      return;
+    }
+
+    const status = state.vpnStatus.byDevice[selectedId] || null;
+    metaEl.textContent = `Device ${selectedId}`;
+    if (!status) {
+      connectionEl.textContent = 'unknown';
+      desiredEl.textContent = 'unknown';
+      providerEl.textContent = 'unknown';
+      profileEl.textContent = 'unknown';
+      policyEl.textContent = 'unknown';
+      updatedEl.textContent = 'never';
+      return;
+    }
+
+    connectionEl.textContent = String(status.connection_state || 'unknown');
+    desiredEl.textContent = String(status.desired_state || 'unknown');
+    providerEl.textContent = String(status.provider_mode || 'unknown');
+    profileEl.textContent = String(status.vpn_profile_id || 'none');
+    policyEl.textContent = status.policy_configured ? 'configured' : 'not configured';
+    const updatedAtMs = Number(status.updated_at_ms || 0);
+    updatedEl.textContent = updatedAtMs > 0 ? fmtDate(new Date(updatedAtMs).toISOString()) : 'unknown';
+  }
+
+  async function loadDeviceApps() {
+    if (!state.selectedDeviceId) {
+      state.appInventory.apps = [];
+      state.appInventory.latestSyncAt = null;
+      state.appInventory.latestPollId = null;
+      state.appInventory.latestChangedCount = 0;
+      state.appInventory.latestSource = null;
+      renderDeviceApps();
+      return;
+    }
+
+    const search = String(byId('hp2-device-apps-search')?.value || state.appInventory.query.search || '').trim();
+    const scope = String(byId('hp2-device-apps-system-filter')?.value || (state.appInventory.query.includeSystem ? 'all' : 'user')).trim();
+    const includeSystem = scope !== 'user';
+    state.appInventory.query.search = search;
+    state.appInventory.query.includeSystem = includeSystem;
+
+    const params = new URLSearchParams();
+    params.set('device_id', state.selectedDeviceId);
+    params.set('limit', '500');
+    params.set('sort', 'label');
+    params.set('order', 'asc');
+    if (!includeSystem) params.set('include_system', 'false');
+    if (search) params.set('q', search);
+
+    const payload = await apiGet(`/api/handler/device-apps?${params.toString()}`);
+    state.appInventory.apps = Array.isArray(payload?.apps) ? payload.apps : [];
+    state.appInventory.latestSyncId = Number(payload?.latest_sync?.id || 0);
+    state.appInventory.latestSyncAt = payload?.latest_sync?.created_at || null;
+    state.appInventory.latestPollId = payload?.latest_sync?.poll_id || null;
+    state.appInventory.latestChangedCount = Number(payload?.latest_sync?.changed_count || 0);
+    state.appInventory.latestSource = payload?.latest_sync?.source || null;
+    renderDeviceApps();
+  }
+
+  async function pollDeviceApps() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-device-apps-result', 'Select a device first.');
+      return;
+    }
+    setInlineResult('hp2-device-apps-result', 'Sending app poll command...');
+    try {
+      const scope = String(byId('hp2-device-apps-system-filter')?.value || 'all').trim();
+      await apiPost('/api/handler/device-apps/poll', {
+        device_id: state.selectedDeviceId,
+        include_system: scope !== 'user',
+        full_snapshot: true,
+      });
+      setInlineResult('hp2-device-apps-result', 'Poll command sent. Refresh in a moment.');
+      pushFeed(`App poll requested for ${state.selectedDeviceId}`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-device-apps-result', `Failed: ${err.message}`);
+      }
+    }
+  }
+
+  async function sendVpnStatusAction(action) {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-vpn-status-result', 'Select a device first.');
+      return;
+    }
+    const title = action.replaceAll('_', ' ');
+    await sendControlCommand({
+      title,
+      action,
+      fields: {},
+      resultId: 'hp2-vpn-status-result',
+      confirmText: 'Send',
+      message: `${title} for ${selectedDeviceLabel()}?`,
+      historyDetail: action,
+    });
   }
 
   function ingestLocation(device) {
@@ -1698,6 +1925,7 @@
 
     if (state.selectedDeviceId) {
       await refreshSelectedStatus();
+      await loadDeviceApps();
     }
     state.telemetry.devicesAt = Date.now();
     renderFreshness();
@@ -1779,6 +2007,17 @@
         state.telemetry.devicesAt = Date.now();
         renderFreshness();
         pushFeed(`Status updated: ${msg.device_id}`);
+        return;
+      }
+
+      if (msg.type === 'device_app_sync' && msg.device_id) {
+        if (state.selectedDeviceId === msg.device_id) {
+          state.appInventory.latestSyncId = Number(msg.sync_id || state.appInventory.latestSyncId || 0);
+          state.appInventory.latestSyncAt = msg.updated_at || state.appInventory.latestSyncAt;
+          state.appInventory.latestChangedCount = Number(msg.changed_count || 0);
+          loadDeviceApps().catch(() => {});
+        }
+        pushFeed(`App sync received: ${msg.device_id}`);
         return;
       }
 
@@ -3784,11 +4023,12 @@
       return;
     }
 
+    const appNameRequired = action !== 'APP_LIST_POLL';
     const legacyAppName = String(byId('hp2-appctl-name')?.value || '').trim();
-    if (!dynamicFields.app_name && legacyAppName) {
+    if (appNameRequired && !dynamicFields.app_name && legacyAppName) {
       dynamicFields.app_name = legacyAppName;
     }
-    if (!dynamicFields.app_name) {
+    if (appNameRequired && !dynamicFields.app_name) {
       setInlineResult('hp2-appctl-result', 'App name is required.');
       return;
     }
@@ -3803,8 +4043,8 @@
       resultId: 'hp2-appctl-result',
       confirmText: 'Send',
       danger: dangerActions.has(action),
-      message: `${title} for ${appName} on ${selectedDeviceLabel()}?`,
-      historyDetail: `${title} app=${appName}`,
+      message: appName ? `${title} for ${appName} on ${selectedDeviceLabel()}?` : `${title} on ${selectedDeviceLabel()}?`,
+      historyDetail: appName ? `${title} app=${appName}` : `${title}`,
     });
   }
 
@@ -4439,6 +4679,7 @@
     renderDeviceList();
     renderSelectedDevice();
     refreshSelectedStatus().catch(() => {});
+    loadDeviceApps().catch(() => {});
     loadDashboardIntelligence().catch(() => {});
     pushFeed(`Selected ${state.selectedDeviceId}`);
   }
@@ -4515,6 +4756,23 @@
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
     byId('hp2-shock-60-btn').addEventListener('click', () => shockSelected(60).catch(() => {}));
     byId('hp2-rename-device-btn').addEventListener('click', () => renameSelectedDevice().catch(() => {}));
+    byId('hp2-device-apps-poll-btn')?.addEventListener('click', () => pollDeviceApps().catch(() => {}));
+    byId('hp2-device-apps-refresh-btn')?.addEventListener('click', () => loadDeviceApps().catch(() => {}));
+    byId('hp2-device-apps-search')?.addEventListener('input', () => {
+      loadDeviceApps().catch(() => {});
+    });
+    byId('hp2-device-apps-system-filter')?.addEventListener('change', () => {
+      loadDeviceApps().catch(() => {});
+    });
+    byId('hp2-vpn-poll-btn')?.addEventListener('click', () => {
+      sendVpnStatusAction('VPN_STATUS_POLL').catch(() => {});
+    });
+    byId('hp2-vpn-connect-btn')?.addEventListener('click', () => {
+      sendVpnStatusAction('VPN_CONNECT').catch(() => {});
+    });
+    byId('hp2-vpn-disconnect-btn')?.addEventListener('click', () => {
+      sendVpnStatusAction('VPN_DISCONNECT').catch(() => {});
+    });
     byId('hp2-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
