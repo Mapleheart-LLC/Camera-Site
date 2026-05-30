@@ -1255,6 +1255,9 @@ class TpePushRequest(BaseModel):
     # UPDATE_TONE_COMPLIANCE
     strict_tone_mode: Optional[str] = None
 
+    # UPDATE_TEXT_REPLACEMENT_DICT
+    text_replacement_dict: Optional[str] = None
+
     # SEND_NOTIFICATION
     title: Optional[str] = None
     body: Optional[str] = None
@@ -1417,6 +1420,7 @@ _VALID_TPE_ACTIONS = {
     # Tone & vocabulary
     "UPDATE_RESTRICTED_VOCABULARY",
     "UPDATE_TEXT_REPLACEMENT_POLICY",
+    "UPDATE_TEXT_REPLACEMENT_DICT",
     "UPDATE_TONE_COMPLIANCE",
     # Tasks
     "TASK_ASSIGNED",
