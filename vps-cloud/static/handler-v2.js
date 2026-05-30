@@ -138,6 +138,7 @@
 
   function showLogin(message = '') {
     disconnectWs();
+    document.body.classList.remove('hp2-authenticated');
     setVisible('hp2-app', false);
     setVisible('hp2-login', true);
     byId('hp2-login-error').textContent = message;
@@ -145,6 +146,7 @@
   }
 
   function showApp() {
+    document.body.classList.add('hp2-authenticated');
     setVisible('hp2-login', false);
     setVisible('hp2-app', true);
   }
