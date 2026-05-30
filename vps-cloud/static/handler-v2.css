@@ -168,7 +168,7 @@ button:focus-visible {
 .hp2-modal {
   position: fixed;
   inset: 0;
-  z-index: 120;
+  z-index: 1500;
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -177,8 +177,8 @@ button:focus-visible {
 .hp2-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(3, 10, 11, 0.66);
-  backdrop-filter: blur(2px);
+  background: rgba(3, 10, 11, 0.78);
+  backdrop-filter: blur(4px);
 }
 
 .hp2-modal-card {
@@ -186,10 +186,16 @@ button:focus-visible {
   width: min(560px, 100%);
   border: 1px solid var(--hp2-line);
   border-radius: 14px;
-  background: linear-gradient(180deg, #173136 0%, #13262a 100%);
+  background: linear-gradient(180deg, #1a353a 0%, #13272c 100%);
   padding: 0.9rem;
   display: grid;
   gap: 0.58rem;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.52);
+}
+
+.hp2-modal-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .hp2-modal-card h3 {
@@ -451,6 +457,21 @@ button:focus-visible {
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 0.65rem;
+}
+
+.hp2-live-map .leaflet-tile-pane {
+  filter: saturate(0.78) hue-rotate(168deg) brightness(0.64) contrast(1.18);
+}
+
+.hp2-live-map .leaflet-control-zoom a,
+.hp2-live-map .leaflet-control-attribution {
+  background: #11262b;
+  color: var(--hp2-text);
+  border-color: var(--hp2-line);
+}
+
+.hp2-live-map .leaflet-control-attribution a {
+  color: var(--hp2-brand-soft);
 }
 
 .hp2-feed,
@@ -871,6 +892,15 @@ button:focus-visible {
   grid-template-columns: 1fr;
   gap: 0.4rem;
   margin-bottom: 0.65rem;
+}
+
+#hp2-command-history li strong {
+  font-size: 0.82rem;
+}
+
+#hp2-settings-result,
+#hp2-command-result {
+  min-height: 1.2em;
 }
 
 @media (min-width: 980px) {

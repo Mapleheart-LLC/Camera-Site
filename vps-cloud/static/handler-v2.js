@@ -2,10 +2,18 @@
   'use strict';
 
   const JWT_KEY = 'handler_panel_jwt';
+  const SETTINGS_KEY = 'handler_panel_v2_settings';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
   const QUEUE_AUTO_REFRESH_MS = 30000;
   const views = ['dashboard', 'stats', 'queue', 'drawer', 'devices', 'commands', 'settings'];
   const MAX_BREADCRUMBS = 6;
+  const defaultSettings = {
+    refreshSecs: 30,
+    freshnessWarnSecs: 60,
+    freshnessStaleSecs: 180,
+    defaultIntensity: 10,
+    defaultLengthMs: 800,
+  };
 
   const state = {
     role: null,
@@ -64,6 +72,10 @@
       drawerAt: 0,
       freshnessTimer: null,
     },
+    settings: { ...defaultSettings },
+    commands: {
+      history: [],
+    },
     modal: {
       resolver: null,
       requireInput: false,
@@ -93,6 +105,132 @@
 
   function clearJwt() {
     sessionStorage.removeItem(JWT_KEY);
+  }
+
+  function getQueueRefreshMs() {
+    const secs = Math.max(30, Number(state.settings.refreshSecs || defaultSettings.refreshSecs));
+    return secs * 1000;
+  }
+
+  function loadSettings() {
+    let parsed = {};
+    try {
+      parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {};
+    } catch (_err) {
+      parsed = {};
+    }
+
+    state.settings = {
+      refreshSecs: Math.max(30, Number(parsed.refreshSecs || defaultSettings.refreshSecs)),
+      freshnessWarnSecs: Math.max(30, Number(parsed.freshnessWarnSecs || defaultSettings.freshnessWarnSecs)),
+      freshnessStaleSecs: Math.max(60, Number(parsed.freshnessStaleSecs || defaultSettings.freshnessStaleSecs)),
+      defaultIntensity: Math.min(20, Math.max(1, Number(parsed.defaultIntensity || defaultSettings.defaultIntensity))),
+      defaultLengthMs: Math.min(20000, Math.max(100, Number(parsed.defaultLengthMs || defaultSettings.defaultLengthMs))),
+    };
+    if (state.settings.freshnessStaleSecs <= state.settings.freshnessWarnSecs) {
+      state.settings.freshnessStaleSecs = state.settings.freshnessWarnSecs + 30;
+    }
+  }
+
+  function saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  }
+
+  function renderSettingsForm() {
+    const map = {
+      'hp2-setting-refresh-secs': state.settings.refreshSecs,
+      'hp2-setting-fresh-warn': state.settings.freshnessWarnSecs,
+      'hp2-setting-fresh-stale': state.settings.freshnessStaleSecs,
+      'hp2-setting-default-intensity': state.settings.defaultIntensity,
+      'hp2-setting-default-length': state.settings.defaultLengthMs,
+    };
+    Object.entries(map).forEach(([id, value]) => {
+      const el = byId(id);
+      if (el) el.value = String(value);
+    });
+  }
+
+  function applyCommandDefaults() {
+    const intensity = byId('hp2-toy-intensity');
+    const length = byId('hp2-toy-length');
+    if (intensity) intensity.value = String(state.settings.defaultIntensity);
+    if (length) length.value = String(state.settings.defaultLengthMs);
+  }
+
+  function saveSettingsFromForm() {
+    const refreshSecs = Number(byId('hp2-setting-refresh-secs')?.value || state.settings.refreshSecs);
+    const warnSecs = Number(byId('hp2-setting-fresh-warn')?.value || state.settings.freshnessWarnSecs);
+    const staleSecs = Number(byId('hp2-setting-fresh-stale')?.value || state.settings.freshnessStaleSecs);
+    const defaultIntensity = Number(byId('hp2-setting-default-intensity')?.value || state.settings.defaultIntensity);
+    const defaultLengthMs = Number(byId('hp2-setting-default-length')?.value || state.settings.defaultLengthMs);
+
+    state.settings.refreshSecs = Math.max(30, Math.min(300, refreshSecs || defaultSettings.refreshSecs));
+    state.settings.freshnessWarnSecs = Math.max(30, Math.min(600, warnSecs || defaultSettings.freshnessWarnSecs));
+    state.settings.freshnessStaleSecs = Math.max(
+      state.settings.freshnessWarnSecs + 30,
+      Math.min(1200, staleSecs || defaultSettings.freshnessStaleSecs),
+    );
+    state.settings.defaultIntensity = Math.max(1, Math.min(20, defaultIntensity || defaultSettings.defaultIntensity));
+    state.settings.defaultLengthMs = Math.max(100, Math.min(20000, defaultLengthMs || defaultSettings.defaultLengthMs));
+
+    saveSettings();
+    renderSettingsForm();
+    applyCommandDefaults();
+    renderFreshness();
+
+    if (byId('hp2-view-queue')?.classList.contains('hp2-view-active')) {
+      setActiveView('queue');
+    }
+    if (byId('hp2-view-drawer')?.classList.contains('hp2-view-active')) {
+      setActiveView('drawer');
+    }
+  }
+
+  function renderCommandHistory() {
+    const host = byId('hp2-command-history');
+    if (!host) return;
+    if (!state.commands.history.length) {
+      host.innerHTML = '<li class="hp2-muted">No command dispatches yet.</li>';
+      return;
+    }
+    host.innerHTML = state.commands.history.map((row) => `<li>
+      <div class="hp2-feed-item-row">
+        <strong>${escapeHtml(row.title)}</strong>
+        <span class="${severityClass(row.ok ? 'info' : 'critical')}">${row.ok ? 'ok' : 'failed'}</span>
+      </div>
+      <div class="hp2-muted">${escapeHtml(row.detail)}</div>
+      <div class="hp2-muted">${escapeHtml(fmtDate(row.at))}</div>
+    </li>`).join('');
+  }
+
+  function recordCommandHistory(title, detail, ok) {
+    state.commands.history.unshift({
+      title,
+      detail,
+      ok: !!ok,
+      at: new Date().toISOString(),
+    });
+    state.commands.history = state.commands.history.slice(0, 12);
+    renderCommandHistory();
+  }
+
+  function applyCommandPreset(presetName) {
+    const targetEl = byId('hp2-toy-target');
+    const actionEl = byId('hp2-toy-action');
+    const intensityEl = byId('hp2-toy-intensity');
+    const lengthEl = byId('hp2-toy-length');
+    const presets = {
+      calm: { target: 'LOVENSE_COMMAND', action: 'pulse', intensity: 5, length: 500 },
+      steady: { target: 'LOVENSE_COMMAND', action: 'vibrate', intensity: 9, length: 1000 },
+      alert: { target: 'PAVLOK_COMMAND', action: 'vibrate', intensity: 15, length: 1400 },
+    };
+    const preset = presets[presetName];
+    if (!preset || !targetEl || !actionEl || !intensityEl || !lengthEl) return;
+    targetEl.value = preset.target;
+    actionEl.value = preset.action;
+    intensityEl.value = String(preset.intensity);
+    lengthEl.value = String(preset.length);
+    setInlineResult('hp2-command-result', `Preset loaded: ${presetName}.`);
   }
 
   function authHeader() {
@@ -330,9 +468,11 @@
     }
 
     const maxAge = Math.max(...ages);
+    const warnAt = Math.max(30, Number(state.settings.freshnessWarnSecs || defaultSettings.freshnessWarnSecs));
+    const staleAt = Math.max(warnAt + 1, Number(state.settings.freshnessStaleSecs || defaultSettings.freshnessStaleSecs));
     let tone = 'fresh';
-    if (maxAge >= 180) tone = 'stale';
-    else if (maxAge >= 60) tone = 'aging';
+    if (maxAge >= staleAt) tone = 'stale';
+    else if (maxAge >= warnAt) tone = 'aging';
 
     pill.textContent = `Data age: ${maxAge}s`;
     pill.classList.toggle('hp2-pill-online', tone === 'fresh');
@@ -417,13 +557,13 @@
       loadQueueHub().catch(() => {});
       state.queue.autoRefreshTimer = setInterval(() => {
         loadQueueHub().catch(() => {});
-      }, QUEUE_AUTO_REFRESH_MS);
+      }, getQueueRefreshMs());
     }
     if (viewName === 'drawer') {
       loadEvidenceDrawer().catch(() => {});
       state.queue.autoRefreshTimer = setInterval(() => {
         loadEvidenceDrawer().catch(() => {});
-      }, QUEUE_AUTO_REFRESH_MS);
+      }, getQueueRefreshMs());
     }
   }
 
@@ -516,9 +656,10 @@
     if (!mapEl || typeof window.L === 'undefined') return null;
 
     state.map.instance = window.L.map(mapEl, { zoomControl: true, attributionControl: true });
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors',
+      subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     }).addTo(state.map.instance);
     state.map.instance.setView([37.7749, -122.4194], 12);
     return state.map.instance;
@@ -824,7 +965,7 @@
       errorEl.textContent = 'Login failed. Please try again.';
     } finally {
       button.disabled = false;
-      button.textContent = 'Enter V2 Panel';
+      button.textContent = 'Enter Panel';
     }
   }
 
@@ -2033,10 +2174,12 @@
     try {
       await apiPost('/api/handler/tpe/push', payload);
       setInlineResult('hp2-command-result', 'Command sent.');
+      recordCommandHistory('Toy Command', `${action} ${mode} intensity ${intensity} length ${length}ms`, true);
       pushFeed(`${action} ${mode} sent to ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-command-result', `Failed: ${err.message}`);
+        recordCommandHistory('Toy Command', `${action} ${mode} failed: ${err.message}`, false);
       }
     }
   }
@@ -2070,10 +2213,12 @@
     try {
       await apiPost('/api/handler/tpe/push', payload);
       setInlineResult('hp2-action-result', 'Quick buzz sent.');
+      recordCommandHistory('Quick Buzz', `Sent to ${state.selectedDeviceId} intensity 8 length 700ms`, true);
       pushFeed(`Quick buzz sent to ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-action-result', `Failed: ${err.message}`);
+        recordCommandHistory('Quick Buzz', `Failed for ${state.selectedDeviceId}: ${err.message}`, false);
       }
     }
   }
@@ -2110,6 +2255,25 @@
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+
+    document.querySelectorAll('[data-cmd-preset]').forEach((button) => {
+      button.addEventListener('click', () => {
+        applyCommandPreset(button.dataset.cmdPreset || '');
+      });
+    });
+
+    byId('hp2-settings-save-btn').addEventListener('click', () => {
+      saveSettingsFromForm();
+      setInlineResult('hp2-settings-result', 'Settings saved.');
+    });
+    byId('hp2-settings-reset-btn').addEventListener('click', () => {
+      state.settings = { ...defaultSettings };
+      saveSettings();
+      renderSettingsForm();
+      applyCommandDefaults();
+      renderFreshness();
+      setInlineResult('hp2-settings-result', 'Settings reset to defaults.');
+    });
 
     byId('hp2-shared-filter-queue').addEventListener('change', (event) => {
       updateSharedControls({ filter: event.target.value });
@@ -2210,8 +2374,12 @@
   }
 
   async function boot() {
+    loadSettings();
     bindEvents();
     syncSharedControls();
+    renderSettingsForm();
+    applyCommandDefaults();
+    renderCommandHistory();
     setMailDetailsVisible(false);
     autoSizeMailComposer();
     renderFreshness();

@@ -6,20 +6,20 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530j" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530m" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
     <section class="hp2-login-card">
       <p class="hp2-overline">Operator Access</p>
       <h1>Handler V2</h1>
-      <p class="hp2-sub">Mobile-first command center preview.</p>
+      <p class="hp2-sub">Operator command center.</p>
       <label for="hp2-user">Username</label>
       <input id="hp2-user" type="text" autocomplete="username" />
       <label for="hp2-pass">Password</label>
       <input id="hp2-pass" type="password" autocomplete="current-password" />
       <p id="hp2-login-error" class="hp2-error" role="alert" aria-live="polite"></p>
-      <button id="hp2-login-btn" class="hp2-btn hp2-btn-primary">Enter V2 Panel</button>
+      <button id="hp2-login-btn" class="hp2-btn hp2-btn-primary">Enter Panel</button>
     </section>
   </div>
 
@@ -124,7 +124,7 @@
           <article class="hp2-kpi-card"><p>Booking Queue</p><h3 id="hp2-kpi-booking">-</h3></article>
           <article class="hp2-kpi-card"><p>Puppy Mail</p><h3 id="hp2-kpi-mail">-</h3></article>
           <article class="hp2-kpi-card"><p>Questions</p><h3 id="hp2-kpi-questions">-</h3></article>
-          <article class="hp2-kpi-card"><p>Limbo Pending</p><h3 id="hp2-kpi-limbo">-</h3></article>
+          <article class="hp2-kpi-card"><p>Evidence Pending</p><h3 id="hp2-kpi-limbo">-</h3></article>
         </div>
 
         <div class="hp2-section-grid hp2-intelligence-grid">
@@ -193,13 +193,13 @@
       <section id="hp2-view-queue" class="hp2-view">
         <div class="hp2-panel hp2-shared-controls-panel">
           <div class="hp2-shared-controls">
-            <label for="hp2-shared-filter-queue" class="hp2-muted">Scope</label>
+            <label for="hp2-shared-filter-queue" class="hp2-muted">Global Scope</label>
             <select id="hp2-shared-filter-queue">
               <option value="all" selected>all</option>
               <option value="open">open</option>
               <option value="resolved">resolved</option>
             </select>
-            <label for="hp2-shared-sort-queue" class="hp2-muted">Sort</label>
+            <label for="hp2-shared-sort-queue" class="hp2-muted">Global Sort</label>
             <select id="hp2-shared-sort-queue">
               <option value="newest" selected>newest</option>
               <option value="oldest">oldest</option>
@@ -283,13 +283,13 @@
       <section id="hp2-view-drawer" class="hp2-view">
         <div class="hp2-panel hp2-shared-controls-panel">
           <div class="hp2-shared-controls">
-            <label for="hp2-shared-filter-drawer" class="hp2-muted">Scope</label>
+            <label for="hp2-shared-filter-drawer" class="hp2-muted">Global Scope</label>
             <select id="hp2-shared-filter-drawer">
               <option value="all" selected>all</option>
               <option value="open">open</option>
               <option value="resolved">resolved</option>
             </select>
-            <label for="hp2-shared-sort-drawer" class="hp2-muted">Sort</label>
+            <label for="hp2-shared-sort-drawer" class="hp2-muted">Global Sort</label>
             <select id="hp2-shared-sort-drawer">
               <option value="newest" selected>newest</option>
               <option value="oldest">oldest</option>
@@ -300,7 +300,7 @@
           <section class="hp2-panel">
             <div class="hp2-panel-head">
               <h4>Evidence Drawer</h4>
-              <span class="hp2-muted">Formerly Limbo</span>
+              <span class="hp2-muted">Review and resolve evidence items</span>
             </div>
             <h5 class="hp2-subhead">Pending</h5>
             <ul id="hp2-drawer-limbo-pending" class="hp2-feed"></ul>
@@ -337,42 +337,80 @@
       </section>
 
       <section id="hp2-view-commands" class="hp2-view">
-        <section class="hp2-panel">
-          <div class="hp2-panel-head">
-            <h4>Toy Command Composer</h4>
-            <span class="hp2-muted">Intensity + Length first-class</span>
-          </div>
-          <div class="hp2-form-grid">
-            <label for="hp2-toy-target">Target</label>
-            <select id="hp2-toy-target">
-              <option value="LOVENSE_COMMAND">Lovense</option>
-              <option value="PAVLOK_COMMAND">Pavlok</option>
-            </select>
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Toy Command Composer</h4>
+              <span class="hp2-muted">Intensity + Length first-class</span>
+            </div>
+            <div class="hp2-queue-actions">
+              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="calm">Calm Pulse</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="steady">Steady Wave</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="alert">High Alert</button>
+            </div>
+            <div class="hp2-form-grid">
+              <label for="hp2-toy-target">Target</label>
+              <select id="hp2-toy-target">
+                <option value="LOVENSE_COMMAND">Lovense</option>
+                <option value="PAVLOK_COMMAND">Pavlok</option>
+              </select>
 
-            <label for="hp2-toy-action">Action</label>
-            <input id="hp2-toy-action" type="text" value="vibrate" />
+              <label for="hp2-toy-action">Action</label>
+              <input id="hp2-toy-action" type="text" value="vibrate" />
 
-            <label for="hp2-toy-intensity">Intensity (1-20)</label>
-            <input id="hp2-toy-intensity" type="number" min="1" max="20" value="10" />
+              <label for="hp2-toy-intensity">Intensity (1-20)</label>
+              <input id="hp2-toy-intensity" type="number" min="1" max="20" value="10" />
 
-            <label for="hp2-toy-length">Length ms</label>
-            <input id="hp2-toy-length" type="number" min="100" max="20000" value="800" />
-          </div>
-          <div class="hp2-action-row">
-            <button id="hp2-send-toy-btn" class="hp2-btn hp2-btn-primary">Send Command</button>
-          </div>
-          <p id="hp2-command-result" class="hp2-muted"></p>
-        </section>
+              <label for="hp2-toy-length">Length ms</label>
+              <input id="hp2-toy-length" type="number" min="100" max="20000" value="800" />
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-send-toy-btn" class="hp2-btn hp2-btn-primary">Send Command</button>
+            </div>
+            <p id="hp2-command-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Recent Commands</h4>
+              <span class="hp2-muted">Latest dispatches</span>
+            </div>
+            <ul id="hp2-command-history" class="hp2-feed"></ul>
+          </section>
+        </div>
       </section>
 
       <section id="hp2-view-settings" class="hp2-view">
-        <section class="hp2-panel">
-          <div class="hp2-panel-head">
-            <h4>V2 Preview Settings</h4>
-          </div>
-          <p class="hp2-muted">This is the first implementation slice. Next slices will migrate booking, mail, questions, limbo, and advanced rule/vault workflows.</p>
-          <button id="hp2-hard-refresh-btn" class="hp2-btn hp2-btn-ghost">Force Refresh Data</button>
-        </section>
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Operations Settings</h4>
+            </div>
+            <p class="hp2-muted">Tune panel behavior, refresh cadence, and command defaults for live operations.</p>
+            <div class="hp2-form-grid">
+              <label for="hp2-setting-refresh-secs">Queue/Drawer Refresh (sec)</label>
+              <input id="hp2-setting-refresh-secs" type="number" min="30" max="300" step="5" value="30" />
+
+              <label for="hp2-setting-fresh-warn">Freshness Warning (sec)</label>
+              <input id="hp2-setting-fresh-warn" type="number" min="30" max="600" step="5" value="60" />
+
+              <label for="hp2-setting-fresh-stale">Freshness Stale (sec)</label>
+              <input id="hp2-setting-fresh-stale" type="number" min="60" max="1200" step="10" value="180" />
+
+              <label for="hp2-setting-default-intensity">Default Intensity</label>
+              <input id="hp2-setting-default-intensity" type="number" min="1" max="20" value="10" />
+
+              <label for="hp2-setting-default-length">Default Length ms</label>
+              <input id="hp2-setting-default-length" type="number" min="100" max="20000" value="800" />
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-settings-save-btn" class="hp2-btn hp2-btn-primary" type="button">Save Settings</button>
+              <button id="hp2-settings-reset-btn" class="hp2-btn hp2-btn-ghost" type="button">Reset Defaults</button>
+              <button id="hp2-hard-refresh-btn" class="hp2-btn hp2-btn-ghost">Force Refresh Data</button>
+            </div>
+            <p id="hp2-settings-result" class="hp2-muted"></p>
+          </section>
+        </div>
       </section>
     </main>
   </div>
@@ -396,6 +434,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530j" defer></script>
+  <script src="/handler-v2.js?v=20260530m" defer></script>
 </body>
 </html>
