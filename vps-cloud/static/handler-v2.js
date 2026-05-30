@@ -21,6 +21,12 @@
         recent: [],
       },
       staleRisk: [],
+      behavior: {
+        eventCount: 0,
+        highRiskCount: 0,
+        moodDelta: null,
+        signals: [],
+      },
     },
   };
 
@@ -378,11 +384,23 @@
   }
 
   async function hydrateApp() {
-    await loadDevices();
-    await loadQueueKpis();
-    await loadDashboardIntelligence();
+    const jobs = [
+      loadDevices(),
+      loadQueueKpis(),
+      loadDashboardIntelligence(),
+    ];
+    const results = await Promise.allSettled(jobs);
     connectWs();
     pushFeed('Session ready.');
+
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length) {
+      pushFeed(`Loaded with ${failed.length} warning(s).`);
+      const result = byId('hp2-action-result');
+      if (result) {
+        result.textContent = 'Signed in with partial data. Use refresh if a panel is empty.';
+      }
+    }
   }
 
   function severityClass(level) {
@@ -551,6 +569,7 @@
     const alertsEl = byId('hp2-alert-timeline');
     const transportEl = byId('hp2-transport-list');
     const staleEl = byId('hp2-stale-risk');
+    const behaviorSignalsEl = byId('hp2-behavior-signals');
 
     byId('hp2-transport-mqtt').textContent = String(state.intelligence.transport.mqtt || 0);
     byId('hp2-transport-ws').textContent = String(state.intelligence.transport.wsFallback || 0);
@@ -601,6 +620,69 @@
           </li>`)
         .join('');
     }
+
+    byId('hp2-behavior-events').textContent = String(state.intelligence.behavior.eventCount || 0);
+    byId('hp2-behavior-risk').textContent = String(state.intelligence.behavior.highRiskCount || 0);
+    byId('hp2-behavior-mood').textContent = state.intelligence.behavior.moodDelta == null
+      ? '-'
+      : String(state.intelligence.behavior.moodDelta);
+
+    if (!state.intelligence.behavior.signals.length) {
+      behaviorSignalsEl.innerHTML = '<li class="hp2-muted">No learning signals yet.</li>';
+    } else {
+      behaviorSignalsEl.innerHTML = state.intelligence.behavior.signals
+        .map((signal) => `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(signal.title || 'Signal')}</strong>
+              <span class="${severityClass(signal.level || 'info')}">${escapeHtml(signal.level || 'info')}</span>
+            </div>
+            <div class="hp2-muted">${escapeHtml(signal.value || '')}</div>
+            <div class="hp2-muted hp2-meta-mono">${escapeHtml(signal.detail || '')}</div>
+          </li>`)
+        .join('');
+    }
+  }
+
+  async function loadBehaviorPulse() {
+    const qs = state.selectedDeviceId
+      ? `?days=14&device_id=${encodeURIComponent(state.selectedDeviceId)}`
+      : '?days=14';
+    const data = await apiGet(`/api/handler/tpe/behavior-insights${qs}`).catch(() => null);
+    if (!data) {
+      state.intelligence.behavior = {
+        eventCount: 0,
+        highRiskCount: 0,
+        moodDelta: null,
+        signals: [],
+      };
+      return;
+    }
+
+    const moodDelta = data.mood_delta == null ? null : Number(data.mood_delta);
+    const rawSignals = Array.isArray(data.learning_signals) ? data.learning_signals : [];
+    const signals = rawSignals.slice(0, 6).map((signal) => {
+      const detail = String(signal.detail || '').toLowerCase();
+      let level = 'info';
+      if (detail.includes('declin') || detail.includes('high-risk') || detail.includes('low-battery')) {
+        level = 'warning';
+      }
+      if (detail.includes('ai alert') || detail.includes('pressure')) {
+        level = 'critical';
+      }
+      return {
+        title: signal.title || 'Signal',
+        value: signal.value || '',
+        detail: signal.detail || '',
+        level,
+      };
+    });
+
+    state.intelligence.behavior = {
+      eventCount: Number(data.event_count || 0),
+      highRiskCount: Number(data.high_risk_count || 0),
+      moodDelta: Number.isFinite(moodDelta) ? moodDelta : null,
+      signals,
+    };
   }
 
   async function loadDashboardIntelligence() {
@@ -612,6 +694,7 @@
     deriveTransportOutcomes(events);
     deriveAlertsTimeline(events, audits);
     deriveStaleRisk();
+    await loadBehaviorPulse();
     renderDashboardIntelligence();
   }
 
@@ -708,6 +791,7 @@
     renderDeviceList();
     renderSelectedDevice();
     refreshSelectedStatus().catch(() => {});
+    loadDashboardIntelligence().catch(() => {});
     pushFeed(`Selected ${state.selectedDeviceId}`);
   }
 
@@ -752,8 +836,17 @@
       byId('hp2-role').textContent = String(state.role || 'handler').toUpperCase();
       showApp();
       await hydrateApp();
-    } catch (_e) {
-      showLogin('Please login again.');
+    } catch (err) {
+      if (err && err.message === AUTH_EXPIRED_ERROR) {
+        showLogin('Please login again.');
+        return;
+      }
+
+      // Keep a valid JWT session active even if non-critical bootstrap calls fail.
+      showApp();
+      byId('hp2-role').textContent = String(state.role || 'handler').toUpperCase();
+      pushFeed('Restored session with limited data.');
+      await hydrateApp();
     }
   }
 

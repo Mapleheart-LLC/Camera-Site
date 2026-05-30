@@ -250,6 +250,11 @@ button:focus-visible {
   padding: 0.5rem 0.6rem;
 }
 
+.hp2-meta-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+}
+
 .hp2-feed-item-row {
   display: flex;
   justify-content: space-between;
