@@ -345,6 +345,15 @@
       </section>
 
       <section id="hp2-view-commands" class="hp2-view">
+        <section class="hp2-panel hp2-command-readiness">
+          <div class="hp2-panel-head">
+            <h4>Command Readiness</h4>
+            <span class="hp2-muted">Live capability hinting</span>
+          </div>
+          <div id="hp2-command-capability-chips" class="hp2-capability-chips"></div>
+          <p id="hp2-command-capability-note" class="hp2-muted">Select a device to evaluate command readiness.</p>
+        </section>
+
         <div class="hp2-section-grid hp2-live-control-grid">
           <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
@@ -386,6 +395,7 @@
             <div class="hp2-action-row">
               <button id="hp2-quicktap-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Quick Tap</button>
             </div>
+            <p id="hp2-quicktap-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-quicktap-result" class="hp2-muted"></p>
           </section>
 
@@ -456,6 +466,7 @@
                 <button id="hp2-lovense-schedule-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Send Timed Schedule</button>
               </div>
             </div>
+            <p id="hp2-lovense-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-lovense-result" class="hp2-muted"></p>
           </section>
 
@@ -493,6 +504,7 @@
               </div>
             </div>
             <p id="hp2-pavlok-note" class="hp2-muted">Shock keeps the control focused on intensity. Timed length stays for vibrate and beep.</p>
+            <p id="hp2-pavlok-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-pavlok-result" class="hp2-muted"></p>
           </section>
 
@@ -538,6 +550,7 @@
                 <button id="hp2-appctl-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send App Command</button>
               </div>
             </div>
+            <p id="hp2-appctl-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-appctl-result" class="hp2-muted"></p>
           </section>
 
@@ -591,6 +604,7 @@
                 <button id="hp2-screenctl-url-send-btn" class="hp2-btn hp2-btn-primary" type="button">Open URL</button>
               </div>
             </div>
+            <p id="hp2-screenctl-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-screenctl-result" class="hp2-muted"></p>
           </section>
 
@@ -627,6 +641,7 @@
                 <button id="hp2-speak-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Speak on Device</button>
               </div>
             </div>
+            <p id="hp2-notify-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-notify-result" class="hp2-muted"></p>
           </section>
 
@@ -677,6 +692,7 @@
                 <button id="hp2-sms-reply-toggle-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Reply Permission</button>
               </div>
             </div>
+            <p id="hp2-clipboard-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
             <p id="hp2-clipboard-sms-result" class="hp2-muted"></p>
           </section>
 

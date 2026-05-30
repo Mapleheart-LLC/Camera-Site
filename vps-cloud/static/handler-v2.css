@@ -927,6 +927,55 @@ button:focus-visible {
   align-items: start;
 }
 
+.hp2-command-readiness {
+  margin-bottom: 0.75rem;
+}
+
+.hp2-capability-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.4rem;
+}
+
+.hp2-capability-chip {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.18rem 0.56rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.hp2-capability-chip.hp2-capability-on {
+  color: #d3f8df;
+  border-color: #3f7b57;
+  background: #1c3a2a;
+}
+
+.hp2-capability-chip.hp2-capability-off {
+  color: #ffd8d8;
+  border-color: #8f4b4b;
+  background: #3f2020;
+}
+
+.hp2-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hp2-disabled-hint {
+  margin: 0.12rem 0 0;
+  padding: 0.36rem 0.5rem;
+  border-radius: 8px;
+  border: 1px dashed #8b5f34;
+  background: #2c2417;
+  color: #f7d6a7;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .hp2-control-card {
   background: linear-gradient(180deg, #132a2f 0%, #102227 100%);
 }

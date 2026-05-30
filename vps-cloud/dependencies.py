@@ -57,18 +57,18 @@ SECRET_KEY: str = (
     or (_DEMO_FALLBACK_KEY if _MOCK_AUTH else _DEFAULT_KEY)
 )
 ALGORITHM: str = "HS256"
-# Override via JWT_ACCESS_TOKEN_EXPIRE_MINUTES env var (default: 30 minutes).
+# Override via JWT_ACCESS_TOKEN_EXPIRE_MINUTES env var (default: 480 minutes).
 # Increase to e.g. 43200 (30 days) for long-lived mobile sessions.
 try:
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
-        os.environ.get("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+        os.environ.get("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "480")
     )
 except ValueError:
     import logging as _logging
     _logging.getLogger(__name__).warning(
-        "JWT_ACCESS_TOKEN_EXPIRE_MINUTES is not a valid integer; falling back to 30 minutes."
+        "JWT_ACCESS_TOKEN_EXPIRE_MINUTES is not a valid integer; falling back to 480 minutes."
     )
-    ACCESS_TOKEN_EXPIRE_MINUTES = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
 bearer_scheme = HTTPBearer(auto_error=False)
 

@@ -277,6 +277,8 @@
         ? 'Current Pavlok command is intensity-first; timed length is ignored here.'
         : 'Timed length is active for vibrate and beep commands.';
     }
+
+    applyCommandGating();
   }
 
   function renderQuickTapActionButtons() {
@@ -340,6 +342,7 @@
     state.commands.liveControl.quickTapTarget = target === 'pavlok' ? 'pavlok' : 'lovense';
     setSegmentActive(byId('hp2-quicktap-target-lovense')?.parentElement || null, state.commands.liveControl.quickTapTarget);
     renderQuickTapActionButtons();
+    applyCommandGating();
   }
 
   function applyCommandPreset(presetName) {
@@ -434,6 +437,155 @@
   function selectedDeviceLabel() {
     const device = selectedDevice();
     return device?.device_name || device?.device_id || state.selectedDeviceId || 'selected device';
+  }
+
+  function parseToyInfo(device) {
+    if (!device) return {};
+    if (device.toy_info && typeof device.toy_info === 'object') return device.toy_info;
+    if (device.toy_info_json && typeof device.toy_info_json === 'string') {
+      try {
+        const parsed = JSON.parse(device.toy_info_json);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (_err) {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  function hasToyCapability(device, mode) {
+    const info = parseToyInfo(device);
+    const text = JSON.stringify(info || {}).toLowerCase();
+    const token = String(mode || '').toLowerCase();
+    if (!token) return false;
+    if (text.includes(token)) return true;
+    if (token === 'lovense' && (text.includes('nora') || text.includes('lush') || text.includes('hush'))) return true;
+    if (token === 'pavlok' && (text.includes('zap') || text.includes('shock'))) return true;
+    return false;
+  }
+
+  function commandCapabilities(device) {
+    const online = deviceOnline(device);
+    const lovense = hasToyCapability(device, 'lovense');
+    const pavlok = hasToyCapability(device, 'pavlok');
+    const toyInfoKnown = JSON.stringify(parseToyInfo(device)).length > 2;
+    return {
+      online,
+      lovense,
+      pavlok,
+      toyInfoKnown,
+      selected: !!device,
+    };
+  }
+
+  function setButtonEnabled(id, enabled, reason) {
+    const el = byId(id);
+    if (!el) return;
+    el.disabled = !enabled;
+    if (!enabled && reason) {
+      el.title = reason;
+    } else {
+      el.title = '';
+    }
+  }
+
+  function setDisabledHint(id, message) {
+    const el = byId(id);
+    if (!el) return;
+    const text = String(message || '').trim();
+    el.textContent = text;
+    el.classList.toggle('hp2-hidden', !text);
+  }
+
+  function renderCommandReadiness() {
+    const chipsHost = byId('hp2-command-capability-chips');
+    const noteEl = byId('hp2-command-capability-note');
+    if (!chipsHost || !noteEl) return;
+
+    const device = selectedDevice();
+    const caps = commandCapabilities(device);
+
+    if (!caps.selected) {
+      chipsHost.innerHTML = '<span class="hp2-capability-chip hp2-capability-off">No Device</span>';
+      noteEl.textContent = 'Select a device to evaluate command readiness.';
+      return;
+    }
+
+    const rows = [
+      { label: 'Online', on: caps.online },
+      { label: 'Lovense', on: caps.lovense },
+      { label: 'Pavlok', on: caps.pavlok },
+      { label: 'Toy Info', on: caps.toyInfoKnown },
+    ];
+    chipsHost.innerHTML = rows
+      .map((row) => `<span class="hp2-capability-chip ${row.on ? 'hp2-capability-on' : 'hp2-capability-off'}">${escapeHtml(row.label)} ${row.on ? 'Ready' : 'Missing'}</span>`)
+      .join('');
+
+    if (!caps.online) {
+      noteEl.textContent = 'Device appears offline. Transport can fail until it reconnects.';
+    } else if (!caps.toyInfoKnown) {
+      noteEl.textContent = 'Toy capability is unknown. Toy controls remain limited until heartbeat reports toy info.';
+    } else {
+      noteEl.textContent = 'Device is online. Command gating is active for toy-specific actions.';
+    }
+  }
+
+  function applyCommandGating() {
+    const device = selectedDevice();
+    const caps = commandCapabilities(device);
+    const noDeviceReason = 'Select a device first.';
+    const onlineReason = 'Device appears offline.';
+    const lovenseReason = 'Lovense capability not detected from toy heartbeat.';
+    const pavlokReason = 'Pavlok capability not detected from toy heartbeat.';
+    const onlineGateReason = !caps.selected ? noDeviceReason : onlineReason;
+
+    const needsOnline = [
+      'hp2-appctl-send-btn',
+      'hp2-screenctl-lock-btn',
+      'hp2-screenctl-dismiss-keyguard-btn',
+      'hp2-screenctl-on-btn',
+      'hp2-screenctl-off-btn',
+      'hp2-screenctl-brightness-send-btn',
+      'hp2-screenctl-timeout-send-btn',
+      'hp2-screenctl-autorotate-send-btn',
+      'hp2-screenctl-url-send-btn',
+      'hp2-notify-send-btn',
+      'hp2-notify-clear-btn',
+      'hp2-speak-send-btn',
+      'hp2-clipboard-send-btn',
+      'hp2-sms-inject-btn',
+      'hp2-sms-reply-toggle-btn',
+    ];
+    needsOnline.forEach((id) => setButtonEnabled(id, caps.selected && caps.online, onlineGateReason));
+
+    const lovenseEnabled = caps.selected && caps.online && caps.lovense;
+    const pavlokEnabled = caps.selected && caps.online && caps.pavlok;
+    const lovenseHint = !caps.selected ? noDeviceReason : (!caps.online ? onlineReason : lovenseReason);
+    const pavlokHint = !caps.selected ? noDeviceReason : (!caps.online ? onlineReason : pavlokReason);
+
+    setButtonEnabled('hp2-lovense-live-start-btn', lovenseEnabled, lovenseHint);
+    setButtonEnabled('hp2-lovense-ramp-start-btn', lovenseEnabled, lovenseHint);
+    setButtonEnabled('hp2-lovense-schedule-send-btn', lovenseEnabled, lovenseHint);
+    setButtonEnabled('hp2-startle-btn', lovenseEnabled, lovenseHint);
+    setButtonEnabled('hp2-pavlok-send-btn', pavlokEnabled, pavlokHint);
+    ['hp2-shock-10-btn', 'hp2-shock-30-btn', 'hp2-shock-60-btn'].forEach((id) => {
+      setButtonEnabled(id, pavlokEnabled, pavlokHint);
+    });
+
+    const quickTapTarget = state.commands.liveControl.quickTapTarget;
+    const quickTapEnabled = quickTapTarget === 'pavlok' ? pavlokEnabled : lovenseEnabled;
+    const quickTapHint = quickTapTarget === 'pavlok' ? pavlokHint : lovenseHint;
+    setButtonEnabled('hp2-quicktap-send-btn', quickTapEnabled, quickTapHint);
+
+    setDisabledHint('hp2-quicktap-disabled-hint', quickTapEnabled ? '' : quickTapHint);
+    setDisabledHint('hp2-lovense-disabled-hint', lovenseEnabled ? '' : lovenseHint);
+    setDisabledHint('hp2-pavlok-disabled-hint', pavlokEnabled ? '' : pavlokHint);
+    setDisabledHint('hp2-appctl-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
+    setDisabledHint('hp2-screenctl-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
+    setDisabledHint('hp2-notify-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
+    setDisabledHint('hp2-clipboard-disabled-hint', caps.selected && caps.online ? '' : onlineGateReason);
+
+    renderCommandReadiness();
   }
 
   function setWsOnline(online) {
@@ -788,6 +940,7 @@
     byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
     renderDashboardAlerts();
     renderLiveMap();
+    applyCommandGating();
   }
 
   function ingestLocation(device) {

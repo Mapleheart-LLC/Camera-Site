@@ -2300,6 +2300,7 @@
     let _pairingPairPollStartedAt = 0;
     let _pairingKnownDevicesAtStart = 0;
     let _handlerNoAssignmentHint = null;
+    let _aiWardenStatusLastKey = '';
     const DEVICE_ONLINE_STALE_MS = 5 * 60 * 1000;
 
     // ── Credential storage ─────────────────────────────
@@ -2313,7 +2314,16 @@
 
     // ── Toast ──────────────────────────────────────────
     let _toastTimer = null;
+    let _toastLastKey = '';
+    let _toastLastAt = 0;
     function showToast(msg, isError = false) {
+      const now = Date.now();
+      const key = String(msg || '');
+      if (key && key === _toastLastKey && (now - _toastLastAt) < 4500) {
+        return;
+      }
+      _toastLastKey = key;
+      _toastLastAt = now;
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.style.borderColor = isError ? '#f87171' : '#e8aeb7';
@@ -2987,6 +2997,11 @@
           return;
         }
         if (msg.type === 'ai_warden_status') {
+          var statusKey = String(msg.status || '') + '|' + String(msg.message || '');
+          if (statusKey && statusKey === _aiWardenStatusLastKey) {
+            return;
+          }
+          _aiWardenStatusLastKey = statusKey;
           showToast('🤖 ' + (msg.message || ('AI Warden ' + (msg.status || 'status'))));
           return;
         }
