@@ -1409,9 +1409,9 @@
                     <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" />
                     <select id="cmd-cf-strict"><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
                     <select id="cmd-cf-nudenet"><option value="">nudenet?</option><option value="true">nudenet: on</option><option value="false">nudenet: off</option></select>
-                    <textarea id="cmd-cf-classes" placeholder='blocked_classes JSON e.g. ["EXPOSED_BREAST_F"]' style="min-height:40px"></textarea>
+                    <textarea id="cmd-cf-classes" placeholder="Blocked classes (comma or new line, e.g. EXPOSED_BREAST_F)" style="min-height:40px"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('UPDATE_SETTINGS',{threshold:v('cmd-cf-thresh'),strict:v('cmd-cf-strict'),nudenet_enabled:v('cmd-cf-nudenet'),blocked_classes:v('cmd-cf-classes')},'res-cmd-cf')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_SETTINGS',{threshold:v('cmd-cf-thresh'),strict:v('cmd-cf-strict'),nudenet_enabled:v('cmd-cf-nudenet'),blocked_classes:toStringArrayJsonValue('cmd-cf-classes')},'res-cmd-cf')">Send</button>
                   <span class="cmd-result" id="res-cmd-cf"></span>
                 </div>
               </div>
@@ -1432,17 +1432,17 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Restricted Vocabulary</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-vocab" placeholder='JSON array e.g. ["word1","word2"]' style="min-height:40px"></textarea>
+                    <textarea id="cmd-vocab" placeholder="Restricted words (comma or new line)" style="min-height:40px"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('UPDATE_RESTRICTED_VOCABULARY',{vocabulary:v('cmd-vocab')},'res-cmd-vocab')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_RESTRICTED_VOCABULARY',{vocabulary:toStringArrayJsonValue('cmd-vocab')},'res-cmd-vocab')">Send</button>
                   <span class="cmd-result" id="res-cmd-vocab"></span>
                 </div>
                 <div class="cmd-row">
                   <span class="cmd-row-label">Notification Blocklist</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-blocklist" placeholder='JSON array e.g. ["keyword1","keyword2"]' style="min-height:40px"></textarea>
+                    <textarea id="cmd-blocklist" placeholder="Blocked keywords (comma or new line)" style="min-height:40px"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('UPDATE_NOTIFICATION_BLOCKLIST',{blocklist:v('cmd-blocklist')},'res-cmd-blocklist')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('UPDATE_NOTIFICATION_BLOCKLIST',{blocklist:toStringArrayJsonValue('cmd-blocklist')},'res-cmd-blocklist')">Send</button>
                   <span class="cmd-result" id="res-cmd-blocklist"></span>
                 </div>
               </div>
@@ -1472,9 +1472,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Rituals</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-rituals-steps" placeholder='JSON array of steps e.g. [{"id":"1","title":"Wake up","description":"","requiresPhoto":false}]'></textarea>
+                    <textarea id="cmd-rituals-steps" placeholder="One step per line: Title | Description (optional) | photo (optional)"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_RITUALS',{steps:v('cmd-rituals-steps')},'res-cmd-rituals')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_RITUALS',{steps:toRitualStepsJsonValue('cmd-rituals-steps')},'res-cmd-rituals')">Send</button>
                   <span class="cmd-result" id="res-cmd-rituals"></span>
                 </div>
                 <div class="cmd-row">
@@ -1527,9 +1527,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">PTS Approved Contacts</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-pts-packages" placeholder='JSON array of contact package names'></textarea>
+                    <textarea id="cmd-pts-packages" placeholder="One package name per line (or comma separated)"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_PTS_APPROVED',{packages:v('cmd-pts-packages')},'res-cmd-pts-pkgs')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_PTS_APPROVED',{packages:toStringArrayJsonValue('cmd-pts-packages')},'res-cmd-pts-pkgs')">Send</button>
                   <span class="cmd-result" id="res-cmd-pts-pkgs"></span>
                 </div>
               </div>
@@ -1550,9 +1550,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Gating Approved Apps</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-gating-pkgs" placeholder='JSON array of package names e.g. ["com.example.app"]'></textarea>
+                    <textarea id="cmd-gating-pkgs" placeholder="One package name per line (or comma separated)"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_GATING_APPROVED',{packages:v('cmd-gating-pkgs')},'res-cmd-gating-pkgs')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GATING_APPROVED',{packages:toStringArrayJsonValue('cmd-gating-pkgs')},'res-cmd-gating-pkgs')">Send</button>
                   <span class="cmd-result" id="res-cmd-gating-pkgs"></span>
                 </div>
                 <div class="cmd-row">
@@ -1567,9 +1567,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Geofences</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-geofences" placeholder='JSON array e.g. [{"id":"home","name":"Home","latitude":0.0,"longitude":0.0,"radius_meters":100}]'></textarea>
+                    <textarea id="cmd-geofences" placeholder="One geofence per line: Name, Latitude, Longitude, RadiusMeters"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_GEOFENCES',{geofences:v('cmd-geofences')},'res-cmd-geofences')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_GEOFENCES',{geofences:toGeofencesJsonValue('cmd-geofences')},'res-cmd-geofences')">Send</button>
                   <span class="cmd-result" id="res-cmd-geofences"></span>
                 </div>
                 <div class="cmd-row">
@@ -1590,9 +1590,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Set Affirmations</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-affirmations" placeholder='JSON array e.g. [{"id":"1","text":"I am obedient"}]'></textarea>
+                    <textarea id="cmd-affirmations" placeholder="One affirmation per line"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_AFFIRMATIONS',{affirmations:v('cmd-affirmations')},'res-cmd-affirmations')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_AFFIRMATIONS',{affirmations:toAffirmationsJsonValue('cmd-affirmations')},'res-cmd-affirmations')">Send</button>
                   <span class="cmd-result" id="res-cmd-affirmations"></span>
                 </div>
                 <div class="cmd-row">
@@ -1714,9 +1714,9 @@
                 <div class="cmd-row">
                   <span class="cmd-row-label">Lovense Schedule</span>
                   <div class="cmd-inputs">
-                    <textarea id="cmd-lovense-sched" placeholder='JSON array e.g. [{"id":"1","time_of_day_minutes":480,"vibration_level":10,"duration_ms":5000,"label":"Morning"}]'></textarea>
+                    <textarea id="cmd-lovense-sched" placeholder="One schedule per line: HH:MM, level, durationMs, label(optional)"></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('SET_LOVENSE_SCHEDULES',{schedules:v('cmd-lovense-sched')},'res-cmd-lovense-sched')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('SET_LOVENSE_SCHEDULES',{schedules:toLovenseSchedulesJsonValue('cmd-lovense-sched')},'res-cmd-lovense-sched')">Send</button>
                   <span class="cmd-result" id="res-cmd-lovense-sched"></span>
                 </div>
               </div>
@@ -3292,6 +3292,126 @@
       var d = new Date(raw);
       if (isNaN(d.getTime())) return '';
       return String(d.getTime());
+    }
+
+    function tryParseJsonArray(raw) {
+      if (!raw) return null;
+      var trimmed = String(raw).trim();
+      if (!trimmed.startsWith('[')) return null;
+      try {
+        var parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function splitSimpleList(raw) {
+      return String(raw || '')
+        .split(/[\n,]/)
+        .map(function(item) { return item.trim(); })
+        .filter(Boolean);
+    }
+
+    function toStringArrayJsonValue(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var existing = tryParseJsonArray(raw);
+      if (existing) return JSON.stringify(existing);
+      return JSON.stringify(splitSimpleList(raw));
+    }
+
+    function toRitualStepsJsonValue(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var existing = tryParseJsonArray(raw);
+      if (existing) return JSON.stringify(existing);
+
+      var rows = String(raw).split(/\n/).map(function(line) { return line.trim(); }).filter(Boolean);
+      var steps = rows.map(function(line, idx) {
+        var parts = line.split('|').map(function(part) { return part.trim(); });
+        var title = parts[0] || ('Step ' + (idx + 1));
+        var description = parts[1] || '';
+        var requiresPhoto = /^(photo|true|yes|y|1)$/i.test(parts[2] || '');
+        return {
+          id: String(idx + 1),
+          title: title,
+          description: description,
+          requiresPhoto: requiresPhoto,
+        };
+      });
+      return JSON.stringify(steps);
+    }
+
+    function toGeofencesJsonValue(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var existing = tryParseJsonArray(raw);
+      if (existing) return JSON.stringify(existing);
+
+      var rows = String(raw).split(/\n/).map(function(line) { return line.trim(); }).filter(Boolean);
+      var fences = [];
+      rows.forEach(function(line, idx) {
+        var parts = line.split(',').map(function(part) { return part.trim(); });
+        if (parts.length < 4) return;
+        var name = parts[0] || ('Fence ' + (idx + 1));
+        var latitude = Number(parts[1]);
+        var longitude = Number(parts[2]);
+        var radiusMeters = Number(parts[3]);
+        if (!isFinite(latitude) || !isFinite(longitude) || !isFinite(radiusMeters)) return;
+        fences.push({
+          id: name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || ('fence_' + (idx + 1)),
+          name: name,
+          latitude: latitude,
+          longitude: longitude,
+          radius_meters: radiusMeters,
+        });
+      });
+      return JSON.stringify(fences);
+    }
+
+    function toAffirmationsJsonValue(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var existing = tryParseJsonArray(raw);
+      if (existing) return JSON.stringify(existing);
+
+      var rows = String(raw).split(/\n/).map(function(line) { return line.trim(); }).filter(Boolean);
+      var affirmations = rows.map(function(text, idx) {
+        return { id: String(idx + 1), text: text };
+      });
+      return JSON.stringify(affirmations);
+    }
+
+    function toLovenseSchedulesJsonValue(id) {
+      var raw = v(id);
+      if (!raw) return '';
+      var existing = tryParseJsonArray(raw);
+      if (existing) return JSON.stringify(existing);
+
+      var rows = String(raw).split(/\n/).map(function(line) { return line.trim(); }).filter(Boolean);
+      var schedules = [];
+      rows.forEach(function(line, idx) {
+        var parts = line.split(',').map(function(part) { return part.trim(); });
+        if (parts.length < 3) return;
+        var hhmm = parts[0];
+        var level = Number(parts[1]);
+        var durationMs = Number(parts[2]);
+        var label = parts[3] || ('Schedule ' + (idx + 1));
+        var m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+        if (!m || !isFinite(level) || !isFinite(durationMs)) return;
+        var h = Number(m[1]);
+        var min = Number(m[2]);
+        if (h < 0 || h > 23 || min < 0 || min > 59) return;
+        schedules.push({
+          id: String(idx + 1),
+          time_of_day_minutes: (h * 60) + min,
+          vibration_level: Math.max(0, Math.min(20, Math.round(level))),
+          duration_ms: Math.max(0, Math.round(durationMs)),
+          label: label,
+        });
+      });
+      return JSON.stringify(schedules);
     }
 
     /**
