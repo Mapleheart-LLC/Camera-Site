@@ -638,6 +638,9 @@
 
   function renderScreenActionFieldInputs() {
     const action = String(byId('hp2-screenctl-action')?.value || '').trim();
+    const legacyWrap = byId('hp2-screenctl-legacy-fields');
+    const specs = actionFieldSpecs(action);
+    if (legacyWrap) legacyWrap.classList.toggle('hp2-hidden', specs.length > 0);
     renderDynamicActionFieldInputs(action, 'hp2-screenctl-dynamic-fields', 'hp2-screenctl-param');
   }
 
@@ -647,6 +650,9 @@
 
   function renderNotifyActionFieldInputs() {
     const action = String(byId('hp2-notify-action')?.value || '').trim();
+    const legacyWrap = byId('hp2-notify-legacy-fields');
+    const specs = actionFieldSpecs(action);
+    if (legacyWrap) legacyWrap.classList.toggle('hp2-hidden', specs.length > 0);
     renderDynamicActionFieldInputs(action, 'hp2-notify-dynamic-fields', 'hp2-notify-param');
   }
 

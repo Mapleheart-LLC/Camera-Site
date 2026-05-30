@@ -581,47 +581,49 @@
                 </div>
               </div>
               <div id="hp2-screenctl-dynamic-fields" class="hp2-control-grid-2 hp2-hidden"></div>
-              <div class="hp2-action-row">
-                <button id="hp2-screenctl-lock-btn" class="hp2-btn hp2-btn-warn" type="button">Lock Device</button>
-                <button id="hp2-screenctl-dismiss-keyguard-btn" class="hp2-btn hp2-btn-ghost" type="button">Dismiss Keyguard</button>
-                <button id="hp2-screenctl-on-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen On</button>
-                <button id="hp2-screenctl-off-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen Off</button>
-              </div>
-              <div class="hp2-control-grid-2">
-                <label class="hp2-control-field" for="hp2-screenctl-brightness">
-                  <span>Brightness</span>
-                  <div class="hp2-range-row">
-                    <input id="hp2-screenctl-brightness" type="range" min="0" max="255" value="150" />
-                    <output id="hp2-screenctl-brightness-value">150</output>
+              <div id="hp2-screenctl-legacy-fields">
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-lock-btn" class="hp2-btn hp2-btn-warn" type="button">Lock Device</button>
+                  <button id="hp2-screenctl-dismiss-keyguard-btn" class="hp2-btn hp2-btn-ghost" type="button">Dismiss Keyguard</button>
+                  <button id="hp2-screenctl-on-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen On</button>
+                  <button id="hp2-screenctl-off-btn" class="hp2-btn hp2-btn-ghost" type="button">Screen Off</button>
+                </div>
+                <div class="hp2-control-grid-2">
+                  <label class="hp2-control-field" for="hp2-screenctl-brightness">
+                    <span>Brightness</span>
+                    <div class="hp2-range-row">
+                      <input id="hp2-screenctl-brightness" type="range" min="0" max="255" value="150" />
+                      <output id="hp2-screenctl-brightness-value">150</output>
+                    </div>
+                  </label>
+                  <div class="hp2-action-row">
+                    <button id="hp2-screenctl-brightness-send-btn" class="hp2-btn hp2-btn-primary" type="button">Apply Brightness</button>
                   </div>
+                  <label class="hp2-control-field" for="hp2-screenctl-timeout">
+                    <span>Screen Timeout ms</span>
+                    <input id="hp2-screenctl-timeout" type="number" min="1000" max="86400000" step="1000" value="120000" />
+                  </label>
+                  <div class="hp2-action-row">
+                    <button id="hp2-screenctl-timeout-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Timeout</button>
+                  </div>
+                  <label class="hp2-control-field" for="hp2-screenctl-autorotate">
+                    <span>Auto Rotate</span>
+                    <select id="hp2-screenctl-autorotate">
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  </label>
+                  <div class="hp2-action-row">
+                    <button id="hp2-screenctl-autorotate-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Auto Rotate</button>
+                  </div>
+                </div>
+                <label class="hp2-control-field" for="hp2-screenctl-url">
+                  <span>Open URL</span>
+                  <input id="hp2-screenctl-url" type="url" placeholder="https://example.com" />
                 </label>
                 <div class="hp2-action-row">
-                  <button id="hp2-screenctl-brightness-send-btn" class="hp2-btn hp2-btn-primary" type="button">Apply Brightness</button>
+                  <button id="hp2-screenctl-url-send-btn" class="hp2-btn hp2-btn-primary" type="button">Open URL</button>
                 </div>
-                <label class="hp2-control-field" for="hp2-screenctl-timeout">
-                  <span>Screen Timeout ms</span>
-                  <input id="hp2-screenctl-timeout" type="number" min="1000" max="86400000" step="1000" value="120000" />
-                </label>
-                <div class="hp2-action-row">
-                  <button id="hp2-screenctl-timeout-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Timeout</button>
-                </div>
-                <label class="hp2-control-field" for="hp2-screenctl-autorotate">
-                  <span>Auto Rotate</span>
-                  <select id="hp2-screenctl-autorotate">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                </label>
-                <div class="hp2-action-row">
-                  <button id="hp2-screenctl-autorotate-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Auto Rotate</button>
-                </div>
-              </div>
-              <label class="hp2-control-field" for="hp2-screenctl-url">
-                <span>Open URL</span>
-                <input id="hp2-screenctl-url" type="url" placeholder="https://example.com" />
-              </label>
-              <div class="hp2-action-row">
-                <button id="hp2-screenctl-url-send-btn" class="hp2-btn hp2-btn-primary" type="button">Open URL</button>
               </div>
             </div>
             <p id="hp2-screenctl-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
@@ -649,30 +651,32 @@
                 </div>
               </div>
               <div id="hp2-notify-dynamic-fields" class="hp2-control-grid-2 hp2-hidden"></div>
-              <div class="hp2-control-grid-2">
-                <label class="hp2-control-field" for="hp2-notify-title">
-                  <span>Notification Title</span>
-                  <input id="hp2-notify-title" type="text" maxlength="80" placeholder="Handler Notice" />
+              <div id="hp2-notify-legacy-fields">
+                <div class="hp2-control-grid-2">
+                  <label class="hp2-control-field" for="hp2-notify-title">
+                    <span>Notification Title</span>
+                    <input id="hp2-notify-title" type="text" maxlength="80" placeholder="Handler Notice" />
+                  </label>
+                  <label class="hp2-control-field" for="hp2-notify-channel">
+                    <span>Channel ID (optional)</span>
+                    <input id="hp2-notify-channel" type="text" placeholder="handler_alerts" />
+                  </label>
+                </div>
+                <label class="hp2-control-field" for="hp2-notify-body">
+                  <span>Notification Body</span>
+                  <textarea id="hp2-notify-body" rows="3" placeholder="Please check in now."></textarea>
                 </label>
-                <label class="hp2-control-field" for="hp2-notify-channel">
-                  <span>Channel ID (optional)</span>
-                  <input id="hp2-notify-channel" type="text" placeholder="handler_alerts" />
+                <div class="hp2-action-row">
+                  <button id="hp2-notify-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Notification</button>
+                  <button id="hp2-notify-clear-btn" class="hp2-btn hp2-btn-ghost" type="button">Clear Notifications</button>
+                </div>
+                <label class="hp2-control-field" for="hp2-speak-text">
+                  <span>Speak Text</span>
+                  <textarea id="hp2-speak-text" rows="2" placeholder="Take a breath and focus."></textarea>
                 </label>
-              </div>
-              <label class="hp2-control-field" for="hp2-notify-body">
-                <span>Notification Body</span>
-                <textarea id="hp2-notify-body" rows="3" placeholder="Please check in now."></textarea>
-              </label>
-              <div class="hp2-action-row">
-                <button id="hp2-notify-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Notification</button>
-                <button id="hp2-notify-clear-btn" class="hp2-btn hp2-btn-ghost" type="button">Clear Notifications</button>
-              </div>
-              <label class="hp2-control-field" for="hp2-speak-text">
-                <span>Speak Text</span>
-                <textarea id="hp2-speak-text" rows="2" placeholder="Take a breath and focus."></textarea>
-              </label>
-              <div class="hp2-action-row">
-                <button id="hp2-speak-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Speak on Device</button>
+                <div class="hp2-action-row">
+                  <button id="hp2-speak-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Speak on Device</button>
+                </div>
               </div>
             </div>
             <p id="hp2-notify-disabled-hint" class="hp2-disabled-hint hp2-hidden" aria-live="polite"></p>
