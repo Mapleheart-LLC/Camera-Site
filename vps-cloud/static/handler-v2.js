@@ -2681,6 +2681,62 @@
     });
   }
 
+  async function sendClipboardCommand() {
+    const text = String(byId('hp2-clipboard-text')?.value || '');
+    if (!text.trim()) {
+      setInlineResult('hp2-clipboard-sms-result', 'Clipboard text is required.');
+      return;
+    }
+    await sendControlCommand({
+      title: 'Set Clipboard',
+      action: 'SET_CLIPBOARD',
+      fields: { text },
+      resultId: 'hp2-clipboard-sms-result',
+      message: `Set clipboard content on ${selectedDeviceLabel()}?`,
+      historyDetail: `SET_CLIPBOARD ${text.slice(0, 48)}`,
+    });
+  }
+
+  async function injectProxySmsCommand() {
+    const threadId = String(byId('hp2-sms-thread-id')?.value || '').trim() || 'default';
+    const body = String(byId('hp2-sms-body')?.value || '').trim();
+    const imageUrl = String(byId('hp2-sms-image-url')?.value || '').trim();
+    const canReply = String(byId('hp2-sms-can-reply')?.value || 'true');
+    if (!body) {
+      setInlineResult('hp2-clipboard-sms-result', 'SMS body is required.');
+      return;
+    }
+    await sendControlCommand({
+      title: 'Inject Incoming SMS',
+      action: 'INCOMING_PROXY_SMS',
+      fields: {
+        thread_id: threadId,
+        body,
+        can_reply: canReply,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      },
+      resultId: 'hp2-clipboard-sms-result',
+      message: `Inject proxy SMS into thread ${threadId} on ${selectedDeviceLabel()}?`,
+      historyDetail: `INCOMING_PROXY_SMS thread=${threadId}`,
+    });
+  }
+
+  async function setSmsReplyPermissionCommand() {
+    const threadId = String(byId('hp2-sms-thread-id')?.value || '').trim() || 'default';
+    const canReply = String(byId('hp2-sms-can-reply')?.value || 'true');
+    await sendControlCommand({
+      title: 'Set SMS Reply Permission',
+      action: 'SET_SMS_THREAD_CAN_REPLY',
+      fields: {
+        thread_id: threadId,
+        can_reply: canReply,
+      },
+      resultId: 'hp2-clipboard-sms-result',
+      message: `Set can-reply ${canReply} for thread ${threadId} on ${selectedDeviceLabel()}?`,
+      historyDetail: `SET_SMS_THREAD_CAN_REPLY thread=${threadId} can_reply=${canReply}`,
+    });
+  }
+
   async function quickBuzz() {
     await sendQuickActionCommand({
       title: 'Quick Buzz',
@@ -2837,6 +2893,9 @@
     byId('hp2-notify-send-btn').addEventListener('click', () => sendNotificationCommand().catch(() => {}));
     byId('hp2-notify-clear-btn').addEventListener('click', () => clearNotificationsCommand().catch(() => {}));
     byId('hp2-speak-send-btn').addEventListener('click', () => speakTextCommand().catch(() => {}));
+    byId('hp2-clipboard-send-btn').addEventListener('click', () => sendClipboardCommand().catch(() => {}));
+    byId('hp2-sms-inject-btn').addEventListener('click', () => injectProxySmsCommand().catch(() => {}));
+    byId('hp2-sms-reply-toggle-btn').addEventListener('click', () => setSmsReplyPermissionCommand().catch(() => {}));
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));

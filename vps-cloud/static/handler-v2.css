@@ -1002,7 +1002,8 @@ button:focus-visible {
 #hp2-pavlok-result,
 #hp2-appctl-result,
 #hp2-screenctl-result,
-#hp2-notify-result {
+#hp2-notify-result,
+#hp2-clipboard-sms-result {
   min-height: 1.2em;
 }
 

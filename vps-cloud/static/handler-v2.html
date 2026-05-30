@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530t" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530u" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -632,6 +632,50 @@
 
           <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
+              <h4>Clipboard and SMS Bridge</h4>
+              <span class="hp2-muted">Context sync + thread control</span>
+            </div>
+            <p class="hp2-muted">Sync short clipboard text to device and inject or tune proxy SMS thread controls used by the in-app handler chat flow.</p>
+            <div class="hp2-control-stack">
+              <label class="hp2-control-field" for="hp2-clipboard-text">
+                <span>Clipboard Text</span>
+                <textarea id="hp2-clipboard-text" rows="2" placeholder="Paste this code into the form."></textarea>
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-clipboard-send-btn" class="hp2-btn hp2-btn-primary" type="button">Set Clipboard</button>
+              </div>
+
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-sms-thread-id">
+                  <span>SMS Thread ID</span>
+                  <input id="hp2-sms-thread-id" type="text" placeholder="default" value="default" />
+                </label>
+                <label class="hp2-control-field" for="hp2-sms-can-reply">
+                  <span>Can Reply</span>
+                  <select id="hp2-sms-can-reply">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </label>
+              </div>
+              <label class="hp2-control-field" for="hp2-sms-body">
+                <span>Inject Proxy SMS Message</span>
+                <textarea id="hp2-sms-body" rows="3" placeholder="Incoming message preview shown in handler chat."></textarea>
+              </label>
+              <label class="hp2-control-field" for="hp2-sms-image-url">
+                <span>Image URL (optional)</span>
+                <input id="hp2-sms-image-url" type="url" placeholder="https://example.com/image.jpg" />
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-sms-inject-btn" class="hp2-btn hp2-btn-primary" type="button">Inject Incoming SMS</button>
+                <button id="hp2-sms-reply-toggle-btn" class="hp2-btn hp2-btn-ghost" type="button">Apply Reply Permission</button>
+              </div>
+            </div>
+            <p id="hp2-clipboard-sms-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>
             </div>
@@ -694,6 +738,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530t" defer></script>
+  <script src="/handler-v2.js?v=20260530u" defer></script>
 </body>
 </html>

@@ -1262,6 +1262,8 @@ class TpePushRequest(BaseModel):
     title: Optional[str] = None
     body: Optional[str] = None
     channel_id: Optional[str] = None
+    can_reply: Optional[str] = None
+    thread_id: Optional[str] = None
 
     # SHOW_OVERLAY
     message: Optional[str] = None
@@ -1415,6 +1417,10 @@ _VALID_TPE_ACTIONS = {
     "UPDATE_NOTIFICATION_BLOCKLIST",
     "SEND_NOTIFICATION",
     "CLEAR_NOTIFICATIONS",
+    "INCOMING_PROXY_SMS",
+    "SET_PROXY_SMS_CAN_REPLY",
+    "SET_SMS_THREAD_CAN_REPLY",
+    "TOGGLE_THREAD_CAN_REPLY",
     "NEW_QUESTION",
     "RULE_REMINDER",
     # Tone & vocabulary
@@ -1514,6 +1520,7 @@ _VALID_TPE_ACTIONS = {
     "SET_ALARM",
     "SET_NFC",
     "SET_FONT_SIZE",
+    "SET_CLIPBOARD",
     # Device file access
     "device.file.read",
     "device.file.write",
@@ -1747,6 +1754,8 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         "title":              body.title,
         "body":               body.body,
         "channel_id":         body.channel_id,
+        "thread_id":          body.thread_id,
+        "can_reply":          body.can_reply,
         # SHOW_OVERLAY
         "message":            body.message,
         "image_url":          body.image_url,
