@@ -75,6 +75,10 @@
     settings: { ...defaultSettings },
     commands: {
       history: [],
+      liveControl: {
+        quickTapTarget: 'lovense',
+        quickTapAction: 'vibrate',
+      },
     },
     modal: {
       resolver: null,
@@ -151,10 +155,14 @@
   }
 
   function applyCommandDefaults() {
-    const intensity = byId('hp2-toy-intensity');
-    const length = byId('hp2-toy-length');
-    if (intensity) intensity.value = String(state.settings.defaultIntensity);
-    if (length) length.value = String(state.settings.defaultLengthMs);
+    const quickTapIntensity = byId('hp2-quicktap-intensity');
+    const quickTapLength = byId('hp2-quicktap-length');
+    const lovenseLiveLevel = byId('hp2-lovense-live-level');
+
+    if (quickTapIntensity) quickTapIntensity.value = String(state.settings.defaultIntensity);
+    if (quickTapLength) quickTapLength.value = String(state.settings.defaultLengthMs);
+    if (lovenseLiveLevel) lovenseLiveLevel.value = String(state.settings.defaultIntensity);
+    syncControlReadouts();
   }
 
   function saveSettingsFromForm() {
@@ -214,23 +222,122 @@
     renderCommandHistory();
   }
 
+  function quickTapActionsForTarget(target) {
+    if (target === 'pavlok') {
+      return ['shock', 'vibrate', 'beep', 'stop'];
+    }
+    return ['vibrate', 'pulse', 'wave', 'tease', 'stop'];
+  }
+
+  function setSegmentActive(host, value) {
+    if (!host) return;
+    host.querySelectorAll('[data-segment-value]').forEach((button) => {
+      const active = button.dataset.segmentValue === value;
+      button.classList.toggle('hp2-segment-active', active);
+    });
+  }
+
+  function syncControlReadouts() {
+    const pairs = [
+      ['hp2-quicktap-intensity', 'hp2-quicktap-intensity-value'],
+      ['hp2-lovense-live-level', 'hp2-lovense-live-level-value'],
+      ['hp2-lovense-ramp-min', 'hp2-lovense-ramp-min-value'],
+      ['hp2-lovense-ramp-max', 'hp2-lovense-ramp-max-value'],
+      ['hp2-pavlok-intensity', 'hp2-pavlok-intensity-value'],
+    ];
+    pairs.forEach(([inputId, outputId]) => {
+      const input = byId(inputId);
+      const output = byId(outputId);
+      if (!input || !output) return;
+      output.textContent = String(input.value || '0');
+    });
+
+    const quickTapLengthWrap = byId('hp2-quicktap-length-wrap');
+    const quickTapNote = byId('hp2-quicktap-note');
+    if (quickTapLengthWrap) {
+      quickTapLengthWrap.style.opacity = (state.commands.liveControl.quickTapTarget === 'pavlok' && state.commands.liveControl.quickTapAction === 'shock') ? '0.55' : '1';
+    }
+    if (quickTapNote) {
+      quickTapNote.textContent = (state.commands.liveControl.quickTapTarget === 'pavlok' && state.commands.liveControl.quickTapAction === 'shock')
+        ? 'Pavlok shock ignores length and uses intensity-first dispatch.'
+        : 'Length stays available for timed taps. Pavlok shock ignores length.';
+    }
+
+    const pavlokCmd = String(byId('hp2-pavlok-command')?.value || 'shock').toLowerCase();
+    const pavlokDurationWrap = byId('hp2-pavlok-duration-wrap');
+    const pavlokNote = byId('hp2-pavlok-note');
+    const hidePavlokDuration = pavlokCmd === 'shock' || pavlokCmd === 'stop';
+    if (pavlokDurationWrap) {
+      pavlokDurationWrap.style.opacity = hidePavlokDuration ? '0.55' : '1';
+    }
+    if (pavlokNote) {
+      pavlokNote.textContent = hidePavlokDuration
+        ? 'Current Pavlok command is intensity-first; timed length is ignored here.'
+        : 'Timed length is active for vibrate and beep commands.';
+    }
+  }
+
+  function renderQuickTapActionButtons() {
+    const host = byId('hp2-quicktap-actions');
+    if (!host) return;
+    const target = state.commands.liveControl.quickTapTarget;
+    const allowed = quickTapActionsForTarget(target);
+    if (!allowed.includes(state.commands.liveControl.quickTapAction)) {
+      [state.commands.liveControl.quickTapAction] = allowed;
+    }
+    host.classList.toggle('hp2-segmented-row-3', allowed.length >= 3);
+    host.innerHTML = allowed.map((action) => `<button type="button" class="hp2-btn hp2-btn-ghost" data-segment-value="${escapeHtml(action)}">${escapeHtml(action)}</button>`).join('');
+    host.querySelectorAll('[data-segment-value]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.commands.liveControl.quickTapAction = button.dataset.segmentValue || 'vibrate';
+        setSegmentActive(host, state.commands.liveControl.quickTapAction);
+        syncControlReadouts();
+      });
+    });
+    setSegmentActive(host, state.commands.liveControl.quickTapAction);
+    syncControlReadouts();
+  }
+
+  function setQuickTapTarget(target) {
+    state.commands.liveControl.quickTapTarget = target === 'pavlok' ? 'pavlok' : 'lovense';
+    setSegmentActive(byId('hp2-quicktap-target-lovense')?.parentElement || null, state.commands.liveControl.quickTapTarget);
+    renderQuickTapActionButtons();
+  }
+
   function applyCommandPreset(presetName) {
-    const targetEl = byId('hp2-toy-target');
-    const actionEl = byId('hp2-toy-action');
-    const intensityEl = byId('hp2-toy-intensity');
-    const lengthEl = byId('hp2-toy-length');
     const presets = {
-      calm: { target: 'LOVENSE_COMMAND', action: 'pulse', intensity: 5, length: 500 },
-      steady: { target: 'LOVENSE_COMMAND', action: 'vibrate', intensity: 9, length: 1000 },
-      alert: { target: 'PAVLOK_COMMAND', action: 'vibrate', intensity: 15, length: 1400 },
+      calm: { target: 'lovense', action: 'pulse', intensity: 5, length: 500 },
+      steady: { target: 'lovense', action: 'vibrate', intensity: 9, length: 1000 },
+      alert: { target: 'pavlok', action: 'vibrate', intensity: 90, length: 1400 },
     };
     const preset = presets[presetName];
-    if (!preset || !targetEl || !actionEl || !intensityEl || !lengthEl) return;
-    targetEl.value = preset.target;
-    actionEl.value = preset.action;
-    intensityEl.value = String(preset.intensity);
-    lengthEl.value = String(preset.length);
-    setInlineResult('hp2-command-result', `Preset loaded: ${presetName}.`);
+    if (!preset) return;
+    setQuickTapTarget(preset.target);
+    state.commands.liveControl.quickTapAction = preset.action;
+    const intensityEl = byId('hp2-quicktap-intensity');
+    const lengthEl = byId('hp2-quicktap-length');
+    if (intensityEl) intensityEl.value = String(preset.intensity);
+    if (lengthEl) lengthEl.value = String(preset.length);
+    renderQuickTapActionButtons();
+    setInlineResult('hp2-quicktap-result', `Preset loaded: ${presetName}.`);
+  }
+
+  function parseLovenseSchedules(raw) {
+    return String(raw || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split(',').map((part) => part.trim());
+        const [time = '', level = '10', duration = '5000', label = ''] = parts;
+        return {
+          at: time,
+          level: Number(level || 10),
+          duration_ms: Number(duration || 5000),
+          label,
+        };
+      })
+      .filter((row) => row.at);
   }
 
   function authHeader() {
@@ -2174,46 +2281,230 @@
     }
   }
 
-  async function sendToyCommand() {
+  async function sendQuickTapCommand() {
     if (!state.selectedDeviceId) {
-      setInlineResult('hp2-command-result', 'Select a device first.');
+      setInlineResult('hp2-quicktap-result', 'Select a device first.');
       return;
     }
-
-    const action = byId('hp2-toy-target').value;
-    const mode = byId('hp2-toy-action').value.trim() || 'vibrate';
-    const intensity = Number(byId('hp2-toy-intensity').value || 10);
-    const length = Number(byId('hp2-toy-length').value || 800);
-
-    const payload = {
-      device_id: state.selectedDeviceId,
-      action,
-      payload: {
-        command: mode,
-        intensity,
-        length,
-        level: intensity,
-        duration_ms: length,
-      },
-    };
+    const target = state.commands.liveControl.quickTapTarget;
+    const action = state.commands.liveControl.quickTapAction;
+    const intensity = Number(byId('hp2-quicktap-intensity')?.value || 10);
+    const length = Number(byId('hp2-quicktap-length')?.value || 800);
+    const loop = Math.max(1, Math.min(12, Number(byId('hp2-quicktap-loop')?.value || 1)));
 
     const confirm = await askInlineConfirm({
-      title: 'Send Toy Command',
-      message: `${action} ${mode} intensity ${intensity} length ${length}ms for ${state.selectedDeviceId}?`,
+      title: 'Send Quick Tap',
+      message: `${target} ${action} intensity ${intensity} loop ${loop} for ${selectedDeviceLabel()}?`,
       confirmText: 'Send',
+      danger: target === 'pavlok' && action === 'shock',
     });
     if (!confirm.confirmed) return;
 
-    setInlineResult('hp2-command-result', 'Sending command...');
+    setInlineResult('hp2-quicktap-result', 'Sending quick tap...');
     try {
-      await apiPost('/api/handler/tpe/push', payload);
-      setInlineResult('hp2-command-result', 'Command sent.');
-      recordCommandHistory('Toy Command', `${action} ${mode} intensity ${intensity} length ${length}ms`, true);
-      pushFeed(`${action} ${mode} sent to ${state.selectedDeviceId}`);
+      for (let i = 0; i < loop; i += 1) {
+        if (target === 'pavlok') {
+          await apiPost('/api/handler/tpe/push', {
+            device_id: state.selectedDeviceId,
+            action: 'PAVLOK_COMMAND',
+            payload: {
+              pavlok_cmd: action,
+              pavlok_intensity: String(intensity),
+              intensity: String(intensity),
+              toy_level: String(intensity),
+              ...(action !== 'shock' ? {
+                pavlok_duration_ms: String(length),
+                duration_ms: String(length),
+                toy_duration_ms: String(length),
+              } : {}),
+            },
+            pavlok_cmd: action,
+            pavlok_intensity: String(intensity),
+            intensity: String(intensity),
+            toy_level: String(intensity),
+            ...(action !== 'shock' ? {
+              pavlok_duration_ms: String(length),
+              duration_ms: String(length),
+              toy_duration_ms: String(length),
+            } : {}),
+          });
+        } else {
+          await apiPost('/api/handler/tpe/push', {
+            device_id: state.selectedDeviceId,
+            action: 'LOVENSE_COMMAND',
+            payload: {
+              command: action,
+              toy_command: action,
+              intensity,
+              toy_level: intensity,
+              level: intensity,
+              length,
+              duration_ms: length,
+              toy_duration_ms: length,
+            },
+            command: action,
+            toy_command: action,
+            intensity,
+            toy_level: intensity,
+            level: intensity,
+            length,
+            duration_ms: length,
+            toy_duration_ms: length,
+          });
+        }
+      }
+      setInlineResult('hp2-quicktap-result', `Quick tap sent (${loop}x).`);
+      recordCommandHistory('Quick Tap', `${target} ${action} intensity ${intensity}${action !== 'shock' ? ` length ${length}ms` : ''} loop ${loop}`, true);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        setInlineResult('hp2-command-result', `Failed: ${err.message}`);
-        recordCommandHistory('Toy Command', `${action} ${mode} failed: ${err.message}`, false);
+        setInlineResult('hp2-quicktap-result', `Failed: ${err.message}`);
+        recordCommandHistory('Quick Tap', `${target} ${action} failed: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendLovenseLivePattern() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-lovense-result', 'Select a device first.');
+      return;
+    }
+    const pattern = String(byId('hp2-lovense-pattern')?.value || '').trim();
+    const level = Math.max(1, Math.min(20, Number(byId('hp2-lovense-live-level')?.value || 10)));
+    const duration = Math.max(500, Number(byId('hp2-lovense-live-duration')?.value || 5000));
+    setInlineResult('hp2-lovense-result', 'Sending Lovense live pattern...');
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action: 'toy.live.control',
+        toy_mode: 'lovense',
+        toy_command: 'vibrate',
+        toy_level: String(level),
+        toy_duration_ms: String(duration),
+        ...(pattern ? { toy_pattern: pattern } : {}),
+      });
+      setInlineResult('hp2-lovense-result', 'Lovense live pattern sent.');
+      recordCommandHistory('Lovense Live', `${pattern || 'steady'} level ${level} duration ${duration}ms`, true);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
+        recordCommandHistory('Lovense Live', `Failed: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendLovenseRamp() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-lovense-result', 'Select a device first.');
+      return;
+    }
+    const minLevel = Math.max(1, Math.min(20, Number(byId('hp2-lovense-ramp-min')?.value || 4)));
+    const maxLevel = Math.max(minLevel, Math.min(20, Number(byId('hp2-lovense-ramp-max')?.value || 14)));
+    const stepMs = Math.max(250, Number(byId('hp2-lovense-ramp-step-ms')?.value || 1200));
+    const loops = Math.max(1, Math.min(12, Number(byId('hp2-lovense-ramp-loops')?.value || 3)));
+
+    const sequence = [];
+    for (let l = minLevel; l <= maxLevel; l += 1) {
+      sequence.push({ level: l, duration_ms: stepMs });
+    }
+    for (let l = maxLevel - 1; l >= minLevel + 1; l -= 1) {
+      sequence.push({ level: l, duration_ms: stepMs });
+    }
+
+    const full = [];
+    for (let i = 0; i < loops; i += 1) {
+      full.push(...sequence);
+    }
+
+    setInlineResult('hp2-lovense-result', 'Sending live up/down ramp...');
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action: 'toy.live.control',
+        toy_mode: 'lovense',
+        toy_command: 'vibrate',
+        toy_level: String(minLevel),
+        toy_sequence: JSON.stringify(full),
+      });
+      setInlineResult('hp2-lovense-result', 'Live up/down ramp sent.');
+      recordCommandHistory('Lovense Ramp', `min ${minLevel} max ${maxLevel} step ${stepMs}ms loops ${loops}`, true);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
+        recordCommandHistory('Lovense Ramp', `Failed: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendLovenseSchedule() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-lovense-result', 'Select a device first.');
+      return;
+    }
+    const raw = byId('hp2-lovense-schedule')?.value || '';
+    const parsed = parseLovenseSchedules(raw);
+    if (!parsed.length) {
+      setInlineResult('hp2-lovense-result', 'Add at least one schedule row.');
+      return;
+    }
+
+    setInlineResult('hp2-lovense-result', 'Sending Lovense schedule...');
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action: 'SET_LOVENSE_SCHEDULES',
+        schedules: JSON.stringify(parsed),
+      });
+      setInlineResult('hp2-lovense-result', 'Lovense schedule sent.');
+      recordCommandHistory('Lovense Timed', `${parsed.length} schedule row(s)`, true);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-lovense-result', `Failed: ${err.message}`);
+        recordCommandHistory('Lovense Timed', `Failed: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendPavlokPrecision() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-pavlok-result', 'Select a device first.');
+      return;
+    }
+    const cmd = String(byId('hp2-pavlok-command')?.value || 'shock').toLowerCase();
+    const intensity = Math.max(0, Math.min(255, Number(byId('hp2-pavlok-intensity')?.value || 60)));
+    const duration = Math.max(100, Number(byId('hp2-pavlok-duration')?.value || 1000));
+
+    setInlineResult('hp2-pavlok-result', 'Sending Pavlok command...');
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action: 'PAVLOK_COMMAND',
+        payload: {
+          pavlok_cmd: cmd,
+          pavlok_intensity: String(intensity),
+          intensity: String(intensity),
+          toy_level: String(intensity),
+          ...(cmd !== 'shock' && cmd !== 'stop' ? {
+            pavlok_duration_ms: String(duration),
+            duration_ms: String(duration),
+            toy_duration_ms: String(duration),
+          } : {}),
+        },
+        pavlok_cmd: cmd,
+        pavlok_intensity: String(intensity),
+        intensity: String(intensity),
+        toy_level: String(intensity),
+        ...(cmd !== 'shock' && cmd !== 'stop' ? {
+          pavlok_duration_ms: String(duration),
+          duration_ms: String(duration),
+          toy_duration_ms: String(duration),
+        } : {}),
+      });
+      setInlineResult('hp2-pavlok-result', 'Pavlok command sent.');
+      recordCommandHistory('Pavlok Precision', `${cmd} intensity ${intensity}${cmd !== 'shock' && cmd !== 'stop' ? ` duration ${duration}ms` : ''}`, true);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-pavlok-result', `Failed: ${err.message}`);
+        recordCommandHistory('Pavlok Precision', `Failed: ${err.message}`, false);
       }
     }
   }
@@ -2343,7 +2634,11 @@
     byId('hp2-logout-btn').addEventListener('click', () => showLogin(''));
     byId('hp2-lock-btn').addEventListener('click', () => lockSelected().catch(() => {}));
     byId('hp2-checkin-btn').addEventListener('click', () => requestCheckin().catch(() => {}));
-    byId('hp2-send-toy-btn').addEventListener('click', () => sendToyCommand().catch(() => {}));
+    byId('hp2-quicktap-send-btn').addEventListener('click', () => sendQuickTapCommand().catch(() => {}));
+    byId('hp2-lovense-live-start-btn').addEventListener('click', () => sendLovenseLivePattern().catch(() => {}));
+    byId('hp2-lovense-ramp-start-btn').addEventListener('click', () => sendLovenseRamp().catch(() => {}));
+    byId('hp2-lovense-schedule-send-btn').addEventListener('click', () => sendLovenseSchedule().catch(() => {}));
+    byId('hp2-pavlok-send-btn').addEventListener('click', () => sendPavlokPrecision().catch(() => {}));
     byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
@@ -2359,6 +2654,20 @@
         applyCommandPreset(button.dataset.cmdPreset || '');
       });
     });
+
+    document.querySelectorAll('#hp2-quicktap-target-lovense, #hp2-quicktap-target-pavlok').forEach((button) => {
+      button.addEventListener('click', () => {
+        setQuickTapTarget(button.dataset.quicktapTarget || 'lovense');
+      });
+    });
+
+    ['hp2-quicktap-intensity', 'hp2-lovense-live-level', 'hp2-lovense-ramp-min', 'hp2-lovense-ramp-max', 'hp2-pavlok-intensity', 'hp2-pavlok-command']
+      .forEach((id) => {
+        const el = byId(id);
+        if (!el) return;
+        el.addEventListener('input', syncControlReadouts);
+        el.addEventListener('change', syncControlReadouts);
+      });
 
     byId('hp2-settings-save-btn').addEventListener('click', () => {
       saveSettingsFromForm();
@@ -2475,6 +2784,9 @@
     loadSettings();
     bindEvents();
     syncSharedControls();
+    setQuickTapTarget('lovense');
+    renderQuickTapActionButtons();
+    syncControlReadouts();
     renderSettingsForm();
     applyCommandDefaults();
     renderCommandHistory();

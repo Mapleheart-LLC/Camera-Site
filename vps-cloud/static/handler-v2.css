@@ -923,6 +923,72 @@ button:focus-visible {
   margin-bottom: 0.65rem;
 }
 
+.hp2-live-control-grid {
+  align-items: start;
+}
+
+.hp2-control-card {
+  background: linear-gradient(180deg, #132a2f 0%, #102227 100%);
+}
+
+.hp2-control-stack {
+  display: grid;
+  gap: 0.58rem;
+}
+
+.hp2-control-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.hp2-control-field {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.hp2-control-field > span {
+  color: var(--hp2-muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hp2-segmented-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.hp2-segmented-row.hp2-segmented-row-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hp2-segmented-row .hp2-btn {
+  min-width: 0;
+  padding: 0.42rem 0.5rem;
+}
+
+.hp2-segmented-row .hp2-btn.hp2-segment-active {
+  border-color: color-mix(in srgb, var(--hp2-brand) 45%, #fff);
+  background: #1b3439;
+}
+
+.hp2-range-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hp2-range-row output {
+  min-width: 2.2rem;
+  text-align: right;
+  color: var(--hp2-brand-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
 #hp2-command-history li strong {
   font-size: 0.82rem;
 }
@@ -952,6 +1018,14 @@ button:focus-visible {
   }
 
   .hp2-intelligence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hp2-live-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hp2-control-grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

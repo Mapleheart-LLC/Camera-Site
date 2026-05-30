@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530q" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530r" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -345,40 +345,158 @@
       </section>
 
       <section id="hp2-view-commands" class="hp2-view">
-        <div class="hp2-section-grid">
-          <section class="hp2-panel">
+        <div class="hp2-section-grid hp2-live-control-grid">
+          <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
-              <h4>Toy Command Composer</h4>
-              <span class="hp2-muted">Intensity + Length first-class</span>
+              <h4>Quick Taps</h4>
+              <span class="hp2-muted">Fast repeats</span>
             </div>
-            <div class="hp2-queue-actions">
-              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="calm">Calm Pulse</button>
-              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="steady">Steady Wave</button>
-              <button type="button" class="hp2-btn hp2-btn-ghost" data-cmd-preset="alert">High Alert</button>
+            <p class="hp2-muted">Short-form sends for quick corrections. Intensity, length, and loop count stay close together so you can fire without digging.</p>
+            <div class="hp2-control-stack">
+              <div>
+                <span class="hp2-subhead">Target</span>
+                <div class="hp2-segmented-row">
+                  <button id="hp2-quicktap-target-lovense" class="hp2-btn hp2-btn-ghost" type="button" data-quicktap-target="lovense">Lovense</button>
+                  <button id="hp2-quicktap-target-pavlok" class="hp2-btn hp2-btn-ghost" type="button" data-quicktap-target="pavlok">Pavlok</button>
+                </div>
+              </div>
+              <div>
+                <span class="hp2-subhead">Action</span>
+                <div id="hp2-quicktap-actions" class="hp2-segmented-row"></div>
+              </div>
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-quicktap-intensity">
+                  <span>Intensity</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-quicktap-intensity" type="range" min="1" max="20" value="10" />
+                    <output id="hp2-quicktap-intensity-value">10</output>
+                  </div>
+                </label>
+                <label id="hp2-quicktap-length-wrap" class="hp2-control-field" for="hp2-quicktap-length">
+                  <span>Length ms</span>
+                  <input id="hp2-quicktap-length" type="number" min="100" max="20000" step="100" value="800" />
+                </label>
+                <label class="hp2-control-field" for="hp2-quicktap-loop">
+                  <span>Loop Count</span>
+                  <input id="hp2-quicktap-loop" type="number" min="1" max="12" step="1" value="1" />
+                </label>
+              </div>
             </div>
-            <div class="hp2-form-grid">
-              <label for="hp2-toy-target">Target</label>
-              <select id="hp2-toy-target">
-                <option value="LOVENSE_COMMAND">Lovense</option>
-                <option value="PAVLOK_COMMAND">Pavlok</option>
-              </select>
-
-              <label for="hp2-toy-action">Action</label>
-              <input id="hp2-toy-action" type="text" value="vibrate" />
-
-              <label for="hp2-toy-intensity">Intensity (1-20)</label>
-              <input id="hp2-toy-intensity" type="number" min="1" max="20" value="10" />
-
-              <label for="hp2-toy-length">Length ms</label>
-              <input id="hp2-toy-length" type="number" min="100" max="20000" value="800" />
-            </div>
+            <p id="hp2-quicktap-note" class="hp2-muted">Length stays available for timed taps. Pavlok shock ignores length.</p>
             <div class="hp2-action-row">
-              <button id="hp2-send-toy-btn" class="hp2-btn hp2-btn-primary">Send Command</button>
+              <button id="hp2-quicktap-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Quick Tap</button>
             </div>
-            <p id="hp2-command-result" class="hp2-muted"></p>
+            <p id="hp2-quicktap-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel">
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
+              <h4>Lovense Live</h4>
+              <span class="hp2-muted">Patterns, ramps, timed</span>
+            </div>
+            <p class="hp2-muted">Use this for more deliberate live play: steady or patterned runs, live up/down ramps, and scheduled timed entries you can hand to the app.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-lovense-pattern">
+                  <span>Pattern</span>
+                  <select id="hp2-lovense-pattern">
+                    <option value="">Steady</option>
+                    <option value="pulse">Pulse</option>
+                    <option value="wave">Wave</option>
+                    <option value="tease">Tease</option>
+                  </select>
+                </label>
+                <label class="hp2-control-field" for="hp2-lovense-live-duration">
+                  <span>Timed Length ms</span>
+                  <input id="hp2-lovense-live-duration" type="number" min="500" max="1200000" step="100" value="5000" />
+                </label>
+                <label class="hp2-control-field" for="hp2-lovense-live-level">
+                  <span>Level</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-lovense-live-level" type="range" min="1" max="20" value="10" />
+                    <output id="hp2-lovense-live-level-value">10</output>
+                  </div>
+                </label>
+              </div>
+              <div class="hp2-action-row">
+                <button id="hp2-lovense-live-start-btn" class="hp2-btn hp2-btn-primary" type="button">Start Pattern</button>
+              </div>
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-lovense-ramp-min">
+                  <span>Ramp Min</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-lovense-ramp-min" type="range" min="1" max="20" value="4" />
+                    <output id="hp2-lovense-ramp-min-value">4</output>
+                  </div>
+                </label>
+                <label class="hp2-control-field" for="hp2-lovense-ramp-max">
+                  <span>Ramp Max</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-lovense-ramp-max" type="range" min="1" max="20" value="14" />
+                    <output id="hp2-lovense-ramp-max-value">14</output>
+                  </div>
+                </label>
+                <label class="hp2-control-field" for="hp2-lovense-ramp-step-ms">
+                  <span>Step Length ms</span>
+                  <input id="hp2-lovense-ramp-step-ms" type="number" min="250" max="120000" step="50" value="1200" />
+                </label>
+                <label class="hp2-control-field" for="hp2-lovense-ramp-loops">
+                  <span>Up/Down Loops</span>
+                  <input id="hp2-lovense-ramp-loops" type="number" min="1" max="12" step="1" value="3" />
+                </label>
+              </div>
+              <div class="hp2-action-row">
+                <button id="hp2-lovense-ramp-start-btn" class="hp2-btn hp2-btn-ghost" type="button">Start Live Up/Down</button>
+              </div>
+              <label class="hp2-control-field" for="hp2-lovense-schedule">
+                <span>Timed Schedule</span>
+                <textarea id="hp2-lovense-schedule" rows="4" placeholder="One per line: HH:MM, level, durationMs, label(optional)"></textarea>
+              </label>
+              <div class="hp2-action-row">
+                <button id="hp2-lovense-schedule-send-btn" class="hp2-btn hp2-btn-ghost" type="button">Send Timed Schedule</button>
+              </div>
+            </div>
+            <p id="hp2-lovense-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
+            <div class="hp2-panel-head">
+              <h4>Pavlok Precision</h4>
+              <span class="hp2-muted">Timed control + slider</span>
+            </div>
+            <p class="hp2-muted">Keep Pavlok control narrow and readable: choose the command, drag intensity live, and add a timed length where the command supports it.</p>
+            <div class="hp2-control-stack">
+              <div class="hp2-control-grid-2">
+                <label class="hp2-control-field" for="hp2-pavlok-command">
+                  <span>Command</span>
+                  <select id="hp2-pavlok-command">
+                    <option value="shock">Shock</option>
+                    <option value="vibrate">Vibrate</option>
+                    <option value="beep">Beep</option>
+                    <option value="stop">Stop</option>
+                  </select>
+                </label>
+                <label class="hp2-control-field" for="hp2-pavlok-intensity">
+                  <span>Intensity</span>
+                  <div class="hp2-range-row">
+                    <input id="hp2-pavlok-intensity" type="range" min="0" max="255" value="60" />
+                    <output id="hp2-pavlok-intensity-value">60</output>
+                  </div>
+                </label>
+                <label id="hp2-pavlok-duration-wrap" class="hp2-control-field" for="hp2-pavlok-duration">
+                  <span>Timed Length ms</span>
+                  <input id="hp2-pavlok-duration" type="number" min="100" max="25500" step="100" value="1000" />
+                </label>
+              </div>
+              <div class="hp2-action-row">
+                <button id="hp2-pavlok-send-btn" class="hp2-btn hp2-btn-primary" type="button">Send Pavlok Command</button>
+              </div>
+            </div>
+            <p id="hp2-pavlok-note" class="hp2-muted">Shock keeps the control focused on intensity. Timed length stays for vibrate and beep.</p>
+            <p id="hp2-pavlok-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel hp2-control-card">
             <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>
@@ -442,6 +560,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530q" defer></script>
+  <script src="/handler-v2.js?v=20260530r" defer></script>
 </body>
 </html>
