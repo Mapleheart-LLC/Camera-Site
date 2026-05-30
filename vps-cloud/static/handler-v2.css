@@ -115,20 +115,33 @@ button:focus-visible {
 
 .hp2-app {
   min-height: 100vh;
-  padding: 0.9rem 0.9rem 5.4rem;
+  padding: 0.7rem 0.9rem 1rem;
 }
 
 .hp2-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 0.7rem;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
   margin-bottom: 0.9rem;
+  padding: 0.6rem;
+  border: 1px solid var(--hp2-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, #0d1f23 90%, #000);
+  backdrop-filter: blur(8px);
 }
 
 .hp2-topbar h2 {
   margin: 0.2rem 0 0;
   font-size: 1.2rem;
+}
+
+.hp2-top-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .hp2-top-actions {
@@ -160,6 +173,30 @@ button:focus-visible {
 
 .hp2-main {
   display: grid;
+}
+
+.hp2-header-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.hp2-tab-btn {
+  border: 1px solid var(--hp2-line);
+  background: #122326;
+  color: var(--hp2-muted);
+  border-radius: 11px;
+  padding: 0.42rem 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hp2-tab-active {
+  color: var(--hp2-text);
+  border-color: color-mix(in srgb, var(--hp2-brand) 55%, #fff);
 }
 
 .hp2-view {
@@ -221,6 +258,13 @@ button:focus-visible {
   margin-bottom: 0.65rem;
 }
 
+.hp2-map-controls {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
 .hp2-panel-head h4 {
   margin: 0;
   font-size: 1rem;
@@ -231,6 +275,46 @@ button:focus-visible {
   flex-wrap: wrap;
   gap: 0.55rem;
   margin-bottom: 0.5rem;
+}
+
+.hp2-quick-actions-grid .hp2-btn {
+  flex: 1;
+  min-width: 140px;
+}
+
+.hp2-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.52rem;
+  margin-bottom: 0.56rem;
+}
+
+.hp2-status-grid article {
+  border: 1px solid var(--hp2-line);
+  border-radius: 10px;
+  background: #102126;
+  padding: 0.5rem 0.56rem;
+}
+
+.hp2-status-grid p {
+  margin: 0;
+  color: var(--hp2-muted);
+  font-size: 0.72rem;
+}
+
+.hp2-status-grid h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1.04rem;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.hp2-live-map {
+  width: 100%;
+  height: 280px;
+  border: 1px solid var(--hp2-line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 0.65rem;
 }
 
 .hp2-feed,
@@ -355,38 +439,9 @@ button:focus-visible {
   margin-bottom: 0.65rem;
 }
 
-.hp2-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0.48rem 0.5rem calc(0.48rem + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, #0b1619 88%, #000);
-  border-top: 1px solid var(--hp2-line);
-  backdrop-filter: blur(8px);
-}
-
-.hp2-nav-btn {
-  border: 1px solid transparent;
-  background: #122326;
-  color: var(--hp2-muted);
-  border-radius: 11px;
-  padding: 0.46rem 0.22rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.hp2-nav-active {
-  color: var(--hp2-text);
-  border-color: color-mix(in srgb, var(--hp2-brand) 55%, #fff);
-}
-
 @media (min-width: 980px) {
   .hp2-app {
-    padding: 1rem 1.4rem 1.4rem;
+    padding: 1rem 1.4rem 1.2rem;
   }
 
   .hp2-main {
@@ -401,17 +456,21 @@ button:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 
+  .hp2-intelligence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .hp2-form-grid {
     grid-template-columns: 180px 1fr;
     align-items: center;
   }
 
-  .hp2-nav {
-    position: static;
-    margin-top: 0.8rem;
-    border: 1px solid var(--hp2-line);
-    border-radius: 14px;
-    padding: 0.3rem;
-    background: #112124;
+  .hp2-topbar {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .hp2-header-tabs {
+    grid-column: 1 / -1;
   }
 }

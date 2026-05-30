@@ -3,15 +3,26 @@
 
   const JWT_KEY = 'handler_panel_jwt';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
-  const views = ['dashboard', 'devices', 'commands', 'queues', 'settings'];
+  const views = ['dashboard', 'stats', 'devices', 'commands', 'settings'];
+  const MAX_BREADCRUMBS = 6;
 
   const state = {
     role: null,
     selectedDeviceId: null,
     ws: null,
     wsReconnectTimer: null,
+    wsOfflineVisualTimer: null,
+    wsLastOnlineAt: 0,
     devices: {},
     feed: [],
+    locationHistory: {},
+    map: {
+      instance: null,
+      marker: null,
+      trail: null,
+      trailMarkers: [],
+      autoFollow: true,
+    },
     intelligence: {
       alerts: [],
       transport: {
@@ -88,15 +99,42 @@
 
   function setWsOnline(online) {
     const pill = byId('hp2-ws-pill');
-    pill.textContent = online ? 'WS ONLINE' : 'WS OFFLINE';
-    pill.classList.toggle('hp2-pill-online', online);
-    pill.classList.toggle('hp2-pill-offline', !online);
+
+    const applyState = (nextOnline) => {
+      pill.textContent = nextOnline ? 'WS ONLINE' : 'WS OFFLINE';
+      pill.classList.toggle('hp2-pill-online', nextOnline);
+      pill.classList.toggle('hp2-pill-offline', !nextOnline);
+      if (nextOnline) {
+        state.wsLastOnlineAt = Date.now();
+      }
+    };
+
+    if (online) {
+      if (state.wsOfflineVisualTimer) {
+        clearTimeout(state.wsOfflineVisualTimer);
+        state.wsOfflineVisualTimer = null;
+      }
+      applyState(true);
+      return;
+    }
+
+    if (state.wsOfflineVisualTimer) {
+      clearTimeout(state.wsOfflineVisualTimer);
+    }
+    const elapsed = Date.now() - (state.wsLastOnlineAt || 0);
+    const delayMs = elapsed < 1200 ? 1200 - elapsed : 250;
+    state.wsOfflineVisualTimer = setTimeout(() => {
+      applyState(false);
+      state.wsOfflineVisualTimer = null;
+    }, delayMs);
   }
 
   function showLogin(message = '') {
     disconnectWs();
     byId('hp2-app').hidden = true;
     byId('hp2-login').hidden = false;
+    byId('hp2-app').style.display = 'none';
+    byId('hp2-login').style.display = 'grid';
     byId('hp2-login-error').textContent = message;
     clearJwt();
   }
@@ -104,6 +142,8 @@
   function showApp() {
     byId('hp2-login').hidden = true;
     byId('hp2-app').hidden = false;
+    byId('hp2-login').style.display = 'none';
+    byId('hp2-app').style.display = 'block';
   }
 
   function pushFeed(text) {
@@ -136,8 +176,8 @@
     views.forEach((view) => {
       byId(`hp2-view-${view}`).classList.toggle('hp2-view-active', view === viewName);
     });
-    document.querySelectorAll('.hp2-nav-btn').forEach((button) => {
-      button.classList.toggle('hp2-nav-active', button.dataset.view === viewName);
+    document.querySelectorAll('.hp2-tab-btn').forEach((button) => {
+      button.classList.toggle('hp2-tab-active', button.dataset.view === viewName);
     });
   }
 
@@ -197,6 +237,151 @@
     byId('hp2-detail-lock').textContent = d ? (Number(d.is_locked || 0) === 1 ? 'Locked' : 'Unlocked') : '-';
     byId('hp2-detail-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
     byId('hp2-detail-last').textContent = d ? fmtDate(d.last_seen) : '-';
+    byId('hp2-dashboard-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
+    byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
+    renderDashboardAlerts();
+    renderLiveMap();
+  }
+
+  function ingestLocation(device) {
+    if (!device || !device.device_id) return;
+    const lat = Number(device.lat);
+    const lon = Number(device.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    const key = device.device_id;
+    if (!state.locationHistory[key]) {
+      state.locationHistory[key] = [];
+    }
+    const history = state.locationHistory[key];
+    const last = history[history.length - 1];
+    if (last && Math.abs(last.lat - lat) < 0.00001 && Math.abs(last.lon - lon) < 0.00001) {
+      return;
+    }
+    history.push({ lat, lon, at: device.last_seen || new Date().toISOString() });
+    if (history.length > MAX_BREADCRUMBS) {
+      history.splice(0, history.length - MAX_BREADCRUMBS);
+    }
+  }
+
+  function ensureMapReady() {
+    if (state.map.instance) return state.map.instance;
+    const mapEl = byId('hp2-live-map');
+    if (!mapEl || typeof window.L === 'undefined') return null;
+
+    state.map.instance = window.L.map(mapEl, { zoomControl: true, attributionControl: true });
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(state.map.instance);
+    state.map.instance.setView([37.7749, -122.4194], 12);
+    return state.map.instance;
+  }
+
+  function renderLiveMap() {
+    const listEl = byId('hp2-location-breadcrumbs');
+    if (!listEl) return;
+
+    const deviceId = state.selectedDeviceId;
+    const history = deviceId ? (state.locationHistory[deviceId] || []) : [];
+
+    if (!history.length) {
+      listEl.innerHTML = '<li class="hp2-muted">No location points yet.</li>';
+      return;
+    }
+
+    const map = ensureMapReady();
+    if (map) {
+      if (state.map.marker) {
+        map.removeLayer(state.map.marker);
+        state.map.marker = null;
+      }
+      if (state.map.trail) {
+        map.removeLayer(state.map.trail);
+        state.map.trail = null;
+      }
+      state.map.trailMarkers.forEach((marker) => map.removeLayer(marker));
+      state.map.trailMarkers = [];
+
+      const coords = history.map((p) => [p.lat, p.lon]);
+      const latest = coords[coords.length - 1];
+      state.map.marker = window.L.marker(latest).addTo(map);
+      state.map.trail = window.L.polyline(coords, { color: '#ff8c42', weight: 4, opacity: 0.75 }).addTo(map);
+      state.map.trailMarkers = coords.map((pt, idx) => {
+        const marker = window.L.circleMarker(pt, {
+          radius: idx === coords.length - 1 ? 6 : 4,
+          color: idx === coords.length - 1 ? '#ffd166' : '#ffb071',
+          fillColor: idx === coords.length - 1 ? '#ffd166' : '#ff8c42',
+          fillOpacity: 0.85,
+          weight: 1,
+        }).addTo(map);
+        return marker;
+      });
+      if (state.map.autoFollow) {
+        map.setView(latest, 16, { animate: false });
+      }
+      setTimeout(() => map.invalidateSize(), 0);
+    }
+
+    const points = history.slice(-MAX_BREADCRUMBS).reverse();
+    listEl.innerHTML = points
+      .map((point, idx) => `<li>
+          <div class="hp2-feed-item-row">
+            <strong>Point ${history.length - idx}</strong>
+            <span class="hp2-muted">${escapeHtml(fmtDate(point.at))}</span>
+          </div>
+          <div class="hp2-meta-mono">${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}</div>
+        </li>`)
+      .join('');
+  }
+
+  function renderAutoFollowButton() {
+    const btn = byId('hp2-autofollow-btn');
+    if (!btn) return;
+    btn.textContent = state.map.autoFollow ? 'Auto-follow: ON' : 'Auto-follow: OFF';
+  }
+
+  function toggleAutoFollow() {
+    state.map.autoFollow = !state.map.autoFollow;
+    renderAutoFollowButton();
+    if (state.map.autoFollow) {
+      renderLiveMap();
+    }
+  }
+
+  function dashboardCriticalAlerts() {
+    const alerts = Array.isArray(state.intelligence.alerts) ? state.intelligence.alerts : [];
+    const filtered = alerts.filter((item) => item.level === 'critical' || item.level === 'warning');
+    const selected = state.selectedDeviceId ? state.devices[state.selectedDeviceId] : null;
+    if (selected && (selected.ai_alert === true || Number(selected.ai_alert || 0) === 1)) {
+      filtered.unshift({
+        title: 'AI alert',
+        subtitle: selected.ai_label || 'AI flagged device behavior',
+        at: selected.last_seen || new Date().toISOString(),
+        level: 'critical',
+      });
+    }
+    return filtered.slice(0, 6);
+  }
+
+  function renderDashboardAlerts() {
+    const listEl = byId('hp2-alert-list');
+    if (!listEl) return;
+    const alerts = dashboardCriticalAlerts();
+    if (!alerts.length) {
+      listEl.innerHTML = '<li class="hp2-muted">No active warning/critical alerts.</li>';
+      return;
+    }
+    listEl.innerHTML = alerts
+      .map((item) => `<li>
+          <div class="hp2-feed-item-row">
+            <strong>${escapeHtml(item.title || 'Alert')}</strong>
+            <span class="${severityClass(item.level || 'warning')}">${escapeHtml(item.level || 'warning')}</span>
+          </div>
+          <div class="hp2-muted">${escapeHtml(item.subtitle || '')}</div>
+          <div class="hp2-muted">${escapeHtml(fmtDate(item.at))}</div>
+        </li>`)
+      .join('');
   }
 
   function deviceOnline(device) {
@@ -212,6 +397,7 @@
     state.devices = {};
     (Array.isArray(list) ? list : []).forEach((d) => {
       state.devices[d.device_id] = { ...d };
+      ingestLocation(d);
     });
 
     if (!state.selectedDeviceId || !state.devices[state.selectedDeviceId]) {
@@ -236,6 +422,7 @@
         ...(state.devices[status.device_id] || {}),
         ...status,
       };
+      ingestLocation(state.devices[status.device_id]);
       renderKpis();
       renderDeviceList();
       renderSelectedDevice();
@@ -280,6 +467,7 @@
             ...(state.devices[d.device_id] || {}),
             ...d,
           };
+          ingestLocation(state.devices[d.device_id]);
         });
         renderKpis();
         renderDeviceList();
@@ -293,6 +481,7 @@
           ...(state.devices[msg.device_id] || {}),
           ...msg,
         };
+        ingestLocation(state.devices[msg.device_id]);
         renderKpis();
         renderDeviceList();
         renderSelectedDevice();
@@ -333,6 +522,10 @@
     if (state.wsReconnectTimer) {
       clearTimeout(state.wsReconnectTimer);
       state.wsReconnectTimer = null;
+    }
+    if (state.wsOfflineVisualTimer) {
+      clearTimeout(state.wsOfflineVisualTimer);
+      state.wsOfflineVisualTimer = null;
     }
     setWsOnline(false);
   }
@@ -696,6 +889,7 @@
     deriveStaleRisk();
     await loadBehaviorPulse();
     renderDashboardIntelligence();
+    renderDashboardAlerts();
   }
 
   async function loadQueueKpis() {
@@ -784,6 +978,37 @@
     }
   }
 
+  async function quickBuzz() {
+    const result = byId('hp2-action-result');
+    if (!state.selectedDeviceId) {
+      result.textContent = 'Select a device first.';
+      return;
+    }
+
+    const payload = {
+      device_id: state.selectedDeviceId,
+      action: 'LOVENSE_COMMAND',
+      payload: {
+        command: 'vibrate',
+        intensity: 8,
+        length: 700,
+        level: 8,
+        duration_ms: 700,
+      },
+    };
+
+    result.textContent = 'Sending quick buzz...';
+    try {
+      await apiPost('/api/handler/tpe/push', payload);
+      result.textContent = 'Quick buzz sent.';
+      pushFeed(`Quick buzz sent to ${state.selectedDeviceId}`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        result.textContent = `Failed: ${err.message}`;
+      }
+    }
+  }
+
   function handleDeviceListClick(event) {
     const btn = event.target.closest('button[data-device-id]');
     if (!btn) return;
@@ -811,19 +1036,22 @@
     byId('hp2-lock-btn').addEventListener('click', () => lockSelected().catch(() => {}));
     byId('hp2-checkin-btn').addEventListener('click', () => requestCheckin().catch(() => {}));
     byId('hp2-send-toy-btn').addEventListener('click', () => sendToyCommand().catch(() => {}));
+    byId('hp2-buzz-btn').addEventListener('click', () => quickBuzz().catch(() => {}));
     byId('hp2-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+    byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
 
     byId('hp2-device-list').addEventListener('click', handleDeviceListClick);
 
-    document.querySelectorAll('.hp2-nav-btn').forEach((btn) => {
+    document.querySelectorAll('.hp2-tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => setActiveView(btn.dataset.view));
     });
   }
 
   async function boot() {
     bindEvents();
+    renderAutoFollowButton();
     const jwt = getJwt();
     if (!jwt) {
       showLogin('');

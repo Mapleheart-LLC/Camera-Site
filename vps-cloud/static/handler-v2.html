@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/handler-v2.css" />
 </head>
 <body>
@@ -19,13 +20,12 @@
       <input id="hp2-pass" type="password" autocomplete="current-password" />
       <p id="hp2-login-error" class="hp2-error" role="alert" aria-live="polite"></p>
       <button id="hp2-login-btn" class="hp2-btn hp2-btn-primary">Enter V2 Panel</button>
-      <p class="hp2-note">Supports roles: handler, admin.</p>
     </section>
   </div>
 
   <div id="hp2-app" class="hp2-app" hidden>
     <header class="hp2-topbar">
-      <div>
+      <div class="hp2-top-main">
         <p class="hp2-overline">Mission Console</p>
         <h2 id="hp2-title">No Device Selected</h2>
       </div>
@@ -34,10 +34,70 @@
         <span id="hp2-ws-pill" class="hp2-pill hp2-pill-offline">WS OFFLINE</span>
         <button id="hp2-logout-btn" class="hp2-btn hp2-btn-ghost">Logout</button>
       </div>
+      <nav class="hp2-header-tabs">
+        <button class="hp2-tab-btn hp2-tab-active" data-view="dashboard">Dashboard</button>
+        <button class="hp2-tab-btn" data-view="stats">Stats</button>
+        <button class="hp2-tab-btn" data-view="devices">Devices</button>
+        <button class="hp2-tab-btn" data-view="commands">Commands</button>
+        <button class="hp2-tab-btn" data-view="settings">Settings</button>
+      </nav>
     </header>
 
     <main class="hp2-main">
       <section id="hp2-view-dashboard" class="hp2-view hp2-view-active">
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Quick Actions</h4>
+              <span class="hp2-muted">Selected device</span>
+            </div>
+            <div class="hp2-action-row hp2-quick-actions-grid">
+              <button id="hp2-lock-btn" class="hp2-btn hp2-btn-warn">Lock Device</button>
+              <button id="hp2-checkin-btn" class="hp2-btn hp2-btn-primary">Request Check-In</button>
+              <button id="hp2-buzz-btn" class="hp2-btn hp2-btn-primary">Quick Buzz</button>
+            </div>
+            <p id="hp2-action-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Live Status</h4>
+              <span class="hp2-muted">No info noise</span>
+            </div>
+            <div class="hp2-status-grid">
+              <article>
+                <p>Battery</p>
+                <h3 id="hp2-dashboard-battery">-</h3>
+              </article>
+              <article>
+                <p>Connection</p>
+                <h3 id="hp2-dashboard-connection">-</h3>
+              </article>
+            </div>
+            <ul id="hp2-alert-list" class="hp2-feed"></ul>
+          </section>
+        </div>
+
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Live Map</h4>
+              <div class="hp2-map-controls">
+                <button id="hp2-autofollow-btn" class="hp2-btn hp2-btn-ghost" type="button">Auto-follow: ON</button>
+                <button id="hp2-refresh-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh</button>
+              </div>
+            </div>
+            <div id="hp2-live-map" class="hp2-live-map" aria-label="Live location map"></div>
+            <div class="hp2-panel-head">
+              <h4>Breadcrumbs</h4>
+              <span class="hp2-muted">6 most recent points</span>
+            </div>
+            <ul id="hp2-location-breadcrumbs" class="hp2-feed"></ul>
+          </section>
+        </div>
+      </section>
+
+      <section id="hp2-view-stats" class="hp2-view">
         <div class="hp2-kpi-grid">
           <article class="hp2-kpi-card">
             <p>Known Devices</p>
@@ -55,28 +115,10 @@
             <p>Avg Battery</p>
             <h3 id="hp2-kpi-battery">-</h3>
           </article>
-        </div>
-
-        <div class="hp2-section-grid">
-          <section class="hp2-panel">
-            <div class="hp2-panel-head">
-              <h4>Quick Actions</h4>
-              <span class="hp2-muted">Selected device</span>
-            </div>
-            <div class="hp2-action-row">
-              <button id="hp2-lock-btn" class="hp2-btn hp2-btn-warn">Lock Device</button>
-              <button id="hp2-checkin-btn" class="hp2-btn hp2-btn-primary">Request Check-In</button>
-            </div>
-            <p id="hp2-action-result" class="hp2-muted"></p>
-          </section>
-
-          <section class="hp2-panel">
-            <div class="hp2-panel-head">
-              <h4>Live Activity</h4>
-              <button id="hp2-refresh-btn" class="hp2-btn hp2-btn-ghost">Refresh</button>
-            </div>
-            <ul id="hp2-feed" class="hp2-feed"></ul>
-          </section>
+          <article class="hp2-kpi-card"><p>Booking Queue</p><h3 id="hp2-kpi-booking">-</h3></article>
+          <article class="hp2-kpi-card"><p>Puppy Mail</p><h3 id="hp2-kpi-mail">-</h3></article>
+          <article class="hp2-kpi-card"><p>Questions</p><h3 id="hp2-kpi-questions">-</h3></article>
+          <article class="hp2-kpi-card"><p>Limbo Pending</p><h3 id="hp2-kpi-limbo">-</h3></article>
         </div>
 
         <div class="hp2-section-grid hp2-intelligence-grid">
@@ -197,15 +239,6 @@
         </section>
       </section>
 
-      <section id="hp2-view-queues" class="hp2-view">
-        <div class="hp2-kpi-grid">
-          <article class="hp2-kpi-card"><p>Booking Queue</p><h3 id="hp2-kpi-booking">-</h3></article>
-          <article class="hp2-kpi-card"><p>Puppy Mail</p><h3 id="hp2-kpi-mail">-</h3></article>
-          <article class="hp2-kpi-card"><p>Questions</p><h3 id="hp2-kpi-questions">-</h3></article>
-          <article class="hp2-kpi-card"><p>Limbo Pending</p><h3 id="hp2-kpi-limbo">-</h3></article>
-        </div>
-      </section>
-
       <section id="hp2-view-settings" class="hp2-view">
         <section class="hp2-panel">
           <div class="hp2-panel-head">
@@ -216,16 +249,9 @@
         </section>
       </section>
     </main>
-
-    <nav class="hp2-nav">
-      <button class="hp2-nav-btn hp2-nav-active" data-view="dashboard">Dashboard</button>
-      <button class="hp2-nav-btn" data-view="devices">Devices</button>
-      <button class="hp2-nav-btn" data-view="commands">Commands</button>
-      <button class="hp2-nav-btn" data-view="queues">Queues</button>
-      <button class="hp2-nav-btn" data-view="settings">Settings</button>
-    </nav>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/handler-v2.js" defer></script>
 </body>
 </html>
