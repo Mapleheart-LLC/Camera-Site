@@ -586,17 +586,7 @@
   async function loadSmsThreadPresets() {
     const presetSet = new Set(['default']);
 
-    const [smsThreads, puppyThreads] = await Promise.all([
-      apiGet('/api/admin/sms/threads').catch(() => []),
-      apiGet('/api/handler/puppy-mail/threads?status=all&limit=200').catch(() => []),
-    ]);
-
-    if (Array.isArray(smsThreads)) {
-      smsThreads.forEach((row) => {
-        const id = String(row?.thread_id || '').trim();
-        if (id) presetSet.add(id);
-      });
-    }
+    const puppyThreads = await apiGet('/api/handler/puppy-mail/threads?status=all&limit=200').catch(() => []);
 
     if (Array.isArray(puppyThreads)) {
       puppyThreads.forEach((row) => {
