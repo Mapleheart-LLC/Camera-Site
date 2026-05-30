@@ -1311,6 +1311,10 @@ class HandlerAnswerPayload(BaseModel):
     answer: str
 
 
+class PuppyAnswerPayload(BaseModel):
+    answer: str = Field(..., min_length=1, max_length=1200)
+
+
 class PublicStatusUpdateRequest(BaseModel):
     days_caged_start_date: Optional[str] = None
     days_caged_paused: Optional[bool] = None
@@ -2182,6 +2186,36 @@ def handler_public_intelligence(
 # Device-facing endpoint
 # ---------------------------------------------------------------------------
 
+def _require_device_webhook_secret(
+    db: sqlite3.Connection,
+    *,
+    authorization: Optional[str],
+    request: Request,
+    endpoint_name: str,
+    device_hint: Optional[str] = None,
+) -> None:
+    expected = _effective_webhook_secret(db)
+    if not expected:
+        return
+    provided = ""
+    if authorization and authorization.startswith("Bearer "):
+        provided = authorization[len("Bearer "):].strip()
+    if secrets.compare_digest(provided, expected):
+        return
+    logger.warning(
+        "Rejected %s from %s: invalid webhook secret (device_id=%r)",
+        endpoint_name,
+        (request.client.host if request and request.client else "unknown"),
+        device_hint,
+    )
+    raise HTTPException(
+        status_code=401,
+        detail=(
+            "Invalid webhook secret. "
+            "Send Authorization: Bearer <tpe_webhook_secret>."
+        ),
+    )
+
 @router.post("/api/handler/device-status")
 async def handler_device_status(
     body: DeviceStatusReport,
@@ -2199,24 +2233,13 @@ async def handler_device_status(
     device ID or a UUID generated on first launch).  ``fcm_token`` is optional
     but required for targeted FCM pushes (lock, toy commands).
     """
-    expected = _effective_webhook_secret(db)
-    if expected:
-        provided = ""
-        if authorization and authorization.startswith("Bearer "):
-            provided = authorization[len("Bearer "):].strip()
-        if not secrets.compare_digest(provided, expected):
-            logger.warning(
-                "Rejected /api/handler/device-status from %s: invalid webhook secret (device_id=%r)",
-                (request.client.host if request and request.client else "unknown"),
-                (body.device_id or x_device_id),
-            )
-            raise HTTPException(
-                status_code=401,
-                detail=(
-                    "Invalid webhook secret. "
-                    "Send Authorization: Bearer <tpe_webhook_secret>."
-                ),
-            )
+    _require_device_webhook_secret(
+        db,
+        authorization=authorization,
+        request=request,
+        endpoint_name="/api/handler/device-status",
+        device_hint=(body.device_id or x_device_id),
+    )
 
     body_device_id = (body.device_id or "").strip()
     header_device_id = (x_device_id or "").strip()
@@ -2357,6 +2380,75 @@ async def handler_device_apps_upload(
         }
     )
     return {"status": "received", **result}
+
+
+@router.get("/api/tpe/questions")
+def device_list_questions(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """Device-facing pending questions list for in-app puppy responses."""
+    _require_device_webhook_secret(
+        db,
+        authorization=authorization,
+        request=request,
+        endpoint_name="/api/tpe/questions",
+    )
+
+    rows = db.execute(
+        """
+        SELECT id, text, created_at
+        FROM questions
+        WHERE answer IS NULL
+        ORDER BY created_at ASC
+        LIMIT ?
+        """,
+        (int(limit),),
+    ).fetchall()
+    return [
+        {
+            **dict(row),
+            "question": row["text"],
+            "can_moderate": True,
+            "source": "device",
+        }
+        for row in rows
+    ]
+
+
+@router.post("/api/tpe/questions/{question_id}/answer")
+def device_answer_question(
+    question_id: str,
+    payload: PuppyAnswerPayload,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Device-facing answer submit for pending questions."""
+    _require_device_webhook_secret(
+        db,
+        authorization=authorization,
+        request=request,
+        endpoint_name="/api/tpe/questions/{question_id}/answer",
+    )
+
+    row = db.execute(
+        "SELECT id, answer FROM questions WHERE id = ?",
+        (question_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Question not found.")
+    if row["answer"] is not None:
+        return {"id": question_id, "status": "already_answered"}
+
+    db.execute(
+        "UPDATE questions SET answer = ?, is_public = 0 WHERE id = ?",
+        (payload.answer.strip(), question_id),
+    )
+    db.commit()
+    return {"id": question_id, "status": "answered"}
 
 
 # ---------------------------------------------------------------------------

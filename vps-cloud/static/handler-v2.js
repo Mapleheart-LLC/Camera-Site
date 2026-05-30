@@ -531,6 +531,19 @@
     return ['vibrate', 'pulse', 'wave', 'tease', 'stop'];
   }
 
+  function normalizePavlokCommand(cmd) {
+    const normalized = String(cmd || '').trim().toLowerCase();
+    return normalized === 'shock' ? 'zap' : normalized;
+  }
+
+  function normalizeLovenseCommand(cmd) {
+    const normalized = String(cmd || '').trim().toLowerCase();
+    if (normalized === 'pulse' || normalized === 'wave' || normalized === 'tease') {
+      return 'vibrate';
+    }
+    return normalized;
+  }
+
   function setSegmentActive(host, value) {
     if (!host) return;
     host.querySelectorAll('[data-segment-value]').forEach((button) => {
@@ -1601,6 +1614,7 @@
       metaEl.textContent = 'Select a device';
       if (statusEl) statusEl.textContent = 'No sync yet.';
       listEl.innerHTML = '<li class="hp2-muted">Select a device to load installed apps.</li>';
+      refreshAppActionNameSuggestions();
       return;
     }
 
@@ -1616,6 +1630,7 @@
     const rows = Array.isArray(state.appInventory.apps) ? state.appInventory.apps : [];
     if (!rows.length) {
       listEl.innerHTML = '<li class="hp2-muted">No app inventory yet. Run Poll Installed Apps.</li>';
+      refreshAppActionNameSuggestions();
       return;
     }
 
@@ -1637,6 +1652,25 @@
         <div class="hp2-muted">${escapeHtml(version ? `v${version}` : 'version n/a')}</div>
       </li>`;
     }).join('');
+
+    refreshAppActionNameSuggestions();
+  }
+
+  function refreshAppActionNameSuggestions() {
+    const datalist = byId('hp2-appctl-name-list');
+    if (!datalist) return;
+    const rows = Array.isArray(state.appInventory.apps) ? state.appInventory.apps : [];
+    const values = new Set(['Instagram', 'TikTok', 'Chrome', 'Telegram', 'Discord']);
+    rows.forEach((app) => {
+      const label = String(app.app_label || '').trim();
+      const pkg = String(app.package_name || '').trim();
+      if (label) values.add(label);
+      if (pkg) values.add(pkg);
+    });
+    datalist.innerHTML = Array.from(values)
+      .sort((a, b) => a.localeCompare(b))
+      .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+      .join('');
   }
 
   function renderVpnStatus() {
@@ -3935,7 +3969,7 @@
       title,
       message: `${title} for ${label}?`,
       confirmText,
-      danger: action === 'PAVLOK_COMMAND' && String(payload?.pavlok_cmd || '').toLowerCase() === 'shock',
+      danger: action === 'PAVLOK_COMMAND' && ['shock', 'zap'].includes(String(payload?.pavlok_cmd || '').toLowerCase()),
     });
     if (!confirmed.confirmed) return;
 
@@ -4117,6 +4151,8 @@
     }
     const target = state.commands.liveControl.quickTapTarget;
     const action = state.commands.liveControl.quickTapAction;
+    const pavlokCmd = normalizePavlokCommand(action);
+    const lovenseCmd = normalizeLovenseCommand(action);
     const intensity = Number(byId('hp2-quicktap-intensity')?.value || 10);
     const length = Number(byId('hp2-quicktap-length')?.value || 800);
     const loop = Math.max(1, Math.min(12, Number(byId('hp2-quicktap-loop')?.value || 1)));
@@ -4125,7 +4161,7 @@
       title: 'Send Quick Tap',
       message: `${target} ${action} intensity ${intensity} loop ${loop} for ${selectedDeviceLabel()}?`,
       confirmText: 'Send',
-      danger: target === 'pavlok' && action === 'shock',
+      danger: target === 'pavlok' && pavlokCmd === 'zap',
     });
     if (!confirm.confirmed) return;
 
@@ -4140,21 +4176,21 @@
             command_id: loopCommandId,
             action: 'PAVLOK_COMMAND',
             payload: {
-              pavlok_cmd: action,
+              pavlok_cmd: pavlokCmd,
               pavlok_intensity: String(intensity),
               intensity: String(intensity),
               toy_level: String(intensity),
-              ...(action !== 'shock' ? {
+              ...(pavlokCmd !== 'zap' ? {
                 pavlok_duration_ms: String(length),
                 duration_ms: String(length),
                 toy_duration_ms: String(length),
               } : {}),
             },
-            pavlok_cmd: action,
+            pavlok_cmd: pavlokCmd,
             pavlok_intensity: String(intensity),
             intensity: String(intensity),
             toy_level: String(intensity),
-            ...(action !== 'shock' ? {
+            ...(pavlokCmd !== 'zap' ? {
               pavlok_duration_ms: String(length),
               duration_ms: String(length),
               toy_duration_ms: String(length),
@@ -4166,8 +4202,8 @@
             command_id: loopCommandId,
             action: 'LOVENSE_COMMAND',
             payload: {
-              command: action,
-              toy_command: action,
+              command: lovenseCmd,
+              toy_command: lovenseCmd,
               intensity,
               toy_level: intensity,
               level: intensity,
@@ -4175,8 +4211,8 @@
               duration_ms: length,
               toy_duration_ms: length,
             },
-            command: action,
-            toy_command: action,
+            command: lovenseCmd,
+            toy_command: lovenseCmd,
             intensity,
             toy_level: intensity,
             level: intensity,
@@ -4187,7 +4223,7 @@
         }
       }
       setInlineResult('hp2-quicktap-result', `Quick tap sent (${loop}x).`);
-      recordCommandHistory('Quick Tap', `${target} ${action} intensity ${intensity}${action !== 'shock' ? ` length ${length}ms` : ''} loop ${loop}`, true, {
+      recordCommandHistory('Quick Tap', `${target} ${action} intensity ${intensity}${pavlokCmd !== 'zap' ? ` length ${length}ms` : ''} loop ${loop}`, true, {
         commandId: `${baseCommandId}-1`,
         statusLabel: 'sent',
       });
@@ -4320,7 +4356,8 @@
       setInlineResult('hp2-pavlok-result', 'Select a device first.');
       return;
     }
-    const cmd = String(byId('hp2-pavlok-command')?.value || 'shock').toLowerCase();
+    const cmdRaw = String(byId('hp2-pavlok-command')?.value || 'shock').toLowerCase();
+    const cmd = normalizePavlokCommand(cmdRaw);
     const intensity = Math.max(0, Math.min(255, Number(byId('hp2-pavlok-intensity')?.value || 60)));
     const duration = Math.max(100, Number(byId('hp2-pavlok-duration')?.value || 1000));
 
@@ -4336,7 +4373,7 @@
           pavlok_intensity: String(intensity),
           intensity: String(intensity),
           toy_level: String(intensity),
-          ...(cmd !== 'shock' && cmd !== 'stop' ? {
+          ...(cmd !== 'zap' && cmd !== 'stop' ? {
             pavlok_duration_ms: String(duration),
             duration_ms: String(duration),
             toy_duration_ms: String(duration),
@@ -4346,14 +4383,14 @@
         pavlok_intensity: String(intensity),
         intensity: String(intensity),
         toy_level: String(intensity),
-        ...(cmd !== 'shock' && cmd !== 'stop' ? {
+        ...(cmd !== 'zap' && cmd !== 'stop' ? {
           pavlok_duration_ms: String(duration),
           duration_ms: String(duration),
           toy_duration_ms: String(duration),
         } : {}),
       });
       setInlineResult('hp2-pavlok-result', 'Pavlok command sent.');
-      recordCommandHistory('Pavlok Precision', `${cmd} intensity ${intensity}${cmd !== 'shock' && cmd !== 'stop' ? ` duration ${duration}ms` : ''}`, true, {
+      recordCommandHistory('Pavlok Precision', `${cmdRaw} intensity ${intensity}${cmd !== 'zap' && cmd !== 'stop' ? ` duration ${duration}ms` : ''}`, true, {
         commandId,
         statusLabel: 'sent',
       });
@@ -4614,7 +4651,7 @@
       confirmText: 'Shock',
       action: 'PAVLOK_COMMAND',
       payload: {
-        pavlok_cmd: 'shock',
+        pavlok_cmd: 'zap',
         pavlok_intensity: String(intensity),
         intensity: String(intensity),
         toy_level: String(intensity),
