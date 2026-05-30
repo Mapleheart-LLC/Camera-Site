@@ -1400,19 +1400,27 @@
             </details>
 
             <!-- ── Content Filter / NudeNet ── -->
-            <details class="cmd-group" data-everyday="true">
-              <summary>🔍 Content Filter / NudeNet</summary>
+            <details class="cmd-group" data-everyday="true" open>
+              <summary>🔍 Content Filter / NudeNet (Disabled)</summary>
               <div class="cmd-group-body">
-                <div class="cmd-row">
+                <div class="cmd-row" style="opacity:.55; filter:grayscale(1);">
                   <span class="cmd-row-label">Update Settings</span>
                   <div class="cmd-inputs">
-                    <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" />
-                    <select id="cmd-cf-strict"><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
-                    <select id="cmd-cf-nudenet"><option value="">nudenet?</option><option value="true">nudenet: on</option><option value="false">nudenet: off</option></select>
-                    <textarea id="cmd-cf-classes" placeholder="Blocked classes (comma or new line, e.g. EXPOSED_BREAST_F)" style="min-height:40px"></textarea>
+                    <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" disabled />
+                    <select id="cmd-cf-strict" disabled><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
+                    <select id="cmd-cf-nudenet" disabled><option value="false" selected>nudenet: disabled</option></select>
+                    <textarea id="cmd-cf-classes" placeholder="Blocked classes (comma or new line, e.g. EXPOSED_BREAST_F)" style="min-height:40px" disabled></textarea>
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('UPDATE_SETTINGS',{threshold:v('cmd-cf-thresh'),strict:v('cmd-cf-strict'),nudenet_enabled:v('cmd-cf-nudenet'),blocked_classes:toStringArrayJsonValue('cmd-cf-classes')},'res-cmd-cf')">Send</button>
+                  <button class="btn-cmd" disabled>Disabled</button>
                   <span class="cmd-result" id="res-cmd-cf"></span>
+                </div>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Status</span>
+                  <div class="cmd-inputs">
+                    <div style="padding:.65rem .8rem; border:1px solid var(--border, #444); border-radius:10px; background:rgba(127,127,127,.08); color:inherit;">
+                      NudeNet controls are intentionally disabled on both the device and handler sides.
+                    </div>
+                  </div>
                 </div>
               </div>
             </details>
