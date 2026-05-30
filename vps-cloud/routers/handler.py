@@ -51,7 +51,7 @@ from pydantic import AliasChoices, BaseModel, Field
 import jwt as _jwt
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import SECRET_KEY, ALGORITHM, role_required
-from mqtt_client import mqtt_client as _mqtt_client
+from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
 from routers.tpe import (
     _effective_webhook_secret,
     _send_mqtt_to_device,
@@ -1091,6 +1091,27 @@ async def _send_command_with_ws_fallback(
                 )
 
     if int(mqtt.get("sent", 0)) == 0 and ws_fallback_sent == 0 and ws_broadcast_fallback_sent == 0:
+        queue_id = 0
+        try:
+            queue_id = enqueue_device_command_outbox(
+                db,
+                device_id=device_id,
+                payload=payload,
+            )
+            db.commit()
+        except Exception as exc:
+            logger.warning("Failed to enqueue command outbox for device=%s: %s", device_id, exc)
+            queue_id = 0
+
+        if queue_id:
+            return {
+                "mqtt": mqtt,
+                "ws_fallback": {"sent": ws_fallback_sent},
+                "ws_broadcast_fallback": {"sent": ws_broadcast_fallback_sent},
+                "outbox": {"queued": 1, "id": queue_id},
+                "transport": "outbox",
+            }
+
         raise HTTPException(
             status_code=503,
             detail=(
@@ -1103,6 +1124,7 @@ async def _send_command_with_ws_fallback(
         "mqtt": mqtt,
         "ws_fallback": {"sent": ws_fallback_sent},
         "ws_broadcast_fallback": {"sent": ws_broadcast_fallback_sent},
+        "outbox": {"queued": 0},
         "transport": (
             "mqtt"
             if int(mqtt.get("sent", 0)) > 0
@@ -3586,13 +3608,26 @@ async def handler_lock(
         )
 
     if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Command transport unavailable. "
-                f"mqtt_error={mqtt_error or 'publish_failed'}"
-            ),
-        )
+        queue_id = 0
+        try:
+            queue_id = enqueue_device_command_outbox(
+                db,
+                device_id=body.device_id,
+                payload={"action": "LOCK_DEVICE"},
+            )
+            db.commit()
+        except Exception as exc:
+            logger.warning("Failed to enqueue lock command for device=%s: %s", body.device_id, exc)
+            queue_id = 0
+
+        if not queue_id:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Command transport unavailable. "
+                    f"mqtt_error={mqtt_error or 'publish_failed'}"
+                ),
+            )
 
     now = _now_iso()
     db.execute(
@@ -3610,7 +3645,15 @@ async def handler_lock(
         "status": "lock_sent",
         "mqtt": result,
         "ws_fallback": {"sent": ws_fallback_sent},
-        "transport": "mqtt" if int(result.get("sent", 0)) > 0 else "ws_fallback",
+        "outbox": {
+            "queued": 1 if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+            "id": queue_id if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+        },
+        "transport": (
+            "mqtt"
+            if int(result.get("sent", 0)) > 0
+            else ("ws_fallback" if ws_fallback_sent > 0 else "outbox")
+        ),
     }
 
 
@@ -6929,13 +6972,26 @@ async def handler_tpe_push(
         )
 
     if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Command transport unavailable. "
-                f"mqtt_error={mqtt_error or 'publish_failed'}"
-            ),
-        )
+        queue_id = 0
+        try:
+            queue_id = enqueue_device_command_outbox(
+                db,
+                device_id=body.device_id,
+                payload=payload,
+            )
+            db.commit()
+        except Exception as exc:
+            logger.warning("Failed to enqueue TPE push command for device=%s: %s", body.device_id, exc)
+            queue_id = 0
+
+        if not queue_id:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Command transport unavailable. "
+                    f"mqtt_error={mqtt_error or 'publish_failed'}"
+                ),
+            )
 
     db.execute(
         """
@@ -6953,7 +7009,15 @@ async def handler_tpe_push(
     return {
         **result,
         "ws_fallback": {"sent": ws_fallback_sent},
-        "transport": "mqtt" if int(result.get("sent", 0)) > 0 else "ws_fallback",
+        "outbox": {
+            "queued": 1 if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+            "id": queue_id if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+        },
+        "transport": (
+            "mqtt"
+            if int(result.get("sent", 0)) > 0
+            else ("ws_fallback" if ws_fallback_sent > 0 else "outbox")
+        ),
     }
 
 
@@ -7618,18 +7682,39 @@ async def handler_tpe_checkins_request(
             )
 
         if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Command transport unavailable. "
-                    f"mqtt_error={mqtt_error or 'publish_failed'}"
-                ),
-            )
+            queue_id = 0
+            try:
+                queue_id = enqueue_device_command_outbox(
+                    db,
+                    device_id=body.device_id,
+                    payload=payload,
+                )
+                db.commit()
+            except Exception as exc:
+                logger.warning("Failed to enqueue REQUEST_CHECKIN for device=%s: %s", body.device_id, exc)
+                queue_id = 0
+
+            if not queue_id:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "Command transport unavailable. "
+                        f"mqtt_error={mqtt_error or 'publish_failed'}"
+                    ),
+                )
 
         return {
             "mqtt": result,
             "ws_fallback": {"sent": ws_fallback_sent},
-            "transport": "mqtt" if int(result.get("sent", 0)) > 0 else "ws_fallback",
+            "outbox": {
+                "queued": 1 if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+                "id": queue_id if int(result.get("sent", 0)) == 0 and ws_fallback_sent == 0 else 0,
+            },
+            "transport": (
+                "mqtt"
+                if int(result.get("sent", 0)) > 0
+                else ("ws_fallback" if ws_fallback_sent > 0 else "outbox")
+            ),
         }
 
     ws_fallback_sent = 0

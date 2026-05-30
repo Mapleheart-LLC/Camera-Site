@@ -8,7 +8,7 @@ import re
 import sqlite3
 import ssl
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
 from db import get_db_connection
@@ -20,6 +20,10 @@ _PRESENCE_QUEUE_TIMEOUT_SECONDS = 1.0
 _MQTT_CONNECT_WAIT_SECONDS = 5.0
 _MQTT_PUBLISH_ACK_WAIT_SECONDS = 2.0
 _MQTT_PUBLISH_RETRY_COUNT = 3
+_MQTT_OUTBOX_DEFAULT_MAX_ATTEMPTS = 12
+_MQTT_OUTBOX_DEFAULT_BATCH_SIZE = 25
+_MQTT_OUTBOX_DEFAULT_RETRY_BASE_SECONDS = 5
+_MQTT_OUTBOX_DEFAULT_RETRY_MAX_SECONDS = 300
 
 
 def _as_bool(value: str) -> bool:
@@ -28,6 +32,65 @@ def _as_bool(value: str) -> bool:
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_command_outbox_table(db: sqlite3.Connection) -> None:
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_command_outbox (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id       TEXT NOT NULL,
+            payload_json    TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            attempt_count   INTEGER NOT NULL DEFAULT 0,
+            max_attempts    INTEGER NOT NULL DEFAULT 12,
+            last_error      TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL,
+            next_attempt_at TEXT NOT NULL
+        )
+        """
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_command_outbox_device_status_next "
+        "ON handler_command_outbox(device_id, status, next_attempt_at, id)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_command_outbox_status_next "
+        "ON handler_command_outbox(status, next_attempt_at, id)"
+    )
+
+
+def enqueue_device_command_outbox(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    payload: dict[str, Any],
+    max_attempts: int = _MQTT_OUTBOX_DEFAULT_MAX_ATTEMPTS,
+) -> int:
+    sanitized_device_id = str(device_id or "").strip()
+    if not sanitized_device_id:
+        raise ValueError("device_id is required")
+
+    ensure_command_outbox_table(db)
+    now = _iso_now()
+    payload_json = json.dumps(payload or {}, separators=(",", ":"), ensure_ascii=False)
+    row = db.execute(
+        """
+        INSERT INTO handler_command_outbox
+            (device_id, payload_json, status, attempt_count, max_attempts, last_error, created_at, updated_at, next_attempt_at)
+        VALUES (?, ?, 'pending', 0, ?, NULL, ?, ?, ?)
+        """,
+        (
+            sanitized_device_id,
+            payload_json,
+            max(1, int(max_attempts)),
+            now,
+            now,
+            now,
+        ),
+    )
+    return int(row.lastrowid or 0)
 
 
 class _MqttClientService:
@@ -51,6 +114,10 @@ class _MqttClientService:
         self._telemetry_topic = "tpeapp/device/+/telemetry"
         self._publish_ack_wait_seconds = _MQTT_PUBLISH_ACK_WAIT_SECONDS
         self._publish_retry_count = _MQTT_PUBLISH_RETRY_COUNT
+        self._outbox_max_attempts = _MQTT_OUTBOX_DEFAULT_MAX_ATTEMPTS
+        self._outbox_batch_size = _MQTT_OUTBOX_DEFAULT_BATCH_SIZE
+        self._outbox_retry_base_seconds = _MQTT_OUTBOX_DEFAULT_RETRY_BASE_SECONDS
+        self._outbox_retry_max_seconds = _MQTT_OUTBOX_DEFAULT_RETRY_MAX_SECONDS
 
         self._status_topic_re: Optional[re.Pattern[str]] = None
         self._heartbeat_topic_re: Optional[re.Pattern[str]] = None
@@ -169,6 +236,30 @@ class _MqttClientService:
                 "tpe_mqtt_publish_retry_count",
                 str(self._publish_retry_count),
             )
+            outbox_max_attempts = self._setting(
+                db,
+                "MQTT_OUTBOX_MAX_ATTEMPTS",
+                "tpe_mqtt_outbox_max_attempts",
+                str(self._outbox_max_attempts),
+            )
+            outbox_batch_size = self._setting(
+                db,
+                "MQTT_OUTBOX_REPLAY_BATCH_SIZE",
+                "tpe_mqtt_outbox_replay_batch_size",
+                str(self._outbox_batch_size),
+            )
+            outbox_retry_base = self._setting(
+                db,
+                "MQTT_OUTBOX_RETRY_BASE_SECONDS",
+                "tpe_mqtt_outbox_retry_base_seconds",
+                str(self._outbox_retry_base_seconds),
+            )
+            outbox_retry_max = self._setting(
+                db,
+                "MQTT_OUTBOX_RETRY_MAX_SECONDS",
+                "tpe_mqtt_outbox_retry_max_seconds",
+                str(self._outbox_retry_max_seconds),
+            )
             try:
                 self._publish_ack_wait_seconds = max(0.2, float(publish_ack_wait))
             except Exception:
@@ -177,7 +268,24 @@ class _MqttClientService:
                 self._publish_retry_count = max(1, int(publish_retry_count))
             except Exception:
                 self._publish_retry_count = _MQTT_PUBLISH_RETRY_COUNT
+            try:
+                self._outbox_max_attempts = max(1, int(outbox_max_attempts))
+            except Exception:
+                self._outbox_max_attempts = _MQTT_OUTBOX_DEFAULT_MAX_ATTEMPTS
+            try:
+                self._outbox_batch_size = max(1, int(outbox_batch_size))
+            except Exception:
+                self._outbox_batch_size = _MQTT_OUTBOX_DEFAULT_BATCH_SIZE
+            try:
+                self._outbox_retry_base_seconds = max(1, int(outbox_retry_base))
+            except Exception:
+                self._outbox_retry_base_seconds = _MQTT_OUTBOX_DEFAULT_RETRY_BASE_SECONDS
+            try:
+                self._outbox_retry_max_seconds = max(self._outbox_retry_base_seconds, int(outbox_retry_max))
+            except Exception:
+                self._outbox_retry_max_seconds = _MQTT_OUTBOX_DEFAULT_RETRY_MAX_SECONDS
             self._compile_presence_regexes()
+            ensure_command_outbox_table(db)
 
             if not host:
                 logger.info("MQTT disabled: no broker host configured.")
@@ -356,11 +464,97 @@ class _MqttClientService:
                         """,
                         (device_id, 1 if is_online else 0, now, now),
                     )
+                    if is_online:
+                        self._flush_command_outbox_for_device(db, device_id)
                     db.commit()
                 except Exception as exc:
                     logger.debug("MQTT presence DB update failed for %s: %s", device_id, exc)
         finally:
             db.close()
+
+    def _flush_command_outbox_for_device(self, db: sqlite3.Connection, device_id: str) -> None:
+        ensure_command_outbox_table(db)
+        now = _iso_now()
+        rows = db.execute(
+            """
+            SELECT id, payload_json, attempt_count, max_attempts
+            FROM handler_command_outbox
+            WHERE device_id = ?
+              AND status = 'pending'
+              AND next_attempt_at <= ?
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (device_id, now, self._outbox_batch_size),
+        ).fetchall()
+        if not rows:
+            return
+
+        replayed = 0
+        for row in rows:
+            outbox_id = int(row["id"])
+            attempt_count = int(row["attempt_count"] or 0)
+            max_attempts = int(row["max_attempts"] or self._outbox_max_attempts)
+
+            try:
+                payload = json.loads(row["payload_json"] or "{}")
+                if not isinstance(payload, dict):
+                    raise ValueError("payload_json is not an object")
+            except Exception as exc:
+                db.execute(
+                    """
+                    UPDATE handler_command_outbox
+                    SET status = 'dead',
+                        attempt_count = ?,
+                        last_error = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (attempt_count + 1, f"payload_parse_error:{exc}", _iso_now(), outbox_id),
+                )
+                continue
+
+            topic = self.topic_for_device_command(device_id)
+            published = self.publish_json(topic, payload, qos=1)
+            if published:
+                db.execute("DELETE FROM handler_command_outbox WHERE id = ?", (outbox_id,))
+                replayed += 1
+                continue
+
+            next_attempt = attempt_count + 1
+            update_now = _iso_now()
+            if next_attempt >= max_attempts:
+                db.execute(
+                    """
+                    UPDATE handler_command_outbox
+                    SET status = 'dead',
+                        attempt_count = ?,
+                        last_error = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (next_attempt, "mqtt_replay_failed", update_now, outbox_id),
+                )
+            else:
+                backoff_seconds = min(
+                    self._outbox_retry_max_seconds,
+                    self._outbox_retry_base_seconds * (2 ** max(0, next_attempt - 1)),
+                )
+                next_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff_seconds)).isoformat()
+                db.execute(
+                    """
+                    UPDATE handler_command_outbox
+                    SET attempt_count = ?,
+                        last_error = ?,
+                        updated_at = ?,
+                        next_attempt_at = ?
+                    WHERE id = ?
+                    """,
+                    (next_attempt, "mqtt_replay_failed", update_now, next_at, outbox_id),
+                )
+
+        if replayed:
+            logger.info("MQTT outbox replay delivered %s command(s) to device=%s", replayed, device_id)
 
     def _on_message(self, client, userdata, msg):
         topic = msg.topic or ""
