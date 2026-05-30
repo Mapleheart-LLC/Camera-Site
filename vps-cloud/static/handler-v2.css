@@ -416,6 +416,35 @@ button:focus-visible {
   min-width: 140px;
 }
 
+.hp2-action-cluster {
+  flex: 1.35;
+  min-width: 220px;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  border: 1px solid var(--hp2-line);
+  border-radius: 12px;
+  background: #102126;
+  padding: 0.45rem;
+}
+
+.hp2-action-cluster-label {
+  color: var(--hp2-muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hp2-action-cluster-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.hp2-action-cluster-buttons .hp2-btn {
+  min-width: 0;
+}
+
 .hp2-status-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -460,7 +489,7 @@ button:focus-visible {
 }
 
 .hp2-live-map .leaflet-tile-pane {
-  filter: saturate(0.78) hue-rotate(168deg) brightness(0.64) contrast(1.18);
+  filter: saturate(0.96) brightness(0.96) contrast(1.03);
 }
 
 .hp2-live-map .leaflet-control-zoom a,
@@ -899,7 +928,9 @@ button:focus-visible {
 }
 
 #hp2-settings-result,
-#hp2-command-result {
+#hp2-command-result,
+#hp2-device-detail-result,
+#hp2-action-result {
   min-height: 1.2em;
 }
 

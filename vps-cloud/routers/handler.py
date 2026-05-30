@@ -863,6 +863,10 @@ class LockRequest(BaseModel):
     device_id: str
 
 
+class DeviceRenameRequest(BaseModel):
+    device_name: str
+
+
 class RuleEngineRuleCreateRequest(BaseModel):
     name: str
     enabled: bool = True
@@ -2610,6 +2614,47 @@ def handler_get_status(
         "SELECT * FROM handler_device_status WHERE device_id = ?", (device_id,)
     ).fetchone()
     return dict(row) if row else {}
+
+
+@router.patch("/api/handler/devices/{device_id}/name")
+async def handler_update_device_name(
+    device_id: str,
+    body: DeviceRenameRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    if current_user["role"] != "admin":
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        if device_id not in assigned:
+            raise HTTPException(status_code=403, detail="Access denied to this device.")
+
+    row = db.execute(
+        "SELECT device_id FROM handler_device_status WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Device not found.")
+
+    name = (body.device_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="device_name is required.")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="device_name must be 120 characters or fewer.")
+
+    now = _now_iso()
+    db.execute(
+        "UPDATE handler_device_status SET device_name = ?, updated_at = ? WHERE device_id = ?",
+        (name, now, device_id),
+    )
+    db.commit()
+
+    await _handler_ws.broadcast({
+        "type": "status_update",
+        "device_id": device_id,
+        "device_name": name,
+        "updated_at": now,
+    })
+    return {"updated": True, "device_id": device_id, "device_name": name}
 
 
 @router.post("/api/handler/lock")

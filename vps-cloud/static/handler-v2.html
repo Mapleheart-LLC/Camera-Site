@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530m" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530q" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -56,7 +56,15 @@
             <div class="hp2-action-row hp2-quick-actions-grid">
               <button id="hp2-lock-btn" class="hp2-btn hp2-btn-warn">Lock Device</button>
               <button id="hp2-checkin-btn" class="hp2-btn hp2-btn-primary">Request Check-In</button>
-              <button id="hp2-buzz-btn" class="hp2-btn hp2-btn-primary">Quick Buzz</button>
+              <button id="hp2-startle-btn" class="hp2-btn hp2-btn-primary">Startle</button>
+              <div class="hp2-action-cluster hp2-shock-cluster" aria-label="Shock controls">
+                <span class="hp2-action-cluster-label">Shock</span>
+                <div class="hp2-action-cluster-buttons">
+                  <button id="hp2-shock-10-btn" class="hp2-btn hp2-btn-ghost" type="button">10</button>
+                  <button id="hp2-shock-30-btn" class="hp2-btn hp2-btn-ghost" type="button">30</button>
+                  <button id="hp2-shock-60-btn" class="hp2-btn hp2-btn-warn" type="button">60</button>
+                </div>
+              </div>
             </div>
             <p id="hp2-action-result" class="hp2-muted"></p>
           </section>
@@ -106,10 +114,6 @@
       <section id="hp2-view-stats" class="hp2-view">
         <div class="hp2-kpi-grid">
           <article class="hp2-kpi-card">
-            <p>Known Devices</p>
-            <h3 id="hp2-kpi-known">0</h3>
-          </article>
-          <article class="hp2-kpi-card">
             <p>Online Now</p>
             <h3 id="hp2-kpi-online">0</h3>
           </article>
@@ -121,10 +125,6 @@
             <p>Avg Battery</p>
             <h3 id="hp2-kpi-battery">-</h3>
           </article>
-          <article class="hp2-kpi-card"><p>Booking Queue</p><h3 id="hp2-kpi-booking">-</h3></article>
-          <article class="hp2-kpi-card"><p>Puppy Mail</p><h3 id="hp2-kpi-mail">-</h3></article>
-          <article class="hp2-kpi-card"><p>Questions</p><h3 id="hp2-kpi-questions">-</h3></article>
-          <article class="hp2-kpi-card"><p>Evidence Pending</p><h3 id="hp2-kpi-limbo">-</h3></article>
         </div>
 
         <div class="hp2-section-grid hp2-intelligence-grid">
@@ -133,6 +133,7 @@
               <h4>Alerts Timeline</h4>
               <button id="hp2-refresh-intel-btn" class="hp2-btn hp2-btn-ghost">Refresh Intel</button>
             </div>
+            <p class="hp2-muted">Recent app lifecycle and operator-significant moments, ordered so the latest state changes are easy to scan.</p>
             <ul id="hp2-alert-timeline" class="hp2-feed"></ul>
           </section>
 
@@ -141,6 +142,7 @@
               <h4>Transport Outcomes</h4>
               <span class="hp2-muted">Recent command relay trend</span>
             </div>
+            <p class="hp2-muted">Shows how commands are getting to the device: direct MQTT delivery, websocket fallback, or outright failures.</p>
             <div class="hp2-transport-kpis">
               <article>
                 <p>MQTT</p>
@@ -163,6 +165,7 @@
               <h4>Stale Device Risk</h4>
               <span class="hp2-muted">Offline age + battery pressure</span>
             </div>
+            <p class="hp2-muted">Flags devices that may need attention because telemetry is aging, battery is low, or the app may no longer be reporting cleanly.</p>
             <ul id="hp2-stale-risk" class="hp2-feed"></ul>
           </section>
 
@@ -171,6 +174,7 @@
               <h4>Behavior Pulse</h4>
               <span class="hp2-muted">Learning signals</span>
             </div>
+            <p class="hp2-muted">Condenses recent behavior analysis into event volume, risk pressure, and mood movement so handlers can read trend direction quickly.</p>
             <div class="hp2-transport-kpis">
               <article>
                 <p>Events</p>
@@ -332,6 +336,10 @@
               <p>Battery</p><p id="hp2-detail-battery">-</p>
               <p>Last Seen</p><p id="hp2-detail-last">-</p>
             </div>
+            <div class="hp2-action-row">
+              <button id="hp2-rename-device-btn" class="hp2-btn hp2-btn-ghost" type="button">Set Device Name</button>
+            </div>
+            <p id="hp2-device-detail-result" class="hp2-muted"></p>
           </section>
         </div>
       </section>
@@ -434,6 +442,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530m" defer></script>
+  <script src="/handler-v2.js?v=20260530q" defer></script>
 </body>
 </html>

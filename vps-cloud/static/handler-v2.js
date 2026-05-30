@@ -273,6 +273,24 @@
     return response.json().catch(() => ({}));
   }
 
+  async function apiPatch(path, body) {
+    const response = await apiFetch(path, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    return response.json().catch(() => ({}));
+  }
+
+  function selectedDevice() {
+    return state.selectedDeviceId ? state.devices[state.selectedDeviceId] : null;
+  }
+
+  function selectedDeviceLabel() {
+    const device = selectedDevice();
+    return device?.device_name || device?.device_id || state.selectedDeviceId || 'selected device';
+  }
+
   function setWsOnline(online) {
     const pill = byId('hp2-ws-pill');
 
@@ -569,7 +587,6 @@
 
   function renderKpis() {
     const devices = Object.values(state.devices);
-    const known = devices.length;
     const online = devices.filter((d) => deviceOnline(d)).length;
     const locked = devices.filter((d) => Number(d.is_locked || 0) === 1).length;
     const batteryRows = devices.map((d) => Number(d.battery_pct)).filter((v) => Number.isFinite(v));
@@ -577,7 +594,6 @@
       ? `${Math.round(batteryRows.reduce((acc, v) => acc + v, 0) / batteryRows.length)}%`
       : '-';
 
-    byId('hp2-kpi-known').textContent = String(known);
     byId('hp2-kpi-online').textContent = String(online);
     byId('hp2-kpi-locked').textContent = String(locked);
     byId('hp2-kpi-battery').textContent = avgBattery;
@@ -615,7 +631,7 @@
   }
 
   function renderSelectedDevice() {
-    const d = state.selectedDeviceId ? state.devices[state.selectedDeviceId] : null;
+    const d = selectedDevice();
     byId('hp2-title').textContent = d ? (d.device_name || d.device_id || 'Selected Device') : 'No Device Selected';
     byId('hp2-detail-id').textContent = d?.device_id || '-';
     byId('hp2-detail-name').textContent = d?.device_name || '-';
@@ -656,7 +672,7 @@
     if (!mapEl || typeof window.L === 'undefined') return null;
 
     state.map.instance = window.L.map(mapEl, { zoomControl: true, attributionControl: true });
-    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       subdomains: 'abcd',
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
@@ -972,7 +988,6 @@
   async function hydrateApp() {
     const jobs = [
       loadDevices(),
-      loadQueueKpis(),
       loadDashboardIntelligence(),
       loadQueueHub(),
     ];
@@ -1440,7 +1455,6 @@
       await apiPost(`/api/handler/booking/${encodeURIComponent(String(id))}/status`, { status });
       setQueueResult(`Booking #${id} marked ${status}.`);
       await loadQueueBooking();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to update booking: ${err.message}`);
@@ -1657,7 +1671,6 @@
       }
       setQueueResult('Reply sent.');
       await loadQueueMailThread(threadId);
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         patchPendingMessage(threadId, tempId, {
@@ -1683,7 +1696,6 @@
       removePendingMessage(threadId, tempId);
       setQueueResult('Reply sent.');
       await loadQueueMailThread(threadId);
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         patchPendingMessage(threadId, tempId, { delivery: 'failed', error: err.message });
@@ -1705,7 +1717,6 @@
       } else {
         await loadQueueMailThreads();
       }
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to update thread: ${err.message}`);
@@ -1760,7 +1771,6 @@
       await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/status`, { status });
       setQueueResult(`Thread marked ${status}.`);
       await loadQueueMailThread(threadId);
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to update thread: ${err.message}`);
@@ -1862,7 +1872,6 @@
       await apiPost(`/api/handler/questions/${encodeURIComponent(String(questionId))}/answer`, { answer: normalized });
       setQueueResult('Answer published.');
       await loadQueueQuestions();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to answer question: ${err.message}`);
@@ -1883,7 +1892,6 @@
       await apiFetch(`/api/handler/questions/${encodeURIComponent(String(questionId))}`, { method: 'DELETE' });
       setQueueResult('Question deleted.');
       await loadQueueQuestions();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to delete question: ${err.message}`);
@@ -1969,7 +1977,6 @@
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/answer`, { answer_text: normalized });
       setQueueResult('Limbo item answered.');
       await loadEvidenceDrawer();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to answer limbo item: ${err.message}`);
@@ -1995,7 +2002,6 @@
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/dismiss`, { reason });
       setQueueResult('Limbo item dismissed.');
       await loadEvidenceDrawer();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to dismiss limbo item: ${err.message}`);
@@ -2014,7 +2020,6 @@
       }
       await loadEvidenceDrawer();
       await loadQueueQuestions();
-      await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setQueueResult(`Failed to publish limbo item: ${err.message}`);
@@ -2077,20 +2082,6 @@
     }
   }
 
-  async function loadQueueKpis() {
-    const [booking, mail, questions, limbo] = await Promise.all([
-      apiGet('/api/handler/booking?status=new&limit=200').catch(() => []),
-      apiGet('/api/handler/puppy-mail/threads?status=open&limit=200').catch(() => []),
-      apiGet('/api/handler/questions').catch(() => []),
-      apiGet('/api/handler/limbo?status=pending&limit=200').catch(() => []),
-    ]);
-
-    byId('hp2-kpi-booking').textContent = String(Array.isArray(booking) ? booking.length : 0);
-    byId('hp2-kpi-mail').textContent = String(Array.isArray(mail) ? mail.length : 0);
-    byId('hp2-kpi-questions').textContent = String(Array.isArray(questions) ? questions.length : 0);
-    byId('hp2-kpi-limbo').textContent = String(Array.isArray(limbo) ? limbo.length : 0);
-  }
-
   async function lockSelected() {
     if (!state.selectedDeviceId) {
       setInlineResult('hp2-action-result', 'Select a device first.');
@@ -2132,10 +2123,53 @@
     try {
       await apiPost('/api/handler/tpe/checkins/request', { device_id: state.selectedDeviceId });
       setInlineResult('hp2-action-result', 'Check-in requested.');
+      recordCommandHistory('Request Check-In', `Requested for ${selectedDeviceLabel()}`, true);
       pushFeed(`Check-in requested for ${state.selectedDeviceId}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-action-result', `Failed: ${err.message}`);
+        recordCommandHistory('Request Check-In', `Failed for ${selectedDeviceLabel()}: ${err.message}`, false);
+      }
+    }
+  }
+
+  async function sendQuickActionCommand({
+    title,
+    confirmText,
+    action,
+    payload,
+    successMessage,
+    historyDetail,
+  }) {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-action-result', 'Select a device first.');
+      return;
+    }
+
+    const label = selectedDeviceLabel();
+    const confirmed = await askInlineConfirm({
+      title,
+      message: `${title} for ${label}?`,
+      confirmText,
+      danger: action === 'PAVLOK_COMMAND' && String(payload?.pavlok_cmd || '').toLowerCase() === 'shock',
+    });
+    if (!confirmed.confirmed) return;
+
+    setInlineResult('hp2-action-result', `${title} sending...`);
+    try {
+      await apiPost('/api/handler/tpe/push', {
+        device_id: state.selectedDeviceId,
+        action,
+        payload,
+        ...payload,
+      });
+      setInlineResult('hp2-action-result', successMessage);
+      recordCommandHistory(title, historyDetail || `${title} for ${label}`, true);
+      pushFeed(`${title} sent to ${state.selectedDeviceId}`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-action-result', `Failed: ${err.message}`);
+        recordCommandHistory(title, `${title} failed for ${label}: ${err.message}`, false);
       }
     }
   }
@@ -2185,13 +2219,9 @@
   }
 
   async function quickBuzz() {
-    if (!state.selectedDeviceId) {
-      setInlineResult('hp2-action-result', 'Select a device first.');
-      return;
-    }
-
-    const payload = {
-      device_id: state.selectedDeviceId,
+    await sendQuickActionCommand({
+      title: 'Quick Buzz',
+      confirmText: 'Buzz',
       action: 'LOVENSE_COMMAND',
       payload: {
         command: 'vibrate',
@@ -2200,25 +2230,89 @@
         level: 8,
         duration_ms: 700,
       },
-    };
-
-    const confirm = await askInlineConfirm({
-      title: 'Quick Buzz',
-      message: `Send quick buzz to ${state.selectedDeviceId}?`,
-      confirmText: 'Buzz',
+      successMessage: 'Quick buzz sent.',
+      historyDetail: `Buzz to ${selectedDeviceLabel()} intensity 8 length 700ms`,
     });
-    if (!confirm.confirmed) return;
+  }
 
-    setInlineResult('hp2-action-result', 'Sending quick buzz...');
+  async function startleSelected() {
+    await sendQuickActionCommand({
+      title: 'Startle',
+      confirmText: 'Startle',
+      action: 'LOVENSE_COMMAND',
+      payload: {
+        command: 'vibrate',
+        intensity: 20,
+        length: 500,
+        level: 20,
+        duration_ms: 500,
+      },
+      successMessage: 'Startle sent.',
+      historyDetail: `Startle to ${selectedDeviceLabel()} at 100% for 500ms`,
+    });
+  }
+
+  async function shockSelected(level) {
+    const intensity = Math.max(0, Math.min(255, Number(level || 0)));
+    await sendQuickActionCommand({
+      title: `Shock ${intensity}`,
+      confirmText: 'Shock',
+      action: 'PAVLOK_COMMAND',
+      payload: {
+        pavlok_cmd: 'shock',
+        pavlok_intensity: String(intensity),
+        intensity: String(intensity),
+        toy_level: String(intensity),
+        pavlok_duration_ms: '1000',
+        duration_ms: '1000',
+        toy_duration_ms: '1000',
+      },
+      successMessage: `Shock ${intensity} sent.`,
+      historyDetail: `Shock ${intensity} to ${selectedDeviceLabel()}`,
+    });
+  }
+
+  async function renameSelectedDevice() {
+    if (!state.selectedDeviceId) {
+      setInlineResult('hp2-device-detail-result', 'Select a device first.');
+      return;
+    }
+
+    const currentName = selectedDevice()?.device_name || '';
+    const response = await askInlineText({
+      title: 'Set Device Name',
+      message: `Set a handler-visible name for ${state.selectedDeviceId}.`,
+      confirmText: 'Save',
+      inputLabel: 'Device name',
+      inputValue: currentName,
+    });
+    if (!response.confirmed) return;
+    if (response.invalidEmpty) {
+      setInlineResult('hp2-device-detail-result', 'Name is required.');
+      return;
+    }
+
+    const nextName = String(response.value || '').trim();
+    if (!nextName) {
+      setInlineResult('hp2-device-detail-result', 'Name is required.');
+      return;
+    }
+
+    setInlineResult('hp2-device-detail-result', 'Saving device name...');
     try {
-      await apiPost('/api/handler/tpe/push', payload);
-      setInlineResult('hp2-action-result', 'Quick buzz sent.');
-      recordCommandHistory('Quick Buzz', `Sent to ${state.selectedDeviceId} intensity 8 length 700ms`, true);
-      pushFeed(`Quick buzz sent to ${state.selectedDeviceId}`);
+      await apiPatch(`/api/handler/devices/${encodeURIComponent(state.selectedDeviceId)}/name`, {
+        device_name: nextName,
+      });
+      if (state.devices[state.selectedDeviceId]) {
+        state.devices[state.selectedDeviceId].device_name = nextName;
+      }
+      renderDeviceList();
+      renderSelectedDevice();
+      setInlineResult('hp2-device-detail-result', 'Device name saved.');
+      pushFeed(`Renamed ${state.selectedDeviceId} to ${nextName}`);
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        setInlineResult('hp2-action-result', `Failed: ${err.message}`);
-        recordCommandHistory('Quick Buzz', `Failed for ${state.selectedDeviceId}: ${err.message}`, false);
+        setInlineResult('hp2-device-detail-result', `Failed: ${err.message}`);
       }
     }
   }
@@ -2250,7 +2344,11 @@
     byId('hp2-lock-btn').addEventListener('click', () => lockSelected().catch(() => {}));
     byId('hp2-checkin-btn').addEventListener('click', () => requestCheckin().catch(() => {}));
     byId('hp2-send-toy-btn').addEventListener('click', () => sendToyCommand().catch(() => {}));
-    byId('hp2-buzz-btn').addEventListener('click', () => quickBuzz().catch(() => {}));
+    byId('hp2-startle-btn').addEventListener('click', () => startleSelected().catch(() => {}));
+    byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
+    byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
+    byId('hp2-shock-60-btn').addEventListener('click', () => shockSelected(60).catch(() => {}));
+    byId('hp2-rename-device-btn').addEventListener('click', () => renameSelectedDevice().catch(() => {}));
     byId('hp2-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
