@@ -152,6 +152,7 @@ _CREATE_TABLE_SQL = """
         battery_pct INTEGER,
         lat         REAL,
         lon         REAL,
+        toy_info_json TEXT,
         ai_alert    INTEGER NOT NULL DEFAULT 0,
         ai_label    TEXT,
         ai_score    REAL,
@@ -595,6 +596,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     # Schema is current – ensure required columns + auxiliary tables exist.
     if "device_name" not in col_names:
         conn.execute("ALTER TABLE handler_device_status ADD COLUMN device_name TEXT")
+    if "toy_info_json" not in col_names:
+        conn.execute("ALTER TABLE handler_device_status ADD COLUMN toy_info_json TEXT")
 
     _ensure_limbo_table(conn)
     _ensure_limbo_columns(conn)
@@ -837,6 +840,10 @@ class DeviceStatusReport(BaseModel):
     lon: Optional[float] = Field(
         default=None,
         validation_alias=AliasChoices("lon", "lng", "longitude"),
+    )
+    toy_info: Optional[dict] = Field(
+        default=None,
+        validation_alias=AliasChoices("toy_info", "toyInfo"),
     )
     ai_alert: Optional[bool] = Field(
         default=None,
@@ -1810,20 +1817,22 @@ async def handler_device_status(
         raise HTTPException(status_code=400, detail="device_id must not be empty")
 
     resolved_device_name = (body.device_name or "").strip() or None
+    toy_info_json = json.dumps(body.toy_info) if isinstance(body.toy_info, dict) else None
 
     now = _now_iso()
     db.execute(
         """
         INSERT INTO handler_device_status
-            (device_id, device_name, fcm_token, battery_pct, lat, lon, ai_alert, ai_label, ai_score,
+            (device_id, device_name, fcm_token, battery_pct, lat, lon, toy_info_json, ai_alert, ai_label, ai_score,
              is_locked, is_online, last_seen, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)
         ON CONFLICT(device_id) DO UPDATE SET
             device_name = COALESCE(excluded.device_name, device_name),
             fcm_token   = COALESCE(excluded.fcm_token,   fcm_token),
             battery_pct = COALESCE(excluded.battery_pct, battery_pct),
             lat         = COALESCE(excluded.lat,         lat),
             lon         = COALESCE(excluded.lon,         lon),
+            toy_info_json = COALESCE(excluded.toy_info_json, toy_info_json),
             ai_alert    = COALESCE(excluded.ai_alert,    ai_alert),
             ai_label    = COALESCE(excluded.ai_label,    ai_label),
             ai_score    = COALESCE(excluded.ai_score,    ai_score),
@@ -1838,6 +1847,7 @@ async def handler_device_status(
             body.battery_pct,
             body.lat,
             body.lon,
+            toy_info_json,
             1 if body.ai_alert else 0,
             body.ai_label,
             body.ai_score,
@@ -1858,6 +1868,7 @@ async def handler_device_status(
                     "battery_pct": body.battery_pct,
                     "lat": body.lat,
                     "lon": body.lon,
+                    "toy_info": body.toy_info,
                     "ai_alert": bool(body.ai_alert),
                     "ai_label": body.ai_label,
                     "ai_score": body.ai_score,

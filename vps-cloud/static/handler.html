@@ -921,6 +921,7 @@
                     <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Label</td><td id="det-ai-label">—</td></tr>
                     <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">AI Score</td><td class="ts-cell" id="det-ai-score">—</td></tr>
                     <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Lock State</td><td id="det-lock">—</td></tr>
+                    <tr><td style="color:#9e7e82;font-size:.8rem;font-weight:700">Toy Devices</td><td id="det-toys">—</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2820,7 +2821,7 @@
       if (!s || !s.updated_at) {
         ['ov-battery','sb-battery','ov-battery-sub','ov-gps','ov-gps-sub','det-coords',
          'ov-ai','ov-ai-sub','sb-ai','det-ai-label','det-ai-score',
-         'ov-online','sb-lock'].forEach(function(id) { setText(id, '—'); });
+         'ov-online','sb-lock','det-toys'].forEach(function(id) { setText(id, '—'); });
         if (!viewingDeviceId) {
           setText('ov-online-sub', 'No device selected');
           setText('sb-online', '⚪ No device selected');
@@ -2854,6 +2855,7 @@
       setText('sb-ai',        aiAlert ? '⚠️ Alert' : '✅ Clear');
       setText('det-ai-label', s.ai_label || '—');
       setText('det-ai-score', (s.ai_score !== null && s.ai_score !== undefined) ? (+s.ai_score).toFixed(3) : '—');
+      setText('det-toys', formatToyInfoSummary(s));
 
       var banner = document.getElementById('ai-alert-banner');
       if (aiAlert) {
@@ -2878,6 +2880,47 @@
       setText('det-last-seen', s.last_seen ? fmtDate(s.last_seen) : '—');
 
       if (hasGps) updateDetailMapMarker(+s.lat, +s.lon);
+    }
+
+    function parseToyInfoFromStatus(s) {
+      if (!s) return null;
+      if (s.toy_info && typeof s.toy_info === 'object') {
+        return s.toy_info;
+      }
+      if (typeof s.toy_info_json === 'string' && s.toy_info_json.trim()) {
+        try {
+          var parsed = JSON.parse(s.toy_info_json);
+          if (parsed && typeof parsed === 'object') {
+            return parsed;
+          }
+        } catch (_) {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    function formatToyInfoSummary(s) {
+      var toyInfo = parseToyInfoFromStatus(s);
+      if (!toyInfo) return '—';
+
+      var entries = [];
+      ['lovense', 'pavlok'].forEach(function(key) {
+        var toy = toyInfo[key];
+        if (!toy || typeof toy !== 'object') return;
+        var state = toy.connected ? 'connected' : 'offline';
+        var model = toy.model || toy.name || toy.device_id || 'unknown';
+        entries.push(key + ': ' + state + ' (' + model + ')');
+      });
+
+      if (!entries.length) {
+        try {
+          return JSON.stringify(toyInfo);
+        } catch (_) {
+          return 'available';
+        }
+      }
+      return entries.join(' | ');
     }
 
     function updateBatteryBar(pct) {
