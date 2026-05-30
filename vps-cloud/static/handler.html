@@ -1009,19 +1009,31 @@
               <div class="action-card">
                 <div class="ac-icon">💗</div>
                 <div class="ac-label">Lovense Toy</div>
-                <button class="btn-action" id="btn-lovense">Vibrate (Full)</button>
+                <div style="display:grid;gap:.45rem;margin:.5rem 0">
+                  <input id="qa-lovense-level" type="number" min="0" max="20" value="10" placeholder="Intensity (0-20)" />
+                  <input id="qa-lovense-duration" type="number" min="0" max="1200000" value="5000" placeholder="Length (ms)" />
+                </div>
+                <button class="btn-action" id="btn-lovense">Send Lovense</button>
                 <div class="ac-result" id="res-lovense"></div>
               </div>
               <div class="action-card">
                 <div class="ac-icon">⚡</div>
                 <div class="ac-label">Pavlok</div>
+                <div style="display:grid;gap:.45rem;margin:.5rem 0">
+                  <input id="qa-pavlok-shock-intensity" type="number" min="0" max="255" value="50" placeholder="Intensity (0-255)" />
+                  <input id="qa-pavlok-shock-duration" type="number" min="0" max="25500" value="1000" placeholder="Length (ms)" />
+                </div>
                 <button class="btn-action" id="btn-pavlok-shock">Send Shock</button>
                 <div class="ac-result" id="res-pavlok-shock"></div>
               </div>
               <div class="action-card">
                 <div class="ac-icon">🌀</div>
                 <div class="ac-label">Pavlok</div>
-                <button class="btn-action" id="btn-pavlok-vibrate">Vibrate (Full)</button>
+                <div style="display:grid;gap:.45rem;margin:.5rem 0">
+                  <input id="qa-pavlok-vibe-intensity" type="number" min="0" max="255" value="100" placeholder="Intensity (0-255)" />
+                  <input id="qa-pavlok-vibe-duration" type="number" min="0" max="25500" value="5000" placeholder="Length (ms)" />
+                </div>
+                <button class="btn-action" id="btn-pavlok-vibrate">Send Vibrate</button>
                 <div class="ac-result" id="res-pavlok-vibrate"></div>
               </div>
               <div class="action-card">
@@ -1716,8 +1728,9 @@
                   <div class="cmd-inputs">
                     <select id="cmd-lovense-cmd"><option value="vibrate">Vibrate</option><option value="rotate">Rotate</option><option value="pump">Pump</option><option value="stop">Stop</option><option value="battery">Battery</option></select>
                     <input id="cmd-lovense-level" type="number" placeholder="Level (0–20)" min="0" max="20" style="max-width:130px" />
+                    <input id="cmd-lovense-dur" type="number" placeholder="Length (ms)" min="0" max="1200000" style="max-width:150px" />
                   </div>
-                  <button class="btn-cmd" onclick="sendFcm('LOVENSE_COMMAND',{toy_command:v('cmd-lovense-cmd'),toy_level:v('cmd-lovense-level')},'res-cmd-lovense')">Send</button>
+                  <button class="btn-cmd" onclick="sendFcm('LOVENSE_COMMAND',{toy_command:v('cmd-lovense-cmd'),toy_level:v('cmd-lovense-level'),intensity:v('cmd-lovense-level'),toy_duration_ms:v('cmd-lovense-dur'),duration_ms:v('cmd-lovense-dur')},'res-cmd-lovense')">Send</button>
                   <span class="cmd-result" id="res-cmd-lovense"></span>
                 </div>
                 <div class="cmd-row">
@@ -1820,7 +1833,7 @@
                     <input id="cmd-pavlok-intensity" type="number" placeholder="Intensity (0–255)" min="0" max="255" style="max-width:150px" />
                     <input id="cmd-pavlok-dur" type="number" placeholder="Duration (ms)" min="0" max="25500" style="max-width:130px" />
                   </div>
-                  <button class="btn-cmd danger" onclick="sendFcm('PAVLOK_COMMAND',{pavlok_cmd:v('cmd-pavlok-cmd'),pavlok_intensity:v('cmd-pavlok-intensity'),pavlok_duration_ms:v('cmd-pavlok-dur')},'res-cmd-pavlok')">Send</button>
+                  <button class="btn-cmd danger" onclick="sendFcm('PAVLOK_COMMAND',{pavlok_cmd:v('cmd-pavlok-cmd'),pavlok_intensity:v('cmd-pavlok-intensity'),intensity:v('cmd-pavlok-intensity'),toy_level:v('cmd-pavlok-intensity'),pavlok_duration_ms:v('cmd-pavlok-dur'),duration_ms:v('cmd-pavlok-dur'),toy_duration_ms:v('cmd-pavlok-dur')},'res-cmd-pavlok')">Send</button>
                   <span class="cmd-result" id="res-cmd-pavlok"></span>
                 </div>
               </div>
@@ -3214,13 +3227,23 @@
     async function sendVibrateLovense() {
       var btn = document.getElementById('btn-lovense');
       var res = document.getElementById('res-lovense');
+      var levelEl = document.getElementById('qa-lovense-level');
+      var durEl = document.getElementById('qa-lovense-duration');
+      var level = Math.max(0, Math.min(20, Number(levelEl && levelEl.value ? levelEl.value : 10) || 10));
+      var durationMs = Math.max(0, Math.min(1200000, Number(durEl && durEl.value ? durEl.value : 5000) || 5000));
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
-          device_id: viewingDeviceId, action: 'LOVENSE_COMMAND', toy_command: 'vibrate', toy_level: '10',
+          device_id: viewingDeviceId,
+          action: 'LOVENSE_COMMAND',
+          toy_command: 'vibrate',
+          toy_level: String(level),
+          intensity: String(level),
+          toy_duration_ms: String(durationMs),
+          duration_ms: String(durationMs),
         });
-        if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('💗 Lovense vibrate sent.'); }
+        if (r.ok) { res.textContent = '✅ Lovense sent.'; showToast('💗 Lovense command sent.'); }
         else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
       } catch(e) { if (e.message !== '401') res.textContent = '❌ Request failed.'; }
       finally { btn.disabled = false; }
@@ -3229,12 +3252,22 @@
     async function sendShockPavlok() {
       var btn = document.getElementById('btn-pavlok-shock');
       var res = document.getElementById('res-pavlok-shock');
+      var intensityEl = document.getElementById('qa-pavlok-shock-intensity');
+      var durEl = document.getElementById('qa-pavlok-shock-duration');
+      var intensity = Math.max(0, Math.min(255, Number(intensityEl && intensityEl.value ? intensityEl.value : 50) || 50));
+      var durationMs = Math.max(0, Math.min(25500, Number(durEl && durEl.value ? durEl.value : 1000) || 1000));
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
-          pavlok_cmd: 'shock', pavlok_intensity: '50', pavlok_duration_ms: '1000',
+          pavlok_cmd: 'shock',
+          pavlok_intensity: String(intensity),
+          intensity: String(intensity),
+          toy_level: String(intensity),
+          pavlok_duration_ms: String(durationMs),
+          duration_ms: String(durationMs),
+          toy_duration_ms: String(durationMs),
         });
         if (r.ok) { res.textContent = '✅ Shock sent.'; showToast('⚡ Pavlok command sent.'); }
         else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
@@ -3245,12 +3278,22 @@
     async function sendVibratePavlok() {
       var btn = document.getElementById('btn-pavlok-vibrate');
       var res = document.getElementById('res-pavlok-vibrate');
+      var intensityEl = document.getElementById('qa-pavlok-vibe-intensity');
+      var durEl = document.getElementById('qa-pavlok-vibe-duration');
+      var intensity = Math.max(0, Math.min(255, Number(intensityEl && intensityEl.value ? intensityEl.value : 100) || 100));
+      var durationMs = Math.max(0, Math.min(25500, Number(durEl && durEl.value ? durEl.value : 5000) || 5000));
       if (!_requireDevice(res)) return;
       btn.disabled = true; res.textContent = 'Sending…';
       try {
         var r = await apiPost('/api/handler/tpe/push', {
           device_id: viewingDeviceId, action: 'PAVLOK_COMMAND',
-          pavlok_cmd: 'vibrate', pavlok_intensity: '100', pavlok_duration_ms: '5000',
+          pavlok_cmd: 'vibrate',
+          pavlok_intensity: String(intensity),
+          intensity: String(intensity),
+          toy_level: String(intensity),
+          pavlok_duration_ms: String(durationMs),
+          duration_ms: String(durationMs),
+          toy_duration_ms: String(durationMs),
         });
         if (r.ok) { res.textContent = '✅ Vibrate sent.'; showToast('🌀 Pavlok vibrate sent.'); }
         else { var b = await r.json().catch(function() { return {}; }); res.textContent = '❌ ' + (b.detail || ('HTTP ' + r.status)); }
