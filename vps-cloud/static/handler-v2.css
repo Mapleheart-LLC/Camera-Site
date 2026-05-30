@@ -383,6 +383,33 @@ button:focus-visible {
   font-size: 0.72rem;
 }
 
+.hp2-chat-layout {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.hp2-chat-threads,
+.hp2-chat-thread {
+  border: 1px solid var(--hp2-line);
+  border-radius: 10px;
+  background: #0f2226;
+  padding: 0.55rem;
+}
+
+.hp2-chat-messages li {
+  max-width: 88%;
+}
+
+.hp2-chat-messages li.hp2-chat-self {
+  margin-left: auto;
+  background: #1e3a31;
+  border-color: #3a6c5c;
+}
+
+.hp2-chat-compose {
+  margin-top: 0.45rem;
+}
+
 .hp2-feed-item-row {
   display: flex;
   justify-content: space-between;
@@ -506,6 +533,10 @@ button:focus-visible {
 
   .hp2-queue-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hp2-chat-layout {
+    grid-template-columns: 280px 1fr;
   }
 
   .hp2-form-grid {

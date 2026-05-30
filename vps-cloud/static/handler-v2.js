@@ -3,7 +3,8 @@
 
   const JWT_KEY = 'handler_panel_jwt';
   const AUTH_EXPIRED_ERROR = 'auth-expired';
-  const views = ['dashboard', 'stats', 'queue', 'devices', 'commands', 'settings'];
+  const QUEUE_AUTO_REFRESH_MS = 30000;
+  const views = ['dashboard', 'stats', 'queue', 'drawer', 'devices', 'commands', 'settings'];
   const MAX_BREADCRUMBS = 6;
 
   const state = {
@@ -42,6 +43,11 @@
     queue: {
       selectedMailThreadId: null,
       mailMessagesById: {},
+      autoRefreshTimer: null,
+      openQuestions: [],
+      answeredQuestions: [],
+      openVisible: 3,
+      answeredVisible: 3,
     },
   };
 
@@ -182,6 +188,11 @@
   }
 
   function setActiveView(viewName) {
+    if (state.queue.autoRefreshTimer) {
+      clearInterval(state.queue.autoRefreshTimer);
+      state.queue.autoRefreshTimer = null;
+    }
+
     views.forEach((view) => {
       byId(`hp2-view-${view}`).classList.toggle('hp2-view-active', view === viewName);
     });
@@ -190,6 +201,15 @@
     });
     if (viewName === 'queue') {
       loadQueueHub().catch(() => {});
+      state.queue.autoRefreshTimer = setInterval(() => {
+        loadQueueHub().catch(() => {});
+      }, QUEUE_AUTO_REFRESH_MS);
+    }
+    if (viewName === 'drawer') {
+      loadEvidenceDrawer().catch(() => {});
+      state.queue.autoRefreshTimer = setInterval(() => {
+        loadEvidenceDrawer().catch(() => {});
+      }, QUEUE_AUTO_REFRESH_MS);
     }
   }
 
@@ -1007,7 +1027,9 @@
     host.innerHTML = messages.map((m) => {
       const id = Number(m.id || 0);
       state.queue.mailMessagesById[id] = m;
-      return `<li>
+      const authoredByHandler = String(m.author || '').toLowerCase().includes('handler');
+      const ownClass = authoredByHandler ? 'hp2-chat-self' : '';
+      return `<li class="${ownClass}">
         <div class="hp2-feed-item-row">
           <strong>${escapeHtml(m.author || 'Unknown')}</strong>
           <span class="hp2-muted">${escapeHtml(fmtDate(m.created_at))}</span>
@@ -1016,7 +1038,7 @@
         <div class="hp2-queue-actions">
           <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${id}">Edit</button>
         </div>
-      </li>`;
+        </li>`;
     }).join('');
   }
 
@@ -1125,39 +1147,59 @@
       const open = Array.isArray(openRows) ? openRows : [];
       const answered = Array.isArray(answeredRows) ? answeredRows : [];
 
-      openEl.innerHTML = open.length ? open.map((q) => {
-        const id = Number(q.id || 0);
-        return `<li>
-          <div class="hp2-feed-item-row">
-            <strong>${escapeHtml(q.text || '')}</strong>
-            <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
-          </div>
-          <div class="hp2-queue-actions">
-            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-answer" data-id="${id}">Answer</button>
-            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
-          </div>
-        </li>`;
-      }).join('') : queueListEmpty('No unanswered questions.');
+      state.queue.openQuestions = open;
+      state.queue.answeredQuestions = answered;
+      state.queue.openVisible = Math.max(3, Math.min(state.queue.openVisible, open.length || 3));
+      state.queue.answeredVisible = Math.max(3, Math.min(state.queue.answeredVisible, answered.length || 3));
 
-      answeredEl.innerHTML = answered.length ? answered.map((q) => {
-        const id = Number(q.id || 0);
-        return `<li>
-          <div class="hp2-feed-item-row">
-            <strong>${escapeHtml(q.text || '')}</strong>
-            <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
-          </div>
-          <div class="hp2-muted">${escapeHtml(q.answer || '')}</div>
-          <div class="hp2-queue-actions">
-            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
-          </div>
-        </li>`;
-      }).join('') : queueListEmpty('No answered questions.');
+      renderQueueQuestions();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         openEl.innerHTML = queueListEmpty('Failed to load questions.');
         answeredEl.innerHTML = queueListEmpty('Failed to load answered questions.');
       }
     }
+  }
+
+  function renderQueueQuestions() {
+    const openEl = byId('hp2-queue-questions-open');
+    const answeredEl = byId('hp2-queue-questions-answered');
+    const openOlderBtn = byId('hp2-queue-questions-open-older');
+    const answeredOlderBtn = byId('hp2-queue-questions-answered-older');
+
+    const open = state.queue.openQuestions.slice(0, state.queue.openVisible);
+    const answered = state.queue.answeredQuestions.slice(0, state.queue.answeredVisible);
+
+    openEl.innerHTML = open.length ? open.map((q) => {
+      const id = Number(q.id || 0);
+      return `<li>
+        <div class="hp2-feed-item-row">
+          <strong>${escapeHtml(q.text || '')}</strong>
+          <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
+        </div>
+        <div class="hp2-queue-actions">
+          <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-answer" data-id="${id}">Answer</button>
+          <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
+        </div>
+      </li>`;
+    }).join('') : queueListEmpty('No unanswered questions.');
+
+    answeredEl.innerHTML = answered.length ? answered.map((q) => {
+      const id = Number(q.id || 0);
+      return `<li>
+        <div class="hp2-feed-item-row">
+          <strong>${escapeHtml(q.text || '')}</strong>
+          <span class="hp2-muted">${escapeHtml(fmtDate(q.created_at))}</span>
+        </div>
+        <div class="hp2-muted">${escapeHtml(q.answer || '')}</div>
+        <div class="hp2-queue-actions">
+          <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="question-delete" data-id="${id}">Delete</button>
+        </div>
+      </li>`;
+    }).join('') : queueListEmpty('No answered questions.');
+
+    openOlderBtn.style.display = state.queue.openVisible < state.queue.openQuestions.length ? 'inline-flex' : 'none';
+    answeredOlderBtn.style.display = state.queue.answeredVisible < state.queue.answeredQuestions.length ? 'inline-flex' : 'none';
   }
 
   async function answerQueueQuestion(questionId) {
@@ -1196,9 +1238,9 @@
     }
   }
 
-  async function loadQueueLimbo() {
-    const pendingEl = byId('hp2-queue-limbo-pending');
-    const resolvedEl = byId('hp2-queue-limbo-resolved');
+  async function loadEvidenceDrawer() {
+    const pendingEl = byId('hp2-drawer-limbo-pending');
+    const resolvedEl = byId('hp2-drawer-limbo-resolved');
     pendingEl.innerHTML = queueListEmpty('Loading pending limbo items...');
     resolvedEl.innerHTML = queueListEmpty('Loading resolved limbo items...');
     try {
@@ -1259,7 +1301,7 @@
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/answer`, { answer_text: normalized });
       setQueueResult('Limbo item answered.');
-      await loadQueueLimbo();
+      await loadEvidenceDrawer();
       await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
@@ -1274,7 +1316,7 @@
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/dismiss`, { reason });
       setQueueResult('Limbo item dismissed.');
-      await loadQueueLimbo();
+      await loadEvidenceDrawer();
       await loadQueueKpis();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
@@ -1292,7 +1334,7 @@
       } else {
         setQueueResult('Limbo item published.');
       }
-      await loadQueueLimbo();
+      await loadEvidenceDrawer();
       await loadQueueQuestions();
       await loadQueueKpis();
     } catch (err) {
@@ -1307,7 +1349,6 @@
       loadQueueBooking(),
       loadQueueMailThreads(),
       loadQueueQuestions(),
-      loadQueueLimbo(),
     ]);
   }
 
@@ -1498,14 +1539,21 @@
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
-    byId('hp2-queue-refresh-btn').addEventListener('click', () => loadQueueHub().catch(() => {}));
     byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
     byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
     byId('hp2-queue-mail-reply-btn').addEventListener('click', () => sendQueueMailReply().catch(() => {}));
     byId('hp2-queue-mail-resolve-btn').addEventListener('click', () => updateQueueMailStatus('resolved').catch(() => {}));
     byId('hp2-queue-mail-open-btn').addEventListener('click', () => updateQueueMailStatus('open').catch(() => {}));
+    byId('hp2-queue-questions-open-older').addEventListener('click', () => {
+      state.queue.openVisible += 3;
+      renderQueueQuestions();
+    });
+    byId('hp2-queue-questions-answered-older').addEventListener('click', () => {
+      state.queue.answeredVisible += 3;
+      renderQueueQuestions();
+    });
 
-    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-queue-limbo-pending', 'hp2-queue-limbo-resolved']
+    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-drawer-limbo-pending', 'hp2-drawer-limbo-resolved']
       .forEach((id) => {
         byId(id).addEventListener('click', (event) => {
           handleQueueActionClick(event).catch(() => {});
