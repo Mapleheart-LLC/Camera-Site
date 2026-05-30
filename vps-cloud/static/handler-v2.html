@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530v" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530pu3" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -41,6 +41,8 @@
         <button class="hp2-tab-btn" data-view="drawer">Evidence Drawer</button>
         <button class="hp2-tab-btn" data-view="devices">Devices</button>
         <button class="hp2-tab-btn" data-view="commands">Commands</button>
+        <button class="hp2-tab-btn" data-view="ai-warden">AI Warden</button>
+        <button class="hp2-tab-btn" data-view="public-use">Public Use</button>
         <button class="hp2-tab-btn" data-view="settings">Settings</button>
       </nav>
     </header>
@@ -303,13 +305,89 @@
         <div class="hp2-section-grid">
           <section class="hp2-panel">
             <div class="hp2-panel-head">
+              <h4>New Limbo Item</h4>
+              <span class="hp2-muted">Attach photo, video, or audio</span>
+            </div>
+            <label class="hp2-control-field" for="hp2-drawer-limbo-new-text">
+              <span>Prompt</span>
+              <textarea id="hp2-drawer-limbo-new-text" rows="3" placeholder="Describe the correction item..."></textarea>
+            </label>
+            <label class="hp2-control-field" for="hp2-drawer-limbo-file">
+              <span>Media Attachment (optional)</span>
+              <input id="hp2-drawer-limbo-file" type="file" accept="image/*,video/*,audio/*" />
+            </label>
+            <div class="hp2-action-row">
+              <button id="hp2-drawer-limbo-add-btn" class="hp2-btn hp2-btn-primary" type="button">Add To Limbo</button>
+            </div>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>New Evidence Log</h4>
+              <span class="hp2-muted">Correction evidence with media</span>
+            </div>
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-drawer-evidence-title">
+                <span>Title</span>
+                <input id="hp2-drawer-evidence-title" type="text" placeholder="Missed compliance check" />
+              </label>
+              <label class="hp2-control-field" for="hp2-drawer-evidence-category">
+                <span>Category</span>
+                <select id="hp2-drawer-evidence-category">
+                  <option value="consequence">consequence</option>
+                  <option value="proof">proof</option>
+                  <option value="compliance">compliance</option>
+                  <option value="violation">violation</option>
+                  <option value="system">system</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-drawer-evidence-severity">
+                <span>Severity</span>
+                <select id="hp2-drawer-evidence-severity">
+                  <option value="low">low</option>
+                  <option value="medium" selected>medium</option>
+                  <option value="high">high</option>
+                  <option value="critical">critical</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-drawer-evidence-file">
+                <span>Media Attachment (optional)</span>
+                <input id="hp2-drawer-evidence-file" type="file" accept="image/*,video/*,audio/*" />
+              </label>
+            </div>
+            <label class="hp2-control-field" for="hp2-drawer-evidence-summary">
+              <span>Summary (optional)</span>
+              <textarea id="hp2-drawer-evidence-summary" rows="2" placeholder="Short note about what happened and correction context"></textarea>
+            </label>
+            <div class="hp2-action-row">
+              <button id="hp2-drawer-evidence-add-btn" class="hp2-btn hp2-btn-primary" type="button">Create Evidence Log</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
               <h4>Evidence Drawer</h4>
-              <span class="hp2-muted">Review and resolve evidence items</span>
+              <span class="hp2-muted">Limbo queue + evidence vault + correction history</span>
+            </div>
+            <div id="hp2-drawer-media-filter" class="hp2-media-filter-row" role="group" aria-label="Drawer media filter">
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn hp2-media-filter-btn-active" data-drawer-media-filter="all">all</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn" data-drawer-media-filter="media">has media</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn" data-drawer-media-filter="image">images</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn" data-drawer-media-filter="video">videos</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn" data-drawer-media-filter="audio">audio</button>
+              <button type="button" class="hp2-btn hp2-btn-ghost hp2-media-filter-btn" data-drawer-media-filter="file">files</button>
             </div>
             <h5 class="hp2-subhead">Pending</h5>
             <ul id="hp2-drawer-limbo-pending" class="hp2-feed"></ul>
             <h5 class="hp2-subhead">Resolved</h5>
             <ul id="hp2-drawer-limbo-resolved" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Evidence Logs</h5>
+            <ul id="hp2-drawer-evidence-list" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Auto Correction Events</h5>
+            <ul id="hp2-drawer-corrections" class="hp2-feed"></ul>
+            <p id="hp2-drawer-result" class="hp2-muted"></p>
           </section>
         </div>
       </section>
@@ -775,6 +853,224 @@
         </div>
       </section>
 
+      <section id="hp2-view-ai-warden" class="hp2-view">
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>AI Warden Remote Config</h4>
+              <span class="hp2-muted">Cross-server custom AI control</span>
+            </div>
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-ai-enabled">
+                <span>Enabled</span>
+                <select id="hp2-ai-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-name">
+                <span>AI Name</span>
+                <input id="hp2-ai-name" type="text" placeholder="Custom AI Warden" />
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-provider">
+                <span>Provider</span>
+                <input id="hp2-ai-provider" type="text" placeholder="custom" />
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-server-base-url">
+                <span>AI Server Base URL</span>
+                <input id="hp2-ai-server-base-url" type="url" placeholder="https://ai.your-domain.com" />
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-api-key">
+                <span>API Key (Bearer)</span>
+                <input id="hp2-ai-api-key" type="password" placeholder="Leave blank to keep current" />
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-clear-api-key">
+                <span>Clear Existing API Key</span>
+                <select id="hp2-ai-clear-api-key">
+                  <option value="false" selected>false</option>
+                  <option value="true">true</option>
+                </select>
+              </label>
+            </div>
+            <label class="hp2-control-field" for="hp2-ai-info">
+              <span>AI Information</span>
+              <textarea id="hp2-ai-info" rows="2" placeholder="Purpose, model family, deployment notes..."></textarea>
+            </label>
+            <label class="hp2-control-field" for="hp2-ai-rules">
+              <span>Enforcement Rules (one per line)</span>
+              <textarea id="hp2-ai-rules" rows="6" placeholder="No lock release without handler override\nEscalate critical compliance failures\nPost only approved social summaries"></textarea>
+            </label>
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-ai-auto-enforce">
+                <span>Auto Enforcing</span>
+                <select id="hp2-ai-auto-enforce">
+                  <option value="true">true</option>
+                  <option value="false" selected>false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-ai-auto-social">
+                <span>Auto Social Posting</span>
+                <select id="hp2-ai-auto-social">
+                  <option value="true">true</option>
+                  <option value="false" selected>false</option>
+                </select>
+              </label>
+            </div>
+            <div class="hp2-action-row">
+              <button id="hp2-ai-save-btn" class="hp2-btn hp2-btn-primary" type="button">Save AI Config</button>
+              <button id="hp2-ai-refresh-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh Stats</button>
+            </div>
+            <p id="hp2-ai-config-note" class="hp2-muted"></p>
+            <p id="hp2-ai-result" class="hp2-muted"></p>
+          </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>AI Stats</h4>
+              <span class="hp2-muted">Health, tunnel, and activity windows</span>
+            </div>
+            <ul id="hp2-ai-stats-list" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Recent AI Reports</h5>
+            <ul id="hp2-ai-reports-list" class="hp2-feed"></ul>
+          </section>
+        </div>
+      </section>
+
+      <section id="hp2-view-public-use" class="hp2-view">
+        <div class="hp2-section-grid">
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Public /guest Controls</h4>
+              <span class="hp2-muted">What guests can see and use</span>
+            </div>
+            <p class="hp2-muted">Configure the fully public guest surface at <strong>/guest</strong>.</p>
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-public-site-enabled">
+                <span>Whole Public Site Enabled</span>
+                <select id="hp2-public-site-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-enabled">
+                <span>Guest Page Enabled</span>
+                <select id="hp2-public-use-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-device-id">
+                <span>Target Device ID (blank = auto)</span>
+                <input id="hp2-public-use-device-id" type="text" placeholder="device_id" />
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-show-location">
+                <span>Show Location</span>
+                <select id="hp2-public-use-show-location">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-location-precision">
+                <span>Location Precision</span>
+                <select id="hp2-public-use-location-precision">
+                  <option value="off">off</option>
+                  <option value="approx">approx</option>
+                  <option value="city">city</option>
+                  <option value="exact">exact</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-public-use-lovense-live">
+                <span>Allow Lovense Live</span>
+                <select id="hp2-public-use-lovense-live">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-lovense-pulse">
+                <span>Allow Lovense Pulse</span>
+                <select id="hp2-public-use-lovense-pulse">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-pavlok-enabled">
+                <span>Allow Pavlok</span>
+                <select id="hp2-public-use-pavlok-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-pavlok-max-intensity">
+                <span>Pavlok Max Intensity (1-100)</span>
+                <input id="hp2-public-use-pavlok-max-intensity" type="number" min="1" max="100" value="60" />
+              </label>
+            </div>
+
+            <label class="hp2-control-field" for="hp2-public-use-phone-controls">
+              <span>Phone Controls Allowed (Ctrl/Cmd + click to multi-select)</span>
+              <select id="hp2-public-use-phone-controls" multiple size="8"></select>
+            </label>
+
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-public-use-open-url-enabled">
+                <span>Allow Launching Web Pages</span>
+                <select id="hp2-public-use-open-url-enabled">
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-url-hosts">
+                <span>Allowed URL Hosts (comma separated, blank = any)</span>
+                <input id="hp2-public-use-url-hosts" type="text" placeholder="example.com, docs.example.com" />
+              </label>
+            </div>
+
+            <div class="hp2-control-grid-2">
+              <label class="hp2-control-field" for="hp2-public-use-rate-per-min">
+                <span>Rate Limit Per IP (per min)</span>
+                <input id="hp2-public-use-rate-per-min" type="number" min="1" max="600" value="18" />
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-rate-action-per-min">
+                <span>Rate Limit Per Action (per min)</span>
+                <input id="hp2-public-use-rate-action-per-min" type="number" min="1" max="200" value="6" />
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-session-ttl-sec">
+                <span>Guest Session TTL (sec)</span>
+                <input id="hp2-public-use-session-ttl-sec" type="number" min="60" max="86400" value="900" />
+              </label>
+              <label class="hp2-control-field" for="hp2-public-use-schedule-timezone">
+                <span>Schedule Timezone</span>
+                <select id="hp2-public-use-schedule-timezone">
+                  <option value="utc">utc</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="hp2-control-field" for="hp2-public-use-schedule-profiles">
+              <span>Schedule Profiles JSON (optional)</span>
+              <textarea id="hp2-public-use-schedule-profiles" rows="8" placeholder='[{"name":"Night Safe","start_hour":0,"end_hour":7,"guest_enabled":false}]'></textarea>
+            </label>
+
+            <div class="hp2-action-row">
+              <button id="hp2-public-use-save-btn" class="hp2-btn hp2-btn-primary" type="button">Save Public Use</button>
+              <button id="hp2-public-use-panic-15-btn" class="hp2-btn hp2-btn-warn" type="button">Panic 15m</button>
+              <button id="hp2-public-use-panic-clear-btn" class="hp2-btn hp2-btn-ghost" type="button">Clear Panic</button>
+              <button id="hp2-public-use-refresh-analytics-btn" class="hp2-btn hp2-btn-ghost" type="button">Refresh Analytics</button>
+              <a class="hp2-btn hp2-btn-ghost" href="/guest" target="_blank" rel="noopener">Open /guest</a>
+            </div>
+            <p id="hp2-public-use-result" class="hp2-muted"></p>
+
+            <h5 class="hp2-subhead">Guest Analytics (24h)</h5>
+            <ul id="hp2-public-use-analytics" class="hp2-feed"></ul>
+            <h5 class="hp2-subhead">Recent Blocked</h5>
+            <ul id="hp2-public-use-blocked" class="hp2-feed"></ul>
+          </section>
+        </div>
+      </section>
+
       <section id="hp2-view-settings" class="hp2-view">
         <div class="hp2-section-grid">
           <section class="hp2-panel">
@@ -826,9 +1122,24 @@
     </section>
   </div>
 
+  <div id="hp2-drawer-lightbox" class="hp2-drawer-lightbox hp2-hidden" role="dialog" aria-modal="true" aria-label="Media preview">
+    <div class="hp2-drawer-lightbox-backdrop" data-drawer-lightbox-dismiss="true"></div>
+    <section class="hp2-drawer-lightbox-card">
+      <div class="hp2-drawer-lightbox-head">
+        <a id="hp2-drawer-lightbox-open" class="hp2-drawer-media-label" href="#" target="_blank" rel="noopener">Open in new tab</a>
+        <div class="hp2-drawer-lightbox-actions">
+          <button id="hp2-drawer-lightbox-prev" class="hp2-btn hp2-btn-ghost" type="button" aria-label="Previous image">Prev</button>
+          <button id="hp2-drawer-lightbox-next" class="hp2-btn hp2-btn-ghost" type="button" aria-label="Next image">Next</button>
+          <button id="hp2-drawer-lightbox-close" class="hp2-btn hp2-btn-ghost" type="button">Close</button>
+        </div>
+      </div>
+      <img id="hp2-drawer-lightbox-image" class="hp2-drawer-lightbox-image" alt="Drawer media" />
+    </section>
+  </div>
+
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530v" defer></script>
+  <script src="/handler-v2.js?v=20260530pu3" defer></script>
 </body>
 </html>

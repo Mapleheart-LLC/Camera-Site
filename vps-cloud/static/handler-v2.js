@@ -8,7 +8,7 @@
   const QUEUE_AUTO_REFRESH_MS = 30000;
   const AUTH_REFRESH_MS = 8 * 60 * 1000;
   const COMMAND_ACK_POLL_MS = 7000;
-  const views = ['dashboard', 'stats', 'queue', 'drawer', 'devices', 'commands', 'settings'];
+  const views = ['dashboard', 'stats', 'queue', 'drawer', 'devices', 'commands', 'ai-warden', 'public-use', 'settings'];
   const MAX_BREADCRUMBS = 6;
   const defaultSettings = {
     refreshSecs: 30,
@@ -67,12 +67,27 @@
       sharedFilter: 'all',
       sharedSort: 'newest',
     },
+    drawer: {
+      mediaFilter: 'all',
+      lightboxGallery: [],
+      lightboxIndex: -1,
+    },
+    aiWarden: {
+      config: null,
+      stats: null,
+      reports: [],
+      autoRefreshTimer: null,
+    },
+    publicUse: {
+      config: null,
+    },
     telemetry: {
       hydratedAt: 0,
       devicesAt: 0,
       intelligenceAt: 0,
       queueAt: 0,
       drawerAt: 0,
+      aiWardenAt: 0,
       freshnessTimer: null,
       authRefreshTimer: null,
       commandAckTimer: null,
@@ -1168,6 +1183,20 @@
       clearInterval(state.telemetry.commandAckTimer);
       state.telemetry.commandAckTimer = null;
     }
+    if (state.queue.autoRefreshTimer) {
+      clearInterval(state.queue.autoRefreshTimer);
+      state.queue.autoRefreshTimer = null;
+    }
+    if (state.aiWarden.autoRefreshTimer) {
+      clearInterval(state.aiWarden.autoRefreshTimer);
+      state.aiWarden.autoRefreshTimer = null;
+    }
+    state.aiWarden = {
+      config: null,
+      stats: null,
+      reports: [],
+      autoRefreshTimer: null,
+    };
     document.body.classList.remove('hp2-authenticated');
     setVisible('hp2-app', false);
     setVisible('hp2-login', true);
@@ -1405,6 +1434,10 @@
       clearInterval(state.queue.autoRefreshTimer);
       state.queue.autoRefreshTimer = null;
     }
+    if (state.aiWarden.autoRefreshTimer) {
+      clearInterval(state.aiWarden.autoRefreshTimer);
+      state.aiWarden.autoRefreshTimer = null;
+    }
 
     views.forEach((view) => {
       byId(`hp2-view-${view}`).classList.toggle('hp2-view-active', view === viewName);
@@ -1423,6 +1456,15 @@
       state.queue.autoRefreshTimer = setInterval(() => {
         loadEvidenceDrawer().catch(() => {});
       }, getQueueRefreshMs());
+    }
+    if (viewName === 'ai-warden') {
+      loadAiWardenDashboard().catch(() => {});
+      state.aiWarden.autoRefreshTimer = setInterval(() => {
+        loadAiWardenDashboard().catch(() => {});
+      }, getQueueRefreshMs());
+    }
+    if (viewName === 'public-use') {
+      loadPublicUseSettings().catch(() => {});
     }
   }
 
@@ -2150,6 +2192,467 @@
     setInlineResult('hp2-queue-result', message || '');
   }
 
+  function setDrawerResult(message) {
+    setInlineResult('hp2-drawer-result', message || '');
+  }
+
+  function setAiWardenResult(message) {
+    setInlineResult('hp2-ai-result', message || '');
+  }
+
+  function parseSelectBool(id, fallback = false) {
+    const value = String(byId(id)?.value || '').trim().toLowerCase();
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return !!fallback;
+  }
+
+  function normalizeAiRulesText(text) {
+    return String(text || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  function renderAiWardenStats() {
+    const host = byId('hp2-ai-stats-list');
+    if (!host) return;
+    const stats = state.aiWarden.stats;
+    if (!stats || typeof stats !== 'object') {
+      host.innerHTML = queueListEmpty('No stats loaded yet.');
+      return;
+    }
+    const counts = stats.counts || {};
+    const tunnel = stats.tunnel || {};
+    const health = stats.remote_health || {};
+    host.innerHTML = `
+      <li>
+        <div class="hp2-feed-item-row"><strong>Remote Health</strong><span class="${severityClass(health.ok ? 'info' : 'warning')}">${escapeHtml(health.ok ? 'ok' : 'down')}</span></div>
+        <div class="hp2-muted">${escapeHtml(String(health.url || '-'))}</div>
+        <div class="hp2-muted">status=${escapeHtml(String(health.status_code ?? '-'))} latency=${escapeHtml(String(health.latency_ms ?? '-'))}ms</div>
+        ${health.error ? `<div class="hp2-muted">${escapeHtml(String(health.error))}</div>` : ''}
+      </li>
+      <li>
+        <div class="hp2-feed-item-row"><strong>Tunnel</strong><span class="${severityClass(tunnel.connected ? 'info' : 'warning')}">${escapeHtml(tunnel.connected ? 'connected' : 'disconnected')}</span></div>
+        <div class="hp2-muted">queue_depth=${escapeHtml(String(tunnel.queue_depth ?? 0))}</div>
+      </li>
+      <li>
+        <div class="hp2-feed-item-row"><strong>Activity Window</strong><span class="${severityClass('info')}">${escapeHtml(String(stats.window_hours || 0))}h</span></div>
+        <div class="hp2-muted">corrections=${escapeHtml(String(counts.corrections ?? 0))} behavior=${escapeHtml(String(counts.behavior_events ?? 0))}</div>
+        <div class="hp2-muted">enforcement=${escapeHtml(String(counts.enforcement_events ?? 0))} social=${escapeHtml(String(counts.social_posts ?? 0))}</div>
+        <div class="hp2-muted">reports=${escapeHtml(String(counts.reports_received ?? 0))} rules=${escapeHtml(String(stats.rules_count ?? 0))}</div>
+      </li>
+    `;
+  }
+
+  function renderAiWardenReports() {
+    const host = byId('hp2-ai-reports-list');
+    if (!host) return;
+    const rows = Array.isArray(state.aiWarden.reports) ? state.aiWarden.reports : [];
+    if (!rows.length) {
+      host.innerHTML = queueListEmpty('No AI reports yet.');
+      return;
+    }
+    host.innerHTML = rows.slice(0, 60).map((row) => {
+      const reportType = String(row?.report_type || 'report');
+      const summary = String(row?.summary || '').trim();
+      const severity = String(row?.severity || 'info').toLowerCase();
+      const source = String(row?.source || 'remote_ai');
+      return `<li>
+        <div class="hp2-feed-item-row"><strong>${escapeHtml(reportType)}</strong><span class="${severityClass(severity === 'critical' || severity === 'high' ? 'warning' : 'info')}">${escapeHtml(severity)}</span></div>
+        ${summary ? `<div class="hp2-muted">${escapeHtml(summary)}</div>` : ''}
+        <div class="hp2-muted">${escapeHtml(source)} • ${escapeHtml(fmtDate(row?.created_at))}</div>
+      </li>`;
+    }).join('');
+  }
+
+  function applyAiWardenConfig(config) {
+    if (!config || typeof config !== 'object') return;
+    state.aiWarden.config = config;
+    if (byId('hp2-ai-enabled')) byId('hp2-ai-enabled').value = config.enabled ? 'true' : 'false';
+    if (byId('hp2-ai-name')) byId('hp2-ai-name').value = String(config.ai_name || '');
+    if (byId('hp2-ai-provider')) byId('hp2-ai-provider').value = String(config.provider || '');
+    if (byId('hp2-ai-server-base-url')) byId('hp2-ai-server-base-url').value = String(config.server_base_url || '');
+    if (byId('hp2-ai-info')) byId('hp2-ai-info').value = String(config.info || '');
+    if (byId('hp2-ai-rules')) byId('hp2-ai-rules').value = Array.isArray(config.rules) ? config.rules.join('\n') : '';
+    if (byId('hp2-ai-auto-enforce')) byId('hp2-ai-auto-enforce').value = config.auto_enforce ? 'true' : 'false';
+    if (byId('hp2-ai-auto-social')) byId('hp2-ai-auto-social').value = config.auto_social_posting ? 'true' : 'false';
+    if (byId('hp2-ai-clear-api-key')) byId('hp2-ai-clear-api-key').value = 'false';
+    if (byId('hp2-ai-api-key')) byId('hp2-ai-api-key').value = '';
+    const note = [];
+    if (config.has_api_key) {
+      note.push(`api_key=${String(config.api_key_masked || 'configured')}`);
+    } else {
+      note.push('api_key=not configured');
+    }
+    if (config.ws_endpoint_url) note.push(`ws=${String(config.ws_endpoint_url)}`);
+    if (config.ingress_secret_source) note.push(`auth=${String(config.ingress_secret_source)}`);
+    setInlineResult('hp2-ai-config-note', note.join(' • '));
+  }
+
+  async function loadAiWardenDashboard() {
+    const statsHost = byId('hp2-ai-stats-list');
+    const reportsHost = byId('hp2-ai-reports-list');
+    if (statsHost) statsHost.innerHTML = queueListEmpty('Loading AI stats...');
+    if (reportsHost) reportsHost.innerHTML = queueListEmpty('Loading AI reports...');
+    try {
+      let configError = null;
+      let statsError = null;
+      let reportsError = null;
+      const [config, stats, reportsPayload] = await Promise.all([
+        apiGet('/api/handler/ai-warden/config').catch((err) => {
+          configError = err;
+          return null;
+        }),
+        apiGet('/api/handler/ai-warden/stats?window_hours=24').catch((err) => {
+          statsError = err;
+          return null;
+        }),
+        apiGet('/api/handler/ai-warden/reports?limit=60').catch((err) => {
+          reportsError = err;
+          return { reports: [] };
+        }),
+      ]);
+
+      if (config) applyAiWardenConfig(config);
+      state.aiWarden.stats = stats || null;
+      state.aiWarden.reports = Array.isArray(reportsPayload?.reports) ? reportsPayload.reports : [];
+      renderAiWardenStats();
+      renderAiWardenReports();
+      state.telemetry.aiWardenAt = Date.now();
+
+      const errors = [configError, statsError, reportsError]
+        .filter(Boolean)
+        .map((err) => String(err?.message || err));
+      if (errors.length) {
+        setAiWardenResult(`Partial load issue: ${errors.join(' | ')}`);
+      } else {
+        setAiWardenResult('');
+      }
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        if (statsHost) statsHost.innerHTML = queueListEmpty(`Failed to load AI stats: ${escapeHtml(err.message)}`);
+        if (reportsHost) reportsHost.innerHTML = queueListEmpty('Failed to load AI reports.');
+      }
+    }
+  }
+
+  async function saveAiWardenConfig() {
+    setAiWardenResult('Saving AI Warden config...');
+    const payload = {
+      enabled: parseSelectBool('hp2-ai-enabled', false),
+      ai_name: String(byId('hp2-ai-name')?.value || '').trim(),
+      provider: String(byId('hp2-ai-provider')?.value || '').trim(),
+      server_base_url: String(byId('hp2-ai-server-base-url')?.value || '').trim(),
+      info: String(byId('hp2-ai-info')?.value || '').trim(),
+      rules: normalizeAiRulesText(byId('hp2-ai-rules')?.value || ''),
+      auto_enforce: parseSelectBool('hp2-ai-auto-enforce', false),
+      auto_social_posting: parseSelectBool('hp2-ai-auto-social', false),
+      clear_api_key: parseSelectBool('hp2-ai-clear-api-key', false),
+    };
+    const apiKey = String(byId('hp2-ai-api-key')?.value || '').trim();
+    if (apiKey) payload.api_key = apiKey;
+    try {
+      const config = await apiPost('/api/handler/ai-warden/config', payload);
+      applyAiWardenConfig(config);
+      setAiWardenResult('AI Warden config saved.');
+      await loadAiWardenDashboard();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setAiWardenResult(`Failed to save AI config: ${err.message}`);
+      }
+    }
+  }
+
+  function setPublicUseResult(message) {
+    setInlineResult('hp2-public-use-result', message || '');
+  }
+
+  function parseCsvHosts(value) {
+    return String(value || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  function selectedMultiValues(id) {
+    const select = byId(id);
+    if (!select) return [];
+    return Array.from(select.selectedOptions || []).map((opt) => String(opt.value || '').trim()).filter(Boolean);
+  }
+
+  function parseProfilesJson(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  function renderPublicUseAnalytics(data) {
+    const analyticsHost = byId('hp2-public-use-analytics');
+    const blockedHost = byId('hp2-public-use-blocked');
+    if (!analyticsHost || !blockedHost) return;
+
+    const actions = Array.isArray(data?.actions) ? data.actions : [];
+    const outcomes = Array.isArray(data?.outcomes) ? data.outcomes : [];
+    const blocked = Array.isArray(data?.recent_blocked) ? data.recent_blocked : [];
+
+    const lines = [
+      `<li><strong>Events:</strong> ${escapeHtml(String(data?.event_count || 0))}</li>`,
+      `<li><strong>Top Actions:</strong> ${escapeHtml(actions.slice(0, 5).map((r) => `${r.action}:${r.count}`).join(' | ') || 'none')}</li>`,
+      `<li><strong>Outcomes:</strong> ${escapeHtml(outcomes.slice(0, 5).map((r) => `${r.outcome}:${r.count}`).join(' | ') || 'none')}</li>`,
+    ];
+    analyticsHost.innerHTML = lines.join('');
+
+    blockedHost.innerHTML = blocked.length
+      ? blocked.slice(0, 20).map((row) => `<li><strong>${escapeHtml(String(row.outcome || 'blocked'))}</strong> ${escapeHtml(String(row.action || 'unknown'))}<div class="hp2-muted">${escapeHtml(String(row.detail || ''))} • ${escapeHtml(fmtDate(row.created_at))}</div></li>`).join('')
+      : queueListEmpty('No blocked events in this window.');
+  }
+
+  async function loadPublicUseAnalytics() {
+    const analyticsHost = byId('hp2-public-use-analytics');
+    const blockedHost = byId('hp2-public-use-blocked');
+    if (analyticsHost) analyticsHost.innerHTML = queueListEmpty('Loading guest analytics...');
+    if (blockedHost) blockedHost.innerHTML = queueListEmpty('Loading blocked events...');
+    try {
+      const data = await apiGet('/api/handler/public-use-analytics?hours=24');
+      renderPublicUseAnalytics(data || {});
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        if (analyticsHost) analyticsHost.innerHTML = queueListEmpty(`Analytics unavailable: ${escapeHtml(err.message)}`);
+      }
+    }
+  }
+
+  async function setPublicUsePanic(minutes) {
+    const mins = Math.max(0, Number(minutes || 0));
+    setPublicUseResult(mins > 0 ? `Setting panic for ${mins}m...` : 'Clearing panic mode...');
+    try {
+      const response = await apiPost('/api/handler/public-use-panic', { minutes: mins });
+      const panicUntil = String(response?.panic_until || '');
+      setPublicUseResult(response?.panic_active ? `Panic active until ${fmtDate(panicUntil)}.` : 'Panic cleared.');
+      await loadPublicUseSettings();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setPublicUseResult(`Failed to update panic mode: ${err.message}`);
+      }
+    }
+  }
+
+  function applyPublicUseSettings(config) {
+    if (!config || typeof config !== 'object') return;
+    state.publicUse.config = config;
+
+    if (byId('hp2-public-site-enabled')) byId('hp2-public-site-enabled').value = config.public_site_enabled ? 'true' : 'false';
+    if (byId('hp2-public-use-enabled')) byId('hp2-public-use-enabled').value = config.guest_enabled ? 'true' : 'false';
+    if (byId('hp2-public-use-device-id')) byId('hp2-public-use-device-id').value = String(config.guest_device_id || '');
+    if (byId('hp2-public-use-show-location')) byId('hp2-public-use-show-location').value = config.guest_show_location ? 'true' : 'false';
+    if (byId('hp2-public-use-location-precision')) byId('hp2-public-use-location-precision').value = String(config.guest_location_precision || 'approx');
+    if (byId('hp2-public-use-lovense-live')) byId('hp2-public-use-lovense-live').value = config.guest_allow_lovense_live ? 'true' : 'false';
+    if (byId('hp2-public-use-lovense-pulse')) byId('hp2-public-use-lovense-pulse').value = config.guest_allow_lovense_pulse ? 'true' : 'false';
+    if (byId('hp2-public-use-pavlok-enabled')) byId('hp2-public-use-pavlok-enabled').value = config.guest_allow_pavlok ? 'true' : 'false';
+    if (byId('hp2-public-use-pavlok-max-intensity')) {
+      byId('hp2-public-use-pavlok-max-intensity').value = String(config.guest_pavlok_max_intensity || 60);
+    }
+    if (byId('hp2-public-use-open-url-enabled')) byId('hp2-public-use-open-url-enabled').value = config.guest_allow_open_url ? 'true' : 'false';
+    if (byId('hp2-public-use-url-hosts')) {
+      byId('hp2-public-use-url-hosts').value = Array.isArray(config.guest_allowed_url_hosts)
+        ? config.guest_allowed_url_hosts.join(', ')
+        : '';
+    }
+
+    const controlSelect = byId('hp2-public-use-phone-controls');
+    if (controlSelect) {
+      const options = Array.isArray(config.phone_control_options) ? config.phone_control_options : [];
+      const selected = new Set(Array.isArray(config.guest_phone_controls) ? config.guest_phone_controls : []);
+      controlSelect.innerHTML = options
+        .map((action) => `<option value="${escapeHtml(action)}" ${selected.has(action) ? 'selected' : ''}>${escapeHtml(action)}</option>`)
+        .join('');
+    }
+
+    if (byId('hp2-public-use-rate-per-min')) {
+      byId('hp2-public-use-rate-per-min').value = String(config.guest_rate_limit_per_min || 18);
+    }
+    if (byId('hp2-public-use-rate-action-per-min')) {
+      byId('hp2-public-use-rate-action-per-min').value = String(config.guest_rate_limit_per_action_per_min || 6);
+    }
+    if (byId('hp2-public-use-session-ttl-sec')) {
+      byId('hp2-public-use-session-ttl-sec').value = String(config.guest_session_ttl_sec || 900);
+    }
+    if (byId('hp2-public-use-schedule-timezone')) {
+      byId('hp2-public-use-schedule-timezone').value = String(config.guest_schedule_timezone || 'utc');
+    }
+    if (byId('hp2-public-use-schedule-profiles')) {
+      const profiles = Array.isArray(config.guest_schedule_profiles) ? config.guest_schedule_profiles : [];
+      byId('hp2-public-use-schedule-profiles').value = profiles.length ? JSON.stringify(profiles, null, 2) : '';
+    }
+
+    const panicActive = !!config.guest_panic_active;
+    const panicUntil = String(config.guest_panic_until || '').trim();
+    if (panicActive && panicUntil) {
+      setPublicUseResult(`Panic active until ${fmtDate(panicUntil)}.`);
+    }
+  }
+
+  async function loadPublicUseSettings() {
+    setPublicUseResult('Loading Public Use settings...');
+    try {
+      const config = await apiGet('/api/handler/public-use-settings');
+      applyPublicUseSettings(config);
+      await loadPublicUseAnalytics();
+      if (!config?.guest_panic_active) {
+        setPublicUseResult('');
+      }
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setPublicUseResult(`Failed to load Public Use settings: ${err.message}`);
+      }
+    }
+  }
+
+  async function savePublicUseSettings() {
+    setPublicUseResult('Saving Public Use settings...');
+    let scheduleProfiles = [];
+    try {
+      scheduleProfiles = parseProfilesJson(byId('hp2-public-use-schedule-profiles')?.value || '');
+    } catch (_err) {
+      setPublicUseResult('Schedule profiles must be valid JSON array.');
+      return;
+    }
+    const payload = {
+      public_site_enabled: parseSelectBool('hp2-public-site-enabled', true),
+      guest_enabled: parseSelectBool('hp2-public-use-enabled', false),
+      guest_device_id: String(byId('hp2-public-use-device-id')?.value || '').trim(),
+      guest_show_location: parseSelectBool('hp2-public-use-show-location', true),
+      guest_location_precision: String(byId('hp2-public-use-location-precision')?.value || 'approx').trim(),
+      guest_allow_lovense_live: parseSelectBool('hp2-public-use-lovense-live', true),
+      guest_allow_lovense_pulse: parseSelectBool('hp2-public-use-lovense-pulse', false),
+      guest_allow_pavlok: parseSelectBool('hp2-public-use-pavlok-enabled', false),
+      guest_pavlok_max_intensity: Number(byId('hp2-public-use-pavlok-max-intensity')?.value || 60),
+      guest_phone_controls: selectedMultiValues('hp2-public-use-phone-controls'),
+      guest_allow_open_url: parseSelectBool('hp2-public-use-open-url-enabled', false),
+      guest_allowed_url_hosts: parseCsvHosts(byId('hp2-public-use-url-hosts')?.value || ''),
+      guest_rate_limit_per_min: Number(byId('hp2-public-use-rate-per-min')?.value || 18),
+      guest_rate_limit_per_action_per_min: Number(byId('hp2-public-use-rate-action-per-min')?.value || 6),
+      guest_session_ttl_sec: Number(byId('hp2-public-use-session-ttl-sec')?.value || 900),
+      guest_schedule_timezone: String(byId('hp2-public-use-schedule-timezone')?.value || 'utc').trim(),
+      guest_schedule_profiles: scheduleProfiles,
+    };
+    try {
+      const response = await apiPost('/api/handler/public-use-settings', payload);
+      applyPublicUseSettings(response?.settings || payload);
+      setPublicUseResult('Public Use settings saved.');
+      await loadPublicUseAnalytics();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setPublicUseResult(`Failed to save Public Use settings: ${err.message}`);
+      }
+    }
+  }
+
+  function normalizeDrawerMediaFilter(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['all', 'media', 'image', 'video', 'audio', 'file'].includes(normalized)) {
+      return normalized;
+    }
+    return 'all';
+  }
+
+  function syncDrawerMediaFilterControls() {
+    const active = normalizeDrawerMediaFilter(state.drawer.mediaFilter);
+    document.querySelectorAll('[data-drawer-media-filter]').forEach((button) => {
+      const selected = normalizeDrawerMediaFilter(button.dataset.drawerMediaFilter) === active;
+      button.classList.toggle('hp2-media-filter-btn-active', selected);
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+  }
+
+  function setDrawerMediaFilter(value) {
+    state.drawer.mediaFilter = normalizeDrawerMediaFilter(value);
+    syncDrawerMediaFilterControls();
+    if (byId('hp2-view-drawer')?.classList.contains('hp2-view-active')) {
+      loadEvidenceDrawer().catch(() => {});
+    }
+  }
+
+  function isDrawerLightboxOpen() {
+    return !byId('hp2-drawer-lightbox')?.classList.contains('hp2-hidden');
+  }
+
+  function closeDrawerLightbox() {
+    const wrap = byId('hp2-drawer-lightbox');
+    const img = byId('hp2-drawer-lightbox-image');
+    const link = byId('hp2-drawer-lightbox-open');
+    const prev = byId('hp2-drawer-lightbox-prev');
+    const next = byId('hp2-drawer-lightbox-next');
+    if (!wrap || !img || !link) return;
+    wrap.classList.add('hp2-hidden');
+    img.removeAttribute('src');
+    img.alt = 'Drawer media';
+    link.href = '#';
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    state.drawer.lightboxGallery = [];
+    state.drawer.lightboxIndex = -1;
+  }
+
+  function syncDrawerLightboxNavButtons() {
+    const prev = byId('hp2-drawer-lightbox-prev');
+    const next = byId('hp2-drawer-lightbox-next');
+    const total = state.drawer.lightboxGallery.length;
+    const idx = state.drawer.lightboxIndex;
+    if (prev) prev.disabled = !(total > 1 && idx > 0);
+    if (next) next.disabled = !(total > 1 && idx >= 0 && idx < total - 1);
+  }
+
+  function showDrawerLightboxAt(index) {
+    const wrap = byId('hp2-drawer-lightbox');
+    const img = byId('hp2-drawer-lightbox-image');
+    const link = byId('hp2-drawer-lightbox-open');
+    const gallery = state.drawer.lightboxGallery;
+    if (!wrap || !img || !link || !gallery.length) return;
+    const nextIndex = Math.max(0, Math.min(gallery.length - 1, Number(index || 0)));
+    const item = gallery[nextIndex];
+    if (!item || !item.src) return;
+    state.drawer.lightboxIndex = nextIndex;
+    img.src = item.src;
+    img.alt = item.label || 'Drawer media';
+    link.href = item.src;
+    syncDrawerLightboxNavButtons();
+    wrap.classList.remove('hp2-hidden');
+  }
+
+  function collectDrawerLightboxGallery() {
+    const nodes = Array.from(document.querySelectorAll('#hp2-view-drawer [data-drawer-lightbox-src]'));
+    return nodes.map((node) => ({
+      src: String(node.dataset.drawerLightboxSrc || '').trim(),
+      label: String(node.dataset.drawerLightboxLabel || 'Drawer media').trim(),
+    })).filter((item) => item.src);
+  }
+
+  function openDrawerLightbox(src, label, options = {}) {
+    const gallery = Array.isArray(options.gallery) && options.gallery.length
+      ? options.gallery
+      : collectDrawerLightboxGallery();
+    state.drawer.lightboxGallery = gallery;
+    let index = Number(options.index);
+    if (!Number.isInteger(index) || index < 0 || index >= gallery.length) {
+      index = Math.max(0, gallery.findIndex((item) => item.src === src));
+    }
+    if (!gallery.length) {
+      state.drawer.lightboxGallery = [{ src, label: label || 'Drawer media' }];
+      index = 0;
+    }
+    showDrawerLightboxAt(index);
+  }
+
+  function navigateDrawerLightbox(delta) {
+    if (!isDrawerLightboxOpen()) return;
+    const total = state.drawer.lightboxGallery.length;
+    if (!total) return;
+    showDrawerLightboxAt(state.drawer.lightboxIndex + delta);
+  }
+
   function isInlineModalOpen() {
     const modal = byId('hp2-modal');
     return !!modal && !modal.classList.contains('hp2-hidden');
@@ -2743,34 +3246,188 @@
     }
   }
 
+  function inferDrawerAttachmentType(entry) {
+    const kind = String(entry?.media_kind || entry?.kind || '').trim().toLowerCase();
+    const metadataType = String(entry?.metadata?.content_type || '').trim().toLowerCase();
+    const url = String(entry?.url || '').trim().toLowerCase();
+    if (kind === 'image' || metadataType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(url)) return 'image';
+    if (kind === 'video' || metadataType.startsWith('video/') || /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(url)) return 'video';
+    if (kind === 'audio' || metadataType.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(url)) return 'audio';
+    return 'file';
+  }
+
+  function itemMatchesDrawerMediaFilter(attachments) {
+    const mode = normalizeDrawerMediaFilter(state.drawer.mediaFilter);
+    if (mode === 'all') return true;
+    const rows = Array.isArray(attachments) ? attachments : [];
+    if (!rows.length) return false;
+    const types = rows.map((entry) => inferDrawerAttachmentType(entry));
+    if (mode === 'media') return types.length > 0;
+    return types.includes(mode);
+  }
+
+  function renderDrawerAttachmentLinks(attachments) {
+    const rows = Array.isArray(attachments) ? attachments : [];
+    if (!rows.length) return '';
+    const rendered = rows.map((entry) => {
+      const mediaType = inferDrawerAttachmentType(entry);
+      const label = String(entry?.label || mediaType || 'media').trim() || 'media';
+      const url = String(entry?.url || '').trim();
+      if (!url) return '';
+      const safeUrl = escapeHtml(url);
+      if (mediaType === 'image') {
+        return `<div class="hp2-drawer-attachment"><button type="button" class="hp2-drawer-lightbox-trigger" data-drawer-lightbox-src="${safeUrl}" data-drawer-lightbox-label="${escapeHtml(label)}" aria-label="Open image preview"><img class="hp2-drawer-media-preview hp2-drawer-media-image" src="${safeUrl}" alt="${escapeHtml(label)}" loading="lazy" /></button><a class="hp2-drawer-media-label" href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a></div>`;
+      }
+      if (mediaType === 'video') {
+        return `<div class="hp2-drawer-attachment"><video class="hp2-drawer-media-preview hp2-drawer-media-video" src="${safeUrl}" controls preload="metadata"></video><a class="hp2-drawer-media-label" href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a></div>`;
+      }
+      if (mediaType === 'audio') {
+        return `<div class="hp2-drawer-attachment"><audio class="hp2-drawer-media-preview hp2-drawer-media-audio" src="${safeUrl}" controls preload="metadata"></audio><a class="hp2-drawer-media-label" href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a></div>`;
+      }
+      return `<div class="hp2-drawer-attachment"><a class="hp2-drawer-media-label" href="${safeUrl}" target="_blank" rel="noopener">${escapeHtml(label)}</a></div>`;
+    }).filter(Boolean);
+    if (!rendered.length) return '';
+    return `<div class="hp2-drawer-attachments">${rendered.join('')}</div>`;
+  }
+
+  async function uploadDrawerMedia(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await apiFetch('/api/handler/drawer/upload', {
+      method: 'POST',
+      body: form,
+    });
+    return response.json().catch(() => ({}));
+  }
+
+  async function createDrawerLimboItem() {
+    const prompt = String(byId('hp2-drawer-limbo-new-text')?.value || '').trim();
+    const mediaFile = byId('hp2-drawer-limbo-file')?.files?.[0] || null;
+    if (!prompt) {
+      setDrawerResult('Limbo prompt is required.');
+      return;
+    }
+    setDrawerResult('Creating limbo item...');
+    try {
+      const created = await apiPost('/api/handler/limbo', {
+        prompt_text: prompt,
+        source: 'handler',
+      });
+      const limboId = Number(created?.id || 0);
+      if (mediaFile && limboId > 0) {
+        const upload = await uploadDrawerMedia(mediaFile);
+        await apiPost(`/api/handler/limbo/${encodeURIComponent(String(limboId))}/attachments`, {
+          media_kind: String(upload?.media_kind || 'file').trim().toLowerCase(),
+          label: mediaFile.name,
+          url: String(upload?.url || '').trim(),
+          metadata: {
+            content_type: mediaFile.type || '',
+            size_bytes: mediaFile.size || 0,
+            filename: mediaFile.name,
+          },
+        });
+      }
+      if (byId('hp2-drawer-limbo-new-text')) byId('hp2-drawer-limbo-new-text').value = '';
+      if (byId('hp2-drawer-limbo-file')) byId('hp2-drawer-limbo-file').value = '';
+      setDrawerResult('Limbo item logged.');
+      await loadEvidenceDrawer();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setDrawerResult(`Failed to create limbo item: ${err.message}`);
+      }
+    }
+  }
+
+  async function createDrawerEvidenceItem() {
+    const title = String(byId('hp2-drawer-evidence-title')?.value || '').trim();
+    const summary = String(byId('hp2-drawer-evidence-summary')?.value || '').trim();
+    const category = String(byId('hp2-drawer-evidence-category')?.value || 'consequence').trim().toLowerCase();
+    const severity = String(byId('hp2-drawer-evidence-severity')?.value || 'medium').trim().toLowerCase();
+    const mediaFile = byId('hp2-drawer-evidence-file')?.files?.[0] || null;
+    if (!title) {
+      setDrawerResult('Evidence title is required.');
+      return;
+    }
+    setDrawerResult('Creating evidence log...');
+    try {
+      const created = await apiPost('/api/handler/tpe/evidence', {
+        device_id: state.selectedDeviceId || null,
+        category,
+        severity,
+        title,
+        summary: summary || null,
+        metadata: {
+          source: 'handler_v2_drawer',
+        },
+      });
+      const evidenceId = Number(created?.id || 0);
+      if (mediaFile && evidenceId > 0) {
+        const upload = await uploadDrawerMedia(mediaFile);
+        await apiPost(`/api/handler/tpe/evidence/${encodeURIComponent(String(evidenceId))}/attachments`, {
+          kind: String(upload?.media_kind || 'file').trim().toLowerCase(),
+          label: mediaFile.name,
+          url: String(upload?.url || '').trim(),
+          metadata: {
+            content_type: mediaFile.type || '',
+            size_bytes: mediaFile.size || 0,
+            filename: mediaFile.name,
+          },
+        });
+      }
+      if (byId('hp2-drawer-evidence-title')) byId('hp2-drawer-evidence-title').value = '';
+      if (byId('hp2-drawer-evidence-summary')) byId('hp2-drawer-evidence-summary').value = '';
+      if (byId('hp2-drawer-evidence-file')) byId('hp2-drawer-evidence-file').value = '';
+      setDrawerResult('Evidence log created.');
+      await loadEvidenceDrawer();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setDrawerResult(`Failed to create evidence log: ${err.message}`);
+      }
+    }
+  }
+
   async function loadEvidenceDrawer() {
     const pendingEl = byId('hp2-drawer-limbo-pending');
     const resolvedEl = byId('hp2-drawer-limbo-resolved');
+    const evidenceEl = byId('hp2-drawer-evidence-list');
+    const correctionsEl = byId('hp2-drawer-corrections');
     pendingEl.innerHTML = queueListEmpty('Loading pending limbo items...');
     resolvedEl.innerHTML = queueListEmpty('Loading resolved limbo items...');
+    if (evidenceEl) evidenceEl.innerHTML = queueListEmpty('Loading evidence logs...');
+    if (correctionsEl) correctionsEl.innerHTML = queueListEmpty('Loading correction events...');
     try {
-      const [pendingRows, allRows] = await Promise.all([
+      const [pendingRows, allRows, evidenceRows, correctionRows] = await Promise.all([
         apiGet('/api/handler/limbo?status=pending&limit=200').catch(() => []),
         apiGet('/api/handler/limbo?status=all&limit=300').catch(() => []),
+        apiGet(`/api/handler/tpe/evidence?limit=120${state.selectedDeviceId ? `&device_id=${encodeURIComponent(state.selectedDeviceId)}` : ''}`).catch(() => []),
+        apiGet('/api/handler/drawer/corrections?limit=150').catch(() => []),
       ]);
       let pending = Array.isArray(pendingRows) ? pendingRows : [];
       const all = Array.isArray(allRows) ? allRows : [];
       let resolved = all.filter((item) => item.status !== 'pending');
+      const evidence = Array.isArray(evidenceRows) ? evidenceRows : [];
+      const corrections = Array.isArray(correctionRows) ? correctionRows : [];
 
       pending = pending.filter((item) => includeBySharedFilter(item.status || 'pending', 'open-only'));
       resolved = resolved.filter((item) => includeBySharedFilter(item.status || 'resolved', 'resolved-only'));
+      pending = pending.filter((item) => itemMatchesDrawerMediaFilter(item?.attachments));
+      resolved = resolved.filter((item) => itemMatchesDrawerMediaFilter(item?.attachments));
+      const visibleEvidence = evidence.filter((item) => itemMatchesDrawerMediaFilter(item?.attachments));
 
       pending.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
       resolved.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
 
       pendingEl.innerHTML = pending.length ? pending.map((item) => {
         const id = Number(item.id || 0);
+        const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
         return `<li>
           <div class="hp2-feed-item-row">
             <strong>${escapeHtml(item.prompt_text || '')}</strong>
             <span class="${severityClass('warning')}">${escapeHtml(item.source || 'handler')}</span>
           </div>
           <div class="hp2-muted">${escapeHtml(fmtDate(item.created_at))}</div>
+          ${attachmentCount ? `<div class="hp2-muted">Media: ${attachmentCount}</div>` : ''}
+          ${renderDrawerAttachmentLinks(item.attachments)}
           <div class="hp2-queue-actions">
             <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-answer" data-id="${id}">Answer</button>
             <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-dismiss" data-id="${id}">Dismiss</button>
@@ -2781,22 +3438,66 @@
       resolvedEl.innerHTML = resolved.length ? resolved.slice(0, 120).map((item) => {
         const id = Number(item.id || 0);
         const resolution = item.status === 'answered' ? (item.answer_text || 'Answered') : (item.dismissed_reason || 'Dismissed');
+        const attachmentCount = Array.isArray(item.attachments) ? item.attachments.length : 0;
         return `<li>
           <div class="hp2-feed-item-row">
             <strong>${escapeHtml(item.prompt_text || '')}</strong>
             <span class="${severityClass(item.status === 'answered' ? 'info' : 'warning')}">${escapeHtml(item.status || 'resolved')}</span>
           </div>
           <div class="hp2-muted">${escapeHtml(resolution)}</div>
+          ${attachmentCount ? `<div class="hp2-muted">Media: ${attachmentCount}</div>` : ''}
+          ${renderDrawerAttachmentLinks(item.attachments)}
           <div class="hp2-queue-actions">
             ${item.status === 'answered' && !item.published_question_id ? `<button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="limbo-publish" data-id="${id}">Publish</button>` : ''}
           </div>
         </li>`;
       }).join('') : queueListEmpty('No resolved limbo items.');
+
+      if (evidenceEl) {
+        evidenceEl.innerHTML = visibleEvidence.length ? visibleEvidence.map((item) => {
+          const title = String(item?.title || '').trim() || 'Evidence item';
+          const category = String(item?.category || 'system');
+          const severity = String(item?.severity || 'medium');
+          const summary = String(item?.summary || '').trim();
+          const attachmentCount = Array.isArray(item?.attachments) ? item.attachments.length : 0;
+          return `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(title)}</strong>
+              <span class="${severityClass(severity === 'critical' || severity === 'high' ? 'warning' : 'info')}">${escapeHtml(`${category}/${severity}`)}</span>
+            </div>
+            ${summary ? `<div class="hp2-muted">${escapeHtml(summary)}</div>` : ''}
+            <div class="hp2-muted">${escapeHtml(fmtDate(item?.created_at))}</div>
+            ${attachmentCount ? `<div class="hp2-muted">Media: ${attachmentCount}</div>` : ''}
+            ${renderDrawerAttachmentLinks(item?.attachments)}
+          </li>`;
+        }).join('') : queueListEmpty('No evidence logs match the current media filter.');
+      }
+
+      if (correctionsEl) {
+        correctionsEl.innerHTML = corrections.length ? corrections.slice(0, 120).map((item) => {
+          const eventType = String(item?.event_type || 'update').replaceAll('_', ' ');
+          const note = String(item?.note || '').trim();
+          const actor = String(item?.actor || 'system').trim();
+          const targetType = String(item?.target_type || 'item').trim();
+          const targetId = String(item?.target_id || '').trim();
+          return `<li>
+            <div class="hp2-feed-item-row">
+              <strong>${escapeHtml(eventType)}</strong>
+              <span class="${severityClass('info')}">${escapeHtml(`${targetType}${targetId ? `#${targetId}` : ''}`)}</span>
+            </div>
+            ${note ? `<div class="hp2-muted">${escapeHtml(note)}</div>` : ''}
+            <div class="hp2-muted">${escapeHtml(actor)} • ${escapeHtml(fmtDate(item?.created_at))}</div>
+          </li>`;
+        }).join('') : queueListEmpty('No correction events logged yet.');
+      }
+
       state.telemetry.drawerAt = Date.now();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         pendingEl.innerHTML = queueListEmpty('Failed to load pending limbo.');
         resolvedEl.innerHTML = queueListEmpty('Failed to load resolved limbo.');
+        if (evidenceEl) evidenceEl.innerHTML = queueListEmpty('Failed to load evidence logs.');
+        if (correctionsEl) correctionsEl.innerHTML = queueListEmpty('Failed to load correction events.');
       }
     }
   }
@@ -2812,18 +3513,18 @@
     });
     if (!response.confirmed) return;
     if (response.invalidEmpty) {
-      setQueueResult('Limbo answer cannot be empty.');
+      setDrawerResult('Limbo answer cannot be empty.');
       return;
     }
     const normalized = response.value;
-    setQueueResult('Saving limbo answer...');
+    setDrawerResult('Saving limbo answer...');
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/answer`, { answer_text: normalized });
-      setQueueResult('Limbo item answered.');
+      setDrawerResult('Limbo item answered.');
       await loadEvidenceDrawer();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        setQueueResult(`Failed to answer limbo item: ${err.message}`);
+        setDrawerResult(`Failed to answer limbo item: ${err.message}`);
       }
     }
   }
@@ -2841,32 +3542,32 @@
     });
     if (!response.confirmed) return;
     const reason = response.value || '';
-    setQueueResult('Dismissing limbo item...');
+    setDrawerResult('Dismissing limbo item...');
     try {
       await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/dismiss`, { reason });
-      setQueueResult('Limbo item dismissed.');
+      setDrawerResult('Limbo item dismissed.');
       await loadEvidenceDrawer();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        setQueueResult(`Failed to dismiss limbo item: ${err.message}`);
+        setDrawerResult(`Failed to dismiss limbo item: ${err.message}`);
       }
     }
   }
 
   async function publishQueueLimbo(itemId) {
-    setQueueResult('Publishing limbo item...');
+    setDrawerResult('Publishing limbo item...');
     try {
       const result = await apiPost(`/api/handler/limbo/${encodeURIComponent(String(itemId))}/publish`, {});
       if (result && result.already_published) {
-        setQueueResult('Limbo item was already published.');
+        setDrawerResult('Limbo item was already published.');
       } else {
-        setQueueResult('Limbo item published.');
+        setDrawerResult('Limbo item published.');
       }
       await loadEvidenceDrawer();
       await loadQueueQuestions();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
-        setQueueResult(`Failed to publish limbo item: ${err.message}`);
+        setDrawerResult(`Failed to publish limbo item: ${err.message}`);
       }
     }
   }
@@ -3743,6 +4444,12 @@
   }
 
   function bindEvents() {
+    const bind = (id, eventName, handler) => {
+      const el = byId(id);
+      if (!el) return;
+      el.addEventListener(eventName, handler);
+    };
+
     byId('hp2-login-btn').addEventListener('click', () => {
       login().catch(() => {});
     });
@@ -3812,6 +4519,14 @@
     byId('hp2-autofollow-btn').addEventListener('click', toggleAutoFollow);
     byId('hp2-refresh-intel-btn').addEventListener('click', () => loadDashboardIntelligence().catch(() => {}));
     byId('hp2-hard-refresh-btn').addEventListener('click', () => hydrateApp().catch(() => {}));
+    byId('hp2-drawer-limbo-add-btn').addEventListener('click', () => createDrawerLimboItem().catch(() => {}));
+    byId('hp2-drawer-evidence-add-btn').addEventListener('click', () => createDrawerEvidenceItem().catch(() => {}));
+    bind('hp2-ai-save-btn', 'click', () => saveAiWardenConfig().catch(() => {}));
+    bind('hp2-ai-refresh-btn', 'click', () => loadAiWardenDashboard().catch(() => {}));
+    bind('hp2-public-use-save-btn', 'click', () => savePublicUseSettings().catch(() => {}));
+    bind('hp2-public-use-panic-15-btn', 'click', () => setPublicUsePanic(15).catch(() => {}));
+    bind('hp2-public-use-panic-clear-btn', 'click', () => setPublicUsePanic(0).catch(() => {}));
+    bind('hp2-public-use-refresh-analytics-btn', 'click', () => loadPublicUseAnalytics().catch(() => {}));
 
     document.querySelectorAll('[data-cmd-preset]').forEach((button) => {
       button.addEventListener('click', () => {
@@ -3868,6 +4583,11 @@
     byId('hp2-shared-sort-drawer').addEventListener('change', (event) => {
       updateSharedControls({ sort: event.target.value });
     });
+    bind('hp2-drawer-media-filter', 'click', (event) => {
+      const btn = event.target.closest('[data-drawer-media-filter]');
+      if (!btn) return;
+      setDrawerMediaFilter(btn.dataset.drawerMediaFilter || 'all');
+    });
 
     byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
     byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
@@ -3899,8 +4619,38 @@
         closeInlineModal({ confirmed: false, value: '' });
       }
     });
+    byId('hp2-drawer-lightbox-close').addEventListener('click', () => {
+      closeDrawerLightbox();
+    });
+    byId('hp2-drawer-lightbox-prev').addEventListener('click', () => {
+      navigateDrawerLightbox(-1);
+    });
+    byId('hp2-drawer-lightbox-next').addEventListener('click', () => {
+      navigateDrawerLightbox(1);
+    });
+    byId('hp2-drawer-lightbox').addEventListener('click', (event) => {
+      const target = event.target;
+      if (target && target.dataset && target.dataset.drawerLightboxDismiss === 'true') {
+        closeDrawerLightbox();
+      }
+    });
 
     document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && isDrawerLightboxOpen()) {
+        event.preventDefault();
+        closeDrawerLightbox();
+        return;
+      }
+      if (event.key === 'ArrowLeft' && isDrawerLightboxOpen()) {
+        event.preventDefault();
+        navigateDrawerLightbox(-1);
+        return;
+      }
+      if (event.key === 'ArrowRight' && isDrawerLightboxOpen()) {
+        event.preventDefault();
+        navigateDrawerLightbox(1);
+        return;
+      }
       if (isInlineModalOpen()) {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -3940,9 +4690,24 @@
       renderQueueQuestions();
     });
 
-    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-drawer-limbo-pending', 'hp2-drawer-limbo-resolved']
+    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-drawer-limbo-pending', 'hp2-drawer-limbo-resolved', 'hp2-drawer-evidence-list']
       .forEach((id) => {
-        byId(id).addEventListener('click', (event) => {
+        const host = byId(id);
+        if (!host) return;
+        host.addEventListener('click', (event) => {
+          const lightboxTrigger = event.target.closest('[data-drawer-lightbox-src]');
+          if (lightboxTrigger) {
+            event.preventDefault();
+            const gallery = collectDrawerLightboxGallery();
+            const galleryIndex = Array.from(document.querySelectorAll('#hp2-view-drawer [data-drawer-lightbox-src]'))
+              .findIndex((node) => node === lightboxTrigger);
+            openDrawerLightbox(
+              lightboxTrigger.dataset.drawerLightboxSrc || '',
+              lightboxTrigger.dataset.drawerLightboxLabel || 'Drawer media',
+              { gallery, index: galleryIndex },
+            );
+            return;
+          }
           handleQueueActionClick(event).catch(() => {});
         });
       });
@@ -3959,6 +4724,7 @@
     loadMacrosLocal();
     bindEvents();
     syncSharedControls();
+    syncDrawerMediaFilterControls();
     setQuickTapTarget('lovense');
     renderQuickTapActionButtons();
     syncControlReadouts();

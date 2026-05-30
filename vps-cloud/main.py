@@ -1276,6 +1276,7 @@ _BACKEND_ONLY_PREFIXES = (
     "/api/",
     "/ws/",
     "/static/",
+    "/guest",
     "/favicon.ico",
     "/sw.js",
     "/manifest.json",
@@ -1283,6 +1284,73 @@ _BACKEND_ONLY_PREFIXES = (
     "/robots.txt",
     "/sitemap.xml",
 )
+
+_PUBLIC_TOGGLE_PAGE_PREFIXES = (
+    "/",
+    "/anon",
+    "/links",
+    "/drool",
+    "/spotify",
+    "/booking",
+    "/guest",
+)
+
+_PUBLIC_TOGGLE_PAGE_EXACT = {
+    "/",
+    "/index.html",
+    "/anon.html",
+    "/links.html",
+    "/drool.html",
+    "/spotify.html",
+    "/booking.html",
+    "/guest.html",
+}
+
+
+def _is_toggleable_public_page_path(path: str) -> bool:
+    if path in _PUBLIC_TOGGLE_PAGE_EXACT:
+        return True
+    if path.startswith(("/api/", "/ws/", "/static/", "/admin", "/handler", "/docs", "/openapi.json")):
+        return False
+    for prefix in _PUBLIC_TOGGLE_PAGE_PREFIXES:
+        if prefix != "/" and path.startswith(prefix):
+            return True
+    return False
+
+
+@app.middleware("http")
+async def public_page_toggle_gate(request: Request, call_next):
+    if request.method not in ("GET", "HEAD"):
+        return await call_next(request)
+
+    path = request.url.path
+    if not _is_toggleable_public_page_path(path):
+        return await call_next(request)
+
+    enabled = True
+    db = None
+    try:
+        db = get_db_connection()
+        enabled = str(get_setting(db, "public_site_enabled", "true") or "true").strip().lower() == "true"
+    except Exception:
+        enabled = True
+    finally:
+        if db is not None:
+            db.close()
+
+    if enabled:
+        return await call_next(request)
+
+    return HTMLResponse(
+        content=(
+            "<html><head><title>Public Site Offline</title></head>"
+            "<body style='font-family:Segoe UI,Tahoma,sans-serif;padding:24px;'>"
+            "<h2>Public Site Temporarily Disabled</h2>"
+            "<p>The public pages are currently unavailable.</p>"
+            "</body></html>"
+        ),
+        status_code=503,
+    )
 
 
 @app.middleware("http")
@@ -1368,6 +1436,12 @@ def spotify_page():
 def booking_page():
     """Serve the detailed public booking questionnaire page."""
     return FileResponse("static/booking.html")
+
+
+@app.get("/guest", include_in_schema=False)
+def guest_page():
+    """Serve the public guest controls page."""
+    return FileResponse("static/guest.html")
 
 
 @app.get("/age-gate", include_in_schema=False)

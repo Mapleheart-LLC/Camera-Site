@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Guest Control</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #121c31;
+      --text: #e7eefc;
+      --muted: #aeb9d4;
+      --accent: #2fd3a3;
+      --warn: #ffb454;
+      --danger: #ff5d6c;
+      --border: #223051;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at top right, #18284a, var(--bg));
+      color: var(--text);
+      min-height: 100vh;
+      padding: 18px;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    h1, h2 {
+      margin: 0 0 10px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.02rem; }
+    .muted { color: var(--muted); }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+    button, select, input {
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f1a2e;
+      color: var(--text);
+      padding: 10px 12px;
+      min-height: 40px;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #1f345f, #182a4d);
+      font-weight: 600;
+    }
+    button.primary { background: linear-gradient(180deg, #2cae87, #238c6c); }
+    button.warn { background: linear-gradient(180deg, #c58b32, #986a24); }
+    button.danger { background: linear-gradient(180deg, #d64f5d, #a93a45); }
+    input[type='number'] { width: 110px; }
+    input[type='url'] { flex: 1; min-width: 220px; }
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      margin-right: 6px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .result {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f1830;
+      font-size: 0.95rem;
+    }
+    .ok { color: var(--accent); }
+    .err { color: #ff8f9a; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>Guest Control</h1>
+      <div class="muted">Public page controls are governed by Handler -> Public Use settings.</div>
+      <div class="row" id="status-pills"></div>
+      <div class="result" id="guest-state">Loading...</div>
+    </section>
+
+    <section class="card" id="lovense-card" hidden>
+      <h2>Lovense</h2>
+      <div class="row">
+        <label class="muted" for="intensity">Intensity</label>
+        <input id="intensity" type="number" min="0" max="20" value="10" />
+        <label class="muted" for="duration">Duration ms</label>
+        <input id="duration" type="number" min="100" max="15000" value="1200" />
+      </div>
+      <div class="row" id="lovense-actions"></div>
+    </section>
+
+    <section class="card" id="pavlok-card" hidden>
+      <h2>Pavlok</h2>
+      <div class="row">
+        <label class="muted" for="pav-intensity">Shock Intensity</label>
+        <input id="pav-intensity" type="number" min="1" max="100" value="40" />
+        <button class="danger" id="pav-shock">Send Shock</button>
+      </div>
+    </section>
+
+    <section class="card" id="phone-card" hidden>
+      <h2>Phone Controls</h2>
+      <div class="row">
+        <select id="phone-action"></select>
+        <input id="phone-value" type="number" placeholder="value" hidden />
+        <input id="phone-ms" type="number" placeholder="timeout ms" hidden />
+        <select id="phone-enabled" hidden>
+          <option value="true">Enabled</option>
+          <option value="false">Disabled</option>
+        </select>
+        <select id="phone-policy" hidden>
+          <option value="priority">priority</option>
+          <option value="all">all</option>
+          <option value="alarms_only">alarms_only</option>
+          <option value="total_silence">total_silence</option>
+        </select>
+        <button id="send-phone">Send</button>
+      </div>
+    </section>
+
+    <section class="card" id="url-card" hidden>
+      <h2>Open Web Page In App</h2>
+      <div class="row">
+        <input id="open-url" type="url" placeholder="https://example.com/path" />
+        <button class="primary" id="open-url-btn">Launch URL</button>
+      </div>
+      <div class="muted" id="allowed-hosts"></div>
+    </section>
+
+    <div class="result" id="result"></div>
+  </div>
+
+  <script>
+    const byId = (id) => document.getElementById(id);
+
+    const state = {
+      config: null,
+      pollTimer: null,
+      sessionToken: '',
+      sessionExpiresAt: '',
+    };
+
+    async function api(path, method = 'GET', body, extraHeaders = {}) {
+      const headers = {
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(extraHeaders || {}),
+      };
+      const res = await fetch(path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.detail || `${res.status} ${res.statusText}`);
+      }
+      return data;
+    }
+
+    async function ensureGuestSession(forceRefresh = false) {
+      if (!forceRefresh && state.sessionToken && state.sessionExpiresAt) {
+        const expiryMs = Date.parse(state.sessionExpiresAt);
+        if (Number.isFinite(expiryMs) && expiryMs - Date.now() > 30000) {
+          return;
+        }
+      }
+      const payload = await api('/api/public/guest/session', 'POST', {});
+      state.sessionToken = String(payload.session_token || '');
+      state.sessionExpiresAt = String(payload.expires_at || '');
+    }
+
+    function setResult(msg, ok = true) {
+      const el = byId('result');
+      el.textContent = msg;
+      el.className = `result ${ok ? 'ok' : 'err'}`;
+    }
+
+    function renderPills(config) {
+      const pills = [];
+      pills.push(config.guest_enabled ? 'Guest Enabled' : 'Guest Disabled');
+      if (config.guest_show_location) pills.push(`Location: ${config.guest_location_precision}`);
+      if (config.guest_allow_lovense_live) pills.push('Lovense Live');
+      if (config.guest_allow_lovense_pulse) pills.push('Lovense Pulse');
+      if (config.guest_allow_pavlok) pills.push(`Pavlok <= ${config.guest_pavlok_max_intensity}`);
+      if (config.guest_phone_controls?.length) pills.push(`Phone Controls: ${config.guest_phone_controls.length}`);
+      if (config.guest_allow_open_url) pills.push('Open URL');
+      byId('status-pills').innerHTML = pills.map((p) => `<span class="pill">${p}</span>`).join('');
+    }
+
+    function renderPhoneControls(config) {
+      const select = byId('phone-action');
+      const controls = config.guest_phone_controls || [];
+      select.innerHTML = controls.map((item) => `<option value="${item}">${item}</option>`).join('');
+      byId('phone-card').hidden = controls.length === 0;
+      refreshPhoneActionInputs();
+    }
+
+    function refreshPhoneActionInputs() {
+      const action = byId('phone-action').value;
+      byId('phone-value').hidden = action !== 'SET_BRIGHTNESS';
+      byId('phone-ms').hidden = action !== 'SET_SCREEN_TIMEOUT';
+      byId('phone-enabled').hidden = !['SET_AUTO_ROTATE', 'SET_FLASHLIGHT'].includes(action);
+      byId('phone-policy').hidden = action !== 'SET_DND';
+    }
+
+    async function loadGuestState() {
+      const data = await api('/api/public/guest/state');
+      if (!data.guest_enabled) {
+        byId('guest-state').textContent = 'Guest page is currently disabled by handler settings.';
+        return;
+      }
+      const loc = data.location || {};
+      const locText = loc.lat == null || loc.lon == null
+        ? 'hidden'
+        : `${loc.lat}, ${loc.lon} (${loc.precision})`;
+      byId('guest-state').textContent = [
+        `Device: ${data.device_name || data.device_id || 'unassigned'}`,
+        `Online: ${data.is_online ? 'yes' : 'no'}`,
+        `Locked: ${data.is_locked ? 'yes' : 'no'}`,
+        `Battery: ${data.battery_pct == null ? 'n/a' : `${data.battery_pct}%`}`,
+        `Location: ${locText}`,
+      ].join(' | ');
+    }
+
+    async function sendGuestControl(payload) {
+      try {
+        await ensureGuestSession(false);
+        const result = await api('/api/public/guest/control', 'POST', payload, {
+          'X-Guest-Session': state.sessionToken,
+        });
+        setResult(`Sent ${result.action} to ${result.device_id}.`, true);
+      } catch (err) {
+        if (String(err.message || '').toLowerCase().includes('invalid or expired guest session')) {
+          try {
+            await ensureGuestSession(true);
+            const retry = await api('/api/public/guest/control', 'POST', payload, {
+              'X-Guest-Session': state.sessionToken,
+            });
+            setResult(`Sent ${retry.action} to ${retry.device_id}.`, true);
+            return;
+          } catch (_retryErr) {
+            setResult(`Failed: ${_retryErr.message}`, false);
+            return;
+          }
+        }
+        setResult(`Failed: ${err.message}`, false);
+      }
+    }
+
+    async function boot() {
+      try {
+        const config = await api('/api/public/guest/config');
+        state.config = config;
+
+        if (!config.guest_enabled) {
+          byId('guest-state').textContent = 'Guest page is currently disabled by handler settings.';
+          return;
+        }
+
+        renderPills(config);
+        await ensureGuestSession(true);
+
+        const lovenseActions = [];
+        if (config.guest_allow_lovense_live) lovenseActions.push(['lovense_live', 'Send Live']);
+        if (config.guest_allow_lovense_pulse) lovenseActions.push(['lovense_pulse', 'Send Pulse']);
+        byId('lovense-card').hidden = lovenseActions.length === 0;
+        byId('lovense-actions').innerHTML = lovenseActions
+          .map(([action, label]) => `<button data-lovense-action="${action}">${label}</button>`)
+          .join('');
+
+        byId('pavlok-card').hidden = !config.guest_allow_pavlok;
+        byId('pav-intensity').max = String(config.guest_pavlok_max_intensity || 100);
+
+        renderPhoneControls(config);
+
+        byId('url-card').hidden = !config.guest_allow_open_url;
+        const hosts = config.guest_allowed_url_hosts || [];
+        byId('allowed-hosts').textContent = hosts.length
+          ? `Allowed hosts: ${hosts.join(', ')}`
+          : 'Any host is currently allowed.';
+
+        await loadGuestState();
+        state.pollTimer = setInterval(() => loadGuestState().catch(() => {}), 15000);
+      } catch (err) {
+        byId('guest-state').textContent = `Unable to load guest config: ${err.message}`;
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-lovense-action]');
+      if (btn) {
+        sendGuestControl({
+          action: btn.getAttribute('data-lovense-action'),
+          intensity: Number(byId('intensity').value || 10),
+          duration_ms: Number(byId('duration').value || 1200),
+        });
+      }
+    });
+
+    byId('pav-shock').addEventListener('click', () => {
+      sendGuestControl({
+        action: 'pavlok_shock',
+        intensity: Number(byId('pav-intensity').value || 40),
+      });
+    });
+
+    byId('phone-action').addEventListener('change', refreshPhoneActionInputs);
+    byId('send-phone').addEventListener('click', () => {
+      const action = byId('phone-action').value;
+      const payload = { action: 'phone_control', phone_action: action };
+      if (action === 'SET_BRIGHTNESS') payload.value = Number(byId('phone-value').value || 180);
+      if (action === 'SET_SCREEN_TIMEOUT') payload.ms = Number(byId('phone-ms').value || 120000);
+      if (action === 'SET_AUTO_ROTATE' || action === 'SET_FLASHLIGHT') {
+        payload.enabled = byId('phone-enabled').value === 'true';
+      }
+      if (action === 'SET_DND') payload.policy = byId('phone-policy').value;
+      sendGuestControl(payload);
+    });
+
+    byId('open-url-btn').addEventListener('click', () => {
+      sendGuestControl({
+        action: 'open_url',
+        url: String(byId('open-url').value || '').trim(),
+      });
+    });
+
+    boot();
+  </script>
+</body>
+</html>

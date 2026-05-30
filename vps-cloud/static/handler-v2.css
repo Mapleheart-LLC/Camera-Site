@@ -830,6 +830,121 @@ button:focus-visible {
   gap: 0.55rem;
 }
 
+.hp2-drawer-attachments {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.36rem;
+}
+
+.hp2-media-filter-row {
+  display: flex;
+  gap: 0.32rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.hp2-media-filter-btn {
+  padding: 0.26rem 0.52rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+}
+
+.hp2-media-filter-btn-active {
+  border-color: color-mix(in srgb, var(--hp2-brand) 65%, #fff);
+  background: color-mix(in srgb, var(--hp2-brand) 20%, #102126);
+}
+
+.hp2-drawer-attachment {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.hp2-drawer-lightbox-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+  width: min(360px, 100%);
+  text-align: left;
+}
+
+.hp2-drawer-media-preview {
+  width: min(360px, 100%);
+  border: 1px solid var(--hp2-line);
+  border-radius: 9px;
+  background: #0d1b1f;
+}
+
+.hp2-drawer-media-image,
+.hp2-drawer-media-video {
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.hp2-drawer-media-audio {
+  height: 34px;
+}
+
+.hp2-drawer-media-label {
+  color: var(--hp2-brand-soft);
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
+.hp2-drawer-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 0.9rem;
+}
+
+.hp2-drawer-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 7, 8, 0.86);
+  backdrop-filter: blur(2px);
+}
+
+.hp2-drawer-lightbox-card {
+  position: relative;
+  width: min(1040px, 96vw);
+  max-height: 94vh;
+  border: 1px solid var(--hp2-line);
+  border-radius: 12px;
+  background: #0d1f22;
+  padding: 0.65rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hp2-drawer-lightbox-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hp2-drawer-lightbox-actions {
+  display: flex;
+  gap: 0.36rem;
+}
+
+.hp2-drawer-lightbox-actions .hp2-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hp2-drawer-lightbox-image {
+  max-width: 100%;
+  max-height: calc(94vh - 72px);
+  object-fit: contain;
+  border-radius: 9px;
+  border: 1px solid var(--hp2-line);
+  background: #081214;
+}
+
 .hp2-severity {
   border-radius: 999px;
   border: 1px solid transparent;

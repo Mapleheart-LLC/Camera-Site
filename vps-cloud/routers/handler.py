@@ -33,13 +33,19 @@ from collections import Counter
 import hashlib
 import json
 import logging
+import os
 import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import time
 from typing import Any, List, Optional
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from pydantic import AliasChoices, BaseModel, Field
 
 import jwt as _jwt
@@ -128,9 +134,41 @@ TOY_SHARE_SCOPE_PROFILE_OPTIONS = {
     "custom",
 }
 
+_HANDLER_DRAWER_UPLOAD_DIR = Path(os.environ.get("HANDLER_DRAWER_UPLOAD_PATH", "static/handler-media"))
+_HANDLER_DRAWER_UPLOAD_URL_PREFIX = "/handler-media"
+_HANDLER_DRAWER_UPLOAD_CHUNK_SIZE = 1024 * 1024
+_HANDLER_DRAWER_UPLOAD_MAX_BYTES = 80 * 1024 * 1024
+
 HANDLER_PANEL_MACROS_SETTINGS_KEY = "handler_panel_v2_macros_json"
 HANDLER_PANEL_MACROS_MAX_ITEMS = 20
 HANDLER_PANEL_MACRO_STEPS_MAX_LEN = 4000
+
+AI_WARDEN_SETTING_SERVER_BASE_URL = "ai_warden_server_base_url"
+AI_WARDEN_SETTING_NAME = "ai_warden_name"
+AI_WARDEN_SETTING_PROVIDER = "ai_warden_provider"
+AI_WARDEN_SETTING_INFO = "ai_warden_info"
+AI_WARDEN_SETTING_API_KEY = "ai_warden_api_key"
+AI_WARDEN_SETTING_RULES_JSON = "ai_warden_rules_json"
+AI_WARDEN_SETTING_AUTO_ENFORCE = "ai_warden_auto_enforce"
+AI_WARDEN_SETTING_AUTO_SOCIAL = "ai_warden_auto_social_posting"
+AI_WARDEN_REPORTS_MAX_LIMIT = 200
+
+PUBLIC_USE_LOCATION_PRECISION_OPTIONS = ["off", "approx", "city", "exact"]
+PUBLIC_USE_TIMEZONE_OPTIONS = ["utc"]
+PUBLIC_USE_PHONE_CONTROL_OPTIONS = [
+    "LOCK_DEVICE",
+    "DISMISS_KEYGUARD",
+    "SCREEN_ON",
+    "SCREEN_OFF",
+    "SET_BRIGHTNESS",
+    "SET_SCREEN_TIMEOUT",
+    "SET_AUTO_ROTATE",
+    "SET_DND",
+    "SET_FLASHLIGHT",
+]
+PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN = 18
+PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN = 6
+PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC = 900
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +239,43 @@ def _ensure_limbo_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE limbo_items ADD COLUMN published_at TEXT")
     if "published_question_id" not in cols:
         conn.execute("ALTER TABLE limbo_items ADD COLUMN published_question_id TEXT")
+
+
+def _ensure_limbo_attachments_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS limbo_item_attachments (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            limbo_item_id INTEGER NOT NULL,
+            media_kind    TEXT NOT NULL DEFAULT 'file',
+            label         TEXT,
+            url           TEXT NOT NULL,
+            metadata_json TEXT,
+            created_at    TEXT NOT NULL,
+            FOREIGN KEY(limbo_item_id) REFERENCES limbo_items(id) ON DELETE CASCADE
+        )
+        """
+    )
+
+
+def _ensure_drawer_correction_events_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_drawer_correction_events (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type   TEXT NOT NULL,
+            target_type  TEXT NOT NULL,
+            target_id    TEXT,
+            actor        TEXT,
+            note         TEXT,
+            payload_json TEXT,
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_drawer_correction_created_at ON handler_drawer_correction_events(created_at DESC)"
+    )
 
 
 def _ensure_booking_table(conn: sqlite3.Connection) -> None:
@@ -411,6 +486,46 @@ def _ensure_public_intelligence_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_public_guest_control_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS public_guest_sessions (
+            token       TEXT PRIMARY KEY,
+            client_ip   TEXT,
+            user_agent  TEXT,
+            created_at  TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            revoked     INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_guest_sessions_expires ON public_guest_sessions(expires_at)"
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS public_guest_control_events (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_token TEXT,
+            client_ip     TEXT,
+            action        TEXT,
+            outcome       TEXT NOT NULL,
+            detail        TEXT,
+            created_at    TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_guest_control_events_created ON public_guest_control_events(created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_guest_control_events_ip_created ON public_guest_control_events(client_ip, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_public_guest_control_events_action_created ON public_guest_control_events(action, created_at DESC)"
+    )
+
+
 def _ensure_toy_share_links_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -526,6 +641,25 @@ def _ensure_toy_share_command_events_table(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_ai_warden_reports_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_warden_reports (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_type  TEXT NOT NULL,
+            severity     TEXT NOT NULL DEFAULT 'info',
+            summary      TEXT,
+            payload_json TEXT,
+            source       TEXT NOT NULL DEFAULT 'remote_ai',
+            created_at   TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_warden_reports_created_at ON ai_warden_reports(created_at DESC)"
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -540,15 +674,19 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         conn.execute(_CREATE_TABLE_SQL)
         _ensure_limbo_table(conn)
         _ensure_limbo_columns(conn)
+        _ensure_limbo_attachments_table(conn)
         _ensure_booking_table(conn)
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
+        _ensure_drawer_correction_events_table(conn)
         _ensure_behavior_log_table(conn)
         _ensure_public_intelligence_table(conn)
+        _ensure_public_guest_control_tables(conn)
         _ensure_toy_share_links_table(conn)
         _ensure_toy_control_queue_table(conn)
         _ensure_toy_share_command_events_table(conn)
+        _ensure_ai_warden_reports_table(conn)
         conn.commit()
         return
 
@@ -586,15 +724,19 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         conn.execute("DROP TABLE _handler_device_status_v1")
         _ensure_limbo_table(conn)
         _ensure_limbo_columns(conn)
+        _ensure_limbo_attachments_table(conn)
         _ensure_booking_table(conn)
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
+        _ensure_drawer_correction_events_table(conn)
         _ensure_behavior_log_table(conn)
         _ensure_public_intelligence_table(conn)
+        _ensure_public_guest_control_tables(conn)
         _ensure_toy_share_links_table(conn)
         _ensure_toy_control_queue_table(conn)
         _ensure_toy_share_command_events_table(conn)
+        _ensure_ai_warden_reports_table(conn)
         conn.commit()
         return
 
@@ -608,20 +750,80 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
 
     _ensure_limbo_table(conn)
     _ensure_limbo_columns(conn)
+    _ensure_limbo_attachments_table(conn)
     _ensure_booking_table(conn)
     _ensure_puppy_mail_tables(conn)
     _ensure_rule_engine_tables(conn)
     _ensure_evidence_vault_tables(conn)
+    _ensure_drawer_correction_events_table(conn)
     _ensure_behavior_log_table(conn)
     _ensure_public_intelligence_table(conn)
+    _ensure_public_guest_control_tables(conn)
     _ensure_toy_share_links_table(conn)
     _ensure_toy_control_queue_table(conn)
     _ensure_toy_share_command_events_table(conn)
+    _ensure_ai_warden_reports_table(conn)
     conn.commit()
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _drawer_actor(current_user: Optional[dict]) -> str:
+    if not current_user:
+        return "system"
+    return str(current_user.get("user_id") or current_user.get("username") or "handler")
+
+
+def _log_drawer_correction_event(
+    db: sqlite3.Connection,
+    *,
+    current_user: Optional[dict],
+    event_type: str,
+    target_type: str,
+    target_id: Any,
+    note: str,
+    payload: Optional[dict] = None,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO handler_drawer_correction_events
+            (event_type, target_type, target_id, actor, note, payload_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(event_type or "drawer_update")[:80],
+            str(target_type or "unknown")[:80],
+            str(target_id or "")[:120],
+            _drawer_actor(current_user),
+            str(note or "")[:500],
+            json.dumps(payload or {}, ensure_ascii=True),
+            _now_iso(),
+        ),
+    )
+
+
+def _limbo_with_attachments(db: sqlite3.Connection, row: sqlite3.Row | dict) -> dict:
+    item = dict(row)
+    attachments = db.execute(
+        "SELECT id, limbo_item_id, media_kind, label, url, metadata_json, created_at "
+        "FROM limbo_item_attachments WHERE limbo_item_id = ? ORDER BY id ASC",
+        (item["id"],),
+    ).fetchall()
+    item["attachments"] = [dict(a) for a in attachments]
+    return item
+
+
+def _infer_media_kind(content_type: str) -> str:
+    ct = (content_type or "").strip().lower()
+    if ct.startswith("image/"):
+        return "image"
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("audio/"):
+        return "audio"
+    return "file"
 
 
 def serialize_puppy_mail_message(row: sqlite3.Row | dict) -> dict:
@@ -683,6 +885,10 @@ class _AiWardenTunnel:
         self._ws: Optional[WebSocket] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._queue: Optional[asyncio.Queue[dict[str, Any]]] = None
+        self._telemetry_received_total = 0
+        self._telemetry_enqueued_total = 0
+        self._telemetry_forwarded_total = 0
+        self._telemetry_dropped_total = 0
 
     async def attach(self, ws: WebSocket) -> None:
         previous = self._ws
@@ -709,6 +915,7 @@ class _AiWardenTunnel:
                 return
             payload = await queue.get()
             await ws.send_json(payload)
+            self._telemetry_forwarded_total += 1
 
     def enqueue_mqtt_telemetry(self, topic: str, payload_raw: str) -> None:
         ws = self._ws
@@ -727,6 +934,8 @@ class _AiWardenTunnel:
         if not _is_tpe_telemetry_packet(topic, parsed):
             return
 
+        self._telemetry_received_total += 1
+
         envelope = {
             "type": "tpe_telemetry",
             "topic": topic,
@@ -739,14 +948,18 @@ class _AiWardenTunnel:
                 return
             try:
                 queue.put_nowait(envelope)
+                self._telemetry_enqueued_total += 1
             except asyncio.QueueFull:
                 try:
                     queue.get_nowait()
+                    self._telemetry_dropped_total += 1
                 except asyncio.QueueEmpty:
                     return
                 try:
                     queue.put_nowait(envelope)
+                    self._telemetry_enqueued_total += 1
                 except asyncio.QueueFull:
+                    self._telemetry_dropped_total += 1
                     return
 
         try:
@@ -754,8 +967,26 @@ class _AiWardenTunnel:
         except RuntimeError:
             return
 
+    def snapshot(self) -> dict[str, Any]:
+        queue = self._queue
+        return {
+            "connected": self._ws is not None,
+            "queue_depth": queue.qsize() if queue is not None else 0,
+            "telemetry_received_total": self._telemetry_received_total,
+            "telemetry_enqueued_total": self._telemetry_enqueued_total,
+            "telemetry_forwarded_total": self._telemetry_forwarded_total,
+            "telemetry_dropped_total": self._telemetry_dropped_total,
+        }
+
 
 _ai_warden_tunnel = _AiWardenTunnel()
+
+
+def _effective_ai_warden_secret(db: sqlite3.Connection) -> str:
+    configured = str(get_setting(db, AI_WARDEN_SETTING_API_KEY, "") or "").strip()
+    if configured:
+        return configured
+    return str(_effective_webhook_secret(db) or "").strip()
 
 
 def _bridge_ai_warden_mqtt_message(topic: str, payload_raw: str) -> None:
@@ -925,6 +1156,13 @@ class EvidenceAttachmentCreateRequest(BaseModel):
     metadata: Optional[dict] = None
 
 
+class LimboAttachmentCreateRequest(BaseModel):
+    media_kind: str = "file"
+    label: Optional[str] = None
+    url: str
+    metadata: Optional[dict] = None
+
+
 class EvidencePromoteRequest(BaseModel):
     device_id: Optional[str] = None
     title: Optional[str] = None
@@ -1013,6 +1251,26 @@ class PanelMacroItem(BaseModel):
 
 class PanelMacrosUpdateRequest(BaseModel):
     macros: List[PanelMacroItem] = Field(default_factory=list)
+
+
+class AiWardenConfigUpdateRequest(BaseModel):
+    enabled: Optional[bool] = None
+    ai_name: Optional[str] = None
+    provider: Optional[str] = None
+    server_base_url: Optional[str] = None
+    info: Optional[str] = None
+    api_key: Optional[str] = None
+    clear_api_key: Optional[bool] = False
+    rules: Optional[List[str]] = None
+    auto_enforce: Optional[bool] = None
+    auto_social_posting: Optional[bool] = None
+
+
+class AiWardenRuntimeReportRequest(BaseModel):
+    report_type: str
+    severity: Optional[str] = "info"
+    summary: Optional[str] = ""
+    payload: Optional[dict[str, Any]] = None
 
 
 class PublicExposureProfileRequest(BaseModel):
@@ -1132,6 +1390,39 @@ class PublicSharedControlRequest(BaseModel):
     action: str
     params: Optional[dict] = None
     participant_id: Optional[str] = None
+
+
+class PublicUseSettingsUpdateRequest(BaseModel):
+    public_site_enabled: Optional[bool] = None
+    guest_enabled: Optional[bool] = None
+    guest_device_id: Optional[str] = None
+    guest_show_location: Optional[bool] = None
+    guest_location_precision: Optional[str] = None
+    guest_allow_lovense_live: Optional[bool] = None
+    guest_allow_lovense_pulse: Optional[bool] = None
+    guest_allow_pavlok: Optional[bool] = None
+    guest_pavlok_max_intensity: Optional[int] = None
+    guest_phone_controls: Optional[list[str]] = None
+    guest_allow_open_url: Optional[bool] = None
+    guest_allowed_url_hosts: Optional[list[str]] = None
+    guest_rate_limit_per_min: Optional[int] = None
+    guest_rate_limit_per_action_per_min: Optional[int] = None
+    guest_session_ttl_sec: Optional[int] = None
+    guest_schedule_timezone: Optional[str] = None
+    guest_schedule_profiles: Optional[list[dict[str, Any]]] = None
+
+
+class PublicGuestControlRequest(BaseModel):
+    session_token: Optional[str] = None
+    action: str
+    intensity: Optional[int] = None
+    duration_ms: Optional[int] = None
+    phone_action: Optional[str] = None
+    value: Optional[int] = None
+    ms: Optional[int] = None
+    enabled: Optional[bool] = None
+    policy: Optional[str] = None
+    url: Optional[str] = None
 
 
 def _is_expired_iso(value: Optional[str]) -> bool:
@@ -3249,6 +3540,385 @@ def _safe_choice(value: Optional[str], allowed: List[str], default: str) -> str:
     return raw if raw in allowed else default
 
 
+def _safe_json_string_list(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [str(item).strip() for item in parsed if str(item).strip()]
+
+
+def _normalize_public_use_phone_controls(raw: Optional[list[str]]) -> list[str]:
+    out: list[str] = []
+    for entry in raw or []:
+        action = str(entry or "").strip().upper()
+        if action in PUBLIC_USE_PHONE_CONTROL_OPTIONS and action not in out:
+            out.append(action)
+    return out
+
+
+def _normalize_public_use_url_hosts(raw: Optional[list[str]]) -> list[str]:
+    hosts: list[str] = []
+    for entry in raw or []:
+        host = str(entry or "").strip().lower()
+        host = host.replace("http://", "").replace("https://", "").split("/")[0].strip()
+        if not host:
+            continue
+        if host.startswith("www."):
+            host = host[4:]
+        if host not in hosts:
+            hosts.append(host)
+    return hosts[:100]
+
+
+def _resolve_public_use_device_id(db: sqlite3.Connection) -> Optional[str]:
+    configured = str(get_setting(db, "public_guest_device_id", "") or "").strip()
+    if configured:
+        exists = db.execute(
+            "SELECT device_id FROM handler_device_status WHERE device_id = ?",
+            (configured,),
+        ).fetchone()
+        if exists:
+            return configured
+
+    row = db.execute(
+        "SELECT device_id FROM handler_device_status ORDER BY is_online DESC, last_seen DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return None
+    return str(row["device_id"]).strip() or None
+
+
+def _round_location(value: Optional[float], decimals: int) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return round(float(value), decimals)
+    except Exception:
+        return None
+
+
+def _apply_location_precision(lat: Optional[float], lon: Optional[float], precision: str) -> tuple[Optional[float], Optional[float]]:
+    if precision == "exact":
+        return _round_location(lat, 6), _round_location(lon, 6)
+    if precision == "approx":
+        return _round_location(lat, 2), _round_location(lon, 2)
+    if precision == "city":
+        return _round_location(lat, 1), _round_location(lon, 1)
+    return None, None
+
+
+def _public_use_settings_payload(db: sqlite3.Connection) -> dict:
+    settings = {
+        "public_site_enabled": _safe_bool(get_setting(db, "public_site_enabled", "true"), True),
+        "guest_enabled": _safe_bool(get_setting(db, "public_guest_enabled", "false")),
+        "guest_device_id": str(get_setting(db, "public_guest_device_id", "") or "").strip(),
+        "guest_show_location": _safe_bool(get_setting(db, "public_guest_show_location", "true")),
+        "guest_location_precision": _safe_choice(
+            get_setting(db, "public_guest_location_precision", "approx"),
+            PUBLIC_USE_LOCATION_PRECISION_OPTIONS,
+            "approx",
+        ),
+        "guest_allow_lovense_live": _safe_bool(get_setting(db, "public_guest_allow_lovense_live", "true")),
+        "guest_allow_lovense_pulse": _safe_bool(get_setting(db, "public_guest_allow_lovense_pulse", "false")),
+        "guest_allow_pavlok": _safe_bool(get_setting(db, "public_guest_allow_pavlok", "false")),
+        "guest_pavlok_max_intensity": max(
+            1,
+            min(_safe_int(get_setting(db, "public_guest_pavlok_max_intensity", "60"), 60), 100),
+        ),
+        "guest_phone_controls": _normalize_public_use_phone_controls(
+            _safe_json_string_list(get_setting(db, "public_guest_phone_controls", "[]"))
+        ),
+        "guest_allow_open_url": _safe_bool(get_setting(db, "public_guest_allow_open_url", "false")),
+        "guest_allowed_url_hosts": _normalize_public_use_url_hosts(
+            _safe_json_string_list(get_setting(db, "public_guest_allowed_url_hosts", "[]"))
+        ),
+        "guest_rate_limit_per_min": max(
+            1,
+            min(
+                _safe_int(
+                    get_setting(db, "public_guest_rate_limit_per_min", str(PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN)),
+                    PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN,
+                ),
+                600,
+            ),
+        ),
+        "guest_rate_limit_per_action_per_min": max(
+            1,
+            min(
+                _safe_int(
+                    get_setting(
+                        db,
+                        "public_guest_rate_limit_per_action_per_min",
+                        str(PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN),
+                    ),
+                    PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN,
+                ),
+                200,
+            ),
+        ),
+        "guest_session_ttl_sec": max(
+            60,
+            min(
+                _safe_int(
+                    get_setting(db, "public_guest_session_ttl_sec", str(PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC)),
+                    PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC,
+                ),
+                86400,
+            ),
+        ),
+        "guest_schedule_timezone": _safe_choice(
+            get_setting(db, "public_guest_schedule_timezone", "utc"),
+            PUBLIC_USE_TIMEZONE_OPTIONS,
+            "utc",
+        ),
+        "guest_schedule_profiles": [],
+        "guest_panic_until": str(get_setting(db, "public_guest_panic_until", "") or "").strip(),
+        "location_precision_options": PUBLIC_USE_LOCATION_PRECISION_OPTIONS,
+        "phone_control_options": PUBLIC_USE_PHONE_CONTROL_OPTIONS,
+        "timezone_options": PUBLIC_USE_TIMEZONE_OPTIONS,
+    }
+    try:
+        raw_profiles = json.loads(str(get_setting(db, "public_guest_schedule_profiles", "[]") or "[]"))
+    except Exception:
+        raw_profiles = []
+    settings["guest_schedule_profiles"] = _normalize_public_use_schedule_profiles(raw_profiles)
+    return settings
+
+
+def _normalize_public_use_schedule_profiles(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for entry in raw[:24]:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "Profile").strip()[:80]
+        start_hour = max(0, min(int(entry.get("start_hour", 0)), 23))
+        end_hour = max(0, min(int(entry.get("end_hour", 23)), 23))
+        profile = {
+            "name": name,
+            "start_hour": start_hour,
+            "end_hour": end_hour,
+            "guest_enabled": bool(entry.get("guest_enabled", True)),
+            "guest_show_location": bool(entry.get("guest_show_location", True)),
+            "guest_location_precision": _safe_choice(
+                str(entry.get("guest_location_precision") or "approx"),
+                PUBLIC_USE_LOCATION_PRECISION_OPTIONS,
+                "approx",
+            ),
+            "guest_allow_lovense_live": bool(entry.get("guest_allow_lovense_live", False)),
+            "guest_allow_lovense_pulse": bool(entry.get("guest_allow_lovense_pulse", False)),
+            "guest_allow_pavlok": bool(entry.get("guest_allow_pavlok", False)),
+            "guest_pavlok_max_intensity": max(1, min(int(entry.get("guest_pavlok_max_intensity", 60)), 100)),
+            "guest_allow_open_url": bool(entry.get("guest_allow_open_url", False)),
+            "guest_phone_controls": _normalize_public_use_phone_controls(entry.get("guest_phone_controls") or []),
+            "guest_allowed_url_hosts": _normalize_public_use_url_hosts(entry.get("guest_allowed_url_hosts") or []),
+            "guest_rate_limit_per_min": max(1, min(int(entry.get("guest_rate_limit_per_min", PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN)), 600)),
+            "guest_rate_limit_per_action_per_min": max(
+                1,
+                min(int(entry.get("guest_rate_limit_per_action_per_min", PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN)), 200),
+            ),
+            "guest_session_ttl_sec": max(60, min(int(entry.get("guest_session_ttl_sec", PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC)), 86400)),
+        }
+        out.append(profile)
+    return out
+
+
+def _active_public_use_schedule_profile(settings: dict, now: Optional[datetime] = None) -> Optional[dict[str, Any]]:
+    profiles = settings.get("guest_schedule_profiles") or []
+    if not profiles:
+        return None
+    ts = now or datetime.now(timezone.utc)
+    hour = ts.astimezone(timezone.utc).hour
+    for profile in profiles:
+        start_hour = int(profile.get("start_hour", 0))
+        end_hour = int(profile.get("end_hour", 23))
+        if start_hour <= end_hour:
+            if start_hour <= hour <= end_hour:
+                return profile
+        else:
+            if hour >= start_hour or hour <= end_hour:
+                return profile
+    return None
+
+
+def _parse_iso_utc(value: str) -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _public_use_effective_settings(db: sqlite3.Connection) -> dict:
+    base = _public_use_settings_payload(db)
+    active_profile = _active_public_use_schedule_profile(base)
+    if active_profile:
+        for key in (
+            "guest_enabled",
+            "guest_show_location",
+            "guest_location_precision",
+            "guest_allow_lovense_live",
+            "guest_allow_lovense_pulse",
+            "guest_allow_pavlok",
+            "guest_pavlok_max_intensity",
+            "guest_phone_controls",
+            "guest_allow_open_url",
+            "guest_allowed_url_hosts",
+            "guest_rate_limit_per_min",
+            "guest_rate_limit_per_action_per_min",
+            "guest_session_ttl_sec",
+        ):
+            if key in active_profile:
+                base[key] = active_profile[key]
+        base["guest_active_profile"] = {
+            "name": str(active_profile.get("name") or "Profile"),
+            "start_hour": int(active_profile.get("start_hour", 0)),
+            "end_hour": int(active_profile.get("end_hour", 23)),
+        }
+    else:
+        base["guest_active_profile"] = None
+
+    panic_until = _parse_iso_utc(base.get("guest_panic_until") or "")
+    panic_active = bool(panic_until and panic_until > datetime.now(timezone.utc))
+    base["guest_panic_active"] = panic_active
+    if panic_active:
+        base["guest_enabled"] = False
+    return base
+
+
+def _request_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for") if request else None
+    if forwarded:
+        first = str(forwarded).split(",")[0].strip()
+        if first:
+            return first[:120]
+    if request and request.client and request.client.host:
+        return str(request.client.host)[:120]
+    return "unknown"
+
+
+def _record_public_guest_control_event(
+    db: sqlite3.Connection,
+    *,
+    session_token: Optional[str],
+    client_ip: str,
+    action: str,
+    outcome: str,
+    detail: str,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO public_guest_control_events (session_token, client_ip, action, outcome, detail, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            (str(session_token or "").strip() or None),
+            str(client_ip or "unknown")[:120],
+            str(action or "unknown")[:80],
+            str(outcome or "unknown")[:32],
+            str(detail or "")[:240],
+            _now_iso(),
+        ),
+    )
+
+
+def _enforce_public_guest_rate_limits(
+    db: sqlite3.Connection,
+    *,
+    client_ip: str,
+    action: str,
+    max_per_min: int,
+    max_per_action_per_min: int,
+) -> None:
+    window_start = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    total_row = db.execute(
+        "SELECT COUNT(*) AS n FROM public_guest_control_events WHERE client_ip = ? AND created_at >= ?",
+        (client_ip, window_start),
+    ).fetchone()
+    total = int(total_row["n"] if total_row else 0)
+    if total >= max_per_min:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit reached ({max_per_min}/min per IP)",
+            headers={"Retry-After": "60"},
+        )
+
+    action_row = db.execute(
+        "SELECT COUNT(*) AS n FROM public_guest_control_events WHERE client_ip = ? AND action = ? AND created_at >= ?",
+        (client_ip, action, window_start),
+    ).fetchone()
+    action_total = int(action_row["n"] if action_row else 0)
+    if action_total >= max_per_action_per_min:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit reached for action ({max_per_action_per_min}/min)",
+            headers={"Retry-After": "60"},
+        )
+
+
+def _create_public_guest_session(
+    db: sqlite3.Connection,
+    *,
+    client_ip: str,
+    user_agent: str,
+    ttl_sec: int,
+) -> tuple[str, str]:
+    token = uuid.uuid4().hex + uuid.uuid4().hex
+    created_at = datetime.now(timezone.utc)
+    expires_at = created_at + timedelta(seconds=max(60, ttl_sec))
+    db.execute(
+        """
+        INSERT INTO public_guest_sessions (token, client_ip, user_agent, created_at, expires_at, revoked)
+        VALUES (?, ?, ?, ?, ?, 0)
+        """,
+        (
+            token,
+            client_ip,
+            (str(user_agent or "")[:240] or None),
+            created_at.isoformat(),
+            expires_at.isoformat(),
+        ),
+    )
+    return token, expires_at.isoformat()
+
+
+def _validate_public_guest_session(
+    db: sqlite3.Connection,
+    *,
+    token: str,
+    client_ip: str,
+) -> bool:
+    token_value = str(token or "").strip()
+    if len(token_value) < 40:
+        return False
+    row = db.execute(
+        "SELECT token, client_ip, expires_at, revoked FROM public_guest_sessions WHERE token = ?",
+        (token_value,),
+    ).fetchone()
+    if not row:
+        return False
+    if bool(row["revoked"]):
+        return False
+    expires_at = _parse_iso_utc(str(row["expires_at"] or ""))
+    if not expires_at or expires_at <= datetime.now(timezone.utc):
+        return False
+    bound_ip = str(row["client_ip"] or "").strip()
+    if bound_ip and bound_ip != client_ip:
+        return False
+    return True
+
+
 def _normalize_panel_macros(raw: Any) -> List[dict]:
     if not isinstance(raw, list):
         return []
@@ -3270,6 +3940,144 @@ def _normalize_panel_macros(raw: Any) -> List[dict]:
             }
         )
     return normalized
+
+
+def _normalize_ai_warden_rules(raw: Any) -> List[str]:
+    if not isinstance(raw, list):
+        return []
+    normalized: List[str] = []
+    for entry in raw[:200]:
+        text = str(entry or "").strip()
+        if not text:
+            continue
+        normalized.append(text[:500])
+    return normalized
+
+
+def _mask_secret(secret: str) -> str:
+    raw = str(secret or "")
+    if not raw:
+        return ""
+    if len(raw) <= 6:
+        return "*" * len(raw)
+    return ("*" * (len(raw) - 4)) + raw[-4:]
+
+
+def _normalized_ai_warden_base_url(raw: Optional[str]) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    parsed = urllib_parse.urlsplit(value)
+    if not parsed.scheme:
+        value = f"https://{value}"
+        parsed = urllib_parse.urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="server_base_url must be a valid http(s) URL")
+    normalized_path = parsed.path.rstrip("/")
+    return urllib_parse.urlunsplit((parsed.scheme, parsed.netloc, normalized_path, "", ""))
+
+
+def _read_ai_warden_config(db: sqlite3.Connection) -> dict[str, Any]:
+    rules_raw = get_setting(db, AI_WARDEN_SETTING_RULES_JSON, "[]")
+    try:
+        rules = _normalize_ai_warden_rules(json.loads(str(rules_raw or "[]")))
+    except Exception:
+        rules = []
+
+    api_key = str(get_setting(db, AI_WARDEN_SETTING_API_KEY, "") or "").strip()
+    secret_source = "custom" if api_key else "webhook_fallback"
+    server_base_url = _normalized_ai_warden_base_url(
+        get_setting(db, AI_WARDEN_SETTING_SERVER_BASE_URL, "")
+    ) if str(get_setting(db, AI_WARDEN_SETTING_SERVER_BASE_URL, "") or "").strip() else ""
+
+    ws_url = ""
+    if server_base_url:
+        parsed = urllib_parse.urlsplit(server_base_url)
+        ws_scheme = "wss" if parsed.scheme == "https" else "ws"
+        ws_url = urllib_parse.urlunsplit((ws_scheme, parsed.netloc, "/ws/ai-warden", "", ""))
+
+    return {
+        "enabled": _safe_bool(get_setting(db, "ai_warden_enabled", "false"), False),
+        "ai_name": str(get_setting(db, AI_WARDEN_SETTING_NAME, "Custom AI Warden") or "Custom AI Warden"),
+        "provider": str(get_setting(db, AI_WARDEN_SETTING_PROVIDER, "custom") or "custom"),
+        "server_base_url": server_base_url,
+        "ws_endpoint_url": ws_url,
+        "info": str(get_setting(db, AI_WARDEN_SETTING_INFO, "") or ""),
+        "has_api_key": bool(api_key),
+        "api_key_masked": _mask_secret(api_key),
+        "rules": rules,
+        "auto_enforce": _safe_bool(get_setting(db, AI_WARDEN_SETTING_AUTO_ENFORCE, "false"), False),
+        "auto_social_posting": _safe_bool(get_setting(db, AI_WARDEN_SETTING_AUTO_SOCIAL, "false"), False),
+        "ingress_secret_source": secret_source,
+    }
+
+
+def _extract_bearer_token(authorization_header: str) -> str:
+    raw = (authorization_header or "").strip()
+    if not raw.lower().startswith("bearer "):
+        return ""
+    return raw[7:].strip()
+
+
+def _require_ai_warden_bearer(db: sqlite3.Connection, authorization_header: str) -> None:
+    expected = _effective_ai_warden_secret(db)
+    provided = _extract_bearer_token(authorization_header)
+    if expected and secrets.compare_digest(provided, expected):
+        return
+    raise HTTPException(status_code=401, detail="Invalid AI Warden bearer token")
+
+
+def _probe_ai_warden_health(base_url: str, api_key: str) -> dict[str, Any]:
+    if not base_url:
+        return {
+            "ok": False,
+            "error": "server_base_url is not configured",
+            "url": "",
+            "status_code": None,
+            "latency_ms": None,
+        }
+
+    health_url = urllib_parse.urljoin(base_url.rstrip("/") + "/", "health")
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request_obj = urllib_request.Request(health_url, headers=headers, method="GET")
+    started = time.perf_counter()
+    try:
+        with urllib_request.urlopen(request_obj, timeout=4.0) as response:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            status_code = int(getattr(response, "status", 200) or 200)
+            body_text = response.read(8192).decode("utf-8", errors="ignore")
+            payload = {}
+            try:
+                payload = json.loads(body_text) if body_text else {}
+            except Exception:
+                payload = {"raw": body_text[:300]}
+            return {
+                "ok": status_code < 400,
+                "url": health_url,
+                "status_code": status_code,
+                "latency_ms": latency_ms,
+                "payload": payload,
+            }
+    except urllib_error.HTTPError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return {
+            "ok": False,
+            "url": health_url,
+            "status_code": int(exc.code),
+            "latency_ms": latency_ms,
+            "error": str(exc.reason or "HTTPError"),
+        }
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        return {
+            "ok": False,
+            "url": health_url,
+            "status_code": None,
+            "latency_ms": latency_ms,
+            "error": str(exc),
+        }
 
 
 def _public_setting_enabled(db: sqlite3.Connection, key: str, default: bool = False) -> bool:
@@ -3398,6 +4206,526 @@ def handler_get_public_status(
     }
 
 
+@router.get("/api/handler/public-use-settings")
+def handler_get_public_use_settings(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    return _public_use_settings_payload(db)
+
+
+@router.post("/api/handler/public-use-settings")
+def handler_save_public_use_settings(
+    payload: PublicUseSettingsUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    if payload.public_site_enabled is not None:
+        set_setting(db, "public_site_enabled", "true" if payload.public_site_enabled else "false")
+
+    if payload.guest_enabled is not None:
+        set_setting(db, "public_guest_enabled", "true" if payload.guest_enabled else "false")
+
+    if payload.guest_device_id is not None:
+        device_id = str(payload.guest_device_id or "").strip()
+        if device_id:
+            exists = db.execute(
+                "SELECT device_id FROM handler_device_status WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if not exists:
+                raise HTTPException(status_code=400, detail="guest_device_id does not exist")
+        set_setting(db, "public_guest_device_id", device_id)
+
+    if payload.guest_show_location is not None:
+        set_setting(db, "public_guest_show_location", "true" if payload.guest_show_location else "false")
+
+    if payload.guest_location_precision is not None:
+        precision = _safe_choice(
+            payload.guest_location_precision,
+            PUBLIC_USE_LOCATION_PRECISION_OPTIONS,
+            "approx",
+        )
+        set_setting(db, "public_guest_location_precision", precision)
+
+    if payload.guest_allow_lovense_live is not None:
+        set_setting(db, "public_guest_allow_lovense_live", "true" if payload.guest_allow_lovense_live else "false")
+
+    if payload.guest_allow_lovense_pulse is not None:
+        set_setting(db, "public_guest_allow_lovense_pulse", "true" if payload.guest_allow_lovense_pulse else "false")
+
+    if payload.guest_allow_pavlok is not None:
+        set_setting(db, "public_guest_allow_pavlok", "true" if payload.guest_allow_pavlok else "false")
+
+    if payload.guest_pavlok_max_intensity is not None:
+        max_intensity = max(1, min(int(payload.guest_pavlok_max_intensity), 100))
+        set_setting(db, "public_guest_pavlok_max_intensity", str(max_intensity))
+
+    if payload.guest_phone_controls is not None:
+        controls = _normalize_public_use_phone_controls(payload.guest_phone_controls)
+        set_setting(db, "public_guest_phone_controls", json.dumps(controls))
+
+    if payload.guest_allow_open_url is not None:
+        set_setting(db, "public_guest_allow_open_url", "true" if payload.guest_allow_open_url else "false")
+
+    if payload.guest_allowed_url_hosts is not None:
+        hosts = _normalize_public_use_url_hosts(payload.guest_allowed_url_hosts)
+        set_setting(db, "public_guest_allowed_url_hosts", json.dumps(hosts))
+
+    if payload.guest_rate_limit_per_min is not None:
+        set_setting(db, "public_guest_rate_limit_per_min", str(max(1, min(int(payload.guest_rate_limit_per_min), 600))))
+
+    if payload.guest_rate_limit_per_action_per_min is not None:
+        set_setting(
+            db,
+            "public_guest_rate_limit_per_action_per_min",
+            str(max(1, min(int(payload.guest_rate_limit_per_action_per_min), 200))),
+        )
+
+    if payload.guest_session_ttl_sec is not None:
+        set_setting(db, "public_guest_session_ttl_sec", str(max(60, min(int(payload.guest_session_ttl_sec), 86400))))
+
+    if payload.guest_schedule_timezone is not None:
+        tz = _safe_choice(payload.guest_schedule_timezone, PUBLIC_USE_TIMEZONE_OPTIONS, "utc")
+        set_setting(db, "public_guest_schedule_timezone", tz)
+
+    if payload.guest_schedule_profiles is not None:
+        profiles = _normalize_public_use_schedule_profiles(payload.guest_schedule_profiles)
+        set_setting(db, "public_guest_schedule_profiles", json.dumps(profiles))
+
+    db.commit()
+    return {"updated": True, "settings": _public_use_settings_payload(db)}
+
+
+@router.post("/api/handler/public-use-panic")
+def handler_set_public_use_panic(
+    minutes: int = Body(default=15, embed=True),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    duration = max(0, min(int(minutes), 24 * 60))
+    if duration <= 0:
+        set_setting(db, "public_guest_panic_until", "")
+        return {"updated": True, "panic_active": False, "panic_until": ""}
+
+    until = datetime.now(timezone.utc) + timedelta(minutes=duration)
+    set_setting(db, "public_guest_panic_until", until.isoformat())
+    return {
+        "updated": True,
+        "panic_active": True,
+        "panic_until": until.isoformat(),
+        "minutes": duration,
+    }
+
+
+@router.get("/api/handler/public-use-analytics")
+def handler_public_use_analytics(
+    hours: int = 24,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    selected_hours = max(1, min(int(hours), 24 * 30))
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=selected_hours)).isoformat()
+    rows = db.execute(
+        "SELECT action, outcome, detail, created_at FROM public_guest_control_events WHERE created_at >= ? ORDER BY id DESC LIMIT 4000",
+        (cutoff,),
+    ).fetchall()
+    action_counter: Counter[str] = Counter()
+    outcome_counter: Counter[str] = Counter()
+    blocked_rows: list[dict[str, Any]] = []
+    for row in rows:
+        action = str(row["action"] or "unknown").strip().lower() or "unknown"
+        outcome = str(row["outcome"] or "unknown").strip().lower() or "unknown"
+        action_counter[action] += 1
+        outcome_counter[outcome] += 1
+        if outcome not in {"ok", "accepted"} and len(blocked_rows) < 50:
+            blocked_rows.append(
+                {
+                    "action": action,
+                    "outcome": outcome,
+                    "detail": str(row["detail"] or ""),
+                    "created_at": row["created_at"],
+                }
+            )
+
+    return {
+        "hours": selected_hours,
+        "window_start": cutoff,
+        "event_count": len(rows),
+        "actions": [{"action": k, "count": v} for k, v in action_counter.most_common(20)],
+        "outcomes": [{"outcome": k, "count": v} for k, v in outcome_counter.most_common(20)],
+        "recent_blocked": blocked_rows,
+    }
+
+
+@router.post("/api/public/guest/session")
+def public_guest_session(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    settings = _public_use_effective_settings(db)
+    if not settings["guest_enabled"]:
+        raise HTTPException(status_code=403, detail="Guest controls are disabled")
+    client_ip = _request_client_ip(request)
+    token, expires_at = _create_public_guest_session(
+        db,
+        client_ip=client_ip,
+        user_agent=request.headers.get("user-agent") or "",
+        ttl_sec=int(settings["guest_session_ttl_sec"]),
+    )
+    _record_public_guest_control_event(
+        db,
+        session_token=token,
+        client_ip=client_ip,
+        action="session_create",
+        outcome="accepted",
+        detail="guest session issued",
+    )
+    db.commit()
+    return {
+        "session_token": token,
+        "expires_at": expires_at,
+        "ttl_sec": int(settings["guest_session_ttl_sec"]),
+    }
+
+
+@router.get("/api/public/guest/config")
+def public_guest_config(
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    settings = _public_use_effective_settings(db)
+    live = _latest_active_public_control_url(db, request)
+    return {
+        "public_site_enabled": settings["public_site_enabled"],
+        "guest_enabled": settings["guest_enabled"],
+        "guest_show_location": settings["guest_show_location"],
+        "guest_location_precision": settings["guest_location_precision"],
+        "guest_allow_lovense_live": settings["guest_allow_lovense_live"],
+        "guest_allow_lovense_pulse": settings["guest_allow_lovense_pulse"],
+        "guest_allow_pavlok": settings["guest_allow_pavlok"],
+        "guest_pavlok_max_intensity": settings["guest_pavlok_max_intensity"],
+        "guest_phone_controls": settings["guest_phone_controls"],
+        "guest_allow_open_url": settings["guest_allow_open_url"],
+        "guest_allowed_url_hosts": settings["guest_allowed_url_hosts"],
+        "guest_rate_limit_per_min": settings["guest_rate_limit_per_min"],
+        "guest_rate_limit_per_action_per_min": settings["guest_rate_limit_per_action_per_min"],
+        "guest_session_ttl_sec": settings["guest_session_ttl_sec"],
+        "guest_panic_active": settings.get("guest_panic_active", False),
+        "guest_panic_until": settings.get("guest_panic_until") or "",
+        "guest_active_profile": settings.get("guest_active_profile"),
+        "require_session_token": True,
+        "toy_control_url": (live["control_url"] if live else None),
+    }
+
+
+@router.get("/api/public/guest/state")
+def public_guest_state(
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    settings = _public_use_effective_settings(db)
+    if not settings["guest_enabled"]:
+        return {
+            "public_site_enabled": settings["public_site_enabled"],
+            "guest_enabled": False,
+            "guest_panic_active": settings.get("guest_panic_active", False),
+            "guest_panic_until": settings.get("guest_panic_until") or "",
+            "guest_active_profile": settings.get("guest_active_profile"),
+        }
+
+    target_device_id = _resolve_public_use_device_id(db)
+    device = None
+    if target_device_id:
+        device = db.execute(
+            "SELECT device_id, device_name, is_online, is_locked, battery_pct, lat, lon, last_seen FROM handler_device_status WHERE device_id = ?",
+            (target_device_id,),
+        ).fetchone()
+
+    lat = device["lat"] if device else None
+    lon = device["lon"] if device else None
+    precision = settings["guest_location_precision"] if settings["guest_show_location"] else "off"
+    safe_lat, safe_lon = _apply_location_precision(lat, lon, precision)
+
+    return {
+        "public_site_enabled": settings["public_site_enabled"],
+        "guest_enabled": True,
+        "device_id": (device["device_id"] if device else None),
+        "device_name": (device["device_name"] if device else None),
+        "is_online": bool(device["is_online"]) if device else False,
+        "is_locked": bool(device["is_locked"]) if device else False,
+        "battery_pct": (device["battery_pct"] if device else None),
+        "last_seen": (device["last_seen"] if device else None),
+        "location": {
+            "lat": safe_lat,
+            "lon": safe_lon,
+            "precision": precision,
+        },
+        "guest_panic_active": settings.get("guest_panic_active", False),
+        "guest_panic_until": settings.get("guest_panic_until") or "",
+        "guest_active_profile": settings.get("guest_active_profile"),
+    }
+
+
+@router.post("/api/public/guest/control")
+async def public_guest_control(
+    body: PublicGuestControlRequest,
+    request: Request,
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    settings = _public_use_effective_settings(db)
+    client_ip = _request_client_ip(request)
+    session_token = str(request.headers.get("x-guest-session") or "").strip()
+    if not session_token:
+        session_token = str(getattr(body, "session_token", "") or "").strip()
+    if not settings["guest_enabled"]:
+        _record_public_guest_control_event(
+            db,
+            session_token=session_token,
+            client_ip=client_ip,
+            action=str(body.action or "unknown"),
+            outcome="blocked",
+            detail="guest disabled",
+        )
+        db.commit()
+        raise HTTPException(status_code=403, detail="Guest controls are disabled")
+
+    if not _validate_public_guest_session(db, token=session_token, client_ip=client_ip):
+        _record_public_guest_control_event(
+            db,
+            session_token=session_token,
+            client_ip=client_ip,
+            action=str(body.action or "unknown"),
+            outcome="invalid_session",
+            detail="missing_or_invalid_session",
+        )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Invalid or expired guest session")
+
+    device_id = _resolve_public_use_device_id(db)
+    if not device_id:
+        _record_public_guest_control_event(
+            db,
+            session_token=session_token,
+            client_ip=client_ip,
+            action=str(body.action or "unknown"),
+            outcome="blocked",
+            detail="no_target_device",
+        )
+        db.commit()
+        raise HTTPException(status_code=503, detail="No target device is available")
+
+    action = str(body.action or "").strip().lower()
+    try:
+        _enforce_public_guest_rate_limits(
+            db,
+            client_ip=client_ip,
+            action=action,
+            max_per_min=int(settings["guest_rate_limit_per_min"]),
+            max_per_action_per_min=int(settings["guest_rate_limit_per_action_per_min"]),
+        )
+    except HTTPException as exc:
+        _record_public_guest_control_event(
+            db,
+            session_token=session_token,
+            client_ip=client_ip,
+            action=action,
+            outcome="rate_limited",
+            detail=str(exc.detail),
+        )
+        db.commit()
+        raise
+
+    payload: dict[str, Any] = {
+        "command_id": uuid.uuid4().hex,
+    }
+
+    if action == "lovense_live":
+        if not settings["guest_allow_lovense_live"]:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail="lovense_live_disabled",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="Lovense live control is disabled")
+        intensity = max(0, min(int(body.intensity if body.intensity is not None else 10), 20))
+        duration_ms = max(100, min(int(body.duration_ms if body.duration_ms is not None else 1200), 15000))
+        payload.update(
+            {
+                "action": "LOVENSE_COMMAND",
+                "command": "vibrate",
+                "toy_command": "vibrate",
+                "intensity": str(intensity),
+                "toy_level": str(intensity),
+                "level": str(intensity),
+                "duration_ms": str(duration_ms),
+                "toy_duration_ms": str(duration_ms),
+            }
+        )
+    elif action == "lovense_pulse":
+        if not settings["guest_allow_lovense_pulse"]:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail="lovense_pulse_disabled",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="Lovense pulse control is disabled")
+        intensity = max(0, min(int(body.intensity if body.intensity is not None else 10), 20))
+        duration_ms = max(100, min(int(body.duration_ms if body.duration_ms is not None else 1200), 15000))
+        payload.update(
+            {
+                "action": "LOVENSE_COMMAND",
+                "command": "pulse",
+                "toy_command": "pulse",
+                "intensity": str(intensity),
+                "toy_level": str(intensity),
+                "level": str(intensity),
+                "duration_ms": str(duration_ms),
+                "toy_duration_ms": str(duration_ms),
+            }
+        )
+    elif action == "pavlok_shock":
+        if not settings["guest_allow_pavlok"]:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail="pavlok_disabled",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="Pavlok control is disabled")
+        max_allowed = int(settings["guest_pavlok_max_intensity"])
+        intensity = max(1, min(int(body.intensity if body.intensity is not None else max_allowed), max_allowed))
+        payload.update(
+            {
+                "action": "PAVLOK_COMMAND",
+                "pavlok_cmd": "shock",
+                "pavlok_intensity": str(intensity),
+                "intensity": str(intensity),
+                "toy_level": str(intensity),
+            }
+        )
+    elif action == "phone_control":
+        phone_action = str(body.phone_action or "").strip().upper()
+        allowed_controls = set(settings["guest_phone_controls"])
+        if phone_action not in allowed_controls:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail=f"phone_action_not_allowed:{phone_action}",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="That phone control is not enabled")
+
+        payload.update({"action": phone_action})
+        if phone_action == "SET_BRIGHTNESS":
+            value = max(0, min(int(body.value if body.value is not None else 180), 255))
+            payload["value"] = str(value)
+        elif phone_action == "SET_SCREEN_TIMEOUT":
+            timeout_ms = max(1000, min(int(body.ms if body.ms is not None else 120000), 86400000))
+            payload["ms"] = str(timeout_ms)
+        elif phone_action == "SET_AUTO_ROTATE":
+            enabled = True if body.enabled is None else bool(body.enabled)
+            payload["enabled"] = "true" if enabled else "false"
+        elif phone_action == "SET_DND":
+            allowed_policies = {"all", "priority", "alarms_only", "total_silence"}
+            policy = str(body.policy or "priority").strip().lower()
+            if policy not in allowed_policies:
+                raise HTTPException(status_code=400, detail="Invalid DND policy")
+            payload["policy"] = policy
+        elif phone_action == "SET_FLASHLIGHT":
+            enabled = True if body.enabled is None else bool(body.enabled)
+            payload["enabled"] = "true" if enabled else "false"
+    elif action == "open_url":
+        if not settings["guest_allow_open_url"]:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail="open_url_disabled",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="Open URL is disabled")
+        raw_url = str(body.url or "").strip()
+        if not raw_url:
+            raise HTTPException(status_code=400, detail="url is required")
+        parsed = urllib_parse.urlsplit(raw_url)
+        if parsed.scheme not in {"http", "https"}:
+            raise HTTPException(status_code=400, detail="url must be http or https")
+        host = (parsed.hostname or "").lower().strip()
+        allowed_hosts = set(settings["guest_allowed_url_hosts"])
+        if allowed_hosts and host not in allowed_hosts:
+            _record_public_guest_control_event(
+                db,
+                session_token=session_token,
+                client_ip=client_ip,
+                action=action,
+                outcome="blocked",
+                detail=f"host_not_allowed:{host}",
+            )
+            db.commit()
+            raise HTTPException(status_code=403, detail="URL host is not allowed")
+        payload.update({"action": "OPEN_URL", "url": raw_url})
+    else:
+        _record_public_guest_control_event(
+            db,
+            session_token=session_token,
+            client_ip=client_ip,
+            action=action,
+            outcome="invalid",
+            detail="unsupported_action",
+        )
+        db.commit()
+        raise HTTPException(status_code=400, detail="Unsupported guest action")
+
+    result = await _send_command_with_ws_fallback(
+        db,
+        device_id=device_id,
+        payload=payload,
+    )
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'public_guest_control', 'command_push', ?, ?, ?)
+        """,
+        (
+            device_id,
+            str(payload.get("action") or "unknown"),
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    _record_public_guest_control_event(
+        db,
+        session_token=session_token,
+        client_ip=client_ip,
+        action=action,
+        outcome="ok",
+        detail=str(payload.get("action") or action),
+    )
+    db.commit()
+    return {
+        "status": "ok",
+        "device_id": device_id,
+        "action": payload.get("action"),
+        "transport": result,
+    }
+
+
 @router.get("/api/handler/panel-macros")
 def handler_get_panel_macros(
     _current_user: dict = Depends(role_required("admin", "handler")),
@@ -3429,6 +4757,184 @@ def handler_save_panel_macros(
     )
     set_setting(db, HANDLER_PANEL_MACROS_SETTINGS_KEY, json.dumps(normalized, ensure_ascii=True))
     return {"ok": True, "count": len(normalized), "macros": normalized}
+
+
+@router.get("/api/handler/ai-warden/config")
+def handler_get_ai_warden_config(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    return _read_ai_warden_config(db)
+
+
+@router.post("/api/handler/ai-warden/config")
+def handler_update_ai_warden_config(
+    payload: AiWardenConfigUpdateRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    if payload.enabled is not None:
+        set_setting(db, "ai_warden_enabled", "true" if payload.enabled else "false")
+    if payload.ai_name is not None:
+        set_setting(db, AI_WARDEN_SETTING_NAME, payload.ai_name.strip()[:120])
+    if payload.provider is not None:
+        set_setting(db, AI_WARDEN_SETTING_PROVIDER, payload.provider.strip()[:120])
+    if payload.server_base_url is not None:
+        normalized_url = _normalized_ai_warden_base_url(payload.server_base_url)
+        set_setting(db, AI_WARDEN_SETTING_SERVER_BASE_URL, normalized_url)
+    if payload.info is not None:
+        set_setting(db, AI_WARDEN_SETTING_INFO, payload.info.strip()[:2000])
+    if payload.clear_api_key:
+        set_setting(db, AI_WARDEN_SETTING_API_KEY, "")
+    elif payload.api_key is not None:
+        set_setting(db, AI_WARDEN_SETTING_API_KEY, payload.api_key.strip()[:400])
+    if payload.rules is not None:
+        normalized_rules = _normalize_ai_warden_rules(payload.rules)
+        set_setting(db, AI_WARDEN_SETTING_RULES_JSON, json.dumps(normalized_rules, ensure_ascii=True))
+    if payload.auto_enforce is not None:
+        set_setting(db, AI_WARDEN_SETTING_AUTO_ENFORCE, "true" if payload.auto_enforce else "false")
+    if payload.auto_social_posting is not None:
+        set_setting(db, AI_WARDEN_SETTING_AUTO_SOCIAL, "true" if payload.auto_social_posting else "false")
+    return _read_ai_warden_config(db)
+
+
+@router.get("/api/handler/ai-warden/stats")
+def handler_get_ai_warden_stats(
+    window_hours: int = Query(default=24, ge=1, le=24 * 30),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    since_dt = datetime.now(timezone.utc) - timedelta(hours=int(window_hours))
+    since_iso = since_dt.isoformat()
+
+    correction_count = int(
+        db.execute(
+            "SELECT COUNT(1) AS c FROM handler_drawer_correction_events WHERE created_at >= ?",
+            (since_iso,),
+        ).fetchone()["c"]
+    )
+    behavior_count = int(
+        db.execute(
+            "SELECT COUNT(1) AS c FROM tpe_behavior_logs WHERE created_at >= ?",
+            (since_iso,),
+        ).fetchone()["c"]
+    )
+    report_count = int(
+        db.execute(
+            "SELECT COUNT(1) AS c FROM ai_warden_reports WHERE created_at >= ?",
+            (since_iso,),
+        ).fetchone()["c"]
+    )
+    enforcement_count = int(
+        db.execute(
+            "SELECT COUNT(1) AS c FROM handler_drawer_correction_events WHERE created_at >= ? AND LOWER(event_type) LIKE '%enforce%'",
+            (since_iso,),
+        ).fetchone()["c"]
+    )
+    social_post_count = int(
+        db.execute(
+            "SELECT COUNT(1) AS c FROM handler_drawer_correction_events WHERE created_at >= ? AND LOWER(event_type) LIKE '%social%'",
+            (since_iso,),
+        ).fetchone()["c"]
+    )
+
+    config = _read_ai_warden_config(db)
+    tunnel = _ai_warden_tunnel.snapshot()
+    remote_health = _probe_ai_warden_health(
+        config.get("server_base_url", ""),
+        str(get_setting(db, AI_WARDEN_SETTING_API_KEY, "") or "").strip(),
+    )
+
+    return {
+        "generated_at": _now_iso(),
+        "window_hours": int(window_hours),
+        "tunnel": tunnel,
+        "tunnel_snapshot": tunnel,
+        "remote_health": remote_health,
+        "counts": {
+            "corrections": correction_count,
+            "behavior_events": behavior_count,
+            "reports_received": report_count,
+            "enforcement_events": enforcement_count,
+            "social_posts": social_post_count,
+        },
+        "rules_count": len(config.get("rules", [])),
+        "auto_enforce": bool(config.get("auto_enforce")),
+        "auto_social_posting": bool(config.get("auto_social_posting")),
+    }
+
+
+@router.get("/api/handler/ai-warden/reports")
+def handler_get_ai_warden_reports(
+    limit: int = Query(default=50, ge=1, le=AI_WARDEN_REPORTS_MAX_LIMIT),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    rows = db.execute(
+        "SELECT id, report_type, severity, summary, payload_json, source, created_at FROM ai_warden_reports ORDER BY id DESC LIMIT ?",
+        (int(limit),),
+    ).fetchall()
+    reports: list[dict[str, Any]] = []
+    for row in rows:
+        payload = {}
+        try:
+            payload = json.loads(str(row["payload_json"] or "{}"))
+        except Exception:
+            payload = {}
+        reports.append(
+            {
+                "id": int(row["id"]),
+                "report_type": str(row["report_type"] or ""),
+                "severity": str(row["severity"] or "info"),
+                "summary": str(row["summary"] or ""),
+                "payload": payload,
+                "source": str(row["source"] or "remote_ai"),
+                "created_at": str(row["created_at"] or ""),
+            }
+        )
+    return {"reports": reports}
+
+
+@router.post("/api/handler/ai-warden/report")
+def ai_warden_ingest_report(
+    payload: AiWardenRuntimeReportRequest,
+    authorization: str = Header(default=""),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _require_ai_warden_bearer(db, authorization)
+    report_type = str(payload.report_type or "").strip()[:120]
+    if not report_type:
+        raise HTTPException(status_code=400, detail="report_type is required")
+    severity = str(payload.severity or "info").strip().lower()[:40] or "info"
+    summary = str(payload.summary or "").strip()[:1000]
+    payload_json = json.dumps(payload.payload or {}, ensure_ascii=True)
+    created_at = _now_iso()
+    cursor = db.execute(
+        """
+        INSERT INTO ai_warden_reports (report_type, severity, summary, payload_json, source, created_at)
+        VALUES (?, ?, ?, ?, 'remote_ai', ?)
+        """,
+        (report_type, severity, summary, payload_json, created_at),
+    )
+    db.commit()
+    return {"ok": True, "id": int(cursor.lastrowid or 0), "created_at": created_at}
+
+
+@router.get("/api/handler/ai-warden/runtime")
+def ai_warden_runtime_profile(
+    authorization: str = Header(default=""),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _require_ai_warden_bearer(db, authorization)
+    cfg = _read_ai_warden_config(db)
+    return {
+        "enabled": bool(cfg.get("enabled")),
+        "ai_name": cfg.get("ai_name", "Custom AI Warden"),
+        "provider": cfg.get("provider", "custom"),
+        "rules": cfg.get("rules", []),
+        "auto_enforce": bool(cfg.get("auto_enforce")),
+        "auto_social_posting": bool(cfg.get("auto_social_posting")),
+    }
 
 
 @router.post("/api/handler/public-status")
@@ -3617,7 +5123,59 @@ def handler_list_limbo_items(
             """,
             (sf, limit),
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [_limbo_with_attachments(db, r) for r in rows]
+
+
+@router.post("/api/handler/drawer/upload")
+async def handler_drawer_upload_media(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(role_required("admin", "handler")),
+) -> dict:
+    if file is None:
+        raise HTTPException(status_code=400, detail="file is required")
+
+    media_kind = _infer_media_kind(file.content_type or "")
+    if media_kind not in {"image", "video", "audio"}:
+        raise HTTPException(status_code=400, detail="Only image, video, and audio uploads are allowed")
+
+    _HANDLER_DRAWER_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    suffix = Path(file.filename or "").suffix[:12]
+    safe_suffix = "".join(ch for ch in suffix if ch.isalnum() or ch == ".")
+    if not safe_suffix.startswith("."):
+        safe_suffix = ".bin"
+    name = f"drawer_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{uuid.uuid4().hex}{safe_suffix}"
+    dest = _HANDLER_DRAWER_UPLOAD_DIR / name
+
+    total = 0
+    try:
+        with dest.open("wb") as out:
+            while True:
+                chunk = await file.read(_HANDLER_DRAWER_UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _HANDLER_DRAWER_UPLOAD_MAX_BYTES:
+                    raise HTTPException(status_code=413, detail="Upload exceeds 80 MB limit")
+                out.write(chunk)
+    except HTTPException:
+        if dest.exists():
+            dest.unlink(missing_ok=True)
+        raise
+    except Exception as exc:
+        if dest.exists():
+            dest.unlink(missing_ok=True)
+        logger.error("Drawer media upload failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to save upload")
+
+    return {
+        "url": f"{_HANDLER_DRAWER_UPLOAD_URL_PREFIX}/{name}",
+        "filename": name,
+        "size_bytes": total,
+        "content_type": file.content_type or "application/octet-stream",
+        "media_kind": media_kind,
+        "uploaded_by": _drawer_actor(current_user),
+    }
 
 
 @router.post("/api/handler/limbo", status_code=201)
@@ -3640,14 +5198,66 @@ def handler_create_limbo_item(
         """,
         (prompt, source, created_at),
     )
+    _log_drawer_correction_event(
+        db,
+        current_user=_current_user,
+        event_type="limbo_created",
+        target_type="limbo",
+        target_id=cur.lastrowid,
+        note="Created limbo queue item",
+        payload={"source": source},
+    )
     db.commit()
-    return {
-        "id": cur.lastrowid,
-        "prompt_text": prompt,
-        "source": source,
-        "status": "pending",
-        "created_at": created_at,
-    }
+    row = db.execute("SELECT * FROM limbo_items WHERE id = ?", (cur.lastrowid,)).fetchone()
+    return _limbo_with_attachments(db, row)
+
+
+@router.post("/api/handler/limbo/{item_id}/attachments")
+def handler_add_limbo_attachment(
+    item_id: int,
+    payload: LimboAttachmentCreateRequest,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    row = db.execute("SELECT * FROM limbo_items WHERE id = ?", (item_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Limbo item not found")
+
+    media_kind = (payload.media_kind or "file").strip().lower()
+    if media_kind not in {"image", "video", "audio", "file", "url"}:
+        raise HTTPException(status_code=400, detail="media_kind must be image, video, audio, file, or url")
+    url = (payload.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+
+    now = _now_iso()
+    db.execute(
+        """
+        INSERT INTO limbo_item_attachments
+            (limbo_item_id, media_kind, label, url, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            item_id,
+            media_kind,
+            payload.label,
+            url,
+            json.dumps(payload.metadata or {}, ensure_ascii=True),
+            now,
+        ),
+    )
+    _log_drawer_correction_event(
+        db,
+        current_user=current_user,
+        event_type="limbo_attachment_added",
+        target_type="limbo",
+        target_id=item_id,
+        note="Attached media to limbo item",
+        payload={"media_kind": media_kind, "url": url},
+    )
+    db.commit()
+    refreshed = db.execute("SELECT * FROM limbo_items WHERE id = ?", (item_id,)).fetchone()
+    return _limbo_with_attachments(db, refreshed)
 
 
 @router.post("/api/handler/limbo/{item_id}/answer")
@@ -3679,6 +5289,15 @@ def handler_answer_limbo_item(
         """,
         (answer, answered_at, current_user.get("user_id", ""), item_id),
     )
+    _log_drawer_correction_event(
+        db,
+        current_user=current_user,
+        event_type="limbo_answered",
+        target_type="limbo",
+        target_id=item_id,
+        note="Answered limbo item",
+        payload={"answer_preview": answer[:120]},
+    )
     db.commit()
     return {"id": item_id, "status": "answered", "answered_at": answered_at}
 
@@ -3708,6 +5327,15 @@ def handler_dismiss_limbo_item(
         WHERE id = ?
         """,
         (dismissed_reason, answered_at, current_user.get("user_id", ""), item_id),
+    )
+    _log_drawer_correction_event(
+        db,
+        current_user=current_user,
+        event_type="limbo_dismissed",
+        target_type="limbo",
+        target_id=item_id,
+        note="Dismissed limbo item",
+        payload={"reason": dismissed_reason[:160]},
     )
     db.commit()
     return {"id": item_id, "status": "dismissed", "answered_at": answered_at}
@@ -3783,6 +5411,15 @@ def handler_publish_limbo_item(
         "UPDATE limbo_items SET published_at = ?, published_question_id = ? WHERE id = ?",
         (now, question_id, item_id),
     )
+    _log_drawer_correction_event(
+        db,
+        current_user=_current_user,
+        event_type="limbo_published",
+        target_type="limbo",
+        target_id=item_id,
+        note="Published limbo item",
+        payload={"question_id": question_id},
+    )
 
     confessions_raw = get_setting(db, "public_confessions_posted")
     if confessions_raw is not None:
@@ -3795,6 +5432,27 @@ def handler_publish_limbo_item(
 
     db.commit()
     return {"published": True, "question_id": question_id, "already_published": False}
+
+
+@router.get("/api/handler/drawer/corrections")
+def handler_list_drawer_corrections(
+    target_type: Optional[str] = None,
+    limit: int = Query(default=200, ge=1, le=1000),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    tt = (target_type or "").strip().lower()
+    if tt:
+        rows = db.execute(
+            "SELECT * FROM handler_drawer_correction_events WHERE lower(target_type) = ? ORDER BY id DESC LIMIT ?",
+            (tt, limit),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT * FROM handler_drawer_correction_events ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -4215,6 +5873,15 @@ def handler_tpe_evidence_create(
             now,
         ),
     )
+    _log_drawer_correction_event(
+        db,
+        current_user=current_user,
+        event_type="evidence_created",
+        target_type="evidence",
+        target_id=cur.lastrowid,
+        note="Created evidence item",
+        payload={"category": category, "severity": severity},
+    )
     db.commit()
     evidence_id = int(cur.lastrowid)
     row = db.execute(
@@ -4318,6 +5985,15 @@ def handler_tpe_evidence_add_attachment(
     db.execute(
         "UPDATE handler_evidence_vault SET updated_at = ? WHERE id = ?",
         (now, evidence_id),
+    )
+    _log_drawer_correction_event(
+        db,
+        current_user=current_user,
+        event_type="evidence_attachment_added",
+        target_type="evidence",
+        target_id=evidence_id,
+        note="Attached media to evidence item",
+        payload={"kind": (body.kind or "url"), "url": body.url},
     )
     db.commit()
 
@@ -6448,7 +8124,7 @@ async def ai_warden_ws_endpoint(websocket: WebSocket, secret: str = "") -> None:
     db = get_db_connection()
     connected = False
     try:
-        expected = _effective_webhook_secret(db)
+        expected = _effective_ai_warden_secret(db)
         provided_secret = (secret or "").strip()
         auth_header = (websocket.headers.get("authorization") or "").strip()
         if auth_header.lower().startswith("bearer "):
