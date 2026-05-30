@@ -931,6 +931,21 @@
     el.textContent = message || '';
   }
 
+  function setMailDetailsVisible(visible) {
+    const details = byId('hp2-queue-mail-details');
+    const toggle = byId('hp2-queue-mail-details-toggle');
+    if (!details || !toggle) return;
+    details.classList.toggle('hp2-hidden', !visible);
+    toggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  }
+
+  function autoSizeMailComposer() {
+    const input = byId('hp2-queue-mail-reply');
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 108)}px`;
+  }
+
   function queueListEmpty(message) {
     return `<li class="hp2-muted">${escapeHtml(message)}</li>`;
   }
@@ -998,16 +1013,22 @@
       listEl.innerHTML = items.map((thread) => {
         const id = Number(thread.id || 0);
         const selected = state.queue.selectedMailThreadId === id;
+        const senderName = String(thread.sender_name || 'Anonymous').trim() || 'Anonymous';
+        const avatar = senderName.charAt(0).toUpperCase();
+        const latest = escapeHtml(thread.latest_message || 'No messages yet');
+        const updatedAt = escapeHtml(fmtDate(thread.latest_message_at || thread.updated_at || thread.created_at));
+        const selectedClass = selected ? 'hp2-chat-thread-btn-active' : '';
         return `<li>
-          <div class="hp2-feed-item-row">
-            <strong>${escapeHtml(thread.sender_name || 'Anonymous')}</strong>
-            <span class="${severityClass(thread.status === 'resolved' ? 'info' : 'warning')}">${escapeHtml(thread.status || 'open')}</span>
-          </div>
-          <div class="hp2-muted">${escapeHtml(thread.latest_message || 'No messages yet')}</div>
-          <div class="hp2-muted">${escapeHtml(fmtDate(thread.latest_message_at || thread.updated_at || thread.created_at))}</div>
-          <div class="hp2-queue-actions">
-            <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-open" data-id="${id}">${selected ? 'Selected' : 'Open'}</button>
-          </div>
+          <button type="button" class="hp2-chat-thread-btn ${selectedClass}" data-q-action="mail-open" data-id="${id}">
+            <div class="hp2-chat-thread-row">
+              <span class="hp2-chat-avatar">${escapeHtml(avatar)}</span>
+              <div>
+                <p class="hp2-chat-thread-name">${escapeHtml(senderName)}</p>
+                <p class="hp2-chat-thread-preview">${latest}</p>
+              </div>
+              <span class="hp2-chat-thread-time">${updatedAt}</span>
+            </div>
+          </button>
         </li>`;
       }).join('');
     } catch (err) {
@@ -1027,33 +1048,34 @@
     host.innerHTML = messages.map((m) => {
       const id = Number(m.id || 0);
       state.queue.mailMessagesById[id] = m;
-      const authoredByHandler = String(m.author || '').toLowerCase().includes('handler');
+      const author = String(m.author || '').trim() || 'Unknown';
+      const lower = author.toLowerCase();
+      const authoredByHandler = lower.includes('handler') || lower.includes('admin') || lower.includes('operator');
       const ownClass = authoredByHandler ? 'hp2-chat-self' : '';
       return `<li class="${ownClass}">
-        <div class="hp2-feed-item-row">
-          <strong>${escapeHtml(m.author || 'Unknown')}</strong>
-          <span class="hp2-muted">${escapeHtml(fmtDate(m.created_at))}</span>
-        </div>
-        <div>${escapeHtml(m.body || '')}</div>
-        <div class="hp2-queue-actions">
-          <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${id}">Edit</button>
-        </div>
+        <p class="hp2-chat-message-body">${escapeHtml(m.body || '')}</p>
+        <div class="hp2-chat-message-meta">${escapeHtml(author)} • ${escapeHtml(fmtDate(m.created_at))} • <button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="mail-edit" data-id="${id}">Edit</button></div>
         </li>`;
     }).join('');
+    host.scrollTop = host.scrollHeight;
   }
 
   async function loadQueueMailThread(threadId) {
     state.queue.selectedMailThreadId = threadId;
+    const title = byId('hp2-queue-mail-title');
     const meta = byId('hp2-queue-mail-meta');
+    if (title) title.textContent = 'Loading thread...';
     meta.textContent = 'Loading thread...';
     try {
       const data = await apiGet(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}`);
       const thread = data.thread || {};
-      meta.textContent = `Thread #${thread.id || threadId} • ${thread.status || 'open'} • ${thread.sender_name || 'Anonymous'}`;
+      if (title) title.textContent = thread.sender_name || `Thread #${thread.id || threadId}`;
+      meta.textContent = `Thread #${thread.id || threadId} • ${thread.status || 'open'}`;
       renderQueueMailMessages(data.messages || []);
       await loadQueueMailThreads();
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
+        if (title) title.textContent = 'Thread Detail';
         meta.textContent = 'Failed to load thread.';
         renderQueueMailMessages([]);
       }
@@ -1075,7 +1097,10 @@
     setQueueResult('Sending reply...');
     try {
       await apiPost(`/api/handler/puppy-mail/threads/${encodeURIComponent(String(threadId))}/reply`, { body });
-      if (input) input.value = '';
+      if (input) {
+        input.value = '';
+        autoSizeMailComposer();
+      }
       setQueueResult('Reply sent.');
       await loadQueueMailThread(threadId);
       await loadQueueKpis();
@@ -1542,8 +1567,20 @@
     byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
     byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
     byId('hp2-queue-mail-reply-btn').addEventListener('click', () => sendQueueMailReply().catch(() => {}));
+    byId('hp2-queue-mail-details-toggle').addEventListener('click', () => {
+      const details = byId('hp2-queue-mail-details');
+      if (!details) return;
+      setMailDetailsVisible(details.classList.contains('hp2-hidden'));
+    });
     byId('hp2-queue-mail-resolve-btn').addEventListener('click', () => updateQueueMailStatus('resolved').catch(() => {}));
     byId('hp2-queue-mail-open-btn').addEventListener('click', () => updateQueueMailStatus('open').catch(() => {}));
+    byId('hp2-queue-mail-reply').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendQueueMailReply().catch(() => {});
+      }
+    });
+    byId('hp2-queue-mail-reply').addEventListener('input', autoSizeMailComposer);
     byId('hp2-queue-questions-open-older').addEventListener('click', () => {
       state.queue.openVisible += 3;
       renderQueueQuestions();
@@ -1569,6 +1606,8 @@
 
   async function boot() {
     bindEvents();
+    setMailDetailsVisible(false);
+    autoSizeMailComposer();
     renderAutoFollowButton();
     const jwt = getJwt();
     if (!jwt) {

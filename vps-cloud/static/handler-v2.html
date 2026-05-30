@@ -6,7 +6,7 @@
   <title>Handler Panel V2</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/handler-v2.css?v=20260530d" />
+  <link rel="stylesheet" href="/handler-v2.css?v=20260530g" />
 </head>
 <body>
   <div id="hp2-login" class="hp2-login-wrap">
@@ -204,15 +204,19 @@
                 <ul id="hp2-queue-mail-list" class="hp2-feed"></ul>
               </aside>
               <section class="hp2-chat-thread">
-                <div class="hp2-panel-head">
-                  <h5 class="hp2-subhead">Thread Detail</h5>
+                <div class="hp2-chat-thread-head">
+                  <h5 id="hp2-queue-mail-title" class="hp2-chat-thread-title">Thread Detail</h5>
                   <span id="hp2-queue-mail-meta" class="hp2-muted">Select a thread</span>
                 </div>
                 <ul id="hp2-queue-mail-messages" class="hp2-feed hp2-chat-messages"></ul>
                 <div class="hp2-chat-compose">
-                  <input id="hp2-queue-mail-reply" type="text" placeholder="Reply to selected thread..." />
-                  <div class="hp2-action-row">
+                  <div class="hp2-chat-compose-main">
+                    <textarea id="hp2-queue-mail-reply" rows="1" placeholder="iMessage-style reply..."></textarea>
                     <button id="hp2-queue-mail-reply-btn" class="hp2-btn hp2-btn-primary" type="button">Send</button>
+                    <button id="hp2-queue-mail-details-toggle" class="hp2-btn hp2-btn-ghost" type="button" aria-expanded="false" aria-controls="hp2-queue-mail-details">Details</button>
+                  </div>
+                  <div id="hp2-queue-mail-details" class="hp2-chat-compose-secondary hp2-hidden">
+                    <span class="hp2-muted">Thread status</span>
                     <button id="hp2-queue-mail-resolve-btn" class="hp2-btn hp2-btn-ghost" type="button">Resolve</button>
                     <button id="hp2-queue-mail-open-btn" class="hp2-btn hp2-btn-ghost" type="button">Reopen</button>
                   </div>
@@ -339,6 +343,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260530e" defer></script>
+  <script src="/handler-v2.js?v=20260530g" defer></script>
 </body>
 </html>
