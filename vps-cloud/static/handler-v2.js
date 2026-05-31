@@ -583,6 +583,10 @@
     return normalized;
   }
 
+  function waitMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  }
+
   function setSegmentActive(host, value) {
     if (!host) return;
     host.querySelectorAll('[data-segment-value]').forEach((button) => {
@@ -4404,7 +4408,13 @@
       return;
     }
     const target = state.commands.liveControl.quickTapTarget;
-    const action = state.commands.liveControl.quickTapAction;
+    const allowedActions = quickTapActionsForTarget(target);
+    let action = state.commands.liveControl.quickTapAction;
+    if (!allowedActions.includes(action)) {
+      [action] = allowedActions;
+      state.commands.liveControl.quickTapAction = action;
+      renderQuickTapActionButtons();
+    }
     const pavlokCmd = normalizePavlokCommand(action);
     const lovenseCmd = normalizeLovenseCommand(action);
     const intensity = Number(byId('hp2-quicktap-intensity')?.value || 10);
@@ -4422,6 +4432,10 @@
     setInlineResult('hp2-quicktap-result', 'Sending quick tap...');
     try {
       const baseCommandId = makeCommandId('quicktap');
+      const interTapDelayMs = target === 'pavlok'
+        ? (pavlokCmd === 'zap' ? 700 : 450)
+        : Math.max(220, Math.min(1200, Math.floor(length / 2)));
+
       for (let i = 0; i < loop; i += 1) {
         const loopCommandId = `${baseCommandId}-${i + 1}`;
         if (target === 'pavlok') {
@@ -4434,21 +4448,17 @@
               pavlok_intensity: String(intensity),
               intensity: String(intensity),
               toy_level: String(intensity),
-              ...(pavlokCmd !== 'zap' ? {
-                pavlok_duration_ms: String(length),
-                duration_ms: String(length),
-                toy_duration_ms: String(length),
-              } : {}),
+              pavlok_duration_ms: String(Math.max(200, length)),
+              duration_ms: String(Math.max(200, length)),
+              toy_duration_ms: String(Math.max(200, length)),
             },
             pavlok_cmd: pavlokCmd,
             pavlok_intensity: String(intensity),
             intensity: String(intensity),
             toy_level: String(intensity),
-            ...(pavlokCmd !== 'zap' ? {
-              pavlok_duration_ms: String(length),
-              duration_ms: String(length),
-              toy_duration_ms: String(length),
-            } : {}),
+            pavlok_duration_ms: String(Math.max(200, length)),
+            duration_ms: String(Math.max(200, length)),
+            toy_duration_ms: String(Math.max(200, length)),
           });
         } else {
           await apiPost('/api/handler/tpe/push', {
@@ -4474,6 +4484,11 @@
             duration_ms: length,
             toy_duration_ms: length,
           });
+        }
+
+        if (loop > 1 && i < loop - 1) {
+          setInlineResult('hp2-quicktap-result', `Sending quick tap... (${i + 1}/${loop})`);
+          await waitMs(interTapDelayMs);
         }
       }
       setInlineResult('hp2-quicktap-result', `Quick tap sent (${loop}x).`);
