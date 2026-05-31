@@ -3298,12 +3298,47 @@ def _fetch_devices_by_ids(
     if not device_ids:
         return []
     placeholders = ",".join("?" * len(device_ids))
-    cols = "*" if full else "device_id, device_name, is_online, is_locked, battery_pct, last_seen"
+    cols = "*" if full else "device_id, device_name, fcm_token, is_online, is_locked, battery_pct, last_seen"
     return db.execute(
         f"SELECT {cols} FROM handler_device_status "
         f"WHERE device_id IN ({placeholders}) ORDER BY last_seen DESC",
         device_ids,
     ).fetchall()
+
+
+def _device_dedupe_key(row: dict[str, Any]) -> str:
+    """Build a stable grouping key for panel device rows.
+
+    The same physical device may occasionally show up under a new device_id
+    (for example after reinstall/migration) while retaining the same FCM token.
+    Collapsing by token keeps the panel list sane.
+    """
+    token = str(row.get("fcm_token") or "").strip()
+    if token:
+        return f"fcm:{token}"
+    return f"device:{str(row.get('device_id') or '').strip()}"
+
+
+def _device_freshness_key(row: dict[str, Any]) -> tuple[int, str, str, str]:
+    """Sort key where newer/online rows compare greater."""
+    return (
+        1 if int(row.get("is_online") or 0) == 1 else 0,
+        str(row.get("last_seen") or ""),
+        str(row.get("updated_at") or ""),
+        str(row.get("device_id") or ""),
+    )
+
+
+def _collapse_panel_devices(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    """Collapse duplicate logical devices, keeping the freshest row per group."""
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        candidate = dict(row)
+        key = _device_dedupe_key(candidate)
+        existing = grouped.get(key)
+        if existing is None or _device_freshness_key(candidate) > _device_freshness_key(existing):
+            grouped[key] = candidate
+    return sorted(grouped.values(), key=_device_freshness_key, reverse=True)
 
 
 @router.get("/api/handler/devices")
@@ -3318,7 +3353,7 @@ def handler_list_devices(
     """
     if current_user["role"] == "admin":
         rows = db.execute(
-            "SELECT device_id, device_name, is_online, is_locked, battery_pct, last_seen "
+            "SELECT device_id, device_name, fcm_token, is_online, is_locked, battery_pct, last_seen, updated_at "
             "FROM handler_device_status ORDER BY last_seen DESC"
         ).fetchall()
     else:
@@ -3330,7 +3365,10 @@ def handler_list_devices(
         if known_total > 0 and len(rows) == 0:
             response.headers["X-Handler-Devices-Notice"] = "no-assignment"
             response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
-    return [dict(r) for r in rows]
+    collapsed = _collapse_panel_devices(rows)
+    for row in collapsed:
+        row.pop("fcm_token", None)
+    return collapsed
 
 
 @router.get("/api/handler/status")
@@ -8666,7 +8704,10 @@ async def handler_ws_endpoint(websocket: WebSocket, token: str = "") -> None:
 
         snapshot_payload = {
             "type": "snapshot",
-            "devices": [dict(r) for r in rows],
+            "devices": [
+                {k: v for k, v in row.items() if k != "fcm_token"}
+                for row in _collapse_panel_devices(rows)
+            ],
         }
         if snapshot_notice:
             snapshot_payload["notice"] = snapshot_notice
