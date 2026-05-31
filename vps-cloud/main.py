@@ -2156,9 +2156,9 @@ def anon_page(request: Request):
     """Standalone Puppy Pouch page: submit a question + browse all answered Q&A."""
     canonical = BASE_URL or str(request.base_url).rstrip("/")
     page_url  = _html_escape(f"{canonical}/anon")
-    og_title  = "Puppy Pouch 🐾 – Anonymous Notes | mochii.live"
+    og_title  = "Puppy Pouch 🐾 – Anonymous Questions | mochii.live"
     og_desc   = _html_escape(
-        "Send an anonymous note to the Puppy Pouch and read published replies."
+        "No questions off limits. The mutt has to answer."
     )
 
     html = f"""<!DOCTYPE html>
@@ -2620,7 +2620,7 @@ def anon_page(request: Request):
 </head>
 <body>
   <div class="page-header">
-        <h1>🐾 Puppy Pouch Inbox</h1>
+      <h1>🐾 Puppy Pouch: Ask Like a Shameless Mutt</h1>
         <a class="back-link" href="{_html_escape(canonical)}">← Return to Home</a>
   </div>
 
@@ -2628,8 +2628,8 @@ def anon_page(request: Request):
         <div class="status-tile">
             <div class="status-value" id="anon-days-locked">--</div>
             <div class="status-label">Days Locked</div>
-            <div class="status-sub" id="anon-days-locked-goal">Goal: --</div>
-            <div style="display:flex;justify-content:center;gap:.45rem;margin-top:.55rem">
+            <div class="status-sub" id="anon-days-locked-goal" style="display:none">Target: --</div>
+            <div id="anon-days-controls" style="display:none;justify-content:center;gap:.45rem;margin-top:.55rem">
                 <button type="button" id="anon-days-remove" style="padding:.3rem .55rem;border-radius:8px;border:1px solid #5a3a3e;background:#22161a;color:#f6d5db;font-weight:700;cursor:pointer">−1 day</button>
                 <button type="button" id="anon-days-add" style="padding:.3rem .55rem;border-radius:8px;border:1px solid #5a3a3e;background:#22161a;color:#f6d5db;font-weight:700;cursor:pointer">+1 day</button>
             </div>
@@ -2638,11 +2638,11 @@ def anon_page(request: Request):
 
   <!-- Submit form -->
   <div class="card">
-    <h2>Send an Anonymous Note 🐾</h2>
-        <p class="tagline">Share what is happening and what response would help most.</p>
+    <h2>Drop Your Question, Puppy 🐾</h2>
+                <p class="tagline">No questions off limits. The mutt has to answer. Like Tellonym, but crueler.</p>
         <div class="detail-grid">
             <div>
-                <label for="note-topic">Question Type</label>
+                <label for="note-topic">What Kind of Mess Is This?</label>
                 <select id="note-topic" aria-label="Question topic">
                     <option value="General">General</option>
                     <option value="Protocol">Protocol</option>
@@ -2652,7 +2652,7 @@ def anon_page(request: Request):
                 </select>
             </div>
             <div>
-                <label for="note-context">Situation</label>
+                <label for="note-context">Current Mutt Situation</label>
                 <select id="note-context" aria-label="Current context">
                     <option value="No context">No extra context</option>
                     <option value="Urgent">Urgent</option>
@@ -2662,7 +2662,7 @@ def anon_page(request: Request):
                 </select>
             </div>
             <div>
-                <label for="note-response-style">Reply Tone</label>
+                <label for="note-response-style">How Hard Should This Bitch Be Read?</label>
                 <select id="note-response-style" aria-label="Preferred answer style">
                     <option value="Direct">Direct</option>
                     <option value="Supportive">Supportive</option>
@@ -2671,17 +2671,17 @@ def anon_page(request: Request):
                 </select>
             </div>
         </div>
-        <textarea id="note-textarea" maxlength="900" placeholder="What do you want help with right now? Include the exact outcome you want. 🐾" aria-label="Your question"></textarea>
+                <textarea id="note-textarea" maxlength="900" placeholder="Ask your anonymous question. Be specific so I can drag your mutt logic and still fix it. 🐾" aria-label="Your question"></textarea>
     <div class="note-footer-row">
             <span id="char-count">0 / 900</span>
-      <button id="send-btn" disabled>Send Note 🐾</button>
+            <button id="send-btn" disabled>Submit, Bitch 🐾</button>
     </div>
     <p id="send-msg" role="alert" aria-live="polite"></p>
   </div>
 
   <!-- Answered Q&A feed -->
   <div class="card">
-    <p class="feed-header">Published Replies 🐾</p>
+        <p class="feed-header">Answered Mutt Questions 🐾</p>
         <div class="feed-toolbar" aria-label="Answered note filters">
             <div class="filter-row">
                 <span class="filter-label">Origin</span>
@@ -2701,8 +2701,8 @@ def anon_page(request: Request):
                 </div>
             </div>
         </div>
-    <p id="feed-loading">Loading published replies… 🐾</p>
-    <p id="empty-feed">No published replies yet — send the first note. 🐾</p>
+    <p id="feed-loading">Loading your public drag session… 🐾</p>
+    <p id="empty-feed">No answered questions yet — be the first loud little puppy. 🐾</p>
     <div id="qa-list"></div>
   </div>
 
@@ -2747,17 +2747,17 @@ def anon_page(request: Request):
           textarea.value = '';
           charCount.textContent = `0 / ${{MAX}}`;
           charCount.className = '';
-                    sendMsg.textContent = '🐾 Note received. Thanks for sharing.';
+                                        sendMsg.textContent = '🐾 Question submitted. Your mutt moment is in queue.';
           sendMsg.className = 'success';
           setTimeout(() => {{ sendMsg.textContent = ''; sendMsg.className = ''; }}, 3500);
         }} else {{
           const data = await resp.json().catch(() => ({{}}));
-                    sendMsg.textContent = data.detail || 'Could not send your note. Please try again.';
+                                        sendMsg.textContent = data.detail || 'Could not submit your question. Try again, bitch.';
           sendMsg.className = 'error';
           sendBtn.disabled = false;
         }}
       }} catch {{
-                sendMsg.textContent = 'Network issue. Please try sending again.';
+                                sendMsg.textContent = 'Network issue. Your question got choked. Try again.';
         sendMsg.className = 'error';
         sendBtn.disabled = textarea.value.trim().length === 0;
       }}
@@ -2797,7 +2797,7 @@ def anon_page(request: Request):
         function sourceLabel(source) {{
             const s = normalizedSource(source);
             if (s === 'limbo') return 'Limbo';
-            return 'Anon';
+            return 'Puppy Box';
         }}
 
         function applyFilters(items) {{
@@ -2825,13 +2825,13 @@ def anon_page(request: Request):
             const filtered = applyFilters(allQuestions);
 
             if (!allQuestions.length) {{
-                emptyFeed.textContent = 'No published replies yet — send the first note. 🐾';
+                emptyFeed.textContent = 'No answered questions yet — be the first loud little puppy. 🐾';
                 emptyFeed.style.display = 'block';
                 return;
             }}
 
             if (!filtered.length) {{
-                emptyFeed.textContent = 'No replies match your current filters yet. 🐾';
+                emptyFeed.textContent = 'No drags match your current filters yet. 🐾';
                 emptyFeed.style.display = 'block';
                 return;
             }}
@@ -2851,7 +2851,7 @@ def anon_page(request: Request):
                     `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
                     `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
                     metaHtml +
-                    `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Open share link</a>`;
+                    `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this Q&A</a>`;
                 qaList.appendChild(div);
             }});
         }}
@@ -2874,14 +2874,21 @@ def anon_page(request: Request):
                 const s = await resp.json();
                 const daysLocked = s.days_locked ?? s.days_caged;
                 const goalDays = s.days_locked_goal_days ?? 0;
+                const hasGoal = goalDays > 0;
+                const goalLine = document.getElementById('anon-days-locked-goal');
+                const dayControls = document.getElementById('anon-days-controls');
                 const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
                 document.getElementById('anon-days-locked').textContent = goalMet ? '🔓 Unlocked' : String(daysLocked ?? '--');
-                document.getElementById('anon-days-locked-goal').textContent =
-                    goalMet
-                        ? `Target reached (${{daysLocked}}/${{goalDays}} days)`
-                        : goalDays > 0 && daysLocked != null
-                            ? `Target: ${{daysLocked}}/${{goalDays}} days`
-                            : `Target: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
+                goalLine.style.display = hasGoal ? 'block' : 'none';
+                dayControls.style.display = hasGoal ? 'flex' : 'none';
+                if (hasGoal) {{
+                    goalLine.textContent =
+                        goalMet
+                            ? `Target reached (${{daysLocked}}/${{goalDays}} days)`
+                            : daysLocked != null
+                                ? `Target: ${{daysLocked}}/${{goalDays}} days`
+                                : `Target: --/${{goalDays}} days`;
+                }}
             }} catch {{
                 // Keep placeholders when unavailable.
             }}
