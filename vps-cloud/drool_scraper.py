@@ -131,7 +131,11 @@ def _extract_reddit_media(child_data: dict) -> tuple:
     if not media_urls and child_data.get("is_gallery"):
         metadata: dict = child_data.get("media_metadata") or {}
         gallery_items = (child_data.get("gallery_data") or {}).get("items") or []
-        ordered_ids = [str(it.get("media_id", "")) for it in gallery_items] or list(metadata.keys())
+        ordered_ids = (
+            [str(it.get("media_id", "")) for it in gallery_items]
+            if gallery_items
+            else list(metadata.keys())
+        )
         for mid in ordered_ids:
             entry = metadata.get(mid) or {}
             if entry.get("status") == "valid":
