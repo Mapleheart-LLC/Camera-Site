@@ -2640,37 +2640,6 @@ def anon_page(request: Request):
   <div class="card">
     <h2>Drop Your Question, Puppy 🐾</h2>
                 <p class="tagline">No questions off limits. The mutt has to answer. Like Tellonym, but crueler.</p>
-        <div class="detail-grid">
-            <div>
-                <label for="note-topic">What Kind of Mess Is This?</label>
-                <select id="note-topic" aria-label="Question topic">
-                    <option value="General">General</option>
-                    <option value="Protocol">Protocol</option>
-                    <option value="Training">Training</option>
-                    <option value="Public status">Public status</option>
-                    <option value="Relationship">Relationship</option>
-                </select>
-            </div>
-            <div>
-                <label for="note-context">Current Mutt Situation</label>
-                <select id="note-context" aria-label="Current context">
-                    <option value="No context">No extra context</option>
-                    <option value="Urgent">Urgent</option>
-                    <option value="Emotional">Emotional</option>
-                    <option value="Planning ahead">Planning</option>
-                    <option value="Follow-up">Follow-up</option>
-                </select>
-            </div>
-            <div>
-                <label for="note-response-style">How Hard Should This Bitch Be Read?</label>
-                <select id="note-response-style" aria-label="Preferred answer style">
-                    <option value="Direct">Direct</option>
-                    <option value="Supportive">Supportive</option>
-                    <option value="Detailed">Detailed</option>
-                    <option value="Short">Short</option>
-                </select>
-            </div>
-        </div>
                 <textarea id="note-textarea" maxlength="900" placeholder="Ask your anonymous question. Be specific so I can drag your mutt logic and still fix it. 🐾" aria-label="Your question"></textarea>
     <div class="note-footer-row">
             <span id="char-count">0 / 900</span>
@@ -2708,7 +2677,6 @@ def anon_page(request: Request):
 
   <script>
     const MAX = 900;
-    const API_MAX = 1200;
     const textarea  = document.getElementById('note-textarea');
     const charCount = document.getElementById('char-count');
     const sendBtn   = document.getElementById('send-btn');
@@ -2724,15 +2692,6 @@ def anon_page(request: Request):
     sendBtn.addEventListener('click', async () => {{
       const text = textarea.value.trim();
       if (!text || text.length > MAX) return;
-            const topic = (document.getElementById('note-topic')?.value || 'General').trim();
-            const context = (document.getElementById('note-context')?.value || 'No context').trim();
-            const style = (document.getElementById('note-response-style')?.value || 'Direct').trim();
-            const payloadText = `[Topic: ${{topic}} | Context: ${{context}} | Reply style: ${{style}}] ${{text}}`;
-            if (payloadText.length > API_MAX) {{
-                sendMsg.textContent = `Please shorten your note by ${{payloadText.length - API_MAX}} characters before sending.`;
-                sendMsg.className = 'error';
-                return;
-            }}
 
       sendBtn.disabled = true;
       sendMsg.textContent = '';
@@ -2741,7 +2700,7 @@ def anon_page(request: Request):
         const resp = await fetch('/api/questions', {{
           method: 'POST',
           headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ text: payloadText }}),
+                                        body: JSON.stringify({{ text }}),
         }});
         if (resp.ok) {{
           textarea.value = '';
