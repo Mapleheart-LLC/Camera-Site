@@ -2,8 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system fonts used by Pillow to render OG preview images
+# Install system fonts used by Pillow and toolchain needed for native Python wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    pkg-config \
     fonts-noto-core \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
