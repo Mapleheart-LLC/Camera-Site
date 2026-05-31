@@ -17,7 +17,7 @@
   <title>mochii.live</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bungee:wght@400&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -31,10 +31,22 @@
       border: 0;
     }
 
+    :root {
+      --bg-0: #170f18;
+      --bg-1: #261422;
+      --bg-2: #331730;
+      --ink-main: #ffe9f3;
+      --ink-soft: #d8b8c9;
+      --line-soft: #5b2949;
+      --accent-pink: #ff7ec3;
+      --accent-candy: #ff9f6b;
+      --accent-mint: #88f6ca;
+    }
+
     body {
       font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
-      background: #1a1a1a;
-      color: #f0e6e8;
+      background: radial-gradient(circle at 16% 8%, #402040 0%, transparent 44%), radial-gradient(circle at 88% 2%, #24395a 0%, transparent 35%), linear-gradient(148deg, var(--bg-0) 0%, var(--bg-1) 52%, var(--bg-2) 100%);
+      color: var(--ink-main);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -73,10 +85,11 @@
     }
 
     .landing-logo {
-      font-size: 1.15rem;
-      font-weight: 800;
-      color: #e8aeb7;
-      letter-spacing: .01em;
+      font-family: 'Bungee', 'Nunito', sans-serif;
+      font-size: 1.03rem;
+      font-weight: 400;
+      color: #ffd7ec;
+      letter-spacing: .03em;
     }
 
 
@@ -84,13 +97,20 @@
     .landing-hero {
       text-align: center;
       padding: 4rem 1.5rem 2.5rem;
+      transform: rotate(-1deg);
     }
 
     .hero-paw {
       font-size: 3.5rem;
       display: block;
       margin-bottom: 1rem;
-      animation: pawFloat 3s ease-in-out infinite;
+      animation: pawFloat 3s ease-in-out infinite, pawChaos 1.25s steps(2, end) infinite;
+    }
+
+    @keyframes pawChaos {
+      0% { filter: drop-shadow(0 0 16px rgba(255, 126, 195, .35)); }
+      50% { filter: drop-shadow(0 0 24px rgba(255, 159, 107, .45)); }
+      100% { filter: drop-shadow(0 0 18px rgba(136, 246, 202, .32)); }
     }
 
     @keyframes pawFloat {
@@ -110,35 +130,60 @@
       font-size: .95rem;
       color: #9e7e82;
       font-weight: 600;
+      max-width: 720px;
+      margin: 0 auto;
+      transform: rotate(-0.6deg);
     }
 
     .public-status-strip {
       width: 100%;
-      max-width: 760px;
-      margin: 0 auto 1.6rem;
+      max-width: 860px;
+      margin: 0 auto 1.2rem;
       padding: 0 1.5rem;
+      transform: rotate(-1.15deg) translateX(-4px);
     }
 
     .public-status-grid {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr);
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
       gap: .6rem;
     }
 
     .public-status-tile {
-      background: #23161a;
-      border: 1px solid #3d2a2e;
-      border-radius: 12px;
-      padding: .85rem .8rem;
-      text-align: center;
+      background: rgba(36, 17, 43, .68);
+      border: 1px solid #6f3b62;
+      border-radius: 10px;
+      padding: .9rem .9rem;
+      text-align: left;
+      box-shadow: none;
+      position: relative;
+      overflow: hidden;
+      transform: rotate(0.9deg);
+    }
+
+    .public-status-tile.is-hidden {
+      display: none;
+    }
+
+    .public-status-tile::after {
+      content: '';
+      position: absolute;
+      width: 72px;
+      height: 18px;
+      top: 10px;
+      right: -20px;
+      background: rgba(255, 159, 107, .28);
+      border: 1px solid rgba(255, 159, 107, .55);
+      transform: rotate(24deg);
     }
 
     .public-status-value {
       font-size: 1.15rem;
       font-weight: 800;
-      color: #e8aeb7;
+      color: #ffc2ea;
       line-height: 1;
       margin-bottom: .3rem;
+      font-family: 'Space Mono', monospace;
     }
 
     .public-status-label {
@@ -146,105 +191,160 @@
       font-weight: 800;
       letter-spacing: .08em;
       text-transform: uppercase;
-      color: #9e7e82;
+      color: #c9a3bc;
       line-height: 1.15;
     }
 
     .public-status-sub {
       margin-top: .35rem;
       font-size: .78rem;
-      color: #c49a9f;
+      color: #e0bdd1;
     }
 
     .public-status-note {
       margin-top: .55rem;
       text-align: center;
       font-size: .76rem;
-      color: #6a4a4e;
+      color: #bc93b2;
       min-height: 1.15em;
+    }
+
+    .public-status-mini {
+      display: none;
+      gap: .36rem;
+      background: rgba(31, 14, 36, .66);
+      border: 1px dashed #6f3b62;
+      border-radius: 10px;
+      padding: .72rem .76rem;
+      transform: rotate(-0.8deg);
+    }
+
+    .public-status-mini.is-active {
+      display: grid;
+    }
+
+    .public-mini-kicker {
+      font-size: .63rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #b98fab;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .public-mini-value {
+      font-size: .98rem;
+      color: #ffd3ec;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .public-mini-sub {
+      font-size: .75rem;
+      color: #d6b5c7;
+      line-height: 1.3;
     }
 
     /* ── Links section ──────────────────────────────── */
     .links-section {
       width: 100%;
-      max-width: 960px;
+      max-width: 860px;
       margin: 0 auto;
-      padding: 0 1.5rem 3rem;
+      padding: 0 1.5rem 1.1rem;
+      position: relative;
     }
 
+    .links-section:nth-of-type(2) { transform: rotate(0.9deg) translateX(4px); }
+    .links-section:nth-of-type(3) { transform: rotate(-0.75deg) translateX(-8px); }
+    .links-section:nth-of-type(4) { transform: rotate(1.15deg) translateX(3px); }
+
     .links-section + .links-section {
-      margin-top: .5rem;
+      margin-top: .45rem;
       padding-top: 0;
     }
 
     .links-section-label {
-      font-size: .7rem;
+      font-size: .74rem;
       font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: .13em;
-      color: #6a4a4e;
-      margin-bottom: 1rem;
-      text-align: center;
+      letter-spacing: .03em;
+      color: #be8eb0;
+      margin-bottom: .52rem;
+      text-align: left;
+      text-transform: none;
+      font-family: 'Space Mono', monospace;
+      transform: rotate(-0.8deg);
     }
 
     .links-list {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: .75rem;
+      grid-template-columns: minmax(0, 1fr);
+      gap: .58rem;
     }
 
     .links-list.primary-actions {
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .link-card {
       display: flex;
       align-items: center;
-      gap: 1rem;
-      min-height: 86px;
-      padding: 1rem 1.1rem;
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      color: #f0e6e8;
+      gap: .75rem;
+      min-height: 56px;
+      padding: .7rem .15rem .72rem .72rem;
+      background: transparent;
+      border: none;
+      border-left: 3px solid #7d3f6a;
+      border-radius: 0;
+      color: var(--ink-main);
       text-decoration: none;
-      font-size: .95rem;
+      font-size: .93rem;
       font-weight: 700;
-      transition: background .18s, border-color .18s, transform .15s, box-shadow .18s, color .18s;
+      transition: background .14s, border-color .14s, color .14s, transform .14s;
+      position: relative;
+      transform-origin: left center;
+    }
+
+    .links-list .link-card:nth-child(odd) {
+      transform: rotate(-1.15deg);
+      margin-right: 1.15rem;
+    }
+
+    .links-list .link-card:nth-child(even) {
+      transform: rotate(1.25deg);
+      margin-left: .95rem;
+      border-left-color: #9c5182;
     }
 
     .link-card:hover {
-      background: #2d1f22;
-      border-color: #e8aeb7;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 28px rgba(232,174,183,.16);
-      color: #f5d5da;
+      background: rgba(71, 30, 68, .42);
+      border-color: #ff88ca;
+      color: #ffdff1;
+      transform: rotate(0deg) scale(1.01);
     }
 
-    .link-card:active { transform: translateY(0); }
+    .link-card:active { background: rgba(71, 30, 68, .62); }
 
     .link-card-emoji {
-      font-size: 1.7rem;
-      width: 2rem;
+      font-size: 1.3rem;
+      width: 1.4rem;
       text-align: center;
       flex-shrink: 0;
+      filter: drop-shadow(0 0 8px rgba(255, 126, 195, .38));
     }
 
     .link-card-body  { flex: 1; display: flex; flex-direction: column; gap: .15rem; }
-    .link-card-title { }
-    .link-card-desc  { font-size: .78rem; font-weight: 400; color: #9a7a80; }
-    .link-card:hover .link-card-desc { color: #c49aa0; }
+    .link-card-title { letter-spacing: .01em; }
+    .link-card-desc  { font-size: .79rem; font-weight: 400; color: #b897ad; }
+    .link-card:hover .link-card-desc { color: #ffd4e9; }
 
     .link-card-arrow {
-      color: #6a4a4e;
+      color: #caa0be;
       font-size: .9rem;
       flex-shrink: 0;
-      transition: color .18s, transform .18s;
+      transition: color .18s;
     }
 
     .link-card:hover .link-card-arrow {
-      color: #e8aeb7;
-      transform: translateX(3px);
+      color: #ffaad8;
     }
 
     .links-empty {
@@ -261,34 +361,38 @@
     }
 
     .public-intake-card {
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      padding: 1rem;
+      background: rgba(39, 18, 45, .7);
+      border: 1px solid #6b375d;
+      border-radius: 10px;
+      padding: .95rem;
       display: grid;
       gap: .6rem;
+      box-shadow: none;
+      transform: rotate(0.45deg);
     }
 
     .public-intake-card h3 {
       font-size: .9rem;
-      color: #e8aeb7;
+      color: #ffd1eb;
       font-weight: 800;
       letter-spacing: .02em;
+      text-transform: none;
+      font-family: 'Space Mono', monospace;
     }
 
     .public-intake-card p {
       font-size: .78rem;
-      color: #9e7e82;
+      color: #d8b6ca;
       line-height: 1.45;
     }
 
     .public-intake-card input,
     .public-intake-card textarea {
       width: 100%;
-      background: #1c1c1c;
-      border: 1px solid #3d2a2e;
+      background: rgba(18, 12, 25, .88);
+      border: 1px solid #643559;
       border-radius: 10px;
-      color: #f0e6e8;
+      color: #ffe8f4;
       font-family: inherit;
       font-size: .84rem;
       padding: .52rem .66rem;
@@ -298,7 +402,8 @@
 
     .public-intake-card input:focus,
     .public-intake-card textarea:focus {
-      border-color: #e8aeb7;
+      border-color: #ffa1d3;
+      box-shadow: 0 0 0 2px rgba(255, 126, 195, .22);
     }
 
     .public-intake-card textarea {
@@ -320,9 +425,9 @@
     }
 
     .public-mail-feed {
-      border: 1px solid #3d2a2e;
+      border: 1px solid #5a3151;
       border-radius: 10px;
-      background: #201317;
+      background: rgba(25, 13, 30, .75);
       min-height: 120px;
       max-height: 220px;
       overflow: auto;
@@ -337,10 +442,10 @@
     }
 
     .public-mail-msg {
-      border: 1px solid #3d2a2e;
+      border: 1px solid #5a3151;
       border-radius: 8px;
       padding: .36rem .5rem;
-      background: #2a171f;
+      background: rgba(48, 22, 49, .72);
       font-size: .78rem;
       color: #f0e6e8;
       line-height: 1.35;
@@ -374,18 +479,18 @@
 
     .mail-code-help {
       font-size: .72rem;
-      color: #b8949f;
+      color: #e2bfd1;
       margin-top: -.1rem;
       margin-bottom: .15rem;
     }
 
     .mail-live-indicator {
       font-size: .74rem;
-      color: #7be9b5;
-      border: 1px solid #345748;
+      color: var(--accent-mint);
+      border: 1px solid #2f6e5a;
       border-radius: 999px;
       padding: .2rem .5rem;
-      background: rgba(30, 66, 48, .35);
+      background: rgba(23, 68, 58, .35);
     }
 
     .mail-live-indicator.off {
@@ -883,25 +988,50 @@
     /* Smoldering background bloom behind the hero */
     #login-section {
       background:
-        radial-gradient(ellipse 70% 50% at 50% 10%, rgba(120, 20, 35, 0.22) 0%, transparent 70%),
-        #1a1a1a;
+        radial-gradient(ellipse 78% 54% at 50% 10%, rgba(205, 78, 157, .22) 0%, transparent 70%),
+        radial-gradient(circle at 8% 22%, rgba(255, 159, 107, .12) 0%, transparent 24%),
+        radial-gradient(circle at 92% 30%, rgba(136, 246, 202, .11) 0%, transparent 26%);
+      position: relative;
+      isolation: isolate;
+    }
+
+    #login-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .3;
+      background-image: linear-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .08) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mix-blend-mode: overlay;
+      z-index: -1;
+    }
+
+    #login-section::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle at 12% 40%, rgba(255, 159, 107, .17) 0 18px, transparent 20px), radial-gradient(circle at 84% 26%, rgba(136, 246, 202, .13) 0 16px, transparent 18px), radial-gradient(circle at 65% 78%, rgba(255, 126, 195, .16) 0 20px, transparent 23px);
+      z-index: -1;
     }
 
     /* Glowing hero paw shadow */
     .hero-paw {
-      filter: drop-shadow(0 0 18px rgba(220, 80, 100, 0.45));
+      filter: drop-shadow(0 0 22px rgba(255, 109, 190, .52));
     }
 
     /* Hero heading — warm glow on the text */
     .landing-hero h1 {
-      text-shadow: 0 0 40px rgba(232, 100, 120, 0.35);
+      font-family: 'Bungee', 'Nunito', sans-serif;
+      text-shadow: 0 0 40px rgba(255, 126, 195, .44);
     }
 
     /* Link cards — deep ember on hover, crimson border pulse */
     .link-card:hover {
-      background: #2a1520;
-      border-color: #d4667a;
-      box-shadow: 0 8px 36px rgba(200, 60, 85, 0.22), 0 2px 8px rgba(232, 174, 183, 0.1);
+      background: linear-gradient(145deg, rgba(67, 34, 75, .96), rgba(45, 22, 58, .97));
+      border-color: #ff88ca;
+      box-shadow: 0 8px 36px rgba(212, 78, 168, .24), 0 2px 8px rgba(255, 161, 211, .16);
     }
 
     /* Subtle shimmer sweep across link cards on hover */
@@ -914,7 +1044,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(105deg, transparent 40%, rgba(220, 100, 120, 0.07) 50%, transparent 60%);
+      background: linear-gradient(105deg, transparent 40%, rgba(255, 164, 215, .12) 50%, transparent 60%);
       transform: translateX(-100%);
       transition: transform .55s ease;
     }
@@ -925,11 +1055,43 @@
 
     /* Nav — very subtle warm top border glow */
     .landing-nav {
-      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160, 30, 50, 0.12);
+      background: rgba(27, 14, 34, .78);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 1px 0 #6a3a60, 0 0 30px rgba(202, 73, 144, .17);
     }
 
     /* ── Mobile responsive (≤ 640px) ───────────────── */
     @media (max-width: 640px) {
+      .landing-logo {
+        font-size: .93rem;
+      }
+
+      .landing-hero {
+        padding: 3rem 1rem 2rem;
+      }
+
+      .public-status-strip {
+        transform: none;
+      }
+
+      .links-section-label {
+        transform: none;
+      }
+
+      .links-section {
+        padding: 0 .95rem 2rem;
+      }
+
+      .links-section-label {
+        font-size: .72rem;
+      }
+
+      .link-card {
+        min-height: 50px;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        transform: none !important;
+      }
 
       /* Allow the dashboard to scroll instead of clipping */
       #dashboard-section {
@@ -1017,6 +1179,17 @@
         grid-template-columns: minmax(0, 1fr);
       }
 
+      .public-status-tile,
+      .public-status-mini {
+        transform: none;
+      }
+
+      .links-section:nth-of-type(2),
+      .links-section:nth-of-type(3),
+      .links-section:nth-of-type(4) {
+        transform: none;
+      }
+
       .links-list {
         grid-template-columns: minmax(0, 1fr);
       }
@@ -1083,12 +1256,12 @@
     <div class="landing-hero">
       <span class="hero-paw" aria-hidden="true">&#128062;</span>
       <h1 aria-label="mochii.live">mochii.live</h1>
-      <p class="hero-tagline">come find your place in the pack. &#128062;</p>
+      <p class="hero-tagline">this messy little mutt built a glittery chaos den. stomp around, poke stuff, and make this pup earn treats.</p>
     </div>
 
     <div class="public-status-strip" aria-label="Public status">
       <div class="public-status-grid">
-        <div class="public-status-tile">
+        <div class="public-status-tile" id="pub-days-card">
           <div class="public-status-value" id="pub-days-locked">--</div>
           <div class="public-status-label">Days Locked</div>
           <div class="public-status-sub" id="pub-days-locked-goal">Goal: --</div>
@@ -1097,35 +1270,45 @@
             <button id="pub-days-add" type="button" class="control-btn" style="padding:.35rem .65rem;font-size:.78rem">+1 day</button>
           </div>
         </div>
+        <div class="public-status-mini" id="pub-tasks-card">
+          <div class="public-mini-kicker" id="pub-tasks-label">Tasks</div>
+          <div class="public-mini-value" id="pub-tasks">--</div>
+          <div class="public-mini-sub">active count</div>
+        </div>
+        <div class="public-status-mini" id="pub-confessions-card">
+          <div class="public-mini-kicker" id="pub-confessions-label">Confessions</div>
+          <div class="public-mini-value" id="pub-confessions">--</div>
+          <div class="public-mini-sub">active count</div>
+        </div>
       </div>
       <p class="public-status-note" id="pub-status-note"></p>
     </div>
 
     <!-- Primary actions -->
     <div class="links-section">
-      <p class="links-section-label">START HERE</p>
+      <p class="links-section-label">choose your chaos</p>
       <div class="links-list primary-actions">
         <a class="link-card" id="public-live-control-card" href="#" style="display:none">
           <span class="link-card-emoji" aria-hidden="true">&#127918;</span>
           <span class="link-card-body">
-            <span class="link-card-title">Join Live Control</span>
-            <span class="link-card-desc" id="public-live-control-desc">public control session is active now</span>
+            <span class="link-card-title">Live chaos lane</span>
+            <span class="link-card-desc" id="public-live-control-desc">opens when handler flips the switch</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
         <a class="link-card" id="public-booking-link-card" href="/booking" style="display:none">
           <span class="link-card-emoji" aria-hidden="true">&#128197;</span>
           <span class="link-card-body">
-            <span class="link-card-title">Book a Session</span>
-            <span class="link-card-desc">open the detailed booking questionnaire</span>
+            <span class="link-card-title">Book this gremlin</span>
+            <span class="link-card-desc">drop details so this mutt shows up focused instead of feral</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
         <a class="link-card" href="/anon">
           <span class="link-card-emoji" aria-hidden="true">&#128062;</span>
           <span class="link-card-body">
-            <span class="link-card-title">Ask a Question</span>
-            <span class="link-card-desc">drop a note with context for a better answer</span>
+            <span class="link-card-title">Bark at this pup</span>
+            <span class="link-card-desc">send context and get a better answer out of this mess</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -1134,13 +1317,13 @@
 
     <!-- Explore pages -->
     <div class="links-section">
-      <p class="links-section-label">EXPLORE</p>
+      <p class="links-section-label">other corners</p>
       <div class="links-list">
         <a class="link-card" href="https://links.mochii.live">
           <span class="link-card-emoji" aria-hidden="true">&#128279;</span>
           <span class="link-card-body">
             <span class="link-card-title">All Links</span>
-            <span class="link-card-desc">browse socials, shop, and extras</span>
+            <span class="link-card-desc">socials and side dens, no ad circus</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -1148,7 +1331,7 @@
           <span class="link-card-emoji" aria-hidden="true">&#128167;</span>
           <span class="link-card-body">
             <span class="link-card-title">Drool Log</span>
-            <span class="link-card-desc">the shame gallery she liked</span>
+            <span class="link-card-desc">the running archive of this mutt being a disaster</span>
           </span>
           <span class="link-card-arrow" aria-hidden="true">&rarr;</span>
         </a>
@@ -1156,23 +1339,23 @@
     </div>
 
     <div class="links-section">
-      <p class="links-section-label">CONTACT HANDLER</p>
+      <p class="links-section-label">mail pit</p>
       <div class="public-intake-grid">
         <div class="public-intake-card">
           <h3>📬 Puppy Mail</h3>
-          <p>Anonymous Pack Chat. Enter your private passcode to load/save your thread. Puppy only sees Packmate.</p>
+          <p>Anonymous pack chat. This mutt sees only Packmate + thread text. Nothing here blasts public.</p>
           <div class="mail-code-row">
             <input id="mail-code" type="password" maxlength="64" placeholder="Pack passcode (4+ chars)" />
-            <button id="mail-load-btn" class="control-btn" type="button" style="background:#2e1d24;border-color:#4b2f39;color:#e8aeb7">Load Thread</button>
+            <button id="mail-load-btn" class="control-btn" type="button" style="background:#41204a;border-color:#935297;color:#ffd1eb">Load Thread</button>
           </div>
-          <div class="mail-code-help">Use the same passcode later on any device to restore your anonymous chat.</div>
+          <div class="mail-code-help">Use the same code later and this pup drags your thread back up.</div>
           <div id="mail-thread-feed" class="public-mail-feed">
-            <div class="public-mail-empty">No messages yet. Start the chat below.</div>
+            <div class="public-mail-empty">No messages yet. This pup is pacing in tiny circles waiting for a bark.</div>
           </div>
-          <textarea id="mail-message" maxlength="1000" placeholder="Type a message..."></textarea>
+          <textarea id="mail-message" maxlength="1000" placeholder="drop your message in the pit..."></textarea>
           <div style="display:flex;gap:.45rem;flex-wrap:wrap;align-items:center">
-            <button id="mail-submit-btn" class="control-btn" type="button">Send Message</button>
-            <button id="mail-refresh-btn" class="control-btn" type="button" style="background:#2e1d24;border-color:#4b2f39;color:#e8aeb7">Sync Chat</button>
+            <button id="mail-submit-btn" class="control-btn" type="button">Launch Bark</button>
+            <button id="mail-refresh-btn" class="control-btn" type="button" style="background:#41204a;border-color:#935297;color:#ffd1eb">Shake Thread</button>
             <span id="mail-live-indicator" class="mail-live-indicator">Auto-sync: on</span>
           </div>
           <div id="mail-status" class="public-intake-status"></div>
@@ -1279,9 +1462,14 @@
       document.getElementById('pub-days-locked').textContent = '--';
       document.getElementById('pub-days-locked-goal').textContent = 'Goal: --';
       document.getElementById('pub-days-locked-goal').style.display = 'none';
+      document.getElementById('pub-days-card')?.classList.remove('is-hidden');
+      document.getElementById('pub-tasks').textContent = '--';
+      document.getElementById('pub-confessions').textContent = '--';
+      document.getElementById('pub-tasks-card')?.classList.remove('is-active');
+      document.getElementById('pub-confessions-card')?.classList.remove('is-active');
       var daysControls = document.getElementById('pub-days-controls');
       if (daysControls) daysControls.style.display = 'none';
-      document.getElementById('pub-status-note').textContent = 'Public status temporarily unavailable.';
+      document.getElementById('pub-status-note').textContent = 'yard board is being weird right now.';
       var bookingLink = document.getElementById('public-booking-link-card');
       var bookingCard = document.getElementById('public-booking-card');
       var liveCard = document.getElementById('public-live-control-card');
@@ -1331,9 +1519,24 @@
         const goalDays = data.days_locked_goal_days ?? 0;
         const goalMet = goalDays > 0 && daysLocked != null && daysLocked >= goalDays;
         const hasGoal = goalDays > 0;
+        const tasksCompleted = Number(data.tasks_completed ?? 0);
+        const confessionsPosted = Number(data.confessions_posted ?? 0);
+        const tasksLabel = String(data.tasks_label || 'Tasks');
+        const confessionsLabel = String(data.confessions_label || 'Confessions');
         var goalEl = document.getElementById('pub-days-locked-goal');
         var daysControls = document.getElementById('pub-days-controls');
+        var daysCard = document.getElementById('pub-days-card');
+        var tasksCard = document.getElementById('pub-tasks-card');
+        var confessionsCard = document.getElementById('pub-confessions-card');
+        const daysActive = (Number(daysLocked ?? 0) > 0) || hasGoal;
         document.getElementById('pub-days-locked').textContent = goalMet ? 'Unlocked' : String(daysLocked ?? '--');
+        if (daysCard) daysCard.classList.toggle('is-hidden', !daysActive);
+        document.getElementById('pub-tasks').textContent = String(Math.max(0, tasksCompleted));
+        document.getElementById('pub-confessions').textContent = String(Math.max(0, confessionsPosted));
+        document.getElementById('pub-tasks-label').textContent = tasksLabel;
+        document.getElementById('pub-confessions-label').textContent = confessionsLabel;
+        if (tasksCard) tasksCard.classList.toggle('is-active', tasksCompleted > 0);
+        if (confessionsCard) confessionsCard.classList.toggle('is-active', confessionsPosted > 0);
         if (goalEl) {
           goalEl.style.display = hasGoal ? '' : 'none';
           goalEl.textContent =
@@ -1350,12 +1553,16 @@
         if (bookingLink) bookingLink.style.display = bookingEnabled ? '' : 'none';
         if (bookingCard) bookingCard.style.display = bookingEnabled ? '' : 'none';
 
-        if (data.is_paused) {
-          document.getElementById('pub-status-note').textContent = 'Days locked counter is currently paused.';
+        if (data.is_paused || data.days_caged_paused) {
+          document.getElementById('pub-status-note').textContent = 'days counter is on ice right now.';
         } else if (!bookingEnabled) {
-          document.getElementById('pub-status-note').textContent = 'Booking requests are currently closed by the handler.';
+          document.getElementById('pub-status-note').textContent = 'booking is closed until handler re-opens it.';
         } else {
           document.getElementById('pub-status-note').textContent = '';
+        }
+
+        if (!daysActive && tasksCompleted <= 0 && confessionsPosted <= 0) {
+          document.getElementById('pub-status-note').textContent = 'no counters lit up right now.';
         }
 
         try {
@@ -1368,13 +1575,13 @@
             liveCard.href = String(liveData.control_url);
             if (liveDesc) {
               liveDesc.textContent = liveData.expires_at
-                ? ('active now - expires ' + new Date(liveData.expires_at).toLocaleString())
-                : 'public control session is active now';
+                ? ('live now - chaos window closes ' + new Date(liveData.expires_at).toLocaleString())
+                : 'live control is popping right now';
             }
           } else if (liveCard) {
             liveCard.style.display = 'none';
             liveCard.href = '#';
-            if (liveDesc) liveDesc.textContent = 'public control session is active now';
+            if (liveDesc) liveDesc.textContent = 'live control wakes up when handler says so';
           }
         } catch (_) {
           const liveCard = document.getElementById('public-live-control-card');
@@ -1383,7 +1590,7 @@
             liveCard.style.display = 'none';
             liveCard.href = '#';
           }
-          if (liveDesc) liveDesc.textContent = 'public control session is active now';
+          if (liveDesc) liveDesc.textContent = 'live control wakes up when handler says so';
         }
       } catch (_) {
         setPublicStatusFallback();
@@ -1396,7 +1603,7 @@
       const removeBtn = document.getElementById('pub-days-remove');
       addBtn.disabled = true;
       removeBtn.disabled = true;
-      noteEl.textContent = 'Updating days locked...';
+      noteEl.textContent = 'shuffling days around...';
       try {
         const r = await fetch('/api/public/days-locked/adjust', {
           method: 'POST',
@@ -1405,9 +1612,9 @@
         });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         await loadPublicStatus();
-        noteEl.textContent = deltaDays > 0 ? 'Added 1 day to the goal.' : 'Removed 1 day from the goal.';
+        noteEl.textContent = deltaDays > 0 ? 'added a day to the pile.' : 'pulled a day off the pile.';
       } catch (_) {
-        noteEl.textContent = 'Could not update days locked right now.';
+        noteEl.textContent = 'could not move days right now.';
       } finally {
         addBtn.disabled = false;
         removeBtn.disabled = false;
@@ -1515,7 +1722,7 @@
       const host = document.getElementById('mail-thread-feed');
       if (!host) return;
       if (!Array.isArray(messages) || !messages.length) {
-        host.innerHTML = '<div class="public-mail-empty">No messages yet. Start the chat below.</div>';
+        host.innerHTML = '<div class="public-mail-empty">No messages yet. Toss the first bark below.</div>';
         return;
       }
       host.innerHTML = messages.map((m) => {
@@ -1540,7 +1747,7 @@
         try {
           await lookupPuppyMailSessionByCode(guestCode);
         } catch (e) {
-          if (!silent && statusEl) statusEl.textContent = '⚠️ Could not load chat with this code: ' + e.message;
+          if (!silent && statusEl) statusEl.textContent = '⚠️ this pup could not load chat with that code: ' + e.message;
           renderPublicMailThread([]);
           _puppyMailRefreshing = false;
           return;
@@ -1548,7 +1755,7 @@
       }
       if (!_puppyMailSession || !_puppyMailSession.thread_id || !_puppyMailSession.thread_token) {
         renderPublicMailThread([]);
-        if (!silent && statusEl && guestCode) statusEl.textContent = 'No existing chat for this passcode yet. Send a first message to start.';
+        if (!silent && statusEl && guestCode) statusEl.textContent = 'no thread on that passcode yet. launch first bark to start one.';
         _puppyMailRefreshing = false;
         return;
       }
@@ -1561,12 +1768,12 @@
         }
         const data = await r.json();
         renderPublicMailThread(data.messages || []);
-        if (!silent && statusEl) statusEl.textContent = 'Chat synced.';
+        if (!silent && statusEl) statusEl.textContent = 'thread shaken and synced.';
       } catch (e) {
         if (String(e.message || '').includes('Invalid thread token')) {
           _clearPuppyMailSession();
         }
-        if (!silent && statusEl) statusEl.textContent = '⚠️ Could not sync chat: ' + e.message;
+        if (!silent && statusEl) statusEl.textContent = '⚠️ this mutt could not sync thread: ' + e.message;
       } finally {
         _puppyMailRefreshing = false;
       }
@@ -1579,7 +1786,7 @@
       }, 5000);
       var liveEl = document.getElementById('mail-live-indicator');
       if (liveEl) {
-        liveEl.textContent = 'Auto-sync: on';
+        liveEl.textContent = 'Auto-sync: feral';
         liveEl.classList.remove('off');
       }
     }
@@ -1588,7 +1795,7 @@
       const statusEl = document.getElementById('mail-status');
       const code = _guestCodeValue();
       if (!code || code.length < 4) {
-        if (statusEl) statusEl.textContent = 'Enter a passcode (4+ chars) to load a thread.';
+        if (statusEl) statusEl.textContent = 'drop a passcode (4+ chars) to yank up a thread.';
         return;
       }
       _clearPuppyMailSession();
@@ -1596,13 +1803,13 @@
         const found = await lookupPuppyMailSessionByCode(code);
         if (!found) {
           renderPublicMailThread([]);
-          if (statusEl) statusEl.textContent = 'No thread found for this passcode yet. Send a first message to create one.';
+          if (statusEl) statusEl.textContent = 'no thread on that code yet. send first bark to spawn one.';
           return;
         }
         await refreshPublicMailThread(true);
-        if (statusEl) statusEl.textContent = 'Thread loaded.';
+        if (statusEl) statusEl.textContent = 'thread loaded and growling.';
       } catch (e) {
-        if (statusEl) statusEl.textContent = '❌ Could not load thread: ' + e.message;
+        if (statusEl) statusEl.textContent = '❌ could not load thread: ' + e.message;
       }
     }
 
@@ -1614,17 +1821,17 @@
 
       if (!guestCode || guestCode.length < 4) {
         emitPublicIntelEvent('mail_submit_failed', { reason: 'missing_guest_code' });
-        if (statusEl) statusEl.textContent = 'Enter your passcode (4+ chars) before messaging.';
+        if (statusEl) statusEl.textContent = 'drop your passcode (4+ chars) before barking.';
         return;
       }
       if (!message) {
         emitPublicIntelEvent('mail_submit_failed', { reason: 'validation' });
-        if (statusEl) statusEl.textContent = 'Message cannot be empty.';
+        if (statusEl) statusEl.textContent = 'message is empty. feed this mutt words.';
         return;
       }
 
       btn.disabled = true;
-      if (statusEl) statusEl.textContent = 'Sending message...';
+      if (statusEl) statusEl.textContent = 'launching bark...';
       try {
         if (_puppyMailSession && _puppyMailSession.thread_id && _puppyMailSession.thread_token) {
           const r = await fetch('/api/puppy-mail/threads/' + encodeURIComponent(String(_puppyMailSession.thread_id)) + '/messages', {
@@ -1664,11 +1871,11 @@
         const msgEl = document.getElementById('mail-message');
         if (msgEl) msgEl.value = '';
         emitPublicIntelEvent('mail_submit_success', { source: 'public', mode: _puppyMailSession ? 'thread' : 'new' });
-        if (statusEl) statusEl.textContent = '✅ Message sent. Chat is live.';
+        if (statusEl) statusEl.textContent = '✅ bark launched. thread is humming.';
         await refreshPublicMailThread(true);
       } catch (e) {
         emitPublicIntelEvent('mail_submit_failed', { reason: 'request_error' });
-        if (statusEl) statusEl.textContent = '❌ Could not send message: ' + e.message;
+        if (statusEl) statusEl.textContent = '❌ this mutt could not launch bark: ' + e.message;
       } finally {
         btn.disabled = false;
       }

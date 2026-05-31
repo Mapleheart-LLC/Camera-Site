@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="mochii.live – The Drool Log. She liked this. Now everyone knows. 🐾" />
+  <meta name="description" content="mochii.live - The Drool Log. Handler-kept receipts of what the mutt wanted. Public, messy, undeniable." />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="mochii.live" />
   <meta property="og:title"       content="The Drool Log 🐾 – mochii.live" />
-  <meta property="og:description" content="Her secret likes and saves. Exposed for the pack." />
+  <meta property="og:description" content="Handler-kept receipts of what the mutt wanted. Public for the pack." />
   <meta property="og:url"         content="https://mochii.live/drool" />
   <link rel="canonical"           href="https://mochii.live/drool" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="The Drool Log 🐾 – mochii.live" />
-  <meta name="twitter:description" content="Her secret likes and saves. Exposed for the pack." />
+  <meta name="twitter:description" content="Handler-kept receipts of what the mutt wanted. Public for the pack." />
   <title>The Drool Log 🐾 – mochii.live</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -48,10 +48,41 @@
 
     body {
       font-family: 'Nunito', 'Varela Round', system-ui, sans-serif;
-      background: #1a1a1a;
+      background:
+        radial-gradient(900px 500px at 8% -10%, #5a2561 0%, transparent 58%),
+        radial-gradient(860px 520px at 95% 110%, #5a3b22 0%, transparent 55%),
+        linear-gradient(160deg, #24122b, #1a1a1a 65%);
       color: #f0e6e8;
       min-height: 100vh;
       padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mix-blend-mode: overlay;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      right: -18%;
+      width: 55vw;
+      height: 55vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(232,174,183,.12) 0%, rgba(232,174,183,0) 70%);
+      pointer-events: none;
+      filter: blur(8px);
     }
 
     /* ── Nav ─────────────────────────────────────────── */
@@ -60,12 +91,12 @@
       align-items: center;
       justify-content: space-between;
       padding: .85rem 1.75rem;
-      background: #1e1e1e;
+      background: rgba(30,17,22,.92);
       border-bottom: 1px solid #3d2a2e;
       position: sticky;
       top: 0;
       z-index: 30;
-      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(160,30,50,.1);
+      box-shadow: 0 1px 0 #3d2a2e, 0 0 30px rgba(232,174,183,.14);
     }
 
     .nav-logo {
@@ -74,6 +105,33 @@
       color: #e8aeb7;
       letter-spacing: .01em;
       text-decoration: none;
+      text-shadow: 0 0 18px rgba(232,174,183,.25);
+      animation: logoJitter 5.5s steps(2, end) infinite;
+    }
+
+    @keyframes logoJitter {
+      0%, 100% { transform: translate(0, 0); }
+      18% { transform: translate(-1px, 0); }
+      19% { transform: translate(1px, 0); }
+      61% { transform: translate(0, -1px); }
+      62% { transform: translate(0, 1px); }
+    }
+
+    .chaos-strip {
+      margin: .85rem 0 1rem;
+      padding: .42rem .7rem;
+      border: 1px dashed #c49a9f;
+      border-radius: 999px;
+      background: rgba(232,174,183,.08);
+      color: #e8aeb7;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      display: inline-flex;
+      gap: .45rem;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     .nav-home-btn {
@@ -107,6 +165,7 @@
       box-shadow: 0 0 40px rgba(232,174,183,.18), 0 0 80px rgba(232,174,183,.08);
       overflow: hidden;
       position: relative;
+      transform: rotate(-.35deg);
     }
 
     .whimper-hero::before {
@@ -170,10 +229,14 @@
       cursor: pointer;
     }
 
+    .post-card:nth-child(odd) { transform: rotate(-.35deg) translateY(0); }
+    .post-card:nth-child(even) { transform: rotate(.3deg) translateY(0); }
+    .post-card:nth-child(3n) { transform: rotate(-.2deg) translateY(3px); }
+
     .post-card:hover {
       border-color: #c49a9f;
       box-shadow: 0 6px 32px rgba(232,174,183,.18), 0 2px 8px rgba(0,0,0,.4);
-      transform: translateY(-2px);
+      transform: translateY(-2px) rotate(.15deg);
     }
 
     /* ── Media area ──────────────────────────────────── */
@@ -237,6 +300,22 @@
       font-size: .75rem;
       font-weight: 700;
       color: #c49a9f;
+    }
+
+    .shame-rank {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-size: .72rem;
+      font-weight: 800;
+      color: #ffd7eb;
+      background: #3d2028;
+      border: 1px solid #e8aeb7;
+      border-radius: 999px;
+      padding: .12rem .48rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      white-space: nowrap;
     }
 
     .card-text {
@@ -365,6 +444,13 @@
     @media (min-width: 560px) { .masonry { columns: 2; } }
     @media (min-width: 1024px) { .masonry { columns: 3; } }
 
+    @media (max-width: 720px) {
+      .nav-logo { animation: none; }
+      .chaos-strip { font-size: .68rem; }
+      .post-card:nth-child(odd), .post-card:nth-child(even), .post-card:nth-child(3n) { transform: none; }
+      .whimper-hero { transform: none; }
+    }
+
     /* ── Toast ───────────────────────────────────────── */
     #toast {
       position: fixed;
@@ -408,8 +494,9 @@
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: .13em;
-      color: #6a4a4e;
+      color: #c49a9f;
       margin-bottom: .75rem;
+      text-shadow: 0 0 14px rgba(232,174,183,.22);
     }
 
     /* ── Empty state ──────────────────────────────────── */
@@ -543,30 +630,39 @@
   <!-- ── Nav ──────────────────────────────────────────── -->
   <nav class="drool-nav" aria-label="Site navigation">
     <a href="https://mochii.live" class="nav-logo">🐾 mochii.live</a>
-    <a href="https://mochii.live" class="nav-home-btn">← Back to the Pack</a>
+    <a href="https://mochii.live" class="nav-home-btn">← Back to the Yard</a>
   </nav>
 
   <!-- ── Page header ──────────────────────────────────── -->
   <div style="padding: 1.5rem 1.25rem 0; max-width: 1200px; margin: 0 auto; width: 100%;">
     <h1 style="font-size: clamp(1.6rem,4vw,2.4rem); font-weight: 800; color: #e8aeb7; margin-bottom: .3rem;">
-      The Drool Log 🐾
+      Ultimate Shame Wall 🐾
     </h1>
     <p style="font-size: .9rem; color: #9e7e82; margin-bottom: 1.25rem;">
-      She liked this. She saved this. She thought no one would find out. <em>She was wrong.</em>
+      Every slip, every thirst-save, every dumb click: logged and displayed. <em>Public humiliation, handler approved.</em>
     </p>
+    <div class="chaos-strip" aria-label="Drool context strip">
+      <span>Humiliation Archive</span>
+      <span>Handler Receipts</span>
+      <span>Public Exposure</span>
+    </div>
     <div class="public-status-pills" aria-label="Public status counters">
       <span class="public-pill">Days Locked: <strong id="drool-days-locked">--</strong></span>
       <span class="public-pill"><span id="drool-tasks-label">Edges</span>: <strong id="drool-tasks-completed">--</strong></span>
       <span class="public-pill"><span id="drool-confessions-label">Orgasms</span>: <strong id="drool-confessions-posted">--</strong></span>
       <span class="public-pill">Mode: <strong id="drool-current-mode">--</strong></span>
+      <span class="public-pill">Shame Score: <strong id="drool-shame-score">--</strong></span>
+      <span class="public-pill">Tier: <strong id="drool-shame-tier">--</strong></span>
+      <span class="public-pill">Escalations: <strong id="drool-shame-escalations">--</strong></span>
+      <span class="public-pill">Active Rule: <strong id="drool-shame-active">--</strong></span>
     </div>
   </div>
 
   <main style="max-width: 1200px; margin: 0 auto; padding: 0 1.25rem 4rem; width: 100%;">
 
     <!-- ── Weekly Whimper section ───────────────────── -->
-    <div id="whimper-section" style="display:none;" aria-label="Weekly Whimper">
-      <p class="section-label">✦ Weekly Whimper ✦</p>
+    <div id="whimper-section" style="display:none;" aria-label="Weekly Humiliation">
+      <p class="section-label">✦ Weekly Humiliation Crown ✦</p>
       <div class="whimper-hero" id="whimper-card">
         <!-- filled by JS -->
       </div>
@@ -574,7 +670,7 @@
 
     <!-- ── Feed section ─────────────────────────────── -->
     <div id="feed-section">
-      <p class="section-label" style="margin-top: 1.5rem;" id="feed-label">✦ Her Shame Gallery ✦</p>
+      <p class="section-label" style="margin-top: 1.5rem;" id="feed-label">✦ Ultimate Humiliation Wall ✦</p>
       <!-- Loading skeletons -->
       <div id="loading-state" class="masonry">
         <div class="post-card" style="padding: 1rem;">
@@ -596,8 +692,8 @@
       <div id="feed-grid" class="masonry" style="display:none;"></div>
       <div id="empty-state" class="empty-state" style="display:none;">
         <span class="paw" aria-hidden="true">🐾</span>
-        <p style="font-size:1rem; font-weight:700; color:#9e7e82;">Nothing yet... she's been good.</p>
-        <p style="font-size:.85rem; color:#6a4a4e; margin-top:.35rem;">Check back soon – the scraper runs every 5 minutes.</p>
+        <p style="font-size:1rem; font-weight:700; color:#9e7e82;">No fresh humiliation captured yet.</p>
+        <p style="font-size:.85rem; color:#6a4a4e; margin-top:.35rem;">Check back soon - handler receipts refresh every 5 minutes.</p>
       </div>
     </div>
 
@@ -639,10 +735,10 @@
     };
 
     const REACTION_LABELS = {
-      'Good Girl':  'Good Girl 🐾',
-      'Bad Puppy':  'Bad Puppy 💢',
-      'Dumb Thing': 'Dumb Thing 🤭',
-      'Pretty Toy': 'Pretty Toy 🎀',
+      'Good Girl':  'Leashed Pup 🐾',
+      'Bad Puppy':  'Pathetic Mutt 💢',
+      'Dumb Thing': 'Shameless Thing 🤭',
+      'Pretty Toy': 'Owned Toy 🎀',
     };
 
     // ── Toast ─────────────────────────────────────────────
@@ -659,7 +755,7 @@
     async function apiFetch(url, opts = {}) {
       const r = await fetch(url, opts);
       if (r.status === 429) {
-        showToast('The puppy can only take so much! Wait a bit. 🐾');
+        showToast('easy, pack. mutt queue is cooling down - wait a moment.');
         return null;
       }
       return r;
@@ -703,7 +799,7 @@
       // Always show first URL as an image thumbnail
       const img = document.createElement('img');
       img.src = urls[0];
-      img.alt = altText || 'She liked this';
+      img.alt = altText || 'Mutt receipt';
       img.loading = 'lazy';
       img.dataset.fallback = '1';
       wrapper.appendChild(img);
@@ -733,7 +829,7 @@
       card.setAttribute('aria-label', `${item.platform} post`);
 
       // Media element (handles single image, video, GIF, and multi-image gallery)
-      const mediaEl = buildMediaElement(item, 'She liked this');
+      const mediaEl = buildMediaElement(item, 'Mutt receipt');
       if (mediaEl) card.appendChild(mediaEl);
 
       // Platform icon
@@ -756,7 +852,10 @@
         <div class="card-body">
           <div class="card-platform-row">
             <span class="platform-chip">${platformIcon}${escHtml(platformLabel)}</span>
-            <span class="drool-meter" title="Drool Meter: times she's been caught">${ICONS.eye} ${item.view_count ?? 0}</span>
+            <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;justify-content:flex-end;">
+              <span class="drool-meter" title="Drool Meter: times she's been caught">${ICONS.eye} ${item.view_count ?? 0}</span>
+              <span class="shame-rank" title="Humiliation rank">${escHtml(String(item.humiliation_rank_label || 'warming up'))} · ${item.humiliation_score ?? 0}</span>
+            </div>
           </div>
           ${snippet ? `<p class="card-text">"${escHtml(snippet)}"</p>` : ''}
           <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer">${escHtml(item.original_url)}</a>
@@ -770,9 +869,9 @@
           </div>
 
           <!-- Comment form -->
-          <form class="comment-form" aria-label="Leave a remark">
-            <input class="comment-input" type="text" maxlength="500" placeholder="Leave a remark for the girl..." aria-label="Leave a remark for the girl" autocomplete="off" />
-            <button type="submit" class="comment-send-btn">Bark 🐾</button>
+          <form class="comment-form" aria-label="Drop a shame note">
+            <input class="comment-input" type="text" maxlength="500" placeholder="Drop a shame note for the mutt..." aria-label="Drop a shame note for the mutt" autocomplete="off" />
+            <button type="submit" class="comment-send-btn">Tag Shame 🐾</button>
           </form>
 
           <!-- Comments -->
@@ -856,7 +955,7 @@
         });
 
         sendBtn.disabled = false;
-        sendBtn.textContent = 'Bark 🐾';
+        sendBtn.textContent = 'Tag Shame 🐾';
 
         if (res && res.ok) {
           const data = await res.json().catch(() => null);
@@ -906,7 +1005,7 @@
       } catch (_) { /* ignore */ }
     }
 
-    // ── Build Weekly Whimper card (larger, hero style) ────
+    // ── Build Weekly Breakdown card (larger, hero style) ────
     function buildWhimperCard(item) {
       const wrapper = document.getElementById('whimper-card');
       wrapper.innerHTML = '';
@@ -918,13 +1017,13 @@
       const header = document.createElement('div');
       header.style.cssText = 'padding:1.25rem 1.25rem .75rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem;';
       header.innerHTML = `
-        <span class="whimper-badge">🏆 Most Embarrassing of the Week</span>
-        <span style="font-size:.8rem;color:#9e7e82;">The pack's favorite treat this week. 🐾</span>
+        <span class="whimper-badge">🏆 Most Humiliating Receipt This Week</span>
+        <span style="font-size:.8rem;color:#9e7e82;">Pack-picked low point of the week. 🐾</span>
       `;
       inner.appendChild(header);
 
       // Media (larger, with rounded corners matching the hero layout)
-      const whimperMediaEl = buildMediaElement(item, 'Weekly Whimper – she liked this');
+      const whimperMediaEl = buildMediaElement(item, 'Weekly Breakdown - mutt receipt');
       if (whimperMediaEl) {
         whimperMediaEl.style.cssText = 'margin: 0 1.25rem .5rem; border-radius: 12px; overflow: hidden; cursor: pointer;';
         whimperMediaEl.querySelectorAll('img').forEach(el => {
@@ -953,6 +1052,7 @@
           <span class="platform-chip" style="font-size:.8rem;">${platformIcon}${escHtml(platformLabel)}</span>
           <span class="drool-meter" style="font-size:.82rem;" title="Drool Meter">${ICONS.eye} ${item.view_count ?? 0}</span>
           <span class="drool-meter" style="font-size:.82rem;">${ICONS.msg} ${item.comment_count ?? 0}</span>
+          <span class="shame-rank" title="Humiliation rank">${escHtml(String(item.humiliation_rank_label || 'warming up'))} · ${item.humiliation_score ?? 0}</span>
           <a class="card-link" href="${escHtml(item.original_url)}" target="_blank" rel="noopener noreferrer" style="margin:0;font-size:.78rem;max-width:200px;">${escHtml(item.original_url)}</a>
         </div>
         ${snippet ? `<p style="font-size:.9rem;color:#c49a9f;line-height:1.5;margin-bottom:.85rem;">"${escHtml(snippet)}"</p>` : ''}
@@ -1021,9 +1121,9 @@
       // Comment form + list
       const commentSection = document.createElement('div');
       commentSection.innerHTML = `
-        <form class="comment-form" aria-label="Leave a remark">
-          <input class="comment-input" type="text" maxlength="500" placeholder="Leave a remark for the girl..." aria-label="Leave a remark for the girl" autocomplete="off" />
-          <button type="submit" class="comment-send-btn">Bark 🐾</button>
+        <form class="comment-form" aria-label="Drop a shame note">
+          <input class="comment-input" type="text" maxlength="500" placeholder="Drop a shame note for the mutt..." aria-label="Drop a shame note for the mutt" autocomplete="off" />
+          <button type="submit" class="comment-send-btn">Tag Shame 🐾</button>
         </form>
         <div class="comment-list">
           ${(item.comments || []).map(c => `
@@ -1050,7 +1150,7 @@
           body: JSON.stringify({ comment_text: text }),
         });
         sendBtn.disabled = false;
-        sendBtn.textContent = 'Bark 🐾';
+        sendBtn.textContent = 'Tag Shame 🐾';
         if (res && res.ok) {
           const data = await res.json().catch(() => null);
           input.value = '';
@@ -1144,6 +1244,10 @@
         document.getElementById('drool-confessions-label').textContent = String(data.confessions_label || 'Orgasms');
         document.getElementById('drool-confessions-posted').textContent = String(data.confessions_posted ?? '--');
         document.getElementById('drool-current-mode').textContent = String(data.current_mode || '--');
+        document.getElementById('drool-shame-score').textContent = String(data.shame_score ?? '--');
+        document.getElementById('drool-shame-tier').textContent = String(data.shame_tier || '--');
+        document.getElementById('drool-shame-escalations').textContent = String(data.shame_pending_escalations ?? 0);
+        document.getElementById('drool-shame-active').textContent = String((data.shame_active_escalation && data.shame_active_escalation.level) || 'none');
       } catch (_) {
         // Keep fallback placeholders when unavailable.
       }

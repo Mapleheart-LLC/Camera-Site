@@ -5,24 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Guest Control</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bungee:wght@400&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
     :root {
-      --bg: #0b1220;
-      --card: #121c31;
-      --text: #e7eefc;
-      --muted: #aeb9d4;
-      --accent: #2fd3a3;
-      --warn: #ffb454;
-      --danger: #ff5d6c;
-      --border: #223051;
+      --bg: #120d1a;
+      --card: rgba(39, 18, 43, .84);
+      --text: #fbeaf5;
+      --muted: #d3aec7;
+      --accent: #91f8cf;
+      --warn: #ffc06a;
+      --danger: #ff7a9f;
+      --border: #6b3d6f;
+      --panel: #1f1130;
+      --hot: #ff93cf;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: "Segoe UI", Tahoma, sans-serif;
-      background: radial-gradient(circle at top right, #18284a, var(--bg));
+      font-family: "Nunito", "Segoe UI", Tahoma, sans-serif;
+      background:
+        radial-gradient(900px 500px at 8% -10%, #5a2561 0%, transparent 58%),
+        radial-gradient(860px 520px at 95% 110%, #5a3b22 0%, transparent 55%),
+        linear-gradient(160deg, #24122b, var(--bg) 65%);
       color: var(--text);
       min-height: 100vh;
       padding: 18px;
+      position: relative;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .28;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .07) 1px, transparent 1px);
+      background-size: 30px 30px;
+      mix-blend-mode: overlay;
     }
     .wrap {
       max-width: 760px;
@@ -31,18 +52,43 @@
       gap: 14px;
     }
     .card {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 14px;
+      box-shadow: 0 8px 24px rgba(8, 2, 13, .24);
+      position: relative;
+      overflow: hidden;
     }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -40% 68% auto -20%;
+      height: 220%;
+      background: linear-gradient(180deg, rgba(255, 147, 207, .18), transparent 60%);
+      transform: rotate(8deg);
+      pointer-events: none;
+    }
+    .card:first-child { transform: rotate(-0.6deg); }
+    .card:nth-child(2) { transform: rotate(0.5deg); }
     h1, h2 {
       margin: 0 0 10px;
       font-weight: 700;
       letter-spacing: 0.3px;
     }
-    h1 { font-size: 1.4rem; }
-    h2 { font-size: 1.02rem; }
+    h1 {
+      font-size: clamp(1.22rem, 2.2vw, 1.8rem);
+      color: var(--hot);
+      font-family: 'Bungee', 'Nunito', sans-serif;
+      text-shadow: 0 0 24px rgba(255, 147, 207, .28);
+    }
+    h2 {
+      font-size: 1.02rem;
+      font-family: 'Space Mono', monospace;
+      color: #ffd5eb;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
     .muted { color: var(--muted); }
     .row {
       display: flex;
@@ -54,19 +100,25 @@
     button, select, input {
       border-radius: 10px;
       border: 1px solid var(--border);
-      background: #0f1a2e;
+      background: var(--panel);
       color: var(--text);
       padding: 10px 12px;
       min-height: 40px;
     }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--hot);
+      box-shadow: 0 0 0 2px rgba(255, 147, 207, .2);
+    }
     button {
       cursor: pointer;
-      background: linear-gradient(180deg, #1f345f, #182a4d);
+      background: linear-gradient(135deg, #b165a8, #8f4f98);
       font-weight: 600;
     }
-    button.primary { background: linear-gradient(180deg, #2cae87, #238c6c); }
-    button.warn { background: linear-gradient(180deg, #c58b32, #986a24); }
-    button.danger { background: linear-gradient(180deg, #d64f5d, #a93a45); }
+    button.primary { background: linear-gradient(135deg, #68dcb1, #3db38a); }
+    button.warn { background: linear-gradient(135deg, #f0b458, #d38d2f); }
+    button.danger { background: linear-gradient(135deg, #ff7a9f, #db4f76); }
+    button:hover { filter: brightness(1.08); }
     input[type='number'] { width: 110px; }
     input[type='url'] { flex: 1; min-width: 220px; }
     .pill {
@@ -77,31 +129,35 @@
       font-size: 0.82rem;
       margin-right: 6px;
       color: var(--muted);
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(255, 255, 255, 0.04);
     }
     .result {
       margin-top: 8px;
       padding: 10px;
       border-radius: 10px;
       border: 1px solid var(--border);
-      background: #0f1830;
+      background: #1a1027;
       font-size: 0.95rem;
     }
     .ok { color: var(--accent); }
     .err { color: #ff8f9a; }
+
+    @media (max-width: 720px) {
+      .card:first-child, .card:nth-child(2) { transform: none; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <section class="card">
-      <h1>Guest Control</h1>
-      <div class="muted">Public page controls are governed by Handler -> Public Use settings.</div>
+      <h1>Pack Guest Control</h1>
+      <div class="muted">Handler-gated controls only. Guests can poke buttons; handler decides what this mutt can be used for.</div>
       <div class="row" id="status-pills"></div>
       <div class="result" id="guest-state">Loading...</div>
     </section>
 
     <section class="card" id="lovense-card" hidden>
-      <h2>Lovense</h2>
+      <h2>Toy Control</h2>
       <div class="row">
         <label class="muted" for="intensity">Intensity</label>
         <input id="intensity" type="number" min="0" max="20" value="10" />
@@ -112,7 +168,7 @@
     </section>
 
     <section class="card" id="pavlok-card" hidden>
-      <h2>Pavlok</h2>
+      <h2>Pavlok Corrections</h2>
       <div class="row">
         <label class="muted" for="pav-intensity">Shock Intensity</label>
         <input id="pav-intensity" type="number" min="1" max="100" value="40" />
@@ -121,7 +177,7 @@
     </section>
 
     <section class="card" id="phone-card" hidden>
-      <h2>Phone Controls</h2>
+      <h2>Phone Commands</h2>
       <div class="row">
         <select id="phone-action"></select>
         <input id="phone-value" type="number" placeholder="value" hidden />
@@ -141,7 +197,7 @@
     </section>
 
     <section class="card" id="url-card" hidden>
-      <h2>Open Web Page In App</h2>
+      <h2>Push A Page To Device</h2>
       <div class="row">
         <input id="open-url" type="url" placeholder="https://example.com/path" />
         <button class="primary" id="open-url-btn">Launch URL</button>
@@ -199,7 +255,7 @@
 
     function renderPills(config) {
       const pills = [];
-      pills.push(config.guest_enabled ? 'Guest Enabled' : 'Guest Disabled');
+      pills.push(config.guest_enabled ? 'Guest Mode Live' : 'Guest Mode Off');
       if (config.guest_show_location) pills.push(`Location: ${config.guest_location_precision}`);
       if (config.guest_allow_lovense_live) pills.push('Lovense Live');
       if (config.guest_allow_lovense_pulse) pills.push('Lovense Pulse');
@@ -228,7 +284,7 @@
     async function loadGuestState() {
       const data = await api('/api/public/guest/state');
       if (!data.guest_enabled) {
-        byId('guest-state').textContent = 'Guest page is currently disabled by handler settings.';
+        byId('guest-state').textContent = 'Guest page is disabled right now by handler settings.';
         return;
       }
       const loc = data.location || {};
@@ -250,7 +306,7 @@
         const result = await api('/api/public/guest/control', 'POST', payload, {
           'X-Guest-Session': state.sessionToken,
         });
-        setResult(`Sent ${result.action} to ${result.device_id}.`, true);
+        setResult(`command fired: ${result.action} -> ${result.device_id}.`, true);
       } catch (err) {
         if (String(err.message || '').toLowerCase().includes('invalid or expired guest session')) {
           try {
@@ -258,14 +314,14 @@
             const retry = await api('/api/public/guest/control', 'POST', payload, {
               'X-Guest-Session': state.sessionToken,
             });
-            setResult(`Sent ${retry.action} to ${retry.device_id}.`, true);
+            setResult(`command fired: ${retry.action} -> ${retry.device_id}.`, true);
             return;
           } catch (_retryErr) {
-            setResult(`Failed: ${_retryErr.message}`, false);
+            setResult(`command failed: ${_retryErr.message}`, false);
             return;
           }
         }
-        setResult(`Failed: ${err.message}`, false);
+        setResult(`command failed: ${err.message}`, false);
       }
     }
 
@@ -275,7 +331,7 @@
         state.config = config;
 
         if (!config.guest_enabled) {
-          byId('guest-state').textContent = 'Guest page is currently disabled by handler settings.';
+          byId('guest-state').textContent = 'Guest page is disabled right now by handler settings.';
           return;
         }
 
@@ -283,8 +339,8 @@
         await ensureGuestSession(true);
 
         const lovenseActions = [];
-        if (config.guest_allow_lovense_live) lovenseActions.push(['lovense_live', 'Send Live']);
-        if (config.guest_allow_lovense_pulse) lovenseActions.push(['lovense_pulse', 'Send Pulse']);
+        if (config.guest_allow_lovense_live) lovenseActions.push(['lovense_live', 'Send Live Pattern']);
+        if (config.guest_allow_lovense_pulse) lovenseActions.push(['lovense_pulse', 'Send Pulse Pattern']);
         byId('lovense-card').hidden = lovenseActions.length === 0;
         byId('lovense-actions').innerHTML = lovenseActions
           .map(([action, label]) => `<button data-lovense-action="${action}">${label}</button>`)
@@ -298,13 +354,13 @@
         byId('url-card').hidden = !config.guest_allow_open_url;
         const hosts = config.guest_allowed_url_hosts || [];
         byId('allowed-hosts').textContent = hosts.length
-          ? `Allowed hosts: ${hosts.join(', ')}`
-          : 'Any host is currently allowed.';
+          ? `Allowed hosts by handler: ${hosts.join(', ')}`
+          : 'Any host is currently allowed by handler.';
 
         await loadGuestState();
         state.pollTimer = setInterval(() => loadGuestState().catch(() => {}), 15000);
       } catch (err) {
-        byId('guest-state').textContent = `Unable to load guest config: ${err.message}`;
+        byId('guest-state').textContent = `could not load guest config: ${err.message}`;
       }
     }
 

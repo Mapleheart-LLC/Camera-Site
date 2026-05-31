@@ -283,6 +283,23 @@
             <ul id="hp2-queue-booking-list" class="hp2-feed"></ul>
             <p id="hp2-queue-result" class="hp2-muted"></p>
           </section>
+
+          <section class="hp2-panel">
+            <div class="hp2-panel-head">
+              <h4>Shame Escalations</h4>
+              <div class="hp2-map-controls">
+                <select id="hp2-queue-escalation-filter">
+                  <option value="all" selected>all</option>
+                  <option value="pending">pending</option>
+                  <option value="active">active</option>
+                  <option value="resolved">resolved</option>
+                </select>
+                <button id="hp2-queue-escalation-refresh" class="hp2-btn hp2-btn-ghost" type="button">Refresh</button>
+              </div>
+            </div>
+            <ul id="hp2-queue-escalation-list" class="hp2-feed"></ul>
+            <p class="hp2-muted">Queued by score thresholds. Pending and active entries can be resolved by handler/admin.</p>
+          </section>
         </div>
       </section>
 
@@ -425,8 +442,10 @@
             </div>
             <div class="hp2-action-row">
               <button id="hp2-devices-cleanup-stale-btn" class="hp2-btn hp2-btn-ghost" type="button">Cleanup Stale Duplicates</button>
+              <button id="hp2-devices-maintenance-run-btn" class="hp2-btn hp2-btn-ghost" type="button">Run Weekly Hygiene Now</button>
               <button id="hp2-devices-delete-all-btn" class="hp2-btn hp2-btn-warn" type="button">Delete All Devices</button>
             </div>
+            <p id="hp2-devices-maintenance-status" class="hp2-muted"></p>
             <p id="hp2-devices-bulk-result" class="hp2-muted"></p>
           </section>
         </div>
@@ -490,10 +509,34 @@
           </div>
           <div id="hp2-command-capability-chips" class="hp2-capability-chips"></div>
           <p id="hp2-command-capability-note" class="hp2-muted">Select a device to evaluate command readiness.</p>
+          <div id="hp2-command-feedback" class="hp2-command-feedback hp2-hidden" aria-live="polite">
+            <strong id="hp2-command-feedback-title">Command status</strong>
+            <span id="hp2-command-feedback-body">No dispatch yet.</span>
+          </div>
+        </section>
+
+        <section class="hp2-panel hp2-command-lane" id="hp2-command-nav">
+          <div class="hp2-panel-head">
+            <h4>Command Lane</h4>
+            <span class="hp2-muted">Filter by intent</span>
+          </div>
+          <div class="hp2-segmented-row hp2-segmented-row-command-nav">
+            <button class="hp2-btn hp2-btn-ghost hp2-segment-active" type="button" data-cmd-section-target="all" aria-pressed="true">All</button>
+            <button class="hp2-btn hp2-btn-ghost" type="button" data-cmd-section-target="live-control" aria-pressed="false">Live Control</button>
+            <button class="hp2-btn hp2-btn-ghost" type="button" data-cmd-section-target="device-admin" aria-pressed="false">Device Admin</button>
+            <button class="hp2-btn hp2-btn-ghost" type="button" data-cmd-section-target="messaging" aria-pressed="false">Messaging</button>
+            <button class="hp2-btn hp2-btn-ghost" type="button" data-cmd-section-target="automation" aria-pressed="false">Automation</button>
+            <button class="hp2-btn hp2-btn-ghost" type="button" data-cmd-section-target="history" aria-pressed="false">History</button>
+          </div>
+          <div id="hp2-mobile-ops-dock" class="hp2-mobile-ops-dock">
+            <button id="hp2-mobile-lock-btn" class="hp2-btn hp2-btn-warn" type="button">Lock</button>
+            <button id="hp2-mobile-checkin-btn" class="hp2-btn hp2-btn-ghost" type="button">Check-In</button>
+            <button id="hp2-mobile-startle-btn" class="hp2-btn hp2-btn-primary" type="button">Startle</button>
+          </div>
         </section>
 
         <div class="hp2-section-grid hp2-live-control-grid">
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="live-control">
             <div class="hp2-panel-head">
               <h4>Quick Taps</h4>
               <span class="hp2-muted">Fast repeats</span>
@@ -537,7 +580,7 @@
             <p id="hp2-quicktap-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="live-control">
             <div class="hp2-panel-head">
               <h4>Lovense Live</h4>
               <span class="hp2-muted">Patterns, ramps, timed</span>
@@ -608,7 +651,7 @@
             <p id="hp2-lovense-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="live-control">
             <div class="hp2-panel-head">
               <h4>Pavlok Precision</h4>
               <span class="hp2-muted">Timed control + slider</span>
@@ -646,7 +689,7 @@
             <p id="hp2-pavlok-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="device-admin">
             <div class="hp2-panel-head">
               <h4>App Lifecycle</h4>
               <span class="hp2-muted">Open, stop, suspend</span>
@@ -694,7 +737,7 @@
             <p id="hp2-appctl-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="device-admin">
             <div class="hp2-panel-head">
               <h4>Screen and Lock</h4>
               <span class="hp2-muted">Display + access</span>
@@ -769,7 +812,7 @@
             <p id="hp2-screenctl-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="messaging">
             <div class="hp2-panel-head">
               <h4>Notifications and Voice</h4>
               <span class="hp2-muted">Prompt + interrupt</span>
@@ -822,7 +865,7 @@
             <p id="hp2-notify-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="messaging">
             <div class="hp2-panel-head">
               <h4>Clipboard and SMS Bridge</h4>
               <span class="hp2-muted">Context sync + thread control</span>
@@ -873,7 +916,7 @@
             <p id="hp2-clipboard-sms-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="automation">
             <div class="hp2-panel-head">
               <h4>Simple Macros</h4>
               <span class="hp2-muted">Handler-only automation</span>
@@ -904,7 +947,7 @@
             <p id="hp2-macro-result" class="hp2-muted"></p>
           </section>
 
-          <section class="hp2-panel hp2-control-card">
+          <section class="hp2-panel hp2-control-card hp2-command-card" data-cmd-section="history">
             <div class="hp2-panel-head">
               <h4>Recent Commands</h4>
               <span class="hp2-muted">Latest dispatches</span>

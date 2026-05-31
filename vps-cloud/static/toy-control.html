@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shared Control Arcade</title>
+  <title>Pup Shame Chaos Console</title>
   <style>
     :root {
       --bg: #090708;
@@ -48,6 +48,21 @@
       justify-content: space-between;
       align-items: center;
       gap: .7rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      width: 180px;
+      height: 24px;
+      top: 10px;
+      right: -52px;
+      transform: rotate(24deg);
+      background: rgba(255, 189, 109, .18);
+      border: 1px solid rgba(255, 189, 109, .42);
+      pointer-events: none;
     }
 
     .hero h1 {
@@ -64,6 +79,12 @@
       color: var(--muted);
       font-size: .76rem;
       background: rgba(255,255,255,.03);
+      animation: chipPulse 4.5s ease-in-out infinite;
+    }
+
+    @keyframes chipPulse {
+      0%, 100% { border-color: var(--line); }
+      50% { border-color: rgba(255, 189, 109, .6); }
     }
 
     .grid {
@@ -77,6 +98,12 @@
       border-radius: 12px;
       background: var(--panel);
       padding: .75rem;
+      transition: transform .15s ease, border-color .15s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-1px);
+      border-color: #6a4651;
     }
 
     .card h2 {
@@ -178,25 +205,25 @@
   <main class="wrap">
     <section class="hero">
       <div>
-        <h1 id="title">Shared Control Arcade</h1>
-        <div class="hint" id="subtitle">Token-scoped controls are loading...</div>
+        <h1 id="title">Pup Shame Chaos Console</h1>
+        <div class="hint" id="subtitle">Loading public shame controls...</div>
       </div>
       <div class="chips">
-        <span class="chip" id="chip-exposure">Exposure: --</span>
-        <span class="chip" id="chip-turn">Turn: --</span>
-        <span class="chip" id="chip-limits">Limits: --</span>
-        <span class="chip" id="chip-token">Token: --</span>
+        <span class="chip" id="chip-exposure">Exposure Tier: --</span>
+        <span class="chip" id="chip-turn">Pup Turn: --</span>
+        <span class="chip" id="chip-limits">Crowd Throttle: --</span>
+        <span class="chip" id="chip-token">Leash Link: --</span>
       </div>
     </section>
 
     <section class="card">
-      <h2>Enabled Scopes</h2>
+      <h2>Humiliation Permissions</h2>
       <div class="scope-grid" id="scope-grid"></div>
     </section>
 
     <section class="grid">
       <article class="card" id="card-toy">
-        <h2>Toy Control Queue</h2>
+        <h2>Pup Throne Queue</h2>
         <div class="row">
           <div>
             <label for="toy-mode">Mode</label>
@@ -225,25 +252,25 @@
           <input id="toy-level-box" type="number" min="0" max="20" value="8" />
         </div>
         <div class="btns">
-          <button id="btn-toy-start">Join / Start</button>
-          <button class="alt" id="btn-toy-stop">Stop / Leave</button>
+          <button id="btn-toy-start">Claim Turn / Start</button>
+          <button class="alt" id="btn-toy-stop">Stop / Drop Out</button>
         </div>
-        <div class="hint" id="toy-queue-meta">Queue idle.</div>
+        <div class="hint" id="toy-queue-meta">Queue idle. Waiting for the next public callout.</div>
       </article>
 
       <article class="card" id="card-party">
-        <h2>Party Mini-Games</h2>
-        <div class="hint">Quick one-tap games. Each game only uses actions already enabled by this link's scopes.</div>
+        <h2>Pup Chaos Games</h2>
+        <div class="hint">One-tap humiliation games. Only actions allowed by this link are used.</div>
         <div class="btns" style="margin-top:.7rem">
           <button id="btn-game-pulse-party">Pulse Party</button>
           <button id="btn-game-chaos-callout">Chaos Callout</button>
           <button id="btn-game-lightning-round">Lightning Round</button>
         </div>
-        <div class="hint" id="party-meta">Waiting for scope checks...</div>
+        <div class="hint" id="party-meta">Checking what the crowd is allowed to do...</div>
       </article>
 
       <article class="card" id="card-screen">
-        <h2>Screen</h2>
+        <h2>Visual Shame</h2>
         <div class="row">
           <button id="btn-screen-on">Screen On</button>
           <button class="alt" id="btn-screen-off">Screen Off</button>
@@ -256,7 +283,7 @@
       </article>
 
       <article class="card" id="card-audio">
-        <h2>Audio + Voice</h2>
+        <h2>Voice + Noise</h2>
         <label for="audio-level">Volume</label>
         <div class="row">
           <select id="audio-stream"><option value="music">Music</option><option value="ring">Ring</option><option value="alarm">Alarm</option></select>
@@ -265,7 +292,7 @@
         </div>
         <label for="audio-tts">Speak Text</label>
         <div class="row">
-          <input id="audio-tts" placeholder="Say something fun..." />
+          <input id="audio-tts" placeholder="Send a public callout..." />
           <button id="btn-audio-tts">Speak</button>
         </div>
         <label for="audio-url">Play Audio URL</label>
@@ -276,7 +303,7 @@
       </article>
 
       <article class="card" id="card-overlay">
-        <h2>Overlay + Notifications</h2>
+        <h2>Broadcast + Alerts</h2>
         <label for="overlay-title">Overlay</label>
         <div class="row">
           <input id="overlay-title" placeholder="Title" />
@@ -296,7 +323,7 @@
       </article>
 
       <article class="card" id="card-device">
-        <h2>Device Controls</h2>
+        <h2>Device Discipline</h2>
         <div class="row">
           <button id="btn-device-checkin">Request Check-In</button>
           <button class="alt" id="btn-device-lock">Lock Device</button>
@@ -316,7 +343,7 @@
       </article>
 
       <article class="card" id="card-apps">
-        <h2>App Controls</h2>
+        <h2>App Discipline</h2>
         <label for="app-name">App Name</label>
         <div class="row">
           <input id="app-name" placeholder="Instagram" />
@@ -326,7 +353,7 @@
       </article>
     </section>
 
-    <section id="status" class="status">Ready.</section>
+    <section id="status" class="status">Console armed. Crowd waiting for orders.</section>
   </main>
 
   <script>
@@ -389,12 +416,12 @@
       var scopes = [
         ['Toy: Lovense', !!m.allow_lovense],
         ['Toy: Intiface', !!m.allow_intiface],
-        ['Notifications', !!m.allow_notifications],
-        ['Overlay', !!m.allow_overlay],
-        ['Audio', !!m.allow_audio],
-        ['Screen', !!m.allow_screen],
-        ['Device', !!m.allow_device_controls],
-        ['Apps', !!m.allow_app_controls],
+        ['Public Alerts', !!m.allow_notifications],
+        ['Public Overlay', !!m.allow_overlay],
+        ['Audio Control', !!m.allow_audio],
+        ['Screen Control', !!m.allow_screen],
+        ['Device Discipline', !!m.allow_device_controls],
+        ['App Discipline', !!m.allow_app_controls],
       ];
       var grid = document.getElementById('scope-grid');
       grid.innerHTML = scopes.map(function(s) {
@@ -411,28 +438,28 @@
       var games = Array.isArray(m.mini_games) ? m.mini_games : [];
       var gameCard = document.getElementById('card-party');
       if (gameCard) gameCard.style.display = games.length ? '' : 'none';
-      setPartyMeta(games.length ? ('Live games: ' + games.join(' • ')) : 'No party games available for this link.');
+      setPartyMeta(games.length ? ('Live chaos games: ' + games.join(' • ')) : 'No chaos games unlocked for this link.');
     }
 
     async function loadMeta() {
       if (!token) {
-        setStatus('Missing token in URL.', 'err');
-        document.getElementById('chip-token').textContent = 'Token: missing';
+        setStatus('No leash token found in this URL.', 'err');
+        document.getElementById('chip-token').textContent = 'Leash Link: missing';
         return false;
       }
       try {
         meta = await api('/api/public/control/' + encodeURIComponent(token) + '/meta');
-        document.getElementById('title').textContent = meta.label || 'Shared Control Arcade';
-        document.getElementById('subtitle').textContent = 'Device ' + (meta.device_id || '--') + ' • expires ' + (meta.expires_at || '--');
-        document.getElementById('chip-exposure').textContent = 'Exposure: ' + (meta.public_exposure_level || '--');
-        document.getElementById('chip-limits').textContent = 'Limits: ' + Number(meta.cmd_rate_limit_count || 24) + '/' + Number(meta.cmd_rate_limit_window_sec || 60) + 's';
-        document.getElementById('chip-token').textContent = 'Token: active';
+        document.getElementById('title').textContent = meta.label || 'Pup Shame Chaos Console';
+        document.getElementById('subtitle').textContent = 'Pup Device ' + (meta.device_id || '--') + ' • link expires ' + (meta.expires_at || '--');
+        document.getElementById('chip-exposure').textContent = 'Exposure Tier: ' + (meta.public_exposure_level || '--');
+        document.getElementById('chip-limits').textContent = 'Crowd Throttle: ' + Number(meta.cmd_rate_limit_count || 24) + '/' + Number(meta.cmd_rate_limit_window_sec || 60) + 's';
+        document.getElementById('chip-token').textContent = 'Leash Link: armed';
         renderScopes(meta);
         return true;
       } catch (e) {
-        setStatus('Unable to load shared control: ' + e.message, 'err');
-        document.getElementById('chip-limits').textContent = 'Limits: --';
-        document.getElementById('chip-token').textContent = 'Token: invalid';
+        setStatus('Could not load the public control link: ' + e.message, 'err');
+        document.getElementById('chip-limits').textContent = 'Crowd Throttle: --';
+        document.getElementById('chip-token').textContent = 'Leash Link: broken';
         return false;
       }
     }
@@ -445,13 +472,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: action, params: params || {}, participant_id: pid }),
         });
-        setStatus('Sent: ' + action, 'ok');
+        setStatus('Crowd command fired: ' + action, 'ok');
         return body;
       } catch (e) {
         if (e.status === 429) {
-          setStatus('Throttled: ' + e.message, 'err');
+          setStatus('Crowd throttled: ' + e.message, 'err');
         } else {
-          setStatus('Command failed: ' + e.message, 'err');
+          setStatus('Chaos command failed: ' + e.message, 'err');
         }
         return null;
       }
@@ -481,33 +508,33 @@
             liveActive = false;
             waitingQueue = false;
             stopQueuePoll();
-            setQueueMeta('Turn released.');
-            document.getElementById('chip-turn').textContent = 'Turn: released';
-            setStatus('Turn released.', 'ok');
+            setQueueMeta('Pup turn released. Back to waiting.');
+            document.getElementById('chip-turn').textContent = 'Pup Turn: released';
+            setStatus('Pup turn released.', 'ok');
             return;
           }
           waitingQueue = !body.active;
           liveActive = !!body.active;
           if (body.active) {
-            document.getElementById('chip-turn').textContent = 'Turn: active';
-            setQueueMeta('Your turn is active now.');
+            document.getElementById('chip-turn').textContent = 'Pup Turn: active';
+            setQueueMeta('Your control turn is active. Make pup squirm.');
             stopQueuePoll();
-            setStatus('Your turn is live. Have fun.', 'ok');
+            setStatus('Your turn is live. Crowd control is yours.', 'ok');
           } else {
-            document.getElementById('chip-turn').textContent = 'Turn: queued';
-            setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / pending ' + (body.pending_total != null ? body.pending_total : '?'));
-            setStatus('You are queued. Keep this tab open.', 'ok');
+            document.getElementById('chip-turn').textContent = 'Pup Turn: queued';
+            setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / waiting ' + (body.pending_total != null ? body.pending_total : '?'));
+            setStatus('You are in queue. Keep this tab open and wait for your turn.', 'ok');
             startQueuePoll();
           }
           return;
         }
 
-        setStatus('Toy command sent.', 'ok');
+        setStatus('Toy command sent. Pup should feel that.', 'ok');
       } catch (e) {
         if (e.status === 429) {
-          setStatus('Throttled: ' + e.message, 'err');
+          setStatus('Crowd throttled: ' + e.message, 'err');
         } else {
-          setStatus('Toy command failed: ' + e.message, 'err');
+          setStatus('Toy control failed: ' + e.message, 'err');
         }
       }
     }
@@ -518,7 +545,7 @@
 
       if (game === 'pulse_party') {
         if (!hasScope('allow_lovense') && !hasScope('allow_intiface')) {
-          setStatus('Pulse Party unavailable for this link.', 'err');
+          setStatus('Pulse Party is locked for this link.', 'err');
           return;
         }
         var mode = hasScope('allow_lovense') ? 'lovense' : 'intiface';
@@ -529,43 +556,43 @@
         document.getElementById('toy-level').value = String(lvl);
         document.getElementById('toy-level-box').value = String(lvl);
         document.getElementById('toy-duration').value = '18000';
-        setPartyMeta('Pulse Party rolled mode=' + mode + ', level=' + lvl + '.');
+        setPartyMeta('Pulse Party rolled mode=' + mode + ', level=' + lvl + '. Pup is in trouble.');
         await sendToyControl('vibrate');
         return;
       }
 
       if (game === 'chaos_callout') {
         if (hasScope('allow_overlay')) {
-          setPartyMeta('Chaos Callout sent as overlay.');
+          setPartyMeta('Chaos Callout broadcast on overlay.');
           await sendPublicCommand('show_overlay', {
-            title: 'Party Mode',
-            message: 'Chaos Callout activated by the crowd!',
+            title: 'Public Shame Mode',
+            message: 'Chaos Callout triggered by the crowd.',
           });
           return;
         }
         if (hasScope('allow_notifications')) {
-          setPartyMeta('Chaos Callout sent as notification.');
+          setPartyMeta('Chaos Callout pushed as notification.');
           await sendPublicCommand('send_notification', {
-            title: 'Party Crowd Move',
-            body: 'Chaos Callout is live.',
+            title: 'Crowd Callout',
+            body: 'Chaos Callout is live. Pup is on notice.',
           });
           return;
         }
         if (hasScope('allow_audio')) {
-          setPartyMeta('Chaos Callout sent as TTS.');
+          setPartyMeta('Chaos Callout spoken over TTS.');
           await sendPublicCommand('speak_text', {
-            text: 'Party mode engaged. Crowd command accepted.',
+            text: 'Public shame mode engaged. Crowd command accepted.',
           });
           return;
         }
-        setStatus('Chaos Callout is unavailable for this link.', 'err');
+        setStatus('Chaos Callout is locked for this link.', 'err');
         return;
       }
 
       if (game === 'lightning_round') {
         if (hasScope('allow_screen')) {
           var bright = 120 + Math.floor(Math.random() * 136);
-          setPartyMeta('Lightning Round set brightness to ' + bright + '.');
+          setPartyMeta('Lightning Round flashed brightness to ' + bright + '.');
           await sendPublicCommand('set_brightness', { value: String(bright) });
           return;
         }
@@ -575,7 +602,7 @@
           await sendPublicCommand('set_flashlight', { enabled: enabled });
           return;
         }
-        setStatus('Lightning Round is unavailable for this link.', 'err');
+        setStatus('Lightning Round is locked for this link.', 'err');
       }
     }
 
@@ -586,13 +613,13 @@
           waitingQueue = false;
           liveActive = true;
           stopQueuePoll();
-          document.getElementById('chip-turn').textContent = 'Turn: active';
-          setQueueMeta('Your turn is active now.');
-          setStatus('Queue advanced. You are live.', 'ok');
+          document.getElementById('chip-turn').textContent = 'Pup Turn: active';
+          setQueueMeta('Your turn is active now. Crowd can punish live.');
+          setStatus('Queue advanced. You are now live.', 'ok');
         } else {
           waitingQueue = true;
-          document.getElementById('chip-turn').textContent = 'Turn: queued';
-          setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / pending ' + (body.pending_total != null ? body.pending_total : '?') + ' • slot ' + Number(body.turn_seconds || 20) + 's');
+          document.getElementById('chip-turn').textContent = 'Pup Turn: queued';
+          setQueueMeta('Queue position ' + (body.position != null ? body.position : '?') + ' / waiting ' + (body.pending_total != null ? body.pending_total : '?') + ' • slot ' + Number(body.turn_seconds || 20) + 's');
         }
       } catch (_) {
         // Queue polling is best-effort.
@@ -625,7 +652,7 @@
       waitingQueue = false;
       liveActive = false;
       stopQueuePoll();
-      document.getElementById('chip-turn').textContent = 'Turn: idle';
+      document.getElementById('chip-turn').textContent = 'Pup Turn: idle';
       setQueueMeta('You left the queue.');
     }
 
@@ -643,7 +670,7 @@
       document.getElementById('btn-toy-stop').addEventListener('click', async function() {
         if (waitingQueue) {
           await leaveQueue();
-          setStatus('Left queue.', 'ok');
+          setStatus('You left the queue.', 'ok');
           return;
         }
         sendToyControl('stop');
@@ -670,14 +697,14 @@
 
       document.getElementById('btn-overlay-show').addEventListener('click', function() {
         sendPublicCommand('show_overlay', {
-          title: document.getElementById('overlay-title').value || 'Notice',
-          message: document.getElementById('overlay-message').value || 'Shared control active.',
+          title: document.getElementById('overlay-title').value || 'Public Shame Notice',
+          message: document.getElementById('overlay-message').value || 'Crowd control is active.',
         });
       });
       document.getElementById('btn-notif-send').addEventListener('click', function() {
         sendPublicCommand('send_notification', {
-          title: document.getElementById('notif-title').value || 'Heads up',
-          body: document.getElementById('notif-body').value || 'You have a new handler command.',
+          title: document.getElementById('notif-title').value || 'Public Command',
+          body: document.getElementById('notif-body').value || 'A new crowd command just landed.',
         });
       });
 
@@ -707,9 +734,9 @@
 
     (async function boot() {
       bindControls();
-      document.getElementById('chip-turn').textContent = 'Turn: idle';
+      document.getElementById('chip-turn').textContent = 'Pup Turn: idle';
       if (await loadMeta()) {
-        setStatus('Shared control ready. Pick a section and play.', 'ok');
+        setStatus('Public control ready. Pick a lane and cause chaos.', 'ok');
       }
     })();
   </script>

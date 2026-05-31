@@ -24,6 +24,7 @@ from slowapi.util import get_remote_address
 
 from db import get_db
 from discord_webhook import send_discord_notification
+from shame import ensure_shame_tables, record_shame_event
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,8 @@ class DroolItem(BaseModel):
     timestamp: str
     comment_count: int
     reaction_counts: dict[str, int]
+    humiliation_score: int
+    humiliation_rank_label: str
     is_weekly_whimper: bool = False
 
 
@@ -207,6 +210,28 @@ def _build_feed_items(
         ids,
     )
 
+    reaction_weight = {
+        "Good Girl": 2,
+        "Bad Puppy": 4,
+        "Dumb Thing": 5,
+        "Pretty Toy": 3,
+    }
+
+    def _score_for(item_id: int, view_count: int) -> int:
+        comments = int(comment_map.get(item_id, 0) or 0)
+        rx = reaction_map.get(item_id, {})
+        rx_score = sum(int(v) * int(reaction_weight.get(k, 2)) for k, v in rx.items())
+        return max(0, int(view_count) + (comments * 6) + rx_score)
+
+    def _rank_label(score: int) -> str:
+        if score >= 130:
+            return "legendary shame"
+        if score >= 80:
+            return "severe shame"
+        if score >= 40:
+            return "public shame"
+        return "warming up"
+
     return [
         DroolItem(
             id=row["id"],
@@ -219,6 +244,8 @@ def _build_feed_items(
             timestamp=row["timestamp"],
             comment_count=comment_map.get(row["id"], 0),
             reaction_counts=reaction_map.get(row["id"], {}),
+            humiliation_score=_score_for(int(row["id"]), int(row["view_count"])),
+            humiliation_rank_label=_rank_label(_score_for(int(row["id"]), int(row["view_count"]))),
             is_weekly_whimper=(row["id"] == whimper_id),
         )
         for row in rows
@@ -295,6 +322,12 @@ async def post_comment(
         """,
         (item_id, payload.comment_text, pack_id, created_at),
     )
+    record_shame_event(
+        db,
+        "drool_comment",
+        metadata={"drool_id": item_id, "pack_member_id": pack_id},
+        created_at=created_at,
+    )
     db.commit()
 
     # Discord ping – fire and forget
@@ -323,6 +356,10 @@ async def post_reaction(
     pack_id = get_pack_identity(request)
 
     try:
+        prior = db.execute(
+            "SELECT reaction_type FROM drool_reactions WHERE drool_id = ? AND pack_member_id = ?",
+            (item_id, pack_id),
+        ).fetchone()
         db.execute(
             """
             INSERT INTO drool_reactions (drool_id, reaction_type, pack_member_id)
@@ -332,6 +369,20 @@ async def post_reaction(
             """,
             (item_id, payload.reaction_type, pack_id),
         )
+        if prior is None:
+            record_shame_event(
+                db,
+                "drool_reaction_added",
+                metadata={"drool_id": item_id, "pack_member_id": pack_id, "reaction_type": payload.reaction_type},
+            )
+        elif prior["reaction_type"] != payload.reaction_type:
+            # Reactions changed are lower impact than fresh engagement.
+            record_shame_event(
+                db,
+                "drool_reaction_added",
+                points=1,
+                metadata={"drool_id": item_id, "pack_member_id": pack_id, "reaction_type": payload.reaction_type, "changed": True},
+            )
         db.commit()
     except Exception as exc:
         raise HTTPException(
@@ -353,10 +404,16 @@ async def delete_reaction(
     _get_item_or_404(item_id, db)
 
     pack_id = get_pack_identity(request)
-    db.execute(
+    deleted = db.execute(
         "DELETE FROM drool_reactions WHERE drool_id = ? AND pack_member_id = ?",
         (item_id, pack_id),
     )
+    if int(deleted.rowcount or 0) > 0:
+        record_shame_event(
+            db,
+            "drool_reaction_removed",
+            metadata={"drool_id": item_id, "pack_member_id": pack_id},
+        )
     db.commit()
 
     return {"message": "Reaction removed 🐾", "pack_member_id": pack_id}
@@ -454,6 +511,13 @@ async def ifttt_reddit_webhook(
         VALUES ('reddit', ?, ?, ?, ?, ?)
         """,
         (original_url, media_url, media_urls_json, text_content, ts),
+    )
+    ensure_shame_tables(db)
+    record_shame_event(
+        db,
+        "drool_item_archived",
+        metadata={"drool_id": int(cursor.lastrowid or 0), "platform": "reddit"},
+        created_at=ts,
     )
     db.commit()
 

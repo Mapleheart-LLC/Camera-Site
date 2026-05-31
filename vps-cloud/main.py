@@ -58,7 +58,12 @@ from routers.tpe import (
     admin_router as tpe_admin_router,
     migrate_tpe,
 )
-from routers.handler import router as handler_router, migrate_handler
+from routers.handler import (
+    router as handler_router,
+    migrate_handler,
+    start_handler_maintenance_scheduler,
+    stop_handler_maintenance_scheduler,
+)
 from routers.vitals import router as vitals_router, migrate_vitals
 from routers.public_control import router as public_control_router, migrate_public_control
 from routers.sms_proxy import (
@@ -68,8 +73,8 @@ from routers.sms_proxy import (
     migrate_sms_proxy,
 )
 from redis_client import close_redis
+from shame import compute_shame_summary, ensure_shame_tables
 from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
 
 # ---------------------------------------------------------------------------
 # Configuration (override via environment variables in production)
@@ -505,6 +510,7 @@ def init_db() -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_drool_archive_timestamp ON drool_archive(timestamp)"
     )
+    ensure_shame_tables(conn)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_users_username_nocase ON users(username COLLATE NOCASE)"
     )
@@ -792,10 +798,12 @@ async def lifespan(app: FastAPI):
         mqtt_db.close()
     await _sync_cameras_to_go2rtc()
     start_drool_scheduler()
+    start_handler_maintenance_scheduler()
     await register_metadata_schema()
     await _register_idswyft_webhook()
     yield
     stop_drool_scheduler()
+    stop_handler_maintenance_scheduler()
     shutdown_mqtt()
     # Close the Redis connection pool on shutdown to release resources.
     await close_redis()
@@ -1197,7 +1205,6 @@ app.include_router(admin_sms_router)
 # Attach the slowapi rate-limiter state and exception handler to the app so
 # that @limiter.limit decorators in the drool router function correctly.
 app.state.limiter = drool_limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -1346,12 +1353,10 @@ async def public_page_toggle_gate(request: Request, call_next):
         return await call_next(request)
 
     return HTMLResponse(
-        content=(
-            "<html><head><title>Public Site Offline</title></head>"
-            "<body style='font-family:Segoe UI,Tahoma,sans-serif;padding:24px;'>"
-            "<h2>Public Site Temporarily Disabled</h2>"
-            "<p>The public pages are currently unavailable.</p>"
-            "</body></html>"
+        content=_render_error_html(
+            503,
+            "Puppy playroom is napping.",
+            "Public pages are temporarily snoozing. Wiggle back in a bit.",
         ),
         status_code=503,
     )
@@ -1767,46 +1772,186 @@ def _html_escape(text: str) -> str:
     return _html_lib.escape(text, quote=True)
 
 
-def _render_404_html(heading: str, message: str) -> str:
-    """Return a styled 404 HTML page using the site's dark pink theme."""
+def _render_error_html(status_code: int, heading: str, message: str) -> str:
+    """Return a styled HTML error page using the site's themed palette."""
     home_url = _html_escape(BASE_URL or "/")
+    safe_heading = _html_escape(heading)
+    safe_message = _html_escape(message)
+    mascot = _html_escape({
+        401: "🔑",
+        403: "🛑",
+        404: "🐾",
+        429: "⚡",
+        500: "💥",
+        502: "🧷",
+        503: "😴",
+    }.get(status_code, "🐾"))
+    accent = {
+        401: "#ffd36d",
+        403: "#ff8f8f",
+        404: "#e8aeb7",
+        429: "#ffe28a",
+        500: "#ff7e9d",
+        502: "#8ed0ff",
+        503: "#a4c1ff",
+    }.get(status_code, "#e8aeb7")
+    code_label = _html_escape({
+        401: "401 - Collar Check",
+        403: "403 - Access Slap",
+        404: "404 - Wrong Yard",
+        429: "429 - Too Many Zoomies",
+        500: "500 - Puppy Brain Crash",
+        502: "502 - Upstream Broke",
+        503: "503 - Playroom Nap",
+    }.get(status_code, f"{status_code} - Oopsie"))
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>404 – Not Found 🐾 mochii.live</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <title>{status_code} - Oopsie | mochii.live</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    body {{ font-family: 'Nunito', system-ui, sans-serif; background: #1a1a1a; color: #f0e6e8;
-           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; }}
-    .card {{ width: 100%; max-width: 420px; background: #242424; border: 1px solid #3d2a2e;
-            border-radius: 20px; padding: 2.5rem 2rem 2rem; box-shadow: 0 8px 40px rgba(232,174,183,0.14);
-            text-align: center; }}
-    .paw {{ font-size: 3rem; margin-bottom: 1rem; display: block; }}
-    .error-code {{ font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .12em;
-                  color: #9e7e82; margin-bottom: .6rem; }}
-    h1 {{ font-size: 1.5rem; font-weight: 800; color: #e8aeb7; margin-bottom: .75rem; }}
-    p {{ font-size: .92rem; color: #9e7e82; line-height: 1.55; margin-bottom: 1.75rem; }}
-    a.btn {{ display: inline-block; padding: .65rem 1.5rem; background: #3d2028; border: 1px solid #e8aeb7;
-            border-radius: 10px; color: #e8aeb7; font-family: inherit; font-size: .95rem; font-weight: 700;
-            text-decoration: none; transition: background .15s, color .15s; }}
-    a.btn:hover {{ background: #e8aeb7; color: #1a1a1a; }}
+    body {{
+      font-family: 'Nunito', system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 15% 18%, rgba(232, 174, 183, 0.18) 0%, rgba(232, 174, 183, 0) 38%),
+        radial-gradient(circle at 82% 82%, rgba(29, 185, 84, 0.14) 0%, rgba(29, 185, 84, 0) 42%),
+        linear-gradient(145deg, #100f16 0%, #191725 55%, #1f1320 100%);
+      color: #f5e9ec;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }}
+    .card {{
+      width: 100%;
+      max-width: 460px;
+      background: rgba(30, 28, 42, 0.92);
+            border: 1px solid {accent};
+      border-radius: 20px;
+      padding: 2.6rem 2rem 2.1rem;
+      box-shadow: 0 22px 56px rgba(0, 0, 0, 0.56);
+      text-align: center;
+    }}
+        .paw {{
+            font-size: 3rem;
+            margin-bottom: .9rem;
+            display: block;
+            transform-origin: 50% 90%;
+            animation: paw-wiggle 2.3s ease-in-out infinite;
+        }}
+        @keyframes paw-wiggle {{
+            0%, 100% {{ transform: rotate(0deg) scale(1); }}
+            20% {{ transform: rotate(-9deg) scale(1.02); }}
+            40% {{ transform: rotate(8deg) scale(1.02); }}
+            60% {{ transform: rotate(-6deg) scale(1.01); }}
+            80% {{ transform: rotate(6deg) scale(1.01); }}
+        }}
+    .error-code {{
+      font-size: .72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+            color: {accent};
+      margin-bottom: .55rem;
+    }}
+        h1 {{ font-size: 1.52rem; font-weight: 800; color: #ffd7e3; margin-bottom: .78rem; }}
+    p {{ font-size: .93rem; color: #d7bbc5; line-height: 1.58; margin-bottom: 1.8rem; }}
+    a.btn {{
+      display: inline-block;
+      padding: .68rem 1.45rem;
+            background: rgba(27, 14, 24, 0.95);
+            border: 1px solid {accent};
+      border-radius: 10px;
+            color: {accent};
+      font-family: inherit;
+      font-size: .95rem;
+      font-weight: 800;
+      text-decoration: none;
+      transition: background .15s, color .15s;
+    }}
+        a.btn:hover {{ background: {accent}; color: #1a1a1a; }}
   </style>
 </head>
 <body>
   <div class="card" role="main">
-    <span class="paw" aria-hidden="true">🐾</span>
-    <p class="error-code">404 – Not Found</p>
-    <h1>{_html_escape(heading)}</h1>
-    <p>{_html_escape(message)}</p>
-    <a class="btn" href="{home_url}">Back to mochii.live 🐾</a>
+        <span class="paw" aria-hidden="true">{mascot}</span>
+    <p class="error-code">{code_label}</p>
+    <h1>{safe_heading}</h1>
+    <p>{safe_message}</p>
+    <a class="btn" href="{home_url}">Drag Me Back Home</a>
   </div>
 </body>
 </html>"""
+
+
+def _render_404_html(heading: str, message: str) -> str:
+    """Compatibility wrapper for question-share and static-route 404 pages."""
+    return _render_error_html(404, heading, message)
+
+
+def _request_wants_html_error(request: Request) -> bool:
+    """Return True when the caller likely expects an HTML error page."""
+    path = (request.url.path or "").lower()
+    if path.startswith("/api/"):
+        return False
+    accept = (request.headers.get("accept") or "").lower()
+    if "text/html" in accept or "application/xhtml+xml" in accept:
+        return True
+    if "application/json" in accept:
+        return False
+    return request.method in {"GET", "HEAD"}
+
+
+def _error_page_copy(status_code: int, detail: object = None) -> tuple[str, str]:
+    """Map HTTP status codes to themed page heading/body copy."""
+    if status_code == 401:
+        return (
+            "No collar, no entry.",
+            "Login first, then come back like a good pup.",
+        )
+    if status_code == 403:
+        return (
+            "Hands off. Hell no.",
+            "This zone is locked to a higher role and you're not on the list.",
+        )
+    if status_code == 404:
+        return (
+            "Wrong damn yard.",
+            "That route slipped the leash, moved, or never existed. Pick another command.",
+        )
+    if status_code == 429:
+        return (
+            "Slow your zoomies.",
+            "You're mashing buttons too damn fast. Breathe, then try again.",
+        )
+    if status_code == 500:
+        return (
+            "Well shit, puppy brain crashed.",
+            "Something blew up behind the curtain. Give it a second and retry.",
+        )
+    if status_code == 502:
+        return (
+            "Upstream service faceplanted.",
+            "A linked service fumbled hard. Retry in a moment.",
+        )
+    if status_code == 503:
+        return (
+            "Playroom is down for cleanup.",
+            "This area is temporarily snoozing. Wiggle back in a bit.",
+        )
+    if isinstance(detail, str) and detail.strip():
+        return (f"Status {status_code}", detail.strip())
+    return (
+        f"Status {status_code}",
+        "That request bonked into a wall. Scoot back and try again.",
+    )
 
 
 @app.get("/q/{question_id}/og-image.png", response_class=Response)
@@ -3063,6 +3208,7 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
     public_screen_share_approved = _safe_bool_setting(db, "public_screen_share_approved", default=False)
     public_toy_control_enabled = _safe_bool_setting(db, "public_toy_control_enabled", default=True)
     public_exposure_level = (get_setting(db, "public_exposure_level", "controlled") or "controlled").strip().lower()
+    shame = compute_shame_summary(db)
 
     return {
         "days_locked": days_caged,
@@ -3079,9 +3225,21 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         "public_screen_share_approved": public_screen_share_approved,
         "public_toy_control_enabled": public_toy_control_enabled,
         "public_exposure_level": public_exposure_level,
+        "shame_score": shame["score"],
+        "shame_tier": shame["tier"],
+        "shame_streak_days": shame["streak_days"],
+        "shame_event_score_7d": shame["event_score_7d"],
+        "shame_pending_escalations": shame.get("pending_escalations", 0),
+        "shame_active_escalation": shame.get("active_escalation"),
         "is_paused": paused,
         "days_caged_start_date": (start_dt.date().isoformat() if start_dt else None),
     }
+
+
+@app.get("/api/public/shame/summary")
+def get_public_shame_summary(db: sqlite3.Connection = Depends(get_db)):
+    """Return the computed shame-score summary for public surfaces."""
+    return compute_shame_summary(db)
 
 
 @app.post("/api/public/days-locked/adjust")
@@ -3192,6 +3350,35 @@ def get_schedule(db: sqlite3.Connection = Depends(get_db)):
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, _exc: RateLimitExceeded):
+    if not _request_wants_html_error(request):
+        return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+    heading, message = _error_page_copy(429)
+    return HTMLResponse(content=_render_error_html(429, heading, message), status_code=429)
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException):
+    detail = exc.detail if exc.detail is not None else "Request failed."
+    if not _request_wants_html_error(request):
+        return JSONResponse(status_code=exc.status_code, content={"detail": detail}, headers=exc.headers)
+    heading, message = _error_page_copy(exc.status_code, exc.detail)
+    return HTMLResponse(
+        content=_render_error_html(exc.status_code, heading, message),
+        status_code=exc.status_code,
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, _exc: Exception):
+    if not _request_wants_html_error(request):
+        return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+    heading, message = _error_page_copy(500)
+    return HTMLResponse(content=_render_error_html(500, heading, message), status_code=500)
+
+
 @app.exception_handler(404)
 async def _json_404_handler(request: Request, _exc):
     """Return a JSON 404 for any path not matched by a route or static file.
@@ -3201,7 +3388,13 @@ async def _json_404_handler(request: Request, _exc):
     the Flutter app.  With it, unrecognised ``/api/*`` paths (and any other
     stray request) get a clean JSON body so the client can handle it properly.
     """
-    return JSONResponse(status_code=404, content={"detail": "Not found."})
+    if not _request_wants_html_error(request):
+        return JSONResponse(status_code=404, content={"detail": "Not found."})
+    heading, message = _error_page_copy(404)
+    return HTMLResponse(
+        content=_render_error_html(404, heading, message),
+        status_code=404,
+    )
 
 
 # ---------------------------------------------------------------------------

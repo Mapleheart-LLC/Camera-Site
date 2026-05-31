@@ -6,16 +6,20 @@
   <title>Booking Request | mochii.live</title>
   <meta name="description" content="Submit a detailed booking questionnaire for handler review." />
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bungee:wght@400&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
     :root {
-      --bg: #171314;
-      --panel: #241b1d;
-      --panel-2: #2b2023;
-      --line: #4a3539;
-      --text: #f2e8ea;
-      --muted: #c8a8af;
-      --hot: #e8aeb7;
-      --ok: #7cdcb0;
-      --err: #f88787;
+      --bg: #1a131d;
+      --bg-2: #30192f;
+      --panel: rgba(39, 19, 42, .82);
+      --panel-2: rgba(27, 15, 34, .92);
+      --line: #7f4068;
+      --text: #fbeaf5;
+      --muted: #deb8ce;
+      --hot: #ff93cf;
+      --hot-2: #ffb077;
+      --ok: #88f5cc;
+      --err: #ff929f;
       --font: "Nunito", "Segoe UI", sans-serif;
     }
 
@@ -26,22 +30,84 @@
       font-family: var(--font);
       color: var(--text);
       background:
-        radial-gradient(900px 500px at 12% -8%, #3f2229 0%, transparent 58%),
-        radial-gradient(850px 500px at 95% 112%, #3b2b22 0%, transparent 55%),
-        linear-gradient(160deg, #1a1416, #171314 62%);
+        radial-gradient(900px 500px at 12% -8%, #5a2561 0%, transparent 58%),
+        radial-gradient(850px 500px at 95% 112%, #5a3b22 0%, transparent 55%),
+        linear-gradient(160deg, #211326, #1a131d 62%);
       padding: 1rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .28;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, .08) 1px, transparent 1px);
+      background-size: 30px 30px;
+      mix-blend-mode: overlay;
     }
 
     .wrap { width: min(920px, 100%); margin: 0 auto; display: grid; gap: .85rem; }
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: .9rem;
+      box-shadow: 0 8px 24px rgba(8, 2, 13, .24);
+      position: relative;
+      overflow: hidden;
     }
 
-    h1 { margin: 0; color: var(--hot); font-size: clamp(1.3rem, 2.4vw, 2rem); }
-    .sub { margin-top: .35rem; color: var(--muted); font-size: .9rem; }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -40% 68% auto -20%;
+      height: 220%;
+      background: linear-gradient(180deg, rgba(255, 147, 207, .2), transparent 60%);
+      transform: rotate(8deg);
+      pointer-events: none;
+    }
+
+    .card:first-child { transform: rotate(-0.8deg); }
+    .card:nth-child(2) { transform: rotate(0.7deg); }
+
+    h1 {
+      margin: 0;
+      color: var(--hot);
+      font-family: 'Bungee', 'Nunito', sans-serif;
+      font-size: clamp(1.3rem, 2.4vw, 2rem);
+      letter-spacing: .01em;
+      text-shadow: 0 0 24px rgba(255, 147, 207, .28);
+      animation: titleFlicker 4.2s steps(2, end) infinite;
+    }
+    .sub {
+      margin-top: .35rem;
+      color: var(--muted);
+      font-size: .9rem;
+      transform: rotate(-0.4deg);
+    }
+    .privacy-note {
+      margin-top: .55rem;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: .5rem .6rem;
+      color: #ffd8ec;
+      background: rgba(255, 147, 207, .08);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+
+    @keyframes titleFlicker {
+      0%, 100% { transform: translate(0, 0) skew(0deg); }
+      12% { transform: translate(-1px, 0) skew(-1deg); }
+      13% { transform: translate(1px, 0) skew(1deg); }
+      61% { transform: translate(0, -1px) skew(0deg); }
+      62% { transform: translate(0, 1px) skew(0deg); }
+    }
 
     .row { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .full { grid-column: 1 / -1; }
@@ -52,8 +118,9 @@
       color: var(--muted);
       font-size: .74rem;
       text-transform: uppercase;
-      letter-spacing: .08em;
+      letter-spacing: .11em;
       font-weight: 700;
+      font-family: 'Space Mono', monospace;
     }
 
     input, select, textarea {
@@ -65,77 +132,141 @@
       padding: .56rem .62rem;
       font: inherit;
     }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--hot);
+      box-shadow: 0 0 0 2px rgba(255, 147, 207, .2);
+    }
     textarea { min-height: 86px; resize: vertical; }
 
-    .chips { display: flex; gap: .45rem; flex-wrap: wrap; }
-    .chip {
+    .interest-builder {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: .5rem;
+      align-items: center;
+    }
+    .interest-add-btn {
+      padding: .56rem .8rem;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, .06);
+      color: var(--text);
+      font-weight: 700;
+    }
+    .interest-add-btn:hover:not(:disabled) {
+      border-color: var(--hot);
+      color: var(--hot);
+      filter: none;
+    }
+    .interest-list {
+      margin-top: .55rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      min-height: 2rem;
+      padding: .35rem;
+      border: 1px dashed rgba(255, 147, 207, .32);
+      border-radius: 10px;
+      background: rgba(255, 147, 207, .05);
+      box-shadow: inset 0 0 0 1px rgba(255, 147, 207, .08);
+    }
+    .interest-pill {
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: .34rem .58rem;
-      color: var(--muted);
-      background: rgba(255,255,255,.03);
+      padding: .28rem .55rem;
+      background: rgba(255,255,255,.04);
+      color: var(--text);
       font-size: .78rem;
-      cursor: pointer;
-      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: .42rem;
     }
-    .chip input { display: none; }
-    .chip.active { border-color: #d9a0aa; color: #f0d7dc; background: #3a262b; }
+    .interest-pill button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 0;
+      font-size: .95rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .interest-pill button:hover { color: var(--hot); }
+    .interest-help {
+      margin: .35rem 0 0;
+      color: var(--muted);
+      font-size: .8rem;
+    }
 
     .actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
     button {
       border: none;
       border-radius: 10px;
-      background: var(--hot);
+      background: linear-gradient(135deg, var(--hot), var(--hot-2));
       color: #1d1215;
       font-weight: 800;
       padding: .62rem .92rem;
       cursor: pointer;
     }
+    button:hover:not(:disabled) { filter: brightness(1.08); }
     button:disabled { opacity: .6; cursor: not-allowed; }
 
     .status { min-height: 1.2rem; color: var(--muted); font-size: .84rem; }
     .status.ok { color: var(--ok); }
     .status.err { color: var(--err); }
 
-    a.back { color: var(--muted); text-decoration: none; font-weight: 700; font-size: .85rem; }
+    a.back {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: .85rem;
+      font-family: 'Space Mono', monospace;
+    }
     a.back:hover { color: var(--hot); }
+
+    @media (max-width: 720px) {
+      .card:first-child, .card:nth-child(2), .sub { transform: none; }
+      h1 { animation: none; }
+    }
   </style>
 </head>
 <body>
   <main class="wrap">
     <section class="card">
-      <a class="back" href="/">&larr; Back to mochii.live</a>
-      <h1>Booking Questionnaire</h1>
-      <p class="sub">Give the handler enough context to review quickly and match the right session format.</p>
+      <a class="back" href="/">&larr; crawl back to mochii.live</a>
+      <h1>Book This Chaotic Pup</h1>
+      <p class="sub">Fill this out so handler can decide exactly how this mutt gets used, corrected, and kept in line.</p>
+      <p class="privacy-note">Handler eyes only: pup never reads these submissions. Handler decides. Pup gets dispatched and obeys.</p>
     </section>
 
     <section class="card">
       <div class="row">
         <div>
           <label for="contact">Best Contact (required)</label>
-          <input id="contact" maxlength="120" placeholder="Discord / Telegram / Email" />
+          <input id="contact" maxlength="120" placeholder="Discord / Telegram / Email / smoke signal" />
         </div>
         <div>
           <label for="timezone">Timezone (required)</label>
-          <input id="timezone" maxlength="80" placeholder="UTC-5 / EST / CET" />
+          <input id="timezone" maxlength="80" placeholder="UTC-5 / EST / CET / whatever your clock says" />
         </div>
         <div>
           <label for="availability">Availability Window (required)</label>
-          <input id="availability" maxlength="160" placeholder="Weeknights 7pm-11pm, Saturdays" />
+          <input id="availability" maxlength="160" placeholder="when this mutt is available to be handled" />
         </div>
         <div>
           <label for="location">Location / Region (required)</label>
-          <input id="location" maxlength="160" placeholder="City + country or remote only" />
+          <input id="location" maxlength="160" placeholder="where this mutt can be used (city/country/remote)" />
         </div>
 
         <div>
-          <label for="sessionType">Session Type</label>
+          <label for="sessionType">Session Shape</label>
           <select id="sessionType">
-            <option value="Intro / Consult">Intro / Consult</option>
-            <option value="Training">Training</option>
-            <option value="Maintenance">Maintenance</option>
-            <option value="Intense">Intense</option>
-            <option value="Unsure">Unsure / discuss</option>
+            <option value="One-on-one private handling">One-on-one private handling</option>
+            <option value="One-on-one degradation session">One-on-one degradation session</option>
+            <option value="Group scene (small circle)">Group scene (small circle)</option>
+            <option value="Party scene / group takeover">Party scene / group takeover</option>
+            <option value="Service/task ownership session">Service/task ownership session</option>
+            <option value="Surprise start">Surprise start</option>
+            <option value="Unsure / build together">Unsure / build together</option>
           </select>
         </div>
         <div>
@@ -147,49 +278,134 @@
           </select>
         </div>
         <div class="full">
-          <label>Interest Areas</label>
-          <div class="chips" id="interest-chips">
-            <label class="chip"><input type="checkbox" value="Protocol" />Protocol</label>
-            <label class="chip"><input type="checkbox" value="Accountability" />Accountability</label>
-            <label class="chip"><input type="checkbox" value="Task structure" />Task structure</label>
-            <label class="chip"><input type="checkbox" value="Public control" />Public control</label>
-            <label class="chip"><input type="checkbox" value="Toy sessions" />Toy sessions</label>
-            <label class="chip"><input type="checkbox" value="Aftercare focus" />Aftercare focus</label>
+          <label>Kink Interests</label>
+          <div class="interest-builder">
+            <input id="interestInput" list="interestSuggestions" maxlength="80" placeholder="pick from dropdown or type a kink" />
+            <button id="addInterestBtn" class="interest-add-btn" type="button">Add</button>
           </div>
+          <datalist id="interestSuggestions"></datalist>
+          <div id="interest-list" class="interest-list"></div>
+          <p class="interest-help">Start typing for dropdown matches, then tap Add. Added terms are saved for future handler use.</p>
         </div>
 
         <div class="full">
           <label for="goals">Primary Goals</label>
-          <textarea id="goals" maxlength="500" placeholder="What do you want from this dynamic? What outcomes are you aiming for?"></textarea>
+          <textarea id="goals" maxlength="500" placeholder="what outcome do you want: control, breakdown, obedience, humiliation, etc?"></textarea>
         </div>
         <div class="full">
           <label for="limits">Hard Limits / Boundaries</label>
-          <textarea id="limits" maxlength="500" placeholder="List non-negotiables and anything that is off-limits."></textarea>
+          <textarea id="limits" maxlength="500" placeholder="list the hard no's and non-negotiables. keep this clear."></textarea>
         </div>
         <div class="full">
           <label for="notes">Extra Context</label>
-          <textarea id="notes" maxlength="600" placeholder="Anything else the handler should know before deciding."></textarea>
+          <textarea id="notes" maxlength="600" placeholder="give handler details that help decide pace, pressure, and degradation level."></textarea>
         </div>
       </div>
       <div class="actions" style="margin-top:.7rem">
-        <button id="submitBtn" type="button">Send Booking Request</button>
+        <button id="submitBtn" type="button">Launch Booking Request</button>
         <span id="status" class="status"></span>
       </div>
+      <p class="interest-help">Submission path: handler-only queue. Pup does not see this intake.</p>
     </section>
   </main>
 
   <script>
-    var chips = Array.from(document.querySelectorAll('#interest-chips .chip'));
-    chips.forEach(function(chip) {
-      var input = chip.querySelector('input');
-      function sync() { chip.classList.toggle('active', !!input.checked); }
-      chip.addEventListener('click', function() { input.checked = !input.checked; sync(); });
-      sync();
-    });
+    var selectedInterestTerms = [];
+    var interestSuggestionTerms = [
+      'Humiliation / degradation',
+      'Puppy play / petplay',
+      'Denial / tease / frustration',
+      'Exhibition / public dares',
+      'Obedience / protocol',
+      'Service submission',
+      'Control / power exchange',
+      'Task punishment',
+      'Impact / restraint play'
+    ];
+
+    function normalizeInterestTerm(raw) {
+      var value = String(raw || '').replace(/\s+/g, ' ').replace(/^[,;|\s]+|[,;|\s]+$/g, '').trim();
+      if (!value) return '';
+      return value.slice(0, 80);
+    }
+
+    function refreshInterestSuggestions() {
+      var datalist = document.getElementById('interestSuggestions');
+      if (!datalist) return;
+      datalist.innerHTML = '';
+      interestSuggestionTerms.forEach(function(term) {
+        var option = document.createElement('option');
+        option.value = term;
+        datalist.appendChild(option);
+      });
+    }
+
+    function renderSelectedInterests() {
+      var host = document.getElementById('interest-list');
+      if (!host) return;
+      host.innerHTML = '';
+      selectedInterestTerms.forEach(function(term, index) {
+        var pill = document.createElement('span');
+        pill.className = 'interest-pill';
+        pill.innerHTML = '<span></span><button type="button" aria-label="Remove interest">&times;</button>';
+        pill.querySelector('span').textContent = term;
+        pill.querySelector('button').addEventListener('click', function() {
+          selectedInterestTerms.splice(index, 1);
+          renderSelectedInterests();
+        });
+        host.appendChild(pill);
+      });
+    }
+
+    function mergeSuggestionTerms(terms) {
+      if (!Array.isArray(terms)) return;
+      terms.forEach(function(raw) {
+        var term = normalizeInterestTerm(raw);
+        if (!term) return;
+        var exists = interestSuggestionTerms.some(function(existing) {
+          return existing.toLowerCase() === term.toLowerCase();
+        });
+        if (!exists) interestSuggestionTerms.push(term);
+      });
+      interestSuggestionTerms.sort(function(a, b) { return a.localeCompare(b); });
+      refreshInterestSuggestions();
+    }
+
+    function addInterestsFromInput() {
+      var input = document.getElementById('interestInput');
+      if (!input) return;
+      var chunks = String(input.value || '').split(',');
+      var addedAny = false;
+
+      chunks.forEach(function(chunk) {
+        var term = normalizeInterestTerm(chunk);
+        if (!term) return;
+        var exists = selectedInterestTerms.some(function(existing) {
+          return existing.toLowerCase() === term.toLowerCase();
+        });
+        if (!exists) {
+          selectedInterestTerms.push(term);
+          addedAny = true;
+        }
+      });
+
+      if (addedAny) renderSelectedInterests();
+      input.value = '';
+    }
 
     function selectedInterests() {
-      return chips.filter(function(ch) { return ch.querySelector('input').checked; })
-        .map(function(ch) { return ch.querySelector('input').value; });
+      return selectedInterestTerms.slice();
+    }
+
+    async function loadInterestSuggestions() {
+      try {
+        var response = await fetch('/api/booking/interests?limit=150');
+        if (!response.ok) return;
+        var payload = await response.json();
+        mergeSuggestionTerms(payload.items || []);
+      } catch (_) {
+        // Keep local defaults when network fetch fails.
+      }
     }
 
     function val(id) {
@@ -210,19 +426,20 @@
       var location = val('location');
       var sessionType = val('sessionType');
       var experience = val('experience');
+      addInterestsFromInput();
       var goals = val('goals');
       var limits = val('limits');
       var notes = val('notes');
       var interests = selectedInterests();
 
       if (!contact || !timezone || !availability || !location) {
-        setStatus('Please complete contact, timezone, availability, and location.', 'err');
+        setStatus('fill contact, timezone, availability, and location first.', 'err');
         return;
       }
 
       var btn = document.getElementById('submitBtn');
       btn.disabled = true;
-      setStatus('Sending booking request...');
+      setStatus('routing this mutt request to handler queue...');
 
       var availabilityWindow = availability + ' | TZ: ' + timezone;
       var sessionIntent = [
@@ -231,6 +448,7 @@
         'Interests: ' + (interests.length ? interests.join(', ') : 'not specified'),
         'Goals: ' + (goals || 'not provided'),
         'Limits: ' + (limits || 'not provided'),
+        'Visibility: handler-only',
         'Notes: ' + (notes || 'none'),
       ].join(' | ');
       var locationText = location + ' | TZ: ' + timezone;
@@ -244,7 +462,8 @@
             availability_window: availabilityWindow,
             session_intent: sessionIntent,
             location_text: locationText,
-            source: 'booking_page_v2',
+            source: 'booking_page_v2_handler_only',
+            interest_terms: interests,
           }),
         });
         if (!resp.ok) {
@@ -256,21 +475,29 @@
           var el = document.getElementById(id);
           if (el) el.value = '';
         });
-        document.getElementById('sessionType').value = 'Intro / Consult';
+        document.getElementById('sessionType').value = 'One-on-one private handling';
         document.getElementById('experience').value = 'New';
-        chips.forEach(function(chip) {
-          var input = chip.querySelector('input');
-          input.checked = false;
-          chip.classList.remove('active');
-        });
-        setStatus('Booking sent. Handler review is now queued.', 'ok');
+        selectedInterestTerms = [];
+        renderSelectedInterests();
+        mergeSuggestionTerms(interests);
+        setStatus('request locked in. handler review queued; pup sees none of this.', 'ok');
       } catch (e) {
-        setStatus('Could not send booking: ' + e.message, 'err');
+        setStatus('this mutt failed to launch booking: ' + e.message, 'err');
       } finally {
         btn.disabled = false;
       }
     }
 
+    document.getElementById('addInterestBtn').addEventListener('click', addInterestsFromInput);
+    document.getElementById('interestInput').addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addInterestsFromInput();
+      }
+    });
+    refreshInterestSuggestions();
+    loadInterestSuggestions();
+    renderSelectedInterests();
     document.getElementById('submitBtn').addEventListener('click', submitBooking);
   </script>
 </body>

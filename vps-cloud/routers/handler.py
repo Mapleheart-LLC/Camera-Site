@@ -48,6 +48,8 @@ from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import AliasChoices, BaseModel, Field
 
 import jwt as _jwt
@@ -61,6 +63,7 @@ from discord_webhook import (
     send_discord_channel_payload,
 )
 from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
+from shame import activate_shame_escalation, ensure_shame_tables, list_shame_escalations, record_shame_event, resolve_shame_escalation
 from routers.tpe import (
     _effective_webhook_secret,
     _send_mqtt_to_device,
@@ -76,6 +79,8 @@ from routers.ws_manager import handler_ws as _handler_ws
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["handler"])
+_maintenance_scheduler = AsyncIOScheduler()
+_MAINTENANCE_JOB_ID = "handler_weekly_stale_cleanup"
 AI_WARDEN_HEARTBEAT_SECONDS = 20
 AI_WARDEN_TELEMETRY_QUEUE_MAX_SIZE = 2000
 WS_CLOSE_AUTH_FAILED = 4001
@@ -365,6 +370,45 @@ def _ensure_booking_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
+
+
+_BOOKING_INTEREST_SEED_TERMS = [
+    "Humiliation / degradation",
+    "Puppy play / petplay",
+    "Denial / tease / frustration",
+    "Exhibition / public dares",
+    "Obedience / protocol",
+    "Service submission",
+    "Control / power exchange",
+    "Task punishment",
+    "Impact / restraint play",
+]
+
+
+def _ensure_booking_interest_terms_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS booking_interest_terms (
+            term        TEXT PRIMARY KEY,
+            usage_count INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL,
+            last_used_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_booking_interest_terms_usage ON booking_interest_terms(usage_count DESC, last_used_at DESC)"
+    )
+
+    now = _now_iso()
+    for term in _BOOKING_INTEREST_SEED_TERMS:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO booking_interest_terms (term, usage_count, created_at, last_used_at)
+            VALUES (?, 0, ?, ?)
+            """,
+            (term, now, now),
+        )
 
 
 def _ensure_puppy_mail_tables(conn: sqlite3.Connection) -> None:
@@ -790,6 +834,28 @@ def _ensure_device_app_inventory_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_handler_maintenance_tables(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS handler_device_maintenance_runs (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            source                TEXT NOT NULL,
+            status                TEXT NOT NULL,
+            older_than_hours      INTEGER NOT NULL,
+            include_name_fallback INTEGER NOT NULL DEFAULT 1,
+            candidates            INTEGER NOT NULL DEFAULT 0,
+            deleted               INTEGER NOT NULL DEFAULT 0,
+            remaining             INTEGER NOT NULL DEFAULT 0,
+            note                  TEXT,
+            created_at            TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_handler_maintenance_runs_created ON handler_device_maintenance_runs(created_at DESC)"
+    )
+
+
 def migrate_handler(conn: sqlite3.Connection) -> None:
     """Create or migrate the handler_device_status table.
 
@@ -806,6 +872,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_limbo_columns(conn)
         _ensure_limbo_attachments_table(conn)
         _ensure_booking_table(conn)
+        ensure_shame_tables(conn)
+        _ensure_booking_interest_terms_table(conn)
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
@@ -818,6 +886,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_toy_share_command_events_table(conn)
         _ensure_ai_warden_reports_table(conn)
         _ensure_device_app_inventory_tables(conn)
+        _ensure_handler_maintenance_tables(conn)
         conn.commit()
         return
 
@@ -857,6 +926,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_limbo_columns(conn)
         _ensure_limbo_attachments_table(conn)
         _ensure_booking_table(conn)
+        ensure_shame_tables(conn)
+        _ensure_booking_interest_terms_table(conn)
         _ensure_puppy_mail_tables(conn)
         _ensure_rule_engine_tables(conn)
         _ensure_evidence_vault_tables(conn)
@@ -869,6 +940,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_toy_share_command_events_table(conn)
         _ensure_ai_warden_reports_table(conn)
         _ensure_device_app_inventory_tables(conn)
+        _ensure_handler_maintenance_tables(conn)
         conn.commit()
         return
 
@@ -884,6 +956,8 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_limbo_columns(conn)
     _ensure_limbo_attachments_table(conn)
     _ensure_booking_table(conn)
+    ensure_shame_tables(conn)
+    _ensure_booking_interest_terms_table(conn)
     _ensure_puppy_mail_tables(conn)
     _ensure_rule_engine_tables(conn)
     _ensure_evidence_vault_tables(conn)
@@ -896,6 +970,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_toy_share_command_events_table(conn)
     _ensure_ai_warden_reports_table(conn)
     _ensure_device_app_inventory_tables(conn)
+    _ensure_handler_maintenance_tables(conn)
     conn.commit()
 
 
@@ -1526,12 +1601,17 @@ class BookingCreateRequest(BaseModel):
     session_intent: str
     location_text: str
     source: Optional[str] = "public"
+    interest_terms: Optional[list[str]] = None
 
 
 class BookingStatusUpdateRequest(BaseModel):
     status: str
     priority: Optional[str] = None
     notes: Optional[str] = None
+
+
+class ShameEscalationResolveRequest(BaseModel):
+    note: Optional[str] = None
 
 
 class PuppyMailCreateRequest(BaseModel):
@@ -2802,6 +2882,40 @@ def create_booking_intake(
     if not location_text:
         raise HTTPException(status_code=400, detail="location_text is required")
 
+    def _normalize_interest_term(raw: str) -> Optional[str]:
+        cleaned = re.sub(r"\s+", " ", str(raw or "")).strip(" ,;|")
+        if len(cleaned) < 2:
+            return None
+        return cleaned[:80]
+
+    def _interest_terms_from_payload_or_intent() -> list[str]:
+        parsed: list[str] = []
+        if payload.interest_terms:
+            for term in payload.interest_terms:
+                norm = _normalize_interest_term(term)
+                if norm:
+                    parsed.append(norm)
+        else:
+            match = re.search(r"Interests:\s*([^|]+)", session_intent, flags=re.IGNORECASE)
+            if match:
+                for token in match.group(1).split(","):
+                    norm = _normalize_interest_term(token)
+                    if norm:
+                        parsed.append(norm)
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for term in parsed:
+            key = term.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(term)
+        return deduped[:20]
+
+    interest_terms = _interest_terms_from_payload_or_intent()
+    _ensure_booking_interest_terms_table(db)
+
     now = _now_iso()
     cur = db.execute(
         """
@@ -2836,8 +2950,63 @@ def create_booking_intake(
         booking_id=int(cur.lastrowid),
         event_kind="booking_created",
     )
+
+    record_shame_event(
+        db,
+        "booking_submitted",
+        metadata={"booking_id": int(cur.lastrowid), "source": source},
+        created_at=now,
+    )
+
+    if interest_terms:
+        for term in interest_terms:
+            db.execute(
+                """
+                INSERT INTO booking_interest_terms (term, usage_count, created_at, last_used_at)
+                VALUES (?, 1, ?, ?)
+                ON CONFLICT(term) DO UPDATE SET
+                    usage_count = booking_interest_terms.usage_count + 1,
+                    last_used_at = excluded.last_used_at
+                """,
+                (term, now, now),
+            )
+
     db.commit()
     return {"id": cur.lastrowid, "status": "new"}
+
+
+@router.get("/api/booking/interests")
+def list_booking_interest_terms(
+    q: str = Query(default="", min_length=0, max_length=80),
+    limit: int = Query(default=40, ge=1, le=200),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    _ensure_booking_interest_terms_table(db)
+    query_text = (q or "").strip()
+
+    if query_text:
+        rows = db.execute(
+            """
+            SELECT term
+            FROM booking_interest_terms
+            WHERE LOWER(term) LIKE LOWER(?)
+            ORDER BY usage_count DESC, last_used_at DESC, term ASC
+            LIMIT ?
+            """,
+            (f"%{query_text}%", limit),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT term
+            FROM booking_interest_terms
+            ORDER BY usage_count DESC, last_used_at DESC, term ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    return {"items": [str(row["term"]) for row in rows]}
 
 
 @router.post("/api/puppy-mail", status_code=201)
@@ -3686,52 +3855,13 @@ def _filter_panel_visible_devices(
     return visible, hidden_count
 
 
-@router.get("/api/handler/devices")
-def handler_list_devices(
-    response: Response,
-    current_user: dict = Depends(role_required("admin", "handler")),
-    db: sqlite3.Connection = Depends(get_db),
-) -> list:
-    """Return a list of devices with their current status.
-
-    Admins receive all devices; handlers receive only their assigned ones.
-    """
-    if current_user["role"] == "admin":
-        rows = db.execute(
-            "SELECT device_id, device_name, fcm_token, is_online, is_locked, battery_pct, last_seen, updated_at "
-            "FROM handler_device_status ORDER BY last_seen DESC"
-        ).fetchall()
-    else:
-        assigned = _handler_allowed_devices(db, current_user["user_id"])
-        rows = _fetch_devices_by_ids(db, assigned)
-        known_total = db.execute(
-            "SELECT COUNT(*) AS n FROM handler_device_status"
-        ).fetchone()["n"]
-        if known_total > 0 and len(rows) == 0:
-            response.headers["X-Handler-Devices-Notice"] = "no-assignment"
-            response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
-    collapsed = _collapse_panel_devices(rows)
-    filtered, hidden_count = _filter_panel_visible_devices(
-        collapsed,
-        now_utc=datetime.now(timezone.utc),
-        stale_hours=HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS,
-    )
-    if hidden_count > 0:
-        response.headers["X-Handler-Devices-Hidden-Stale"] = str(hidden_count)
-    for row in filtered:
-        row.pop("fcm_token", None)
-    return filtered
-
-
-@router.post("/api/handler/devices/cleanup-stale")
-def handler_cleanup_stale_devices(
-    older_than_hours: int = Query(default=72, ge=1, le=24 * 365),
-    include_name_fallback: bool = Query(default=True),
-    dry_run: bool = Query(default=False),
-    _current_user: dict = Depends(role_required("admin")),
-    db: sqlite3.Connection = Depends(get_db),
-) -> dict:
-    """Prune stale duplicate device rows to keep handler panel lists clean."""
+def _run_stale_device_cleanup(
+    db: sqlite3.Connection,
+    *,
+    older_than_hours: int,
+    include_name_fallback: bool,
+    dry_run: bool,
+) -> dict[str, Any]:
     rows = db.execute(
         "SELECT device_id, device_name, fcm_token, is_online, last_seen, updated_at "
         "FROM handler_device_status"
@@ -3744,6 +3874,7 @@ def handler_cleanup_stale_devices(
             "dry_run": bool(dry_run),
             "older_than_hours": int(older_than_hours),
             "include_name_fallback": bool(include_name_fallback),
+            "deleted_device_ids": [],
         }
 
     now_utc = datetime.now(timezone.utc)
@@ -3796,6 +3927,207 @@ def handler_cleanup_stale_devices(
         "include_name_fallback": bool(include_name_fallback),
         "deleted_device_ids": delete_ids,
     }
+
+
+def _log_device_maintenance_run(
+    db: sqlite3.Connection,
+    *,
+    source: str,
+    status: str,
+    older_than_hours: int,
+    include_name_fallback: bool,
+    candidates: int,
+    deleted: int,
+    remaining: int,
+    note: str,
+) -> None:
+    db.execute(
+        """
+        INSERT INTO handler_device_maintenance_runs
+            (source, status, older_than_hours, include_name_fallback, candidates, deleted, remaining, note, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            source,
+            status,
+            int(older_than_hours),
+            1 if include_name_fallback else 0,
+            int(candidates),
+            int(deleted),
+            int(remaining),
+            note,
+            _now_iso(),
+        ),
+    )
+    db.commit()
+
+
+def _scheduled_weekly_stale_cleanup_job() -> None:
+    older_than_hours = int(get_setting(None, "handler_cleanup_stale_hours", "168") or "168")
+    include_name_fallback = (get_setting(None, "handler_cleanup_include_name_fallback", "true") or "true").strip().lower() == "true"
+    db = get_db_connection()
+    try:
+        result = _run_stale_device_cleanup(
+            db,
+            older_than_hours=max(1, min(older_than_hours, 24 * 365)),
+            include_name_fallback=bool(include_name_fallback),
+            dry_run=False,
+        )
+        _log_device_maintenance_run(
+            db,
+            source="weekly_scheduler",
+            status="ok",
+            older_than_hours=int(result.get("older_than_hours", older_than_hours)),
+            include_name_fallback=bool(result.get("include_name_fallback", include_name_fallback)),
+            candidates=int(result.get("candidates", 0)),
+            deleted=int(result.get("deleted", 0)),
+            remaining=int(result.get("remaining", 0)),
+            note="weekly stale-duplicate cleanup",
+        )
+        logger.info(
+            "Weekly handler stale cleanup complete: candidates=%s deleted=%s remaining=%s",
+            result.get("candidates", 0),
+            result.get("deleted", 0),
+            result.get("remaining", 0),
+        )
+    except Exception as exc:  # noqa: BLE001
+        _log_device_maintenance_run(
+            db,
+            source="weekly_scheduler",
+            status="error",
+            older_than_hours=max(1, min(older_than_hours, 24 * 365)),
+            include_name_fallback=bool(include_name_fallback),
+            candidates=0,
+            deleted=0,
+            remaining=0,
+            note=f"weekly stale cleanup failed: {exc}",
+        )
+        logger.warning("Weekly handler stale cleanup failed: %s", exc)
+    finally:
+        db.close()
+
+
+def start_handler_maintenance_scheduler() -> None:
+    if _maintenance_scheduler.running:
+        return
+    _maintenance_scheduler.add_job(
+        _scheduled_weekly_stale_cleanup_job,
+        trigger=CronTrigger(day_of_week="sun", hour=3, minute=15, timezone="UTC"),
+        id=_MAINTENANCE_JOB_ID,
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    _maintenance_scheduler.start()
+    logger.info("Handler maintenance scheduler started (weekly stale cleanup Sunday 03:15 UTC).")
+
+
+def stop_handler_maintenance_scheduler() -> None:
+    if _maintenance_scheduler.running:
+        _maintenance_scheduler.shutdown(wait=False)
+        logger.info("Handler maintenance scheduler stopped.")
+
+
+@router.get("/api/handler/devices")
+def handler_list_devices(
+    response: Response,
+    current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    """Return a list of devices with their current status.
+
+    Admins receive all devices; handlers receive only their assigned ones.
+    """
+    if current_user["role"] == "admin":
+        rows = db.execute(
+            "SELECT device_id, device_name, fcm_token, is_online, is_locked, battery_pct, last_seen, updated_at "
+            "FROM handler_device_status ORDER BY last_seen DESC"
+        ).fetchall()
+    else:
+        assigned = _handler_allowed_devices(db, current_user["user_id"])
+        rows = _fetch_devices_by_ids(db, assigned)
+        known_total = db.execute(
+            "SELECT COUNT(*) AS n FROM handler_device_status"
+        ).fetchone()["n"]
+        if known_total > 0 and len(rows) == 0:
+            response.headers["X-Handler-Devices-Notice"] = "no-assignment"
+            response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
+    collapsed = _collapse_panel_devices(rows)
+    filtered, hidden_count = _filter_panel_visible_devices(
+        collapsed,
+        now_utc=datetime.now(timezone.utc),
+        stale_hours=HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS,
+    )
+    if hidden_count > 0:
+        response.headers["X-Handler-Devices-Hidden-Stale"] = str(hidden_count)
+    for row in filtered:
+        row.pop("fcm_token", None)
+    return filtered
+
+
+@router.post("/api/handler/devices/cleanup-stale")
+def handler_cleanup_stale_devices(
+    older_than_hours: int = Query(default=72, ge=1, le=24 * 365),
+    include_name_fallback: bool = Query(default=True),
+    dry_run: bool = Query(default=False),
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Prune stale duplicate device rows to keep handler panel lists clean."""
+    return _run_stale_device_cleanup(
+        db,
+        older_than_hours=int(older_than_hours),
+        include_name_fallback=bool(include_name_fallback),
+        dry_run=bool(dry_run),
+    )
+
+
+@router.get("/api/handler/devices/maintenance/status")
+def handler_devices_maintenance_status(
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    run = db.execute(
+        """
+        SELECT id, source, status, older_than_hours, include_name_fallback,
+               candidates, deleted, remaining, note, created_at
+        FROM handler_device_maintenance_runs
+        ORDER BY id DESC LIMIT 1
+        """
+    ).fetchone()
+    job = _maintenance_scheduler.get_job(_MAINTENANCE_JOB_ID) if _maintenance_scheduler.running else None
+    return {
+        "scheduler_running": bool(_maintenance_scheduler.running),
+        "next_run_utc": job.next_run_time.isoformat() if job and job.next_run_time else None,
+        "last_run": dict(run) if run else None,
+    }
+
+
+@router.post("/api/handler/devices/maintenance/run-now")
+def handler_devices_maintenance_run_now(
+    older_than_hours: int = Query(default=168, ge=1, le=24 * 365),
+    include_name_fallback: bool = Query(default=True),
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    result = _run_stale_device_cleanup(
+        db,
+        older_than_hours=int(older_than_hours),
+        include_name_fallback=bool(include_name_fallback),
+        dry_run=False,
+    )
+    _log_device_maintenance_run(
+        db,
+        source="manual_run_now",
+        status="ok",
+        older_than_hours=int(result.get("older_than_hours", older_than_hours)),
+        include_name_fallback=bool(result.get("include_name_fallback", include_name_fallback)),
+        candidates=int(result.get("candidates", 0)),
+        deleted=int(result.get("deleted", 0)),
+        remaining=int(result.get("remaining", 0)),
+        note="manual stale-duplicate cleanup",
+    )
+    return result
 
 
 @router.get("/api/handler/status")
@@ -4216,6 +4548,26 @@ async def handler_delete_all_devices(
     }
 
 
+@router.post("/api/handler/devices/delete-all/preview")
+def handler_delete_all_devices_preview(
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    status_count = int(db.execute("SELECT COUNT(*) AS n FROM handler_device_status").fetchone()["n"])
+    assignment_count = int(db.execute("SELECT COUNT(*) AS n FROM handler_device_assignments").fetchone()["n"])
+    pairing_count = int(db.execute("SELECT COUNT(*) AS n FROM tpe_paired_devices").fetchone()["n"])
+    sample_rows = db.execute(
+        "SELECT device_id FROM handler_device_status ORDER BY last_seen DESC LIMIT 12"
+    ).fetchall()
+    sample_ids = [str(row["device_id"]) for row in sample_rows if row.get("device_id")]
+    return {
+        "status_rows": status_count,
+        "assignment_rows": assignment_count,
+        "pairing_rows": pairing_count,
+        "sample_device_ids": sample_ids,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Admin-only assignment management
 # ---------------------------------------------------------------------------
@@ -4369,6 +4721,54 @@ def handler_update_booking_status(
     )
     db.commit()
     return {"updated": True, "id": booking_id, "status": status_value}
+
+
+@router.get("/api/handler/shame/escalations")
+def handler_list_shame_escalations(
+    status_filter: str = Query(default="all", alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> list:
+    sf = (status_filter or "all").strip().lower()
+    allowed = {"all", "pending", "active", "resolved"}
+    if sf not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid shame escalation status filter")
+    return list_shame_escalations(db, status_filter=sf, limit=limit)
+
+
+@router.post("/api/handler/shame/escalations/{escalation_id}/resolve")
+def handler_resolve_shame_escalation(
+    escalation_id: int,
+    payload: ShameEscalationResolveRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        result = resolve_shame_escalation(db, escalation_id, note=(payload.note or ""))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Shame escalation not found")
+    db.commit()
+    return result
+
+
+@router.post("/api/handler/shame/escalations/{escalation_id}/activate")
+def handler_activate_shame_escalation(
+    escalation_id: int,
+    payload: ShameEscalationResolveRequest,
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    try:
+        result = activate_shame_escalation(db, escalation_id, note=(payload.note or ""))
+    except ValueError as exc:
+        if str(exc) == "escalation_not_found":
+            raise HTTPException(status_code=404, detail="Shame escalation not found")
+        if str(exc) == "escalation_resolved":
+            raise HTTPException(status_code=409, detail="Resolved escalation cannot be activated")
+        raise
+    db.commit()
+    return result
 
 
 @router.get("/api/handler/puppy-mail/threads")

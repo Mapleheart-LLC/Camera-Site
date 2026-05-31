@@ -1046,6 +1046,47 @@ button:focus-visible {
   margin-bottom: 0.75rem;
 }
 
+.hp2-command-feedback {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid #315862;
+  background: #102328;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.hp2-command-feedback strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ffd5a8;
+}
+
+.hp2-command-feedback span {
+  font-size: 0.84rem;
+}
+
+.hp2-command-lane {
+  margin-bottom: 0.75rem;
+  position: sticky;
+  top: 118px;
+  z-index: 18;
+  background: linear-gradient(180deg, #18343a 0%, #13282d 100%);
+}
+
+.hp2-segmented-row-command-nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hp2-segmented-row-command-nav .hp2-btn {
+  text-align: center;
+}
+
+.hp2-mobile-ops-dock {
+  display: none;
+}
+
 .hp2-capability-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1171,6 +1212,49 @@ button:focus-visible {
   min-height: 1.2em;
 }
 
+.hp2-muted.hp2-inline-result-ok {
+  color: #86f0c7;
+}
+
+.hp2-muted.hp2-inline-result-warn {
+  color: #ffd996;
+}
+
+.hp2-muted.hp2-inline-result-bad {
+  color: #ffb0b0;
+}
+
+@media (max-width: 760px) {
+  .hp2-command-lane {
+    top: 76px;
+  }
+
+  .hp2-live-control-grid {
+    gap: 0.62rem;
+  }
+
+  #hp2-view-commands .hp2-control-card {
+    padding: 0.62rem;
+  }
+
+  #hp2-view-commands .hp2-action-row .hp2-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .hp2-mobile-ops-dock {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.38rem;
+    margin-top: 0.55rem;
+  }
+
+  .hp2-mobile-ops-dock .hp2-btn {
+    padding: 0.45rem 0.4rem;
+    font-size: 0.78rem;
+  }
+}
+
 @media (min-width: 980px) {
   .hp2-app {
     padding: 1rem 1.4rem 1.2rem;
@@ -1194,6 +1278,14 @@ button:focus-visible {
 
   .hp2-live-control-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hp2-segmented-row-command-nav {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .hp2-command-lane {
+    top: 94px;
   }
 
   .hp2-control-grid-2 {

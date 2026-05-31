@@ -6,8 +6,8 @@ GET  /auth/spotify/login          Admin-initiated OAuth authorization redirect
 GET  /auth/spotify/callback       OAuth callback – exchanges code and stores tokens
 GET  /api/spotify/now-playing     Current playback state (no viewer auth required)
 GET  /api/spotify/og-image        Dynamic 1200×630 social-preview PNG (no auth)
-GET  /api/spotify/search          Search for tracks (access_level >= 1)
-POST /api/spotify/queue           Add a track to the creator's queue (access_level >= 1)
+GET  /api/spotify/search          Search for tracks (public)
+POST /api/spotify/queue           Add a track to the creator's queue (public)
 """
 
 import io
@@ -20,12 +20,12 @@ import time
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 
 from db import get_db, get_setting, set_setting
-from dependencies import get_admin_user, get_current_user
+from dependencies import get_admin_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,6 +50,14 @@ _STATE_TTL = 600  # 10 minutes
 _np_cache: tuple[float, dict] | None = None  # (expires_at, data)
 _NP_CACHE_TTL = 3.0  # seconds
 
+# Lightweight in-memory throttles for public queue endpoints.
+_PUBLIC_SEARCH_WINDOW_SECONDS = 60
+_PUBLIC_SEARCH_LIMIT = 30
+_PUBLIC_QUEUE_WINDOW_SECONDS = 60
+_PUBLIC_QUEUE_LIMIT = 12
+_public_search_hits: dict[str, list[float]] = {}
+_public_queue_hits: dict[str, list[float]] = {}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +66,34 @@ def _get_client_creds() -> tuple[str, str]:
         os.environ.get("SPOTIFY_CLIENT_ID", ""),
         os.environ.get("SPOTIFY_CLIENT_SECRET", ""),
     )
+
+
+def _client_ip(request: Request) -> str:
+    xff = (request.headers.get("x-forwarded-for") or "").strip()
+    if xff:
+        return xff.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _consume_public_quota(
+    bucket: dict[str, list[float]],
+    key: str,
+    *,
+    window_seconds: int,
+    max_hits: int,
+) -> bool:
+    now = time.time()
+    cutoff = now - float(window_seconds)
+    prior = bucket.get(key, [])
+    recent = [ts for ts in prior if ts >= cutoff]
+    if len(recent) >= max_hits:
+        bucket[key] = recent
+        return False
+    recent.append(now)
+    bucket[key] = recent
+    return True
 
 
 def _redirect_uri() -> str:
@@ -259,19 +295,25 @@ async def now_playing(db: sqlite3.Connection = Depends(get_db)):
     return result
 
 
-# ── Authenticated search & queue (access_level >= 1) ─────────────────────────
+# ── Public search & queue ─────────────────────────────────────────────────────
 
 @router.get("/api/spotify/search")
 async def search_tracks(
     q: str = Query(..., min_length=1, max_length=200),
-    user: dict = Depends(get_current_user),
+    request: Request = None,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Search Spotify for tracks. Requires access_level >= 1 (free follower+)."""
-    if (user.get("access_level") or 0) < 1:
+    """Search Spotify for tracks (public, throttled per IP)."""
+    client_key = _client_ip(request)
+    if not _consume_public_quota(
+        _public_search_hits,
+        client_key,
+        window_seconds=_PUBLIC_SEARCH_WINDOW_SECONDS,
+        max_hits=_PUBLIC_SEARCH_LIMIT,
+    ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Must be a follower to search tracks.",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Search rate limit reached. Please wait a minute and try again.",
         )
 
     access_token = await _get_valid_access_token(db)
@@ -318,14 +360,20 @@ class QueueRequest(BaseModel):
 @router.post("/api/spotify/queue", status_code=status.HTTP_200_OK)
 async def add_to_queue(
     body: QueueRequest,
-    user: dict = Depends(get_current_user),
+    request: Request = None,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Add a track to the creator's Spotify queue. Requires access_level >= 1 (free follower+)."""
-    if (user.get("access_level") or 0) < 1:
+    """Add a track to the creator's Spotify queue (public, throttled per IP)."""
+    client_key = _client_ip(request)
+    if not _consume_public_quota(
+        _public_queue_hits,
+        client_key,
+        window_seconds=_PUBLIC_QUEUE_WINDOW_SECONDS,
+        max_hits=_PUBLIC_QUEUE_LIMIT,
+    ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Must be a follower to add to queue.",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Queue rate limit reached. Please wait a minute and try again.",
         )
 
     if not body.uri.startswith("spotify:track:"):

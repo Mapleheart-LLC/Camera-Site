@@ -62,6 +62,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -94,6 +95,12 @@ except ImportError:  # noqa: BLE001
     _ATPROTO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+_TWITTER_AUTH_BACKOFF_SECONDS = max(60, int(os.environ.get("TWITTER_AUTH_BACKOFF_SECONDS", "1800")))
+_TWITTER_AUTH_BACKOFF_UNTIL: dict[str, float] = {
+    "likes": 0.0,
+    "bookmarks": 0.0,
+}
 
 # ---------------------------------------------------------------------------
 # Credential helper – DB-first with env-var fallback
@@ -621,6 +628,61 @@ def _get_oauth2_client() -> Optional[object]:
         return None
 
 
+def _twitter_exc_status(exc: Exception) -> Optional[int]:
+    code = getattr(exc, "status_code", None)
+    if isinstance(code, int):
+        return code
+    response = getattr(exc, "response", None)
+    if response is not None:
+        response_code = getattr(response, "status_code", None)
+        if isinstance(response_code, int):
+            return response_code
+    text = str(exc).lower()
+    if "401" in text or "unauthorized" in text:
+        return 401
+    if "403" in text or "forbidden" in text:
+        return 403
+    return None
+
+
+def _twitter_is_auth_error(exc: Exception) -> bool:
+    status = _twitter_exc_status(exc)
+    return status in {401, 403}
+
+
+def _twitter_auth_message(exc: Exception) -> str:
+    # Tweepy exceptions can include duplicate/newline payload text.
+    return str(exc).strip().splitlines()[0][:220]
+
+
+def _twitter_backoff_active(endpoint: str) -> bool:
+    until = float(_TWITTER_AUTH_BACKOFF_UNTIL.get(endpoint, 0.0) or 0.0)
+    now = time.time()
+    if now >= until:
+        return False
+    remaining = int(until - now)
+    logger.debug(
+        "Twitter scraper: %s auth backoff active (%ss remaining); skipping endpoint.",
+        endpoint,
+        max(1, remaining),
+    )
+    return True
+
+
+def _twitter_set_auth_backoff(endpoint: str, exc: Exception) -> None:
+    until = time.time() + _TWITTER_AUTH_BACKOFF_SECONDS
+    _TWITTER_AUTH_BACKOFF_UNTIL[endpoint] = until
+    retry_at = datetime.fromtimestamp(until, tz=timezone.utc).isoformat()
+    logger.warning(
+        "Twitter scraper: %s auth failed (%s). Backing off for %ss (until %s UTC). "
+        "Reauthorize Twitter tokens in admin panel if this persists.",
+        endpoint,
+        _twitter_auth_message(exc),
+        _TWITTER_AUTH_BACKOFF_SECONDS,
+        retry_at,
+    )
+
+
 def _scrape_twitter() -> None:
     """Fetch liked and bookmarked tweets and store new ones in drool_archive."""
     user_id = _load_credential("drool_twitter_user_id", "TWITTER_USER_ID")
@@ -654,79 +716,188 @@ def _scrape_twitter() -> None:
             and _load_credential("drool_twitter_access_secret", "TWITTER_ACCESS_SECRET")
         )
 
-        # Liked tweets
-        try:
-            resp = likes_client.get_liked_tweets(
-                id=user_id,
-                user_auth=use_user_auth,
-                max_results=50,
-                tweet_fields=["created_at", "text", "attachments"],
-                expansions=["attachments.media_keys"],
-                media_fields=["url", "preview_image_url", "type"],
-            )
-            if resp and resp.data:
-                media_map: dict = {}
-                if resp.includes and "media" in resp.includes:
-                    for m in resp.includes["media"]:
-                        media_map[m.media_key] = getattr(m, "url", None) or getattr(
-                            m, "preview_image_url", None
-                        )
-                for tweet in resp.data:
-                    url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
-                    att = getattr(tweet, "attachments", None) or {}
-                    mks = att.get("media_keys") or []
-                    tweet_media_urls = []
-                    for mk in mks:
-                        resolved = media_map.get(mk)
-                        if resolved:
-                            tweet_media_urls.append(resolved)
-                    media_url: Optional[str] = tweet_media_urls[0] if tweet_media_urls else None
-                    media_urls_json: Optional[str] = json.dumps(tweet_media_urls) if tweet_media_urls else None
-                    ts = (
-                        tweet.created_at.isoformat()
-                        if tweet.created_at
-                        else datetime.now(timezone.utc).isoformat()
-                    )
-                    items.append(("twitter", url, media_url, tweet.text, ts, media_urls_json))
-        except Exception as exc:
-            logger.warning("Twitter scraper: liked tweets fetch failed: %s", exc)
-
-        # Bookmarks – always uses OAuth 2.0 PKCE user context (the bookmarks
-        # endpoint returns 403 for bearer tokens and OAuth 1.0a).
-        if oauth2_client is not None:
+        if not _twitter_backoff_active("likes"):
+            # Liked tweets
             try:
-                bk_resp = oauth2_client.get_bookmarks(
+                resp = likes_client.get_liked_tweets(
+                    id=user_id,
+                    user_auth=use_user_auth,
                     max_results=50,
                     tweet_fields=["created_at", "text", "attachments"],
                     expansions=["attachments.media_keys"],
                     media_fields=["url", "preview_image_url", "type"],
                 )
-                if bk_resp and bk_resp.data:
-                    bk_media_map: dict = {}
-                    if bk_resp.includes and "media" in bk_resp.includes:
-                        for m in bk_resp.includes["media"]:
-                            bk_media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                if resp and resp.data:
+                    media_map: dict = {}
+                    if resp.includes and "media" in resp.includes:
+                        for m in resp.includes["media"]:
+                            media_map[m.media_key] = getattr(m, "url", None) or getattr(
                                 m, "preview_image_url", None
                             )
-                    for tweet in bk_resp.data:
+                    for tweet in resp.data:
                         url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
                         att = getattr(tweet, "attachments", None) or {}
                         mks = att.get("media_keys") or []
-                        bk_tweet_media_urls = []
+                        tweet_media_urls = []
                         for mk in mks:
-                            resolved = bk_media_map.get(mk)
+                            resolved = media_map.get(mk)
                             if resolved:
-                                bk_tweet_media_urls.append(resolved)
-                        bk_media_url: Optional[str] = bk_tweet_media_urls[0] if bk_tweet_media_urls else None
-                        bk_media_urls_json: Optional[str] = json.dumps(bk_tweet_media_urls) if bk_tweet_media_urls else None
+                                tweet_media_urls.append(resolved)
+                        media_url: Optional[str] = tweet_media_urls[0] if tweet_media_urls else None
+                        media_urls_json: Optional[str] = json.dumps(tweet_media_urls) if tweet_media_urls else None
                         ts = (
                             tweet.created_at.isoformat()
                             if tweet.created_at
                             else datetime.now(timezone.utc).isoformat()
                         )
-                        items.append(("twitter", url, bk_media_url, tweet.text, ts, bk_media_urls_json))
+                        items.append(("twitter", url, media_url, tweet.text, ts, media_urls_json))
             except Exception as exc:
-                logger.warning("Twitter scraper: bookmarks fetch failed: %s", exc)
+                # OAuth 2.0 token can expire; refresh once and retry likes call.
+                if oauth2_client is not None and _twitter_exc_status(exc) == 401:
+                    refreshed = _refresh_oauth2_token()
+                    if refreshed:
+                        retry_client = _get_oauth2_client()
+                        if retry_client is not None:
+                            try:
+                                resp = retry_client.get_liked_tweets(
+                                    id=user_id,
+                                    user_auth=False,
+                                    max_results=50,
+                                    tweet_fields=["created_at", "text", "attachments"],
+                                    expansions=["attachments.media_keys"],
+                                    media_fields=["url", "preview_image_url", "type"],
+                                )
+                                if resp and resp.data:
+                                    media_map: dict = {}
+                                    if resp.includes and "media" in resp.includes:
+                                        for m in resp.includes["media"]:
+                                            media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                                                m, "preview_image_url", None
+                                            )
+                                    for tweet in resp.data:
+                                        url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
+                                        att = getattr(tweet, "attachments", None) or {}
+                                        mks = att.get("media_keys") or []
+                                        tweet_media_urls = []
+                                        for mk in mks:
+                                            resolved = media_map.get(mk)
+                                            if resolved:
+                                                tweet_media_urls.append(resolved)
+                                        media_url: Optional[str] = tweet_media_urls[0] if tweet_media_urls else None
+                                        media_urls_json: Optional[str] = json.dumps(tweet_media_urls) if tweet_media_urls else None
+                                        ts = (
+                                            tweet.created_at.isoformat()
+                                            if tweet.created_at
+                                            else datetime.now(timezone.utc).isoformat()
+                                        )
+                                        items.append(("twitter", url, media_url, tweet.text, ts, media_urls_json))
+                            except Exception as retry_exc:
+                                if _twitter_is_auth_error(retry_exc):
+                                    _twitter_set_auth_backoff("likes", retry_exc)
+                                else:
+                                    logger.warning(
+                                        "Twitter scraper: liked tweets fetch failed after token refresh: %s",
+                                        _twitter_auth_message(retry_exc),
+                                    )
+                        else:
+                            _twitter_set_auth_backoff("likes", exc)
+                    else:
+                        _twitter_set_auth_backoff("likes", exc)
+                elif _twitter_is_auth_error(exc):
+                    _twitter_set_auth_backoff("likes", exc)
+                else:
+                    logger.warning("Twitter scraper: liked tweets fetch failed: %s", _twitter_auth_message(exc))
+
+        # Bookmarks – always uses OAuth 2.0 PKCE user context (the bookmarks
+        # endpoint returns 403 for bearer tokens and OAuth 1.0a).
+        if oauth2_client is not None:
+            if _twitter_backoff_active("bookmarks"):
+                pass
+            else:
+                try:
+                    bk_resp = oauth2_client.get_bookmarks(
+                        max_results=50,
+                        tweet_fields=["created_at", "text", "attachments"],
+                        expansions=["attachments.media_keys"],
+                        media_fields=["url", "preview_image_url", "type"],
+                    )
+                    if bk_resp and bk_resp.data:
+                        bk_media_map: dict = {}
+                        if bk_resp.includes and "media" in bk_resp.includes:
+                            for m in bk_resp.includes["media"]:
+                                bk_media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                                    m, "preview_image_url", None
+                                )
+                        for tweet in bk_resp.data:
+                            url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
+                            att = getattr(tweet, "attachments", None) or {}
+                            mks = att.get("media_keys") or []
+                            bk_tweet_media_urls = []
+                            for mk in mks:
+                                resolved = bk_media_map.get(mk)
+                                if resolved:
+                                    bk_tweet_media_urls.append(resolved)
+                            bk_media_url: Optional[str] = bk_tweet_media_urls[0] if bk_tweet_media_urls else None
+                            bk_media_urls_json: Optional[str] = json.dumps(bk_tweet_media_urls) if bk_tweet_media_urls else None
+                            ts = (
+                                tweet.created_at.isoformat()
+                                if tweet.created_at
+                                else datetime.now(timezone.utc).isoformat()
+                            )
+                            items.append(("twitter", url, bk_media_url, tweet.text, ts, bk_media_urls_json))
+                except Exception as exc:
+                    if _twitter_exc_status(exc) == 401:
+                        refreshed = _refresh_oauth2_token()
+                        if refreshed:
+                            retry_client = _get_oauth2_client()
+                            if retry_client is not None:
+                                try:
+                                    bk_resp = retry_client.get_bookmarks(
+                                        max_results=50,
+                                        tweet_fields=["created_at", "text", "attachments"],
+                                        expansions=["attachments.media_keys"],
+                                        media_fields=["url", "preview_image_url", "type"],
+                                    )
+                                    if bk_resp and bk_resp.data:
+                                        bk_media_map: dict = {}
+                                        if bk_resp.includes and "media" in bk_resp.includes:
+                                            for m in bk_resp.includes["media"]:
+                                                bk_media_map[m.media_key] = getattr(m, "url", None) or getattr(
+                                                    m, "preview_image_url", None
+                                                )
+                                        for tweet in bk_resp.data:
+                                            url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
+                                            att = getattr(tweet, "attachments", None) or {}
+                                            mks = att.get("media_keys") or []
+                                            bk_tweet_media_urls = []
+                                            for mk in mks:
+                                                resolved = bk_media_map.get(mk)
+                                                if resolved:
+                                                    bk_tweet_media_urls.append(resolved)
+                                            bk_media_url: Optional[str] = bk_tweet_media_urls[0] if bk_tweet_media_urls else None
+                                            bk_media_urls_json: Optional[str] = json.dumps(bk_tweet_media_urls) if bk_tweet_media_urls else None
+                                            ts = (
+                                                tweet.created_at.isoformat()
+                                                if tweet.created_at
+                                                else datetime.now(timezone.utc).isoformat()
+                                            )
+                                            items.append(("twitter", url, bk_media_url, tweet.text, ts, bk_media_urls_json))
+                                except Exception as retry_exc:
+                                    if _twitter_is_auth_error(retry_exc):
+                                        _twitter_set_auth_backoff("bookmarks", retry_exc)
+                                    else:
+                                        logger.warning(
+                                            "Twitter scraper: bookmarks fetch failed after token refresh: %s",
+                                            _twitter_auth_message(retry_exc),
+                                        )
+                            else:
+                                _twitter_set_auth_backoff("bookmarks", exc)
+                        else:
+                            _twitter_set_auth_backoff("bookmarks", exc)
+                    elif _twitter_is_auth_error(exc):
+                        _twitter_set_auth_backoff("bookmarks", exc)
+                    else:
+                        logger.warning("Twitter scraper: bookmarks fetch failed: %s", _twitter_auth_message(exc))
         else:
             logger.debug("Twitter scraper: OAuth 2.0 token not configured, skipping bookmarks.")
 

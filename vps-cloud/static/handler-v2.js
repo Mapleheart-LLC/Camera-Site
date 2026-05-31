@@ -111,9 +111,15 @@
     commands: {
       history: [],
       lastAckEventId: 0,
+      metrics: {
+        sent: 0,
+        executed: 0,
+        failed: 0,
+      },
       schema: null,
       smsThreadPresets: ['default'],
       macros: [],
+      activeSection: 'all',
       liveControl: {
         quickTapTarget: 'lovense',
         quickTapAction: 'vibrate',
@@ -471,6 +477,26 @@
     </li>`).join('');
   }
 
+  function renderCommandFeedback() {
+    const host = byId('hp2-command-feedback');
+    const titleEl = byId('hp2-command-feedback-title');
+    const bodyEl = byId('hp2-command-feedback-body');
+    if (!host || !titleEl || !bodyEl) return;
+
+    const m = state.commands.metrics || { sent: 0, executed: 0, failed: 0 };
+    const latest = state.commands.history[0] || null;
+    const latestLabel = latest
+      ? `${latest.title}: ${latest.statusLabel || (latest.ok ? 'ok' : 'failed')}`
+      : 'No dispatch yet';
+    const tone = latest && !latest.ok
+      ? 'attention'
+      : (latest && String(latest.statusLabel || '').toLowerCase().includes('executed') ? 'ok' : 'pending');
+
+    host.classList.remove('hp2-hidden');
+    titleEl.textContent = tone === 'attention' ? 'Command attention required' : (tone === 'ok' ? 'Command executed' : 'Command lane status');
+    bodyEl.textContent = `${latestLabel} | sent ${m.sent} | executed ${m.executed} | failed ${m.failed}`;
+  }
+
   function makeCommandId(prefix = 'hp2') {
     const now = Date.now().toString(36);
     const rand = Math.random().toString(36).slice(2, 8);
@@ -488,7 +514,12 @@
     };
     state.commands.history.unshift(row);
     state.commands.history = state.commands.history.slice(0, 12);
+    state.commands.metrics.sent = Number(state.commands.metrics.sent || 0) + 1;
+    if (String(row.statusLabel || '').toLowerCase().includes('failed') || !row.ok) {
+      state.commands.metrics.failed = Number(state.commands.metrics.failed || 0) + 1;
+    }
     renderCommandHistory();
+    renderCommandFeedback();
     return row;
   }
 
@@ -505,7 +536,11 @@
         detail: reason ? `${row.detail} | ${reason}` : row.detail,
       };
     });
-    if (touched) renderCommandHistory();
+    if (touched) {
+      state.commands.metrics.executed = Number(state.commands.metrics.executed || 0) + 1;
+      renderCommandHistory();
+      renderCommandFeedback();
+    }
   }
 
   function markCommandFailed(commandId, reason) {
@@ -521,7 +556,11 @@
         detail: reason ? `${row.detail} | ${reason}` : row.detail,
       };
     });
-    if (touched) renderCommandHistory();
+    if (touched) {
+      state.commands.metrics.failed = Number(state.commands.metrics.failed || 0) + 1;
+      renderCommandHistory();
+      renderCommandFeedback();
+    }
   }
 
   function quickTapActionsForTarget(target) {
@@ -1434,7 +1473,16 @@
 
   function setInlineResult(id, message) {
     const el = byId(id);
-    if (el) el.textContent = message || '';
+    if (el) {
+      el.textContent = message || '';
+      el.classList.remove('hp2-inline-result-ok', 'hp2-inline-result-warn', 'hp2-inline-result-bad');
+      if (message) {
+        const lower = String(message).toLowerCase();
+        if (lower.includes('failed') || lower.includes('error')) el.classList.add('hp2-inline-result-bad');
+        else if (lower.includes('warning')) el.classList.add('hp2-inline-result-warn');
+        else el.classList.add('hp2-inline-result-ok');
+      }
+    }
     if (!message) return;
     if (String(message).endsWith('...')) return;
     const lower = String(message).toLowerCase();
@@ -1566,6 +1614,27 @@
     if (viewName === 'public-use') {
       loadPublicUseSettings().catch(() => {});
     }
+    if (viewName === 'commands') {
+      setCommandSection(state.commands.activeSection || 'all');
+    }
+  }
+
+  function setCommandSection(section) {
+    const allowed = new Set(['all', 'live-control', 'device-admin', 'messaging', 'automation', 'history']);
+    const normalized = allowed.has(String(section || '').trim()) ? String(section || '').trim() : 'all';
+    state.commands.activeSection = normalized;
+
+    document.querySelectorAll('[data-cmd-section-target]').forEach((button) => {
+      const active = button.dataset.cmdSectionTarget === normalized;
+      button.classList.toggle('hp2-segment-active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('#hp2-view-commands .hp2-command-card[data-cmd-section]').forEach((card) => {
+      const cardSection = String(card.dataset.cmdSection || '').trim();
+      const show = normalized === 'all' || cardSection === normalized;
+      card.hidden = !show;
+    });
   }
 
   function renderKpis() {
@@ -3112,6 +3181,111 @@
     }
   }
 
+  function escalationTone(level, status) {
+    const safeLevel = String(level || '').toLowerCase();
+    const safeStatus = String(status || '').toLowerCase();
+    if (safeStatus === 'resolved') return 'info';
+    if (safeLevel === 'catastrophic' || safeLevel === 'severe') return 'warning';
+    return 'info';
+  }
+
+  async function loadQueueEscalations() {
+    const listEl = byId('hp2-queue-escalation-list');
+    const filter = byId('hp2-queue-escalation-filter')?.value || 'all';
+    listEl.innerHTML = queueListEmpty('Loading escalation queue...');
+    try {
+      const items = await apiGet(`/api/handler/shame/escalations?status=${encodeURIComponent(filter)}&limit=200`);
+      let rows = Array.isArray(items) ? items : [];
+      rows.sort((a, b) => compareByTimeDescOrAsc(a.created_at, b.created_at));
+      if (!rows.length) {
+        listEl.innerHTML = queueListEmpty('No escalations in this filter.');
+        return;
+      }
+      listEl.innerHTML = rows.map((item) => {
+        const id = Number(item.id || 0);
+        const level = String(item.level || 'high');
+        const status = String(item.status || 'pending');
+        const canResolve = status !== 'resolved';
+        const canActivate = status === 'pending' && isAdminRole();
+        const actionHint = String(item.action_hint || '').replaceAll('_', ' ');
+        const note = String(item.note || '').trim();
+        const resolvedAt = String(item.resolved_at || '').trim();
+        return `<li>
+          <div class="hp2-feed-item-row">
+            <strong>#${id} ${escapeHtml(level)}</strong>
+            <span class="${severityClass(escalationTone(level, status))}">${escapeHtml(status)}</span>
+          </div>
+          <div class="hp2-muted">Trigger score: ${escapeHtml(String(item.trigger_score ?? 0))} • Action: ${escapeHtml(actionHint || 'none')}</div>
+          ${note ? `<div class="hp2-muted">${escapeHtml(note)}</div>` : ''}
+          <div class="hp2-muted">Created: ${escapeHtml(fmtDate(item.created_at))}${resolvedAt ? ` • Resolved: ${escapeHtml(fmtDate(resolvedAt))}` : ''}</div>
+          ${canResolve ? `<div class="hp2-queue-actions">${canActivate ? `<button type="button" class="hp2-btn hp2-btn-primary" data-q-action="escalation-activate" data-id="${id}">Activate</button>` : ''}<button type="button" class="hp2-btn hp2-btn-ghost" data-q-action="escalation-resolve" data-id="${id}">Resolve</button></div>` : ''}
+        </li>`;
+      }).join('');
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        listEl.innerHTML = queueListEmpty('Failed to load escalation queue.');
+      }
+    }
+  }
+
+  async function resolveQueueEscalation(escalationId) {
+    const id = Number(escalationId || 0);
+    if (!id) return;
+    const response = await askInlineText({
+      title: 'Resolve Escalation',
+      message: 'Optional note for resolution log.',
+      inputLabel: 'Resolution note',
+      inputValue: '',
+      multiline: true,
+      allowEmpty: true,
+      confirmText: 'Resolve',
+    });
+    if (!response.confirmed) return;
+    setQueueResult('Resolving escalation...');
+    try {
+      await apiPost(`/api/handler/shame/escalations/${encodeURIComponent(String(id))}/resolve`, {
+        note: response.value || '',
+      });
+      setQueueResult(`Escalation #${id} resolved.`);
+      await loadQueueEscalations();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to resolve escalation: ${err.message}`);
+      }
+    }
+  }
+
+  async function activateQueueEscalation(escalationId) {
+    const id = Number(escalationId || 0);
+    if (!id) return;
+    if (!isAdminRole()) {
+      setQueueResult('Only admins can activate escalations.');
+      return;
+    }
+    const response = await askInlineText({
+      title: 'Activate Escalation',
+      message: 'Optional note for why this escalation is being forced active now.',
+      inputLabel: 'Activation note',
+      inputValue: '',
+      multiline: true,
+      allowEmpty: true,
+      confirmText: 'Activate',
+    });
+    if (!response.confirmed) return;
+    setQueueResult('Activating escalation...');
+    try {
+      await apiPost(`/api/handler/shame/escalations/${encodeURIComponent(String(id))}/activate`, {
+        note: response.value || '',
+      });
+      setQueueResult(`Escalation #${id} set active.`);
+      await loadQueueEscalations();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setQueueResult(`Failed to activate escalation: ${err.message}`);
+      }
+    }
+  }
+
   async function loadQueueMailThreads() {
     const listEl = byId('hp2-queue-mail-list');
     const filter = byId('hp2-queue-mail-filter')?.value || 'open';
@@ -3880,6 +4054,7 @@
       loadQueueBooking(),
       loadQueueMailThreads(),
       loadQueueQuestions(),
+      loadQueueEscalations(),
     ]);
     state.telemetry.queueAt = Date.now();
   }
@@ -3927,6 +4102,14 @@
     }
     if (action === 'limbo-publish') {
       await publishQueueLimbo(id);
+      return;
+    }
+    if (action === 'escalation-resolve') {
+      await resolveQueueEscalation(id);
+      return;
+    }
+    if (action === 'escalation-activate') {
+      await activateQueueEscalation(id);
     }
   }
 
@@ -4775,9 +4958,58 @@
     const isAdmin = isAdminRole();
     const reason = isAdmin ? '' : 'Admin role required.';
     setButtonEnabled('hp2-devices-cleanup-stale-btn', isAdmin, reason);
+    setButtonEnabled('hp2-devices-maintenance-run-btn', isAdmin, reason);
     setButtonEnabled('hp2-devices-delete-all-btn', isAdmin, reason);
     if (!isAdmin) {
       setInlineResult('hp2-devices-bulk-result', 'Only admins can run bulk device operations.');
+      setInlineResult('hp2-devices-maintenance-status', 'Weekly hygiene status requires admin access.');
+      return;
+    }
+    loadDeviceMaintenanceStatus().catch(() => {});
+  }
+
+  async function loadDeviceMaintenanceStatus() {
+    if (!isAdminRole()) return;
+    try {
+      const status = await apiGet('/api/handler/devices/maintenance/status');
+      const last = status?.last_run;
+      const nextRun = status?.next_run_utc ? fmtDate(status.next_run_utc) : 'n/a';
+      if (!last) {
+        setInlineResult('hp2-devices-maintenance-status', `Weekly hygiene ready. Next scheduled run: ${nextRun}.`);
+        return;
+      }
+      const deleted = Number(last.deleted || 0);
+      const candidates = Number(last.candidates || 0);
+      const when = fmtDate(last.created_at);
+      setInlineResult(
+        'hp2-devices-maintenance-status',
+        `Last hygiene ${last.status || 'ok'} at ${when}: deleted ${deleted}/${candidates}. Next: ${nextRun}.`,
+      );
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-maintenance-status', `Maintenance status unavailable: ${err.message}`);
+      }
+    }
+  }
+
+  async function runDeviceMaintenanceNow() {
+    if (!isAdminRole()) {
+      setInlineResult('hp2-devices-bulk-result', 'Only admins can run maintenance cleanup.');
+      return;
+    }
+    setInlineResult('hp2-devices-bulk-result', 'Running weekly hygiene cleanup...');
+    try {
+      const result = await apiPost('/api/handler/devices/maintenance/run-now?older_than_hours=168&include_name_fallback=true', {});
+      const deleted = Number(result?.deleted || 0);
+      const candidates = Number(result?.candidates || 0);
+      const remaining = Number(result?.remaining || 0);
+      setInlineResult('hp2-devices-bulk-result', `Hygiene run complete: deleted ${deleted}/${candidates}. Remaining devices: ${remaining}.`);
+      await loadDevices();
+      await loadDeviceMaintenanceStatus();
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-bulk-result', `Maintenance run failed: ${err.message}`);
+      }
     }
   }
 
@@ -4866,6 +5098,33 @@
     }
 
     const expectedPhrase = 'DELETE ALL DEVICES';
+    setInlineResult('hp2-devices-bulk-result', 'Loading delete-all impact preview...');
+    let preview;
+    try {
+      preview = await apiPost('/api/handler/devices/delete-all/preview', {});
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-bulk-result', `Preview failed: ${err.message}`);
+      }
+      return;
+    }
+
+    const statusRows = Number(preview?.status_rows || 0);
+    const assignmentRows = Number(preview?.assignment_rows || 0);
+    const pairingRows = Number(preview?.pairing_rows || 0);
+    const sample = Array.isArray(preview?.sample_device_ids) ? preview.sample_device_ids.slice(0, 5).join(', ') : '';
+
+    const preConfirm = await askInlineConfirm({
+      title: 'Delete All Devices (Preview)',
+      message: `Will delete status=${statusRows}, assignments=${assignmentRows}, pairings=${pairingRows}.${sample ? ` Sample: ${sample}` : ''}`,
+      confirmText: 'Continue',
+      danger: true,
+    });
+    if (!preConfirm.confirmed) {
+      setInlineResult('hp2-devices-bulk-result', 'Delete-all cancelled after preview.');
+      return;
+    }
+
     const phraseInput = await askInlineText({
       title: 'Delete All Devices',
       message: `This permanently removes all tracked devices. Type ${expectedPhrase} to continue.`,
@@ -4992,8 +5251,12 @@
     byId('hp2-shock-10-btn').addEventListener('click', () => shockSelected(10).catch(() => {}));
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
     byId('hp2-shock-60-btn').addEventListener('click', () => shockSelected(60).catch(() => {}));
+    byId('hp2-mobile-lock-btn')?.addEventListener('click', () => lockSelected().catch(() => {}));
+    byId('hp2-mobile-checkin-btn')?.addEventListener('click', () => requestCheckin().catch(() => {}));
+    byId('hp2-mobile-startle-btn')?.addEventListener('click', () => startleSelected().catch(() => {}));
     byId('hp2-rename-device-btn').addEventListener('click', () => renameSelectedDevice().catch(() => {}));
     byId('hp2-devices-cleanup-stale-btn')?.addEventListener('click', () => cleanupStaleDevicesFromPanel().catch(() => {}));
+    byId('hp2-devices-maintenance-run-btn')?.addEventListener('click', () => runDeviceMaintenanceNow().catch(() => {}));
     byId('hp2-devices-delete-all-btn')?.addEventListener('click', () => deleteAllDevicesFromPanel().catch(() => {}));
     byId('hp2-device-apps-poll-btn')?.addEventListener('click', () => pollDeviceApps().catch(() => {}));
     byId('hp2-device-apps-refresh-btn')?.addEventListener('click', () => loadDeviceApps().catch(() => {}));
@@ -5028,6 +5291,12 @@
     document.querySelectorAll('[data-cmd-preset]').forEach((button) => {
       button.addEventListener('click', () => {
         applyCommandPreset(button.dataset.cmdPreset || '');
+      });
+    });
+
+    document.querySelectorAll('[data-cmd-section-target]').forEach((button) => {
+      button.addEventListener('click', () => {
+        setCommandSection(button.dataset.cmdSectionTarget || 'all');
       });
     });
 
@@ -5088,6 +5357,8 @@
 
     byId('hp2-queue-booking-filter').addEventListener('change', () => loadQueueBooking().catch(() => {}));
     byId('hp2-queue-mail-filter').addEventListener('change', () => loadQueueMailThreads().catch(() => {}));
+    byId('hp2-queue-escalation-filter').addEventListener('change', () => loadQueueEscalations().catch(() => {}));
+    byId('hp2-queue-escalation-refresh').addEventListener('click', () => loadQueueEscalations().catch(() => {}));
     byId('hp2-queue-mail-reply-btn').addEventListener('click', () => sendQueueMailReply().catch(() => {}));
     byId('hp2-queue-mail-details-toggle').addEventListener('click', () => {
       const details = byId('hp2-queue-mail-details');
@@ -5187,7 +5458,7 @@
       renderQueueQuestions();
     });
 
-    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-drawer-limbo-pending', 'hp2-drawer-limbo-resolved', 'hp2-drawer-evidence-list']
+    ['hp2-queue-booking-list', 'hp2-queue-mail-list', 'hp2-queue-mail-messages', 'hp2-queue-questions-open', 'hp2-queue-questions-answered', 'hp2-queue-escalation-list', 'hp2-drawer-limbo-pending', 'hp2-drawer-limbo-resolved', 'hp2-drawer-evidence-list']
       .forEach((id) => {
         const host = byId(id);
         if (!host) return;
@@ -5233,9 +5504,11 @@
     renderSettingsForm();
     applyCommandDefaults();
     renderCommandHistory();
+    renderCommandFeedback();
     setMailDetailsVisible(false);
     autoSizeMailComposer();
     renderFreshness();
+    setCommandSection(state.commands.activeSection || 'all');
     if (state.telemetry.freshnessTimer) {
       clearInterval(state.telemetry.freshnessTimer);
     }
