@@ -7,11 +7,13 @@ using APScheduler, saving only new items to the drool_archive table.
 
 Configuration (environment variables – all also settable via admin panel)
 -------------------------------------------------------------------------
-REDDIT_MODE            – 'api' (default), 'ifttt', or 'gsheet'
-                         'api'    – poll Reddit directly via praw (requires OAuth app)
-                         'ifttt'  – items arrive via the /api/drool/ifttt/reddit webhook
-                         'gsheet' – poll a Google Sheet that IFTTT writes to (recommended
-                                    when the direct webhook is blocked by a proxy/WAF)
+REDDIT_MODE            – 'api' (default), 'ifttt', 'gsheet', or 'json_feed'
+                         'api'       – poll Reddit directly via praw (requires OAuth app)
+                         'ifttt'     – items arrive via the /api/drool/ifttt/reddit webhook
+                         'gsheet'    – poll a Google Sheet that IFTTT writes to (recommended
+                                       when the direct webhook is blocked by a proxy/WAF)
+                         'json_feed' – poll Reddit's private JSON feed URLs directly (no OAuth
+                                       required; uses feed token embedded in the URL)
 
 REDDIT_GSHEET_CSV_URL  – (mode=gsheet) Public CSV export URL of the first Google Sheet that
                          your IFTTT applet writes to (e.g. upvoted posts).  Share the sheet
@@ -30,6 +32,12 @@ REDDIT_GSHEET_CSV_URL_2 – (mode=gsheet, optional) CSV export URL of a second G
                           (e.g. saved posts).  IFTTT requires a separate applet for upvotes
                           and saves, which write to different sheets – configure both here to
                           capture everything.  Same column-detection rules apply.
+
+REDDIT_JSON_SAVED_URL   – (mode=json_feed) Full private JSON feed URL for saved posts.
+                          Obtain from old.reddit.com by appending
+                          ?feed=<token>&user=<username> to the saved feed path.
+REDDIT_JSON_UPVOTED_URL – (mode=json_feed) Full private JSON feed URL for upvoted posts.
+                          Same format as REDDIT_JSON_SAVED_URL.
 
 REDDIT_CLIENT_ID       – Reddit OAuth app client ID (mode=api only)
 REDDIT_CLIENT_SECRET   – Reddit OAuth app client secret (mode=api only)
@@ -184,6 +192,9 @@ def _scrape_reddit() -> None:
         return
     if mode == "gsheet":
         _scrape_gsheet_reddit()
+        return
+    if mode == "json_feed":
+        _scrape_reddit_json_feed()
         return
 
     reddit = _get_praw_reddit()
@@ -504,6 +515,145 @@ def _scrape_gsheet_reddit() -> None:
             logger.debug("Reddit gsheet scraper: no new items after DB dedup.")
     except Exception as exc:
         logger.error("Reddit gsheet scraper error: %s", exc)
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Reddit JSON-feed scraper (mode='json_feed')
+# ---------------------------------------------------------------------------
+
+_REDDIT_JSON_FEED_SAVED_URL_DEFAULT = (
+    "https://old.reddit.com/user/MapleSyrupHeart/saved.json"
+    "?feed=c14ba43b6f006c27b5149b7fd9857d2487011c2f&user=MapleSyrupHeart"
+)
+_REDDIT_JSON_FEED_UPVOTED_URL_DEFAULT = (
+    "https://old.reddit.com/user/MapleSyrupHeart/upvoted.json"
+    "?feed=c14ba43b6f006c27b5149b7fd9857d2487011c2f&user=MapleSyrupHeart"
+)
+_REDDIT_JSON_FEED_HEADERS = {"User-Agent": "CameraSiteDroolFeed/1.0"}
+
+
+def _scrape_reddit_json_feed() -> None:
+    """Fetch saved and upvoted Reddit posts via private JSON feed URLs.
+
+    No OAuth is required – the URLs embed a personal feed token.  Configure
+    the URLs via the settings DB or environment variables:
+
+    - ``drool_reddit_json_saved_url``   / ``REDDIT_JSON_SAVED_URL``
+    - ``drool_reddit_json_upvoted_url`` / ``REDDIT_JSON_UPVOTED_URL``
+
+    Falls back to the bundled MapleSyrupHeart defaults when neither is set.
+    """
+    saved_url   = (
+        _load_credential("drool_reddit_json_saved_url",   "REDDIT_JSON_SAVED_URL")
+        or _REDDIT_JSON_FEED_SAVED_URL_DEFAULT
+    )
+    upvoted_url = (
+        _load_credential("drool_reddit_json_upvoted_url", "REDDIT_JSON_UPVOTED_URL")
+        or _REDDIT_JSON_FEED_UPVOTED_URL_DEFAULT
+    )
+
+    feed_urls = [
+        (saved_url,   "saved"),
+        (upvoted_url, "upvoted"),
+    ]
+
+    items: list[tuple] = []
+
+    for feed_url, label in feed_urls:
+        try:
+            resp = httpx.get(
+                feed_url,
+                headers=_REDDIT_JSON_FEED_HEADERS,
+                follow_redirects=True,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("Reddit JSON feed scraper (%s): fetch failed: %s", label, exc)
+            continue
+
+        try:
+            children = data["data"]["children"]
+        except (KeyError, TypeError) as exc:
+            logger.warning("Reddit JSON feed scraper (%s): unexpected JSON structure: %s", label, exc)
+            continue
+
+        for child in children:
+            child_data = child.get("data", {})
+
+            # Filter out comments – only posts have a title field.
+            if "title" not in child_data:
+                continue
+
+            title     = child_data.get("title", "") or ""
+            subreddit = child_data.get("subreddit", "") or ""
+            permalink = child_data.get("permalink", "")
+
+            # Use the post's linked URL when present and absolute; otherwise
+            # fall back to the Reddit permalink.
+            raw_url = child_data.get("url", "") or ""
+            if raw_url and raw_url.startswith("http"):
+                media_url: Optional[str] = raw_url
+            else:
+                media_url = None
+
+            orig_url = (
+                f"https://reddit.com{permalink}"
+                if permalink
+                else raw_url or ""
+            )
+            if not orig_url:
+                continue
+
+            created_utc = child_data.get("created_utc")
+            if created_utc:
+                try:
+                    ts = datetime.fromtimestamp(float(created_utc), tz=timezone.utc).isoformat()
+                except (ValueError, OSError):
+                    ts = datetime.now(timezone.utc).isoformat()
+            else:
+                ts = datetime.now(timezone.utc).isoformat()
+
+            text_content = title
+            if subreddit:
+                text_content = f"[r/{subreddit}] {title}"
+
+            items.append(("reddit", orig_url, media_url, text_content, ts))
+
+    if not items:
+        logger.debug("Reddit JSON feed scraper: no posts retrieved.")
+        return
+
+    conn = get_db_connection()
+    try:
+        new_count = 0
+        newly_inserted: list[tuple] = []
+        for platform, orig_url, media_url, text_content, ts in items:
+            existing = conn.execute(
+                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
+            ).fetchone()
+            if existing:
+                continue
+            conn.execute(
+                """
+                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (platform, orig_url, media_url or None, text_content or None, ts),
+            )
+            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            new_count += 1
+        conn.commit()
+        if new_count:
+            logger.info("Reddit JSON feed scraper: archived %d new item(s).", new_count)
+            _notify_new_items(newly_inserted)
+        else:
+            logger.debug("Reddit JSON feed scraper: no new items.")
+    except Exception as exc:
+        logger.error("Reddit JSON feed scraper error: %s", exc)
     finally:
         conn.close()
 
