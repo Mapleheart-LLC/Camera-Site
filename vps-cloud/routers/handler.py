@@ -3130,12 +3130,7 @@ async def handler_device_share(
     share_subject = rewrite_x_links_to_fxtwitter(share_subject)
     share_urls = _extract_share_urls(share_text)
 
-    channel_id = (
-        (body.channel_id or "").strip()
-        or (get_setting(db, "discord_device_share_channel_id") or "").strip()
-        or (os.environ.get("DISCORD_DEVICE_SHARE_CHANNEL_ID", "") or "").strip()
-        or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
-    )
+    channel_id = DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     if not channel_id:
         raise HTTPException(
             status_code=503,
