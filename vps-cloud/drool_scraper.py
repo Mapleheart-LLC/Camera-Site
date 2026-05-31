@@ -523,14 +523,8 @@ def _scrape_gsheet_reddit() -> None:
 # Reddit JSON-feed scraper (mode='json_feed')
 # ---------------------------------------------------------------------------
 
-_REDDIT_JSON_FEED_SAVED_URL_DEFAULT = (
-    "https://old.reddit.com/user/MapleSyrupHeart/saved.json"
-    "?feed=c14ba43b6f006c27b5149b7fd9857d2487011c2f&user=MapleSyrupHeart"
-)
-_REDDIT_JSON_FEED_UPVOTED_URL_DEFAULT = (
-    "https://old.reddit.com/user/MapleSyrupHeart/upvoted.json"
-    "?feed=c14ba43b6f006c27b5149b7fd9857d2487011c2f&user=MapleSyrupHeart"
-)
+_REDDIT_JSON_FEED_SAVED_URL_DEFAULT = ""
+_REDDIT_JSON_FEED_UPVOTED_URL_DEFAULT = ""
 _REDDIT_JSON_FEED_HEADERS = {"User-Agent": "CameraSiteDroolFeed/1.0"}
 
 
