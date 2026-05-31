@@ -464,11 +464,14 @@ def build_reaction_role_components(
     return rows
 
 
-async def _post_to_channel(channel_id: str, payload: dict) -> None:
-    """POST *payload* to a Discord channel via the Bot API."""
+async def _post_to_channel(channel_id: str, payload: dict) -> bool:
+    """POST *payload* to a Discord channel via the Bot API.
+
+    Returns True on success, False otherwise.
+    """
     bot_token: str = os.environ.get("DISCORD_BOT_TOKEN", "")
     if not bot_token:
-        return
+        return False
     payload = _rewrite_payload_links(payload)
     url = f"{_DISCORD_API}/channels/{channel_id}/messages"
     try:
@@ -484,8 +487,11 @@ async def _post_to_channel(channel_id: str, payload: dict) -> None:
                     resp.status_code,
                     resp.text[:200],
                 )
+                return False
+            return True
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to post to Discord channel %s: %s", channel_id, exc)
+        return False
 
 
 async def _post_to_webhook(webhook_url: str, payload: dict) -> None:
@@ -775,21 +781,21 @@ async def send_discord_dm(discord_id: str, content: str) -> bool:
         return False
 
 
-async def send_discord_channel_message(channel_id: str, content: str) -> None:
+async def send_discord_channel_message(channel_id: str, content: str) -> bool:
     """Post plain text content to a specific Discord channel via bot API."""
     resolved = (channel_id or "").strip()
     body = (content or "").strip()
     if not resolved or not body:
-        return
-    await _post_to_channel(resolved, {"content": body})
+        return False
+    return await _post_to_channel(resolved, {"content": body})
 
 
-async def send_discord_channel_payload(channel_id: str, payload: dict[str, Any]) -> None:
+async def send_discord_channel_payload(channel_id: str, payload: dict[str, Any]) -> bool:
     """Post an arbitrary Discord message payload to a specific channel."""
     resolved = (channel_id or "").strip()
     if not resolved:
-        return
-    await _post_to_channel(resolved, payload)
+        return False
+    return await _post_to_channel(resolved, payload)
 
 
 async def get_bot_status() -> dict:

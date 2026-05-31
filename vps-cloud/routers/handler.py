@@ -60,9 +60,11 @@ from discord_webhook import (
     load_reaction_role_options,
     maybe_send_counter_update_notification,
     rewrite_x_links_to_fxtwitter,
+    send_answer_notification,
     send_discord_channel_message,
     send_discord_channel_payload,
 )
+from routers.admin import _post_answer_bluesky, _post_answer_tweet
 from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
 from shame import activate_shame_escalation, ensure_shame_tables, list_shame_escalations, record_shame_event, resolve_shame_escalation
 from routers.tpe import (
@@ -192,6 +194,7 @@ DISCORD_COUNTER_EDGE_STEP_DEFAULT = max(
     1,
     int((os.environ.get("DISCORD_COUNTER_EDGE_MILESTONE_STEP", "10") or "10").strip() or "10"),
 )
+_DISCORD_MESSAGE_MAX_LEN = 2000
 _SHARE_URL_RE = re.compile(r"https?://[^\s<>'\"]+", flags=re.IGNORECASE)
 _DEVICE_SHARE_PUP_LABEL_REGEX = re.compile(r"\bpup\b", flags=re.IGNORECASE)
 _DEVICE_SHARE_SUBJECT_LABELS = [
@@ -2691,14 +2694,30 @@ async def handler_device_share(
         (body.channel_id or "").strip()
         or (get_setting(db, "discord_device_share_channel_id") or "").strip()
         or (os.environ.get("DISCORD_DEVICE_SHARE_CHANNEL_ID", "") or "").strip()
-        or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     )
+    if not channel_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Discord device-share channel is not configured.",
+        )
 
     payload_text = (share_text or share_subject).strip()
+    if len(payload_text) > 900:
+        payload_text = payload_text[:897].rstrip() + "..."
     selected_set, templates = _active_device_share_templates(db)
     rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
     message_line = rendered_template.format(payload=payload_text)
-    await send_discord_channel_message(channel_id=channel_id, content=message_line)
+    if share_urls and not any(url in message_line for url in share_urls):
+        message_line = f"{message_line}\n{share_urls[0]}"
+    if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
+        message_line = message_line[:_DISCORD_MESSAGE_MAX_LEN - 3].rstrip() + "..."
+
+    delivered = await send_discord_channel_message(channel_id=channel_id, content=message_line)
+    if not delivered:
+        raise HTTPException(
+            status_code=502,
+            detail="Discord quick-share delivery failed.",
+        )
 
     db.execute(
         """
@@ -2894,7 +2913,7 @@ def device_list_questions(
 
 
 @router.post("/api/tpe/questions/{question_id}/answer")
-def device_answer_question(
+async def device_answer_question(
     question_id: str,
     payload: PuppyAnswerPayload,
     request: Request,
@@ -2918,12 +2937,20 @@ def device_answer_question(
     if row["answer"] is not None:
         return {"id": question_id, "status": "already_answered"}
 
+    answer_text = payload.answer.strip()
     db.execute(
-        "UPDATE questions SET answer = ?, is_public = 0 WHERE id = ?",
-        (payload.answer.strip(), question_id),
+        "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
+        (answer_text, question_id),
     )
     db.commit()
-    return {"id": question_id, "status": "answered"}
+
+    _post_answer_tweet(question_id, answer_text)
+    _post_answer_bluesky(question_id, answer_text)
+    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
+    share_url = f"{base_url}/q/{question_id}" if base_url else ""
+    await send_answer_notification(share_url=share_url)
+
+    return {"id": question_id, "status": "answered", "is_public": True}
 
 
 # ---------------------------------------------------------------------------
@@ -5087,7 +5114,7 @@ def handler_list_answered_questions(
 
 
 @router.post("/api/handler/questions/{question_id}/answer")
-def handler_answer_question(
+async def handler_answer_question(
     question_id: str,
     payload: HandlerAnswerPayload,
     _current_user: dict = Depends(role_required("admin", "handler")),
@@ -5101,11 +5128,19 @@ def handler_answer_question(
     if not row:
         raise HTTPException(status_code=404, detail="Question not found.")
 
+    answer_text = payload.answer.strip()
     db.execute(
         "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
-        (payload.answer, question_id),
+        (answer_text, question_id),
     )
     db.commit()
+
+    _post_answer_tweet(question_id, answer_text)
+    _post_answer_bluesky(question_id, answer_text)
+    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
+    share_url = f"{base_url}/q/{question_id}" if base_url else ""
+    await send_answer_notification(share_url=share_url)
+
     return {
         "id": question_id,
         "message": "Answer saved and question is now public.",

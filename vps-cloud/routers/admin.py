@@ -46,6 +46,7 @@ from pydantic import BaseModel, Field
 
 from db import ensure_user_account_schema, get_db, get_db_connection, get_setting, set_setting
 from dependencies import get_admin_user, hash_password
+from discord_webhook import send_answer_notification
 from routers.tpe import _send_fcm_to_all
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -649,7 +650,7 @@ def admin_list_answered_questions(
 
 
 @router.post("/questions/{question_id}/answer", status_code=status.HTTP_200_OK)
-def admin_answer_question(
+async def admin_answer_question(
     question_id: str,
     payload: AnswerPayload,
     _: str = Depends(get_admin_user),
@@ -670,10 +671,15 @@ def admin_answer_question(
     )
     db.commit()
     tweeted = _post_answer_tweet(question_id, payload.answer)
+    bluesky_posted = _post_answer_bluesky(question_id, payload.answer)
+    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
+    share_url = f"{base_url}/q/{question_id}" if base_url else ""
+    await send_answer_notification(share_url=share_url)
     return {
         "id": question_id,
         "message": "Answer saved and question is now public ðŸ¾",
         "tweeted": tweeted,
+        "bluesky_posted": bluesky_posted,
     }
   
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)

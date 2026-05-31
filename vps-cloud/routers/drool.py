@@ -360,29 +360,25 @@ async def post_reaction(
             "SELECT reaction_type FROM drool_reactions WHERE drool_id = ? AND pack_member_id = ?",
             (item_id, pack_id),
         ).fetchone()
+        if prior is not None:
+            return {
+                "message": "Reaction already recorded for this item. Remove it first to change.",
+                "pack_member_id": pack_id,
+                "reaction_type": prior["reaction_type"],
+            }
+
         db.execute(
             """
             INSERT INTO drool_reactions (drool_id, reaction_type, pack_member_id)
             VALUES (?, ?, ?)
-            ON CONFLICT(drool_id, pack_member_id)
-            DO UPDATE SET reaction_type = excluded.reaction_type
             """,
             (item_id, payload.reaction_type, pack_id),
         )
-        if prior is None:
-            record_shame_event(
-                db,
-                "drool_reaction_added",
-                metadata={"drool_id": item_id, "pack_member_id": pack_id, "reaction_type": payload.reaction_type},
-            )
-        elif prior["reaction_type"] != payload.reaction_type:
-            # Reactions changed are lower impact than fresh engagement.
-            record_shame_event(
-                db,
-                "drool_reaction_added",
-                points=1,
-                metadata={"drool_id": item_id, "pack_member_id": pack_id, "reaction_type": payload.reaction_type, "changed": True},
-            )
+        record_shame_event(
+            db,
+            "drool_reaction_added",
+            metadata={"drool_id": item_id, "pack_member_id": pack_id, "reaction_type": payload.reaction_type},
+        )
         db.commit()
     except Exception as exc:
         raise HTTPException(

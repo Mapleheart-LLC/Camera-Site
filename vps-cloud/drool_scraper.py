@@ -38,11 +38,13 @@ import os
 import time
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from db import get_db_connection
+from discord_webhook import send_discord_channel_message
 
 try:
     import tweepy as _tweepy  # type: ignore[import-untyped]
@@ -96,6 +98,83 @@ scheduler = AsyncIOScheduler()
 # ---------------------------------------------------------------------------
 # Discord helper (reuse existing webhook)
 # ---------------------------------------------------------------------------
+
+
+def _canonicalize_archive_url(url: str) -> str:
+    """Normalize archive URLs so scraper runs dedupe reliably across variants."""
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    try:
+        parts = urlsplit(raw)
+        scheme = (parts.scheme or "https").lower()
+        host = (parts.netloc or "").lower()
+        path = parts.path or "/"
+        if path != "/":
+            path = path.rstrip("/") or "/"
+
+        # Normalize Twitter/X host variants to one canonical domain.
+        if host in {"twitter.com", "www.twitter.com", "x.com", "www.x.com", "fxtwitter.com", "www.fxtwitter.com"}:
+            host = "fxtwitter.com"
+
+        # Strip tracking query params while keeping meaningful params.
+        keep_query: list[tuple[str, str]] = []
+        for key, value in parse_qsl(parts.query, keep_blank_values=False):
+            k = key.lower()
+            if k.startswith("utm_") or k in {"fbclid", "gclid", "si", "feature", "ref", "ref_src", "s"}:
+                continue
+            keep_query.append((key, value))
+        query = urlencode(keep_query, doseq=True)
+
+        return urlunsplit((scheme, host, path, query, ""))
+    except Exception:
+        return raw
+
+
+def _find_existing_archive_row(conn, original_url: str, canonical_url: str):
+    """Check for existing archive rows with either original or canonical URL."""
+    if canonical_url and canonical_url != original_url:
+        return conn.execute(
+            "SELECT id FROM drool_archive WHERE original_url IN (?, ?) LIMIT 1",
+            (original_url, canonical_url),
+        ).fetchone()
+    return conn.execute(
+        "SELECT id FROM drool_archive WHERE original_url = ? LIMIT 1",
+        (original_url,),
+    ).fetchone()
+
+
+def _notify_new_items(new_items: list[tuple]) -> None:
+    """Send a concise Discord update for newly archived drool items."""
+    if not new_items:
+        return
+
+    channel_id = (os.environ.get("DISCORD_NOTIFICATION_CHANNEL_ID", "") or "").strip()
+    if not channel_id:
+        return
+
+    preview_lines: list[str] = []
+    for platform, orig_url, _media_url, text_content, _ts in new_items[:5]:
+        label = (platform or "item").strip().title()
+        snippet = (text_content or "").strip().replace("\n", " ")
+        if len(snippet) > 120:
+            snippet = snippet[:117].rstrip() + "..."
+        preview = f"- [{label}] {snippet or orig_url}"
+        preview_lines.append(preview)
+
+    extra = len(new_items) - len(preview_lines)
+    if extra > 0:
+        preview_lines.append(f"- +{extra} more item(s)")
+
+    content = "🗂️ Drool scraper archived new items:\n" + "\n".join(preview_lines)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(send_discord_channel_message(channel_id=channel_id, content=content))
+    except RuntimeError:
+        try:
+            asyncio.run(send_discord_channel_message(channel_id=channel_id, content=content))
+        except Exception as exc:
+            logger.debug("Drool scraper notify failed: %s", exc)
 
 
 
@@ -268,9 +347,8 @@ def _scrape_reddit() -> None:
         new_count = 0
         newly_inserted: list[tuple] = []
         for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
-            existing = conn.execute(
-                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
-            ).fetchone()
+            canonical_url = _canonicalize_archive_url(orig_url)
+            existing = _find_existing_archive_row(conn, orig_url, canonical_url)
             if existing:
                 continue
             conn.execute(
@@ -278,9 +356,9 @@ def _scrape_reddit() -> None:
                 INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
+                (platform, canonical_url or orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
-            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            newly_inserted.append((platform, canonical_url or orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
@@ -690,9 +768,8 @@ def _scrape_twitter() -> None:
         new_count = 0
         newly_inserted: list[tuple] = []
         for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
-            existing = conn.execute(
-                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
-            ).fetchone()
+            canonical_url = _canonicalize_archive_url(orig_url)
+            existing = _find_existing_archive_row(conn, orig_url, canonical_url)
             if existing:
                 continue
             conn.execute(
@@ -700,9 +777,9 @@ def _scrape_twitter() -> None:
                 INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
+                (platform, canonical_url or orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
-            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            newly_inserted.append((platform, canonical_url or orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
@@ -846,9 +923,8 @@ def _scrape_bluesky() -> None:
         new_count = 0
         newly_inserted: list[tuple] = []
         for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
-            existing = conn.execute(
-                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
-            ).fetchone()
+            canonical_url = _canonicalize_archive_url(orig_url)
+            existing = _find_existing_archive_row(conn, orig_url, canonical_url)
             if existing:
                 continue
             conn.execute(
@@ -856,9 +932,9 @@ def _scrape_bluesky() -> None:
                 INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
+                (platform, canonical_url or orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
-            newly_inserted.append((platform, orig_url, media_url, text_content, ts))
+            newly_inserted.append((platform, canonical_url or orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
