@@ -1813,7 +1813,7 @@ def _render_error_html(status_code: int, heading: str, message: str) -> str:
   <title>{status_code} - Oopsie | mochii.live</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
@@ -2156,9 +2156,9 @@ def anon_page(request: Request):
     """Standalone Puppy Pouch page: submit a question + browse all answered Q&A."""
     canonical = BASE_URL or str(request.base_url).rstrip("/")
     page_url  = _html_escape(f"{canonical}/anon")
-    og_title  = "Puppy Pouch 🐾 – Ask mochii.live Anything"
+    og_title  = "Puppy Pouch 🐾 – Anonymous Notes | mochii.live"
     og_desc   = _html_escape(
-        "Drop an anonymous question into the Puppy Pouch and browse every answered note."
+        "Send an anonymous note to the Puppy Pouch and read published replies."
     )
 
     html = f"""<!DOCTYPE html>
@@ -2189,71 +2189,113 @@ def anon_page(request: Request):
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
-    body {{
-      font-family: 'Nunito', system-ui, sans-serif;
-      background: #1a1a1a;
-      color: #f0e6e8;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2.5rem 1rem 3rem;
-    }}
+        :root {{
+            --bg-0: #170f18;
+            --bg-1: #261422;
+            --bg-2: #331730;
+            --ink-main: #ffe9f3;
+            --ink-soft: #d8b8c9;
+            --line-soft: #5b2949;
+            --line-strong: #7d3f6a;
+            --accent-pink: #ff7ec3;
+            --accent-candy: #ff9f6b;
+            --accent-mint: #88f6ca;
+            --paper: rgba(36, 17, 43, .74);
+            --paper-soft: rgba(31, 14, 36, .68);
+        }}
 
-    .page-header {{
+        body {{
+            font-family: 'Nunito', system-ui, sans-serif;
+            background:
+                radial-gradient(circle at 14% 8%, #402040 0%, transparent 44%),
+                radial-gradient(circle at 88% 4%, #24395a 0%, transparent 35%),
+                linear-gradient(148deg, var(--bg-0) 0%, var(--bg-1) 52%, var(--bg-2) 100%);
+            color: var(--ink-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2.2rem 1rem 3rem;
+        }}
+
+        .page-header {{
       width: 100%;
-      max-width: 560px;
+            max-width: 900px;
       margin-bottom: 1.75rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
       gap: .5rem;
+            padding: .4rem .2rem;
     }}
 
     .page-header h1 {{
-      font-size: 1.4rem;
+            font-size: clamp(1.35rem, 3vw, 2.1rem);
       font-weight: 800;
-      color: #e8aeb7;
+            color: #ffd3ec;
+            letter-spacing: .01em;
+            text-shadow: 0 0 18px rgba(255, 126, 195, .2);
     }}
 
     .back-link {{
-      font-size: .82rem;
-      color: #9e7e82;
+            font-size: .78rem;
+            color: #d8b8c9;
       text-decoration: none;
       font-weight: 700;
-      border: 1px solid #3d2a2e;
-      border-radius: 8px;
-      padding: .3rem .75rem;
-      transition: border-color .2s, color .2s;
+            border: 1px solid var(--line-soft);
+            border-radius: 999px;
+            padding: .32rem .82rem;
+            background: rgba(28, 13, 32, .7);
+            transition: border-color .2s, color .2s, background .2s;
     }}
-    .back-link:hover {{ border-color: #c49a9f; color: #e8aeb7; }}
+        .back-link:hover {{
+            border-color: var(--accent-pink);
+            color: #fff0f8;
+            background: rgba(61, 32, 40, .8);
+        }}
 
         .status-strip {{
             width: 100%;
-            max-width: 560px;
-            margin-bottom: 1rem;
+            max-width: 900px;
+            margin-bottom: 1.05rem;
             display: grid;
             grid-template-columns: minmax(0, 1fr);
             gap: .55rem;
+            transform: rotate(-.75deg);
         }}
 
         .status-tile {{
-            background: #242424;
-            border: 1px solid #3d2a2e;
-            border-radius: 12px;
-            padding: .65rem .5rem;
+            background: var(--paper);
+            border: 1px solid var(--line-strong);
+            border-radius: 14px;
+            padding: .75rem .7rem;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .status-tile::after {{
+            content: '';
+            position: absolute;
+            width: 74px;
+            height: 18px;
+            top: 10px;
+            right: -20px;
+            background: rgba(255, 159, 107, .3);
+            border: 1px solid rgba(255, 159, 107, .55);
+            transform: rotate(24deg);
         }}
 
         .status-value {{
             font-size: 1rem;
             font-weight: 800;
-            color: #e8aeb7;
+            color: #ffc2ea;
             line-height: 1;
             margin-bottom: .25rem;
+            font-family: 'Space Mono', monospace;
         }}
 
         .status-label {{
@@ -2261,36 +2303,36 @@ def anon_page(request: Request):
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: .08em;
-            color: #9e7e82;
+            color: #c9a3bc;
         }}
 
         .status-sub {{
             margin-top: .35rem;
             font-size: .78rem;
-            color: #c49a9f;
+                        color: #e0bdd1;
         }}
 
     .card {{
       width: 100%;
-      max-width: 560px;
-      background: #242424;
-      border: 1px solid #3d2a2e;
+            max-width: 900px;
+            background: var(--paper);
+            border: 1px solid var(--line-strong);
       border-radius: 20px;
       padding: 1.75rem 1.75rem 1.5rem;
-      box-shadow: 0 8px 40px rgba(232,174,183,0.10);
+            box-shadow: 0 10px 40px rgba(255, 126, 195, .14);
       margin-bottom: 1.5rem;
     }}
 
     .card h2 {{
       font-size: 1rem;
       font-weight: 800;
-      color: #e8aeb7;
+            color: #ffd6ec;
       margin-bottom: .3rem;
     }}
 
     .card p.tagline {{
       font-size: .82rem;
-      color: #9e7e82;
+            color: #c9a3bc;
       margin-bottom: 1rem;
     }}
 
@@ -2298,10 +2340,10 @@ def anon_page(request: Request):
         input,
         select {{
       width: 100%;
-      background: #1a1a1a;
-      border: 1px solid #3d2a2e;
+    background: rgba(22, 10, 26, .86);
+    border: 1px solid var(--line-soft);
       border-radius: 8px;
-      color: #f0e6e8;
+    color: var(--ink-main);
       font-family: inherit;
       font-size: .92rem;
       padding: .65rem .85rem;
@@ -2313,7 +2355,9 @@ def anon_page(request: Request):
             min-height: 90px;
         }}
         input, select {{ min-height: 40px; }}
-    textarea:focus {{ border-color: #c49a9f; }}
+    textarea:focus,
+    input:focus,
+    select:focus {{ border-color: var(--accent-pink); }}
 
         .detail-grid {{
             display: grid;
@@ -2327,7 +2371,7 @@ def anon_page(request: Request):
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: .08em;
-            color: #9e7e82;
+            color: #c9a3bc;
             margin-bottom: .22rem;
             display: block;
         }}
@@ -2342,7 +2386,7 @@ def anon_page(request: Request):
 
     #char-count {{
       font-size: .75rem;
-      color: #6a4a4e;
+            color: #bc93b2;
       white-space: nowrap;
     }}
     #char-count.warn {{ color: #f0b040; }}
@@ -2350,10 +2394,10 @@ def anon_page(request: Request):
 
     #send-btn {{
       padding: .5rem 1.2rem;
-      background: #3d2028;
-      border: 1px solid #e8aeb7;
+            background: rgba(61, 32, 40, .72);
+            border: 1px solid var(--accent-pink);
       border-radius: 8px;
-      color: #e8aeb7;
+            color: #ffe6f4;
       font-family: inherit;
       font-size: .88rem;
       font-weight: 700;
@@ -2361,7 +2405,7 @@ def anon_page(request: Request):
       transition: background .15s, color .15s;
       white-space: nowrap;
     }}
-    #send-btn:hover:not(:disabled) {{ background: #e8aeb7; color: #1a1a1a; }}
+        #send-btn:hover:not(:disabled) {{ background: var(--accent-pink); color: #1a1a1a; }}
     #send-btn:disabled {{ opacity: .5; cursor: not-allowed; }}
 
     #send-msg {{
@@ -2378,7 +2422,7 @@ def anon_page(request: Request):
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: .09em;
-      color: #9e7e82;
+            color: #c9a3bc;
       margin-bottom: 1rem;
     }}
 
@@ -2400,7 +2444,7 @@ def anon_page(request: Request):
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: .08em;
-            color: #9e7e82;
+            color: #c9a3bc;
             min-width: 52px;
         }}
 
@@ -2411,9 +2455,9 @@ def anon_page(request: Request):
         }}
 
         .filter-btn {{
-            border: 1px solid #4a3a3d;
-            background: #1f1f1f;
-            color: #bca9ac;
+            border: 1px solid var(--line-soft);
+            background: rgba(31, 14, 36, .8);
+            color: #d4b2c6;
             border-radius: 999px;
             padding: .25rem .65rem;
             font-size: .66rem;
@@ -2425,14 +2469,14 @@ def anon_page(request: Request):
         }}
 
         .filter-btn:hover {{
-            border-color: #c49a9f;
-            color: #e8aeb7;
+            border-color: var(--accent-pink);
+            color: #ffd6ec;
         }}
 
         .filter-btn.is-active {{
-            border-color: #e8aeb7;
-            color: #e8aeb7;
-            background: #3d2028;
+            border-color: var(--accent-pink);
+            color: #fff0f8;
+            background: rgba(61, 32, 40, .85);
         }}
 
     .qa-item {{
@@ -2449,8 +2493,8 @@ def anon_page(request: Request):
     }}
 
     .bubble-q {{
-      background: #3d2028;
-      border: 1px solid #c49a9f;
+            background: rgba(61, 32, 40, .82);
+            border: 1px solid #d3a5be;
       color: #f5d5da;
     }}
     .bubble-q::before {{
@@ -2460,13 +2504,13 @@ def anon_page(request: Request):
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: .08em;
-      color: #c49a9f;
+            color: #e0b9cd;
       margin-bottom: .4rem;
     }}
 
     .bubble-a {{
-      background: #2c2c2c;
-      border: 1px solid #4a4a4a;
+            background: rgba(28, 14, 33, .88);
+            border: 1px solid #5d3f62;
       color: #e0d4d6;
     }}
     .bubble-a::before {{
@@ -2476,7 +2520,7 @@ def anon_page(request: Request):
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: .08em;
-      color: #9e7e82;
+            color: #c4a0ba;
       margin-bottom: .4rem;
     }}
 
@@ -2497,9 +2541,9 @@ def anon_page(request: Request):
             letter-spacing: .06em;
             border-radius: 999px;
             padding: .14rem .45rem;
-            border: 1px solid #4a4a4a;
-            background: #2b2b2b;
-            color: #bca9ac;
+            border: 1px solid #5d3f62;
+            background: rgba(28, 14, 33, .8);
+            color: #d4b2c6;
         }}
 
         .qa-chip.source-limbo {{
@@ -2530,16 +2574,16 @@ def anon_page(request: Request):
       display: inline-block;
       margin-top: .3rem;
       font-size: .75rem;
-      color: #9e7e82;
+            color: #d4b2c6;
       text-decoration: none;
       font-weight: 700;
       transition: color .2s;
     }}
-    .share-link:hover {{ color: #c49a9f; }}
+        .share-link:hover {{ color: #ffd3ec; }}
 
     #feed-loading {{
       font-size: .88rem;
-      color: #9e7e82;
+            color: #c9a3bc;
       text-align: center;
       padding: 1rem 0;
     }}
@@ -2547,22 +2591,37 @@ def anon_page(request: Request):
     #empty-feed {{
       display: none;
       font-size: .88rem;
-      color: #5a3a3e;
+      color: #bc93b2;
       text-align: center;
       padding: 1rem 0;
     }}
 
-        @media (max-width: 560px) {{
+        @media (max-width: 720px) {{
+            .page-header,
+            .status-strip,
+            .card {{
+                max-width: 560px;
+            }}
+
+            .page-header h1 {{
+                font-size: 1.45rem;
+            }}
+
             .status-strip {{
                 grid-template-columns: minmax(0, 1fr);
+                transform: none;
+            }}
+
+            .card {{
+                padding: 1.2rem 1rem 1.1rem;
             }}
         }}
   </style>
 </head>
 <body>
   <div class="page-header">
-    <h1>🐾 Puppy Pouch</h1>
-    <a class="back-link" href="{_html_escape(canonical)}">← Back to mochii.live</a>
+        <h1>🐾 Puppy Pouch Inbox</h1>
+        <a class="back-link" href="{_html_escape(canonical)}">← Return to Home</a>
   </div>
 
     <div class="status-strip" aria-label="Public status">
@@ -2579,11 +2638,11 @@ def anon_page(request: Request):
 
   <!-- Submit form -->
   <div class="card">
-    <h2>Drop a Note 🐾</h2>
-        <p class="tagline">Ask anonymously with a little context so answers can be better tailored.</p>
+    <h2>Send an Anonymous Note 🐾</h2>
+        <p class="tagline">Share what is happening and what response would help most.</p>
         <div class="detail-grid">
             <div>
-                <label for="note-topic">Topic</label>
+                <label for="note-topic">Question Type</label>
                 <select id="note-topic" aria-label="Question topic">
                     <option value="General">General</option>
                     <option value="Protocol">Protocol</option>
@@ -2593,17 +2652,17 @@ def anon_page(request: Request):
                 </select>
             </div>
             <div>
-                <label for="note-context">Current Context</label>
+                <label for="note-context">Situation</label>
                 <select id="note-context" aria-label="Current context">
-                    <option value="No context">No context</option>
+                    <option value="No context">No extra context</option>
                     <option value="Urgent">Urgent</option>
                     <option value="Emotional">Emotional</option>
-                    <option value="Planning ahead">Planning ahead</option>
+                    <option value="Planning ahead">Planning</option>
                     <option value="Follow-up">Follow-up</option>
                 </select>
             </div>
             <div>
-                <label for="note-response-style">Preferred Answer Style</label>
+                <label for="note-response-style">Reply Tone</label>
                 <select id="note-response-style" aria-label="Preferred answer style">
                     <option value="Direct">Direct</option>
                     <option value="Supportive">Supportive</option>
@@ -2612,28 +2671,28 @@ def anon_page(request: Request):
                 </select>
             </div>
         </div>
-        <textarea id="note-textarea" maxlength="900" placeholder="What's on your mind? Include the specific outcome you want. 🐾" aria-label="Your question"></textarea>
+        <textarea id="note-textarea" maxlength="900" placeholder="What do you want help with right now? Include the exact outcome you want. 🐾" aria-label="Your question"></textarea>
     <div class="note-footer-row">
             <span id="char-count">0 / 900</span>
-      <button id="send-btn" disabled>Send 🐾</button>
+      <button id="send-btn" disabled>Send Note 🐾</button>
     </div>
     <p id="send-msg" role="alert" aria-live="polite"></p>
   </div>
 
   <!-- Answered Q&A feed -->
   <div class="card">
-    <p class="feed-header">Answered Notes 🐾</p>
+    <p class="feed-header">Published Replies 🐾</p>
         <div class="feed-toolbar" aria-label="Answered note filters">
             <div class="filter-row">
-                <span class="filter-label">Source</span>
+                <span class="filter-label">Origin</span>
                 <div class="filter-group" role="group" aria-label="Filter by source">
                     <button type="button" class="filter-btn is-active" data-filter-kind="source" data-filter-value="all" aria-pressed="true">All</button>
                     <button type="button" class="filter-btn" data-filter-kind="source" data-filter-value="limbo" aria-pressed="false">Limbo</button>
-                    <button type="button" class="filter-btn" data-filter-kind="source" data-filter-value="anon" aria-pressed="false">Anon</button>
+                    <button type="button" class="filter-btn" data-filter-kind="source" data-filter-value="anon" aria-pressed="false">Inbox</button>
                 </div>
             </div>
             <div class="filter-row">
-                <span class="filter-label">Tier</span>
+                <span class="filter-label">Level</span>
                 <div class="filter-group" role="group" aria-label="Filter by tier">
                     <button type="button" class="filter-btn is-active" data-filter-kind="tier" data-filter-value="all" aria-pressed="true">All</button>
                     <button type="button" class="filter-btn" data-filter-kind="tier" data-filter-value="safe" aria-pressed="false">Safe</button>
@@ -2642,8 +2701,8 @@ def anon_page(request: Request):
                 </div>
             </div>
         </div>
-    <p id="feed-loading">Loading… 🐾</p>
-    <p id="empty-feed">No answered notes yet – be the first to ask! 🐾</p>
+    <p id="feed-loading">Loading published replies… 🐾</p>
+    <p id="empty-feed">No published replies yet — send the first note. 🐾</p>
     <div id="qa-list"></div>
   </div>
 
@@ -2670,7 +2729,7 @@ def anon_page(request: Request):
             const style = (document.getElementById('note-response-style')?.value || 'Direct').trim();
             const payloadText = `[Topic: ${{topic}} | Context: ${{context}} | Reply style: ${{style}}] ${{text}}`;
             if (payloadText.length > API_MAX) {{
-                sendMsg.textContent = `Please shorten your note by ${{payloadText.length - API_MAX}} characters.`;
+                sendMsg.textContent = `Please shorten your note by ${{payloadText.length - API_MAX}} characters before sending.`;
                 sendMsg.className = 'error';
                 return;
             }}
@@ -2688,17 +2747,17 @@ def anon_page(request: Request):
           textarea.value = '';
           charCount.textContent = `0 / ${{MAX}}`;
           charCount.className = '';
-          sendMsg.textContent = '🐾 Your note was sent!';
+                    sendMsg.textContent = '🐾 Note received. Thanks for sharing.';
           sendMsg.className = 'success';
           setTimeout(() => {{ sendMsg.textContent = ''; sendMsg.className = ''; }}, 3500);
         }} else {{
           const data = await resp.json().catch(() => ({{}}));
-          sendMsg.textContent = data.detail || 'Something went wrong. Please try again.';
+                    sendMsg.textContent = data.detail || 'Could not send your note. Please try again.';
           sendMsg.className = 'error';
           sendBtn.disabled = false;
         }}
       }} catch {{
-        sendMsg.textContent = 'Could not send. Please try again.';
+                sendMsg.textContent = 'Network issue. Please try sending again.';
         sendMsg.className = 'error';
         sendBtn.disabled = textarea.value.trim().length === 0;
       }}
@@ -2766,13 +2825,13 @@ def anon_page(request: Request):
             const filtered = applyFilters(allQuestions);
 
             if (!allQuestions.length) {{
-                emptyFeed.textContent = 'No answered notes yet – be the first to ask! 🐾';
+                emptyFeed.textContent = 'No published replies yet — send the first note. 🐾';
                 emptyFeed.style.display = 'block';
                 return;
             }}
 
             if (!filtered.length) {{
-                emptyFeed.textContent = 'No answered notes match these filters yet. 🐾';
+                emptyFeed.textContent = 'No replies match your current filters yet. 🐾';
                 emptyFeed.style.display = 'block';
                 return;
             }}
@@ -2792,7 +2851,7 @@ def anon_page(request: Request):
                     `<div class="bubble bubble-q">${{esc(q.text)}}</div>` +
                     `<div class="bubble bubble-a">${{esc(q.answer)}}</div>` +
                     metaHtml +
-                    `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Share this note</a>`;
+                    `<a class="share-link" href="/q/${{encodeURIComponent(q.id)}}" target="_blank" rel="noopener">🔗 Open share link</a>`;
                 qaList.appendChild(div);
             }});
         }}
@@ -2819,10 +2878,10 @@ def anon_page(request: Request):
                 document.getElementById('anon-days-locked').textContent = goalMet ? '🔓 Unlocked' : String(daysLocked ?? '--');
                 document.getElementById('anon-days-locked-goal').textContent =
                     goalMet
-                        ? `Goal met! (${{daysLocked}}/${{goalDays}} days)`
+                        ? `Target reached (${{daysLocked}}/${{goalDays}} days)`
                         : goalDays > 0 && daysLocked != null
-                            ? `Goal: ${{daysLocked}}/${{goalDays}} days`
-                            : `Goal: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
+                            ? `Target: ${{daysLocked}}/${{goalDays}} days`
+                            : `Target: ${{goalDays > 0 ? goalDays + ' days' : 'not set'}}`;
             }} catch {{
                 // Keep placeholders when unavailable.
             }}
