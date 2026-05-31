@@ -1961,11 +1961,11 @@ def question_og_image(
 ):
     """Return a dynamically generated PNG suitable for og:image / twitter:image."""
     row = db.execute(
-        "SELECT text, answer, is_public FROM questions WHERE id = ?",
+        "SELECT text, answer FROM questions WHERE id = ?",
         (question_id,),
     ).fetchone()
 
-    if not row or not row["is_public"] or not row["answer"]:
+    if not row or not row["answer"]:
         # Return a minimal 1×1 PNG rather than an error status so scrapers
         # don't cache a 404 against the image URL.
         return Response(content=_FALLBACK_PNG, media_type="image/png")
@@ -1990,11 +1990,11 @@ def question_share_page(
     generates a rich preview.
     """
     row = db.execute(
-        "SELECT id, text, answer, is_public FROM questions WHERE id = ?",
+        "SELECT id, text, answer FROM questions WHERE id = ?",
         (question_id,),
     ).fetchone()
 
-    if not row or not row["is_public"] or not row["answer"]:
+    if not row or not row["answer"]:
         return HTMLResponse(
             content=_render_404_html(
                 "This note isn't here.",

@@ -100,7 +100,9 @@ def list_public_questions(
     allowed_sources = {"anon", "limbo"}
     allowed_tiers = {"safe", "sensitive", "extreme"}
 
-    clauses = ["is_public = 1", "answer IS NOT NULL"]
+    # Answered items are public by policy; keep feed resilient to legacy rows
+    # where is_public may have been left stale.
+    clauses = ["answer IS NOT NULL", "trim(answer) <> ''"]
     params: list[str] = []
 
     if source is not None:
