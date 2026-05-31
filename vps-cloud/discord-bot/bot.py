@@ -46,6 +46,7 @@ import asyncio
 import json as _json
 import logging
 import os
+import random
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -53,6 +54,7 @@ from typing import Optional
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 import httpx
 
 logging.basicConfig(
@@ -85,6 +87,10 @@ _ENV_STREAM_CH       = os.environ.get("DISCORD_STREAM_CHANNEL_ID", "")
 _MOCHII_PINK  = 0xE8AEB7
 _MOCHII_RED   = 0xFF5C5C
 _MOCHII_GREY  = 0x5C5C5C
+
+_HANDLER_ROLE_ID = 1494451984554786948
+_SHARED_CHANNEL_ID = 1488943998210146517
+_KENNEL_SETUP_OWNER_ID = 348490841339330561
 
 # â”€â”€ Database helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -154,16 +160,16 @@ _POKE_COOLDOWN_TIER3  = 300    # 5 minutes for access_level 3+
 # â”€â”€ Bot client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
-class MochiiBot(discord.Client):
+class MochiiBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.members = True          # Required for on_member_join
-        intents.message_content = False  # Not needed
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
+        intents.message_content = True   # Required for prefix command support
+        super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
         """Sync slash commands and start background tasks."""
+        await self.add_cog(KennelSetupCog(self))
         if GUILD_ID:
             guild_obj = discord.Object(id=int(GUILD_ID))
             self.tree.copy_global_to(guild=guild_obj)
@@ -193,6 +199,300 @@ class MochiiBot(discord.Client):
 
 
 bot = MochiiBot()
+
+
+class KennelAcceptRulesView(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="I am 18+ and accept the rules!",
+        style=discord.ButtonStyle.green,
+        custom_id="kennel:accept_18_rules",
+    )
+    async def accept_rules(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This button only works inside a server.",
+                ephemeral=True,
+            )
+            return
+
+        pack_role = discord.utils.get(guild.roles, name="The Pack")
+        if pack_role is None:
+            await interaction.response.send_message(
+                'Role "The Pack" is missing. Ask an admin to run !build_public_kennel again.',
+                ephemeral=True,
+            )
+            return
+
+        member = interaction.user if isinstance(interaction.user, discord.Member) else guild.get_member(interaction.user.id)
+        if member is None:
+            await interaction.response.send_message("Could not resolve your member entry.", ephemeral=True)
+            return
+
+        try:
+            if pack_role not in member.roles:
+                await member.add_roles(pack_role, reason="Accepted 18+ kennel rules")
+            await interaction.response.send_message(
+                "Good. Step inside. The mutt is waiting.",
+                ephemeral=True,
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "I couldn't assign that role. Check my permissions and role hierarchy.",
+                ephemeral=True,
+            )
+
+
+class KennelSetupCog(commands.Cog):
+    def __init__(self, bot_client: commands.Bot) -> None:
+        self.bot = bot_client
+        self.rules_view = KennelAcceptRulesView()
+
+    async def cog_load(self) -> None:
+        # Register persistent button view so it survives restarts.
+        self.bot.add_view(self.rules_view)
+
+    async def _get_or_create_role(
+        self,
+        guild: discord.Guild,
+        *,
+        name: str,
+        color: discord.Color,
+        hoist: bool,
+        reason: str,
+    ) -> discord.Role:
+        role = discord.utils.get(guild.roles, name=name)
+        if role is None:
+            role = await guild.create_role(name=name, color=color, hoist=hoist, reason=reason)
+        else:
+            await role.edit(color=color, hoist=hoist, reason=reason)
+        return role
+
+    async def _get_or_create_category(
+        self,
+        guild: discord.Guild,
+        *,
+        name: str,
+        reason: str,
+        overwrites: Optional[dict] = None,
+    ) -> discord.CategoryChannel:
+        category = discord.utils.get(guild.categories, name=name)
+        if category is None:
+            category = await guild.create_category(name=name, overwrites=overwrites, reason=reason)
+        elif overwrites is not None:
+            await category.edit(overwrites=overwrites, reason=reason)
+        return category
+
+    async def _get_or_create_text_channel(
+        self,
+        guild: discord.Guild,
+        *,
+        name: str,
+        category: discord.CategoryChannel,
+        nsfw: bool,
+        reason: str,
+    ) -> discord.TextChannel:
+        channel = discord.utils.get(guild.text_channels, name=name, category=category)
+        if channel is None:
+            channel = await guild.create_text_channel(name=name, category=category, nsfw=nsfw, reason=reason)
+        else:
+            await channel.edit(category=category, nsfw=nsfw, reason=reason)
+        return channel
+
+    async def _upsert_rules_message(
+        self,
+        channel: discord.TextChannel,
+        embed: discord.Embed,
+    ) -> str:
+        bot_user = self.bot.user
+        if bot_user is not None:
+            async for message in channel.history(limit=50):
+                if message.author.id != bot_user.id:
+                    continue
+                for row in message.components:
+                    for child in row.children:
+                        if getattr(child, "custom_id", None) == "kennel:accept_18_rules":
+                            await message.edit(embed=embed, view=self.rules_view)
+                            return "updated"
+
+        await channel.send(embed=embed, view=self.rules_view)
+        return "created"
+
+    @commands.command(name="build_public_kennel")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def build_public_kennel(self, ctx: commands.Context) -> None:
+        guild = ctx.guild
+        if guild is None:
+            await ctx.send("This command can only be run in a server.")
+            return
+
+        if ctx.author.id != _KENNEL_SETUP_OWNER_ID:
+            await ctx.send("Only the configured server owner can run this command.")
+            return
+
+        reason = f"Kennel setup initiated by {ctx.author} ({ctx.author.id})"
+
+        handler_role = guild.get_role(_HANDLER_ROLE_ID)
+        if handler_role is None:
+            await ctx.send(f"Handler role with ID {_HANDLER_ROLE_ID} was not found. Aborting.")
+            return
+
+        await self._get_or_create_role(
+            guild,
+            name="The Pack",
+            color=discord.Color.dark_grey(),
+            hoist=True,
+            reason=reason,
+        )
+        await self._get_or_create_role(
+            guild,
+            name="The Mutt",
+            color=discord.Color.default(),
+            hoist=True,
+            reason=reason,
+        )
+
+        welcome_cat = await self._get_or_create_category(guild, name="The Welcome Mat", reason=reason)
+        rules_channel = await self._get_or_create_text_channel(
+            guild,
+            name="rules",
+            category=welcome_cat,
+            nsfw=False,
+            reason=reason,
+        )
+        await self._get_or_create_text_channel(
+            guild,
+            name="announcements",
+            category=welcome_cat,
+            nsfw=False,
+            reason=reason,
+        )
+
+        pack_cat = await self._get_or_create_category(guild, name="The Pack", reason=reason)
+        await self._get_or_create_text_channel(
+            guild,
+            name="general-barking",
+            category=pack_cat,
+            nsfw=False,
+            reason=reason,
+        )
+
+        kennel_cat = await self._get_or_create_category(guild, name="The Kennel (18+)", reason=reason)
+        for name in ("put-the-mutt-in-its-place", "nsfw-media", "tasks-and-punishments"):
+            await self._get_or_create_text_channel(
+                guild,
+                name=name,
+                category=kennel_cat,
+                nsfw=True,
+                reason=reason,
+            )
+
+        shared_channel = guild.get_channel(_SHARED_CHANNEL_ID)
+        if isinstance(shared_channel, discord.TextChannel):
+            await shared_channel.edit(category=kennel_cat, nsfw=True, reason=reason)
+        else:
+            await ctx.send(
+                f"Warning: Could not find text channel with ID {_SHARED_CHANNEL_ID} to move into The Kennel (18+)."
+            )
+
+        everyone = guild.default_role
+        me = guild.me
+        overwrites = {
+            everyone: discord.PermissionOverwrite(read_messages=False, view_channel=False),
+            handler_role: discord.PermissionOverwrite(read_messages=True, view_channel=True),
+        }
+        if me is not None:
+            overwrites[me] = discord.PermissionOverwrite(read_messages=True, view_channel=True)
+
+        handlers_cat = await self._get_or_create_category(
+            guild,
+            name="Handler's Quarters",
+            reason=reason,
+            overwrites=overwrites,
+        )
+        await self._get_or_create_text_channel(
+            guild,
+            name="commands",
+            category=handlers_cat,
+            nsfw=False,
+            reason=reason,
+        )
+        await self._get_or_create_text_channel(
+            guild,
+            name="behavior-logs",
+            category=handlers_cat,
+            nsfw=False,
+            reason=reason,
+        )
+
+        # Permission sanity pass: public areas visible, handler areas private.
+        welcome_rules = discord.utils.get(guild.text_channels, name="rules", category=welcome_cat)
+        welcome_announcements = discord.utils.get(guild.text_channels, name="announcements", category=welcome_cat)
+        pack_general = discord.utils.get(guild.text_channels, name="general-barking", category=pack_cat)
+        handler_commands = discord.utils.get(guild.text_channels, name="commands", category=handlers_cat)
+        handler_logs = discord.utils.get(guild.text_channels, name="behavior-logs", category=handlers_cat)
+
+        for public_channel in (welcome_rules, welcome_announcements, pack_general):
+            if isinstance(public_channel, discord.TextChannel):
+                await public_channel.set_permissions(
+                    everyone,
+                    view_channel=True,
+                    read_messages=True,
+                    reason=reason,
+                )
+
+        for private_channel in (handler_commands, handler_logs):
+            if isinstance(private_channel, discord.TextChannel):
+                await private_channel.set_permissions(
+                    everyone,
+                    view_channel=False,
+                    read_messages=False,
+                    reason=reason,
+                )
+                await private_channel.set_permissions(
+                    handler_role,
+                    view_channel=True,
+                    read_messages=True,
+                    reason=reason,
+                )
+                if me is not None:
+                    await private_channel.set_permissions(
+                        me,
+                        view_channel=True,
+                        read_messages=True,
+                        reason=reason,
+                    )
+
+        rules_embed = discord.Embed(
+            title="Kennel Rules (18+)",
+            color=discord.Color.dark_grey(),
+            description=(
+                "This is an 18+ space for consensual degradation of the mutt.\n\n"
+                "By proceeding, you confirm all participation is consensual, negotiated, and revocable.\n"
+                "The Handler's word is law within this server's dynamic.\n"
+                "Discord Terms of Service and Community Guidelines must always be followed.\n\n"
+                "No consent violations. No minors. No platform-rule violations."
+            ),
+        )
+        rules_embed.set_footer(text="Click the button below only if you are 18+ and accept these rules.")
+
+        rules_status = await self._upsert_rules_message(rules_channel, rules_embed)
+        await ctx.send(f"Kennel build complete. Rules message {rules_status}.")
+
+    @build_public_kennel.error
+    async def build_public_kennel_error(self, ctx: commands.Context, error: Exception) -> None:
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("Administrator permissions are required for this command.")
+            return
+        if isinstance(error, commands.NoPrivateMessage):
+            await ctx.send("This command can only be used in a server.")
+            return
+        logger.exception("Unhandled error in !build_public_kennel: %s", error)
+        await ctx.send("Setup failed due to an unexpected error. Check bot logs.")
 
 
 # â”€â”€ Slash commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -273,6 +573,75 @@ async def cmd_schedule(interaction: discord.Interaction) -> None:
     if BASE_URL:
         embed.url = BASE_URL
     await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="pouch_random", description="Show a random public Puppy Pouch Q&A")
+async def cmd_pouch_random(interaction: discord.Interaction) -> None:
+    await interaction.response.defer()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(f"{BACKEND_URL}/api/questions/public")
+        if resp.status_code != 200:
+            await interaction.followup.send("Couldn't fetch Puppy Pouch entries right now.")
+            return
+        rows = resp.json()
+        if not isinstance(rows, list) or not rows:
+            await interaction.followup.send("No public Puppy Pouch entries yet.")
+            return
+        picked = random.choice(rows)
+        question_id = str(picked.get("id", ""))
+        share_url = f"{BASE_URL}/q/{question_id}" if BASE_URL and question_id else None
+        embed = discord.Embed(
+            title="🐾 Random Puppy Pouch Note",
+            color=_MOCHII_PINK,
+            description=f"**Q:** {picked.get('text', '—')}\n\n**A:** {picked.get('answer', '—')}",
+        )
+        if share_url:
+            embed.url = share_url
+            embed.set_footer(text="Open full share card")
+        await interaction.followup.send(embed=embed)
+    except Exception as exc:
+        logger.warning("/pouch_random failed: %s", exc)
+        await interaction.followup.send("Couldn't fetch Puppy Pouch entries right now.")
+
+
+@bot.tree.command(name="public_status", description="Show live public website status stats")
+async def cmd_public_status(interaction: discord.Interaction) -> None:
+    await interaction.response.defer()
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(f"{BACKEND_URL}/api/public/status")
+        if resp.status_code != 200:
+            await interaction.followup.send("Couldn't fetch public status right now.")
+            return
+        payload = resp.json() if resp.text else {}
+        days_locked = payload.get("days_locked", payload.get("days_caged", "—"))
+        goal_days = payload.get("days_locked_goal_days", 0)
+        embed = discord.Embed(title="📊 Public Status", color=_MOCHII_PINK)
+        embed.add_field(name="Days Locked", value=str(days_locked), inline=True)
+        embed.add_field(name="Goal", value=str(goal_days), inline=True)
+        if BASE_URL:
+            embed.add_field(name="Site", value=f"[mochii.live]({BASE_URL})", inline=False)
+        await interaction.followup.send(embed=embed)
+    except Exception as exc:
+        logger.warning("/public_status failed: %s", exc)
+        await interaction.followup.send("Couldn't fetch public status right now.")
+
+
+@bot.tree.command(name="community_links", description="Get quick links to public community pages")
+async def cmd_community_links(interaction: discord.Interaction) -> None:
+    if not BASE_URL:
+        await interaction.response.send_message(
+            "The site URL is not configured yet.",
+            ephemeral=True,
+        )
+        return
+
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(label="Puppy Pouch", style=discord.ButtonStyle.link, url=f"{BASE_URL}/anon"))
+    view.add_item(discord.ui.Button(label="Links", style=discord.ButtonStyle.link, url=f"{BASE_URL}/links"))
+    view.add_item(discord.ui.Button(label="Spotify", style=discord.ButtonStyle.link, url=f"{BASE_URL}/spotify"))
+    await interaction.response.send_message("🌐 Jump into the public pages:", view=view)
 
 
 @bot.tree.command(
