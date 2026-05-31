@@ -103,12 +103,80 @@ scheduler = AsyncIOScheduler()
 # Reddit scraper
 # ---------------------------------------------------------------------------
 
-
-# ---------------------------------------------------------------------------
-# Reddit scraper
-# ---------------------------------------------------------------------------
-
 _REDDIT_JSON_FEED_HEADERS = {"User-Agent": "CameraSiteDroolFeed/1.0"}
+
+
+def _extract_reddit_media(child_data: dict) -> tuple:
+    """Return (primary_media_url, media_urls_json) for a Reddit post.
+
+    Extraction priority:
+    1. Reddit-hosted video  – media.reddit_video.fallback_url (direct MP4)
+    2. Gallery post         – all images from media_metadata in gallery order
+    3. Animated GIF/image   – preview.images[0].variants.gif or .source URL
+    4. Direct media URL     – post's url field when it points to a media file
+    5. Link preview / thumb – preview image or thumbnail as a last resort
+    """
+    media_urls: list[str] = []
+
+    # 1. Reddit-hosted video (v.redd.it DASH stream)
+    if child_data.get("is_video"):
+        for key in ("secure_media", "media"):
+            rv = (child_data.get(key) or {}).get("reddit_video") or {}
+            fallback = rv.get("fallback_url", "") or ""
+            if fallback:
+                media_urls.append(fallback)
+                break
+
+    # 2. Gallery post – collect every image in gallery order
+    if not media_urls and child_data.get("is_gallery"):
+        metadata: dict = child_data.get("media_metadata") or {}
+        gallery_items = (child_data.get("gallery_data") or {}).get("items") or []
+        ordered_ids = [str(it.get("media_id", "")) for it in gallery_items] or list(metadata.keys())
+        for mid in ordered_ids:
+            entry = metadata.get(mid) or {}
+            if entry.get("status") == "valid":
+                src = entry.get("s") or {}
+                # "gif" key is present for animated gallery items
+                img_url = src.get("gif") or src.get("u") or ""
+                if img_url:
+                    media_urls.append(img_url.replace("&amp;", "&"))
+
+    # 3. Preview variants (animated GIF → static image)
+    if not media_urls:
+        preview_images = (child_data.get("preview") or {}).get("images") or []
+        if preview_images:
+            first = preview_images[0]
+            variants = first.get("variants") or {}
+            # Prefer the GIF variant (animated); fall back to MP4, then source
+            for variant_key in ("gif", "mp4"):
+                v_url = (variants.get(variant_key) or {}).get("source", {}).get("url", "") or ""
+                if v_url:
+                    media_urls.append(v_url.replace("&amp;", "&"))
+                    break
+            if not media_urls:
+                src_url = (first.get("source") or {}).get("url", "") or ""
+                if src_url:
+                    media_urls.append(src_url.replace("&amp;", "&"))
+
+    # 4. Direct media URL – i.redd.it, imgur, or any obvious media extension
+    if not media_urls:
+        raw_url = child_data.get("url", "") or ""
+        if raw_url.startswith("http"):
+            lower = raw_url.lower().split("?")[0]
+            _media_exts = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".gifv", ".mov")
+            if any(lower.endswith(ext) for ext in _media_exts) or "i.redd.it" in lower:
+                # Convert Imgur .gifv to direct .mp4
+                media_urls.append(raw_url[:-5] + ".mp4" if lower.endswith(".gifv") else raw_url)
+
+    # 5. Thumbnail as last resort (Reddit uses "self"/"nsfw"/etc. for non-image posts)
+    if not media_urls:
+        thumb = child_data.get("thumbnail") or ""
+        if thumb.startswith("http"):
+            media_urls.append(thumb)
+
+    primary: Optional[str] = media_urls[0] if media_urls else None
+    media_urls_json: Optional[str] = json.dumps(media_urls) if media_urls else None
+    return primary, media_urls_json
 
 
 def _scrape_reddit() -> None:
@@ -120,14 +188,8 @@ def _scrape_reddit() -> None:
     - ``drool_reddit_json_saved_url``   / ``REDDIT_JSON_SAVED_URL``
     - ``drool_reddit_json_upvoted_url`` / ``REDDIT_JSON_UPVOTED_URL``
     """
-    saved_url   = (
-        _load_credential("drool_reddit_json_saved_url",   "REDDIT_JSON_SAVED_URL")
-
-    )
-    upvoted_url = (
-        _load_credential("drool_reddit_json_upvoted_url", "REDDIT_JSON_UPVOTED_URL")
-
-    )
+    saved_url   = _load_credential("drool_reddit_json_saved_url",   "REDDIT_JSON_SAVED_URL")
+    upvoted_url = _load_credential("drool_reddit_json_upvoted_url", "REDDIT_JSON_UPVOTED_URL")
 
     feed_urls = [
         (saved_url,   "saved"),
@@ -137,6 +199,9 @@ def _scrape_reddit() -> None:
     items: list[tuple] = []
 
     for feed_url, label in feed_urls:
+        if not feed_url:
+            logger.debug("Reddit JSON feed scraper (%s): URL not configured, skipping.", label)
+            continue
         try:
             resp = httpx.get(
                 feed_url,
@@ -167,18 +232,12 @@ def _scrape_reddit() -> None:
             subreddit = child_data.get("subreddit", "") or ""
             permalink = child_data.get("permalink", "")
 
-            # Use the post's linked URL when present and absolute; otherwise
-            # fall back to the Reddit permalink.
-            raw_url = child_data.get("url", "") or ""
-            if raw_url and raw_url.startswith("http"):
-                media_url: Optional[str] = raw_url
-            else:
-                media_url = None
+            media_url, media_urls_json = _extract_reddit_media(child_data)
 
             orig_url = (
                 f"https://reddit.com{permalink}"
                 if permalink
-                else raw_url or ""
+                else (child_data.get("url", "") or "")
             )
             if not orig_url:
                 continue
@@ -192,11 +251,9 @@ def _scrape_reddit() -> None:
             else:
                 ts = datetime.now(timezone.utc).isoformat()
 
-            text_content = title
-            if subreddit:
-                text_content = f"[r/{subreddit}] {title}"
+            text_content = f"[r/{subreddit}] {title}" if subreddit else title
 
-            items.append(("reddit", orig_url, media_url, text_content, ts))
+            items.append(("reddit", orig_url, media_url, text_content, ts, media_urls_json))
 
     if not items:
         logger.debug("Reddit JSON feed scraper: no posts retrieved.")
@@ -206,7 +263,7 @@ def _scrape_reddit() -> None:
     try:
         new_count = 0
         newly_inserted: list[tuple] = []
-        for platform, orig_url, media_url, text_content, ts in items:
+        for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
             ).fetchone()
@@ -214,10 +271,10 @@ def _scrape_reddit() -> None:
                 continue
             conn.execute(
                 """
-                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, text_content or None, ts),
+                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
             newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
