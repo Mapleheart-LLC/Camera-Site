@@ -39,6 +39,7 @@ import logging
 import os
 import re
 import json
+import random
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -109,6 +110,54 @@ def _is_feature_enabled(setting_key: str, default: bool = True) -> bool:
 def _effective_channel_id(setting_key: str, env_var: str) -> str:
     """Return channel ID: settings table value takes precedence over env var."""
     return (_get_setting(setting_key) or os.environ.get(env_var, "")).strip()
+
+
+def _load_message_variants(
+    setting_key: str,
+    env_var: str,
+    defaults: list[str],
+) -> list[str]:
+    """Load non-empty message variant strings from settings/env with defaults."""
+    raw = (_get_setting(setting_key) or os.environ.get(env_var, "")).strip()
+    if not raw:
+        return defaults
+
+    variants: list[str] = []
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = None
+
+    if isinstance(parsed, list):
+        variants = [str(item).strip() for item in parsed if str(item).strip()]
+    elif isinstance(parsed, str):
+        variants = [line.strip() for line in parsed.splitlines() if line.strip()]
+    else:
+        variants = [line.strip() for line in raw.splitlines() if line.strip()]
+
+    return variants or defaults
+
+
+def _pick_message_variant(
+    setting_key: str,
+    env_var: str,
+    defaults: list[str],
+) -> str:
+    """Pick one randomized message variant."""
+    variants = _load_message_variants(setting_key, env_var, defaults)
+    return random.choice(variants)
+
+
+def _safe_format_variant(template: str, context: dict[str, str]) -> str:
+    """Safely format known variant tokens without crashing on unknown braces."""
+    if not template:
+        return ""
+    try:
+        return template.format(**context)
+    except Exception:
+        # Keep delivery resilient even when admin-configured templates contain
+        # unmatched braces or unknown placeholders.
+        return template
 
 
 def load_reaction_role_options() -> dict[str, dict[str, Any]]:
@@ -260,6 +309,28 @@ async def send_discord_notification(
 
     payload: dict = {"content": content}
 
+    variant_context = {
+        "question": question_text,
+        "question_id": question_id or "",
+        "base_url": base_url,
+    }
+    variant_line = _safe_format_variant(
+        _pick_message_variant(
+        "discord_question_flair_messages",
+        "DISCORD_QUESTION_FLAIR_MESSAGES",
+        [
+            "🐶 The pack inbox has fresh mail.",
+            "🦴 Another secret just landed in the pouch.",
+            "✨ New anonymous note received. Time to snoop.",
+            "🐾 A new confession is waiting for attention.",
+        ],
+        ),
+        variant_context,
+    )
+
+    if variant_line and variant_line not in content:
+        payload["content"] = f"{content}\n{variant_line}".strip()
+
     if is_embed:
         embed: dict = {
             "title": "📬 New note in the Puppy Pouch!",
@@ -317,7 +388,18 @@ async def send_answer_notification(share_url: str = "") -> None:
     if not notification_channel_id:
         return
 
-    lines = ["✅ A note in the Puppy Pouch has been answered and published!"]
+    answer_line = _pick_message_variant(
+        "discord_answer_messages",
+        "DISCORD_ANSWER_MESSAGES",
+        [
+            "✅ A note in the Puppy Pouch has been answered and published!",
+            "📣 Fresh answer posted in the Puppy Pouch.",
+            "🐕 The kennel just dropped a new published reply.",
+            "🗞️ New answer is live for the pack to read.",
+        ],
+    )
+
+    lines = [answer_line]
     if share_url:
         lines.append(f"Share it: {share_url}")
 

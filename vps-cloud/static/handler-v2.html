@@ -755,6 +755,7 @@
                     <option value="SET_BRIGHTNESS">Set Brightness</option>
                     <option value="SET_SCREEN_TIMEOUT">Set Screen Timeout</option>
                     <option value="SET_AUTO_ROTATE">Set Auto Rotate</option>
+                    <option value="SHOW_OVERLAY">Show Overlay</option>
                     <option value="OPEN_URL">Open URL</option>
                   </select>
                 </label>
@@ -805,6 +806,23 @@
                 </label>
                 <div class="hp2-action-row">
                   <button id="hp2-screenctl-url-send-btn" class="hp2-btn hp2-btn-primary" type="button">Open URL</button>
+                </div>
+                <div class="hp2-control-grid-2">
+                  <label class="hp2-control-field" for="hp2-screenctl-overlay-title">
+                    <span>Overlay Title</span>
+                    <input id="hp2-screenctl-overlay-title" type="text" placeholder="Check-in Requested" />
+                  </label>
+                  <label class="hp2-control-field" for="hp2-screenctl-overlay-image">
+                    <span>Overlay Image URL (optional)</span>
+                    <input id="hp2-screenctl-overlay-image" type="url" placeholder="https://example.com/image.png" />
+                  </label>
+                </div>
+                <label class="hp2-control-field" for="hp2-screenctl-overlay-message">
+                  <span>Overlay Message</span>
+                  <textarea id="hp2-screenctl-overlay-message" rows="3" placeholder="Please open the app and respond."></textarea>
+                </label>
+                <div class="hp2-action-row">
+                  <button id="hp2-screenctl-overlay-send-btn" class="hp2-btn hp2-btn-primary" type="button">Show Overlay</button>
                 </div>
               </div>
             </div>

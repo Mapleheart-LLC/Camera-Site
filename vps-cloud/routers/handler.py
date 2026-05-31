@@ -8717,6 +8717,7 @@ def handler_tpe_push_schema(
             "SET_SCREEN_TIMEOUT",
             "SET_AUTO_ROTATE",
             "OPEN_URL",
+            "SHOW_OVERLAY",
         }
     ]
     notify_actions = [
@@ -8872,6 +8873,30 @@ def handler_tpe_push_schema(
                 "required": True,
                 "placeholder": "https://example.com",
             }
+        ],
+        "SHOW_OVERLAY": [
+            {
+                "name": "title",
+                "label": "Overlay Title",
+                "type": "text",
+                "required": False,
+                "placeholder": "Check-in Requested",
+            },
+            {
+                "name": "message",
+                "label": "Overlay Message",
+                "type": "textarea",
+                "required": False,
+                "placeholder": "Please open the app and respond.",
+                "rows": 3,
+            },
+            {
+                "name": "image_url",
+                "label": "Image URL",
+                "type": "url",
+                "required": False,
+                "placeholder": "https://example.com/image.png",
+            },
         ],
         "SEND_NOTIFICATION": [
             {

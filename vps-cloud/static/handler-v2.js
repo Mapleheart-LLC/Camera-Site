@@ -1234,6 +1234,7 @@
       'hp2-screenctl-timeout-send-btn',
       'hp2-screenctl-autorotate-send-btn',
       'hp2-screenctl-url-send-btn',
+      'hp2-screenctl-overlay-send-btn',
       'hp2-notify-send-btn',
       'hp2-notify-clear-btn',
       'hp2-speak-send-btn',
@@ -4376,6 +4377,14 @@
     if (action === 'OPEN_URL' && !fields.url) {
       fields.url = String(byId('hp2-screenctl-url')?.value || '').trim();
     }
+    if (action === 'SHOW_OVERLAY') {
+      if (!fields.title) fields.title = String(byId('hp2-screenctl-overlay-title')?.value || '').trim();
+      if (!fields.message) fields.message = String(byId('hp2-screenctl-overlay-message')?.value || '').trim();
+      if (!fields.image_url) fields.image_url = String(byId('hp2-screenctl-overlay-image')?.value || '').trim();
+      if (!fields.title) fields.title = 'Check-in Requested';
+      if (!fields.message) fields.message = 'Please open the app and respond.';
+      if (!fields.image_url) delete fields.image_url;
+    }
 
     const title = action.replaceAll('_', ' ');
     const fieldSummary = summarizeFieldsForHistory(fields);
@@ -4688,6 +4697,22 @@
       fields: { url },
       message: `Open URL on ${selectedDeviceLabel()}?`,
       historyDetail: `OPEN_URL ${url}`,
+    });
+  }
+
+  async function sendShowOverlay() {
+    const title = String(byId('hp2-screenctl-overlay-title')?.value || '').trim() || 'Check-in Requested';
+    const message = String(byId('hp2-screenctl-overlay-message')?.value || '').trim() || 'Please open the app and respond.';
+    const imageUrl = String(byId('hp2-screenctl-overlay-image')?.value || '').trim();
+    await sendScreenLockAction('SHOW_OVERLAY', {
+      title: 'Show Overlay',
+      fields: {
+        title,
+        message,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      },
+      message: `Show overlay on ${selectedDeviceLabel()}?`,
+      historyDetail: `SHOW_OVERLAY title=${title}`,
     });
   }
 
@@ -5232,6 +5257,7 @@
     byId('hp2-screenctl-timeout-send-btn').addEventListener('click', () => sendScreenTimeout().catch(() => {}));
     byId('hp2-screenctl-autorotate-send-btn').addEventListener('click', () => sendAutoRotate().catch(() => {}));
     byId('hp2-screenctl-url-send-btn').addEventListener('click', () => sendOpenUrl().catch(() => {}));
+    byId('hp2-screenctl-overlay-send-btn').addEventListener('click', () => sendShowOverlay().catch(() => {}));
     byId('hp2-notify-send-schema-btn').addEventListener('click', () => sendSchemaNotifyAction().catch(() => {}));
     byId('hp2-notify-action').addEventListener('change', renderNotifyActionFieldInputs);
     byId('hp2-notify-send-btn').addEventListener('click', () => sendNotificationCommand().catch(() => {}));
