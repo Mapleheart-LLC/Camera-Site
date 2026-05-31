@@ -34,6 +34,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -173,6 +174,60 @@ PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN = 6
 PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC = 900
 DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID = "1510453424993468448"
 _SHARE_URL_RE = re.compile(r"https?://[^\s<>'\"]+", flags=re.IGNORECASE)
+_DEVICE_SHARE_PUP_LABEL_REGEX = re.compile(r"\bpup\b", flags=re.IGNORECASE)
+_DEVICE_SHARE_SUBJECT_LABELS = [
+    "pup",
+    "puppy",
+    "mutt",
+    "bitch",
+    "pet",
+]
+_DEVICE_SHARE_MEANER_LINES = [
+    "This pup got weak again and offered up: {payload}",
+    "Pup saw this and instantly forgot every shred of dignity: {payload}",
+    "Another reminder that pup's willpower is a joke: {payload}",
+    "Pup acted desperate again and handed this over: {payload}",
+    "Zero discipline, zero shame, same pup behavior: {payload}",
+    "Pup chased this like a needy little addict: {payload}",
+    "Self-control collapsed on contact, so pup submitted: {payload}",
+    "Pup could not behave and came crawling with this: {payload}",
+    "Pathetic impulse check failed, pup offered up: {payload}",
+]
+_DEVICE_SHARE_PLAYFUL_LINES = [
+    "Pup found a new favorite and brought it over: {payload}",
+    "Tail-wag report: this one got pup all excited - {payload}",
+    "Pup discovered a spicy little treasure: {payload}",
+    "Zoomies level high, so pup shared this gem: {payload}",
+    "Pup's 'just one peek' became this share: {payload}",
+    "Happy yips, flushed cheeks, and this link: {payload}",
+    "Pup got butterflies and dropped this here: {payload}",
+    "Playful pup energy unlocked by: {payload}",
+]
+_DEVICE_SHARE_HUMILIATION_LINES = [
+    "Public humiliation drop from pup: {payload}",
+    "Pup is presenting this in shame: {payload}",
+    "Pup admits this made it weak and needy: {payload}",
+    "Humiliation confession from pup: {payload}",
+    "Pup offered this up with no dignity left: {payload}",
+    "Pup is embarrassed and still could not resist: {payload}",
+    "Shameless little confession from pup: {payload}",
+    "Pup folded and submitted this in plain view: {payload}",
+]
+_DEVICE_SHARE_MIXED_LINES = [
+    "Pup confession drop: this one made it squirm - {payload}",
+    "No self-control left. Pup handed over: {payload}",
+    "Pup was needy and submitted this: {payload}",
+    "Another horny little admission from pup: {payload}",
+    "Pup found this irresistible and shared it: {payload}",
+    "Attention-seeking pup delivered this: {payload}",
+    "Pup folded fast and offered this up: {payload}",
+]
+_DEVICE_SHARE_TEMPLATE_SETS = {
+    "meaner": _DEVICE_SHARE_MEANER_LINES,
+    "playful": _DEVICE_SHARE_PLAYFUL_LINES,
+    "mixed": _DEVICE_SHARE_MIXED_LINES,
+    "humiliation": _DEVICE_SHARE_HUMILIATION_LINES,
+}
 HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS = int(
     os.environ.get("HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS", "72")
 )
@@ -2288,6 +2343,41 @@ def _extract_share_urls(text: str) -> list[str]:
             seen.add(cleaned)
     return unique
 
+
+def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[str]]:
+    selected_set = (
+        (get_setting(db, "discord_device_share_message_set") or "").strip().lower()
+        or (os.environ.get("DISCORD_DEVICE_SHARE_MESSAGE_SET", "") or "").strip().lower()
+        or "all"
+    )
+    if selected_set == "all":
+        merged: list[str] = []
+        seen: set[str] = set()
+        for bucket in _DEVICE_SHARE_TEMPLATE_SETS.values():
+            for line in bucket:
+                if line in seen:
+                    continue
+                seen.add(line)
+                merged.append(line)
+        return "all", merged or _DEVICE_SHARE_MIXED_LINES
+
+    templates = _DEVICE_SHARE_TEMPLATE_SETS.get(selected_set)
+    if templates:
+        return selected_set, templates
+    return "mixed", _DEVICE_SHARE_MIXED_LINES
+
+
+def _render_device_share_template(template: str) -> tuple[str, str]:
+    label = random.choice(_DEVICE_SHARE_SUBJECT_LABELS)
+
+    def _replace(match: re.Match[str]) -> str:
+        source = match.group(0)
+        if source[:1].isupper():
+            return label.capitalize()
+        return label
+
+    return _DEVICE_SHARE_PUP_LABEL_REGEX.sub(_replace, template), label
+
 @router.post("/api/handler/device-status")
 async def handler_device_status(
     body: DeviceStatusReport,
@@ -2437,24 +2527,11 @@ async def handler_device_share(
         or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     )
 
-    lines = [
-        "📤 Device Quick Share",
-        f"Device: {resolved_device_id}",
-    ]
-    resolved_device_name = (body.device_name or "").strip()
-    if resolved_device_name:
-        lines.append(f"Name: {resolved_device_name}")
-    if (body.source_package or "").strip():
-        lines.append(f"Source: {(body.source_package or '').strip()}")
-    if (body.mime_type or "").strip():
-        lines.append(f"Type: {(body.mime_type or '').strip()}")
-    if share_subject:
-        lines.append(f"Subject: {share_subject}")
-    if share_text:
-        lines.append("")
-        lines.append(share_text)
-
-    await send_discord_channel_message(channel_id=channel_id, content="\n".join(lines).strip())
+    payload_text = (share_text or share_subject).strip()
+    selected_set, templates = _active_device_share_templates(db)
+    rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
+    message_line = rendered_template.format(payload=payload_text)
+    await send_discord_channel_message(channel_id=channel_id, content=message_line)
 
     db.execute(
         """
@@ -2473,6 +2550,9 @@ async def handler_device_share(
                     "stream_uris": body.stream_uris or [],
                     "channel_id": channel_id,
                     "urls": share_urls,
+                    "template_set": selected_set,
+                    "template_used": rendered_template,
+                    "subject_label": rendered_label,
                 }
             ),
             _now_iso(),
@@ -2484,6 +2564,7 @@ async def handler_device_share(
         "status": "shared",
         "device_id": resolved_device_id,
         "channel_id": channel_id,
+        "template_set": selected_set,
         "shared_urls": share_urls,
         "rewritten_text": share_text,
     }
