@@ -439,10 +439,24 @@
 
   async function loadPublicStatusSettingsForForm() {
     const startInput = byId('hp2-setting-days-start');
+    const counterEnabledInput = byId('hp2-setting-counter-discord-enabled');
+    const counterChannelInput = byId('hp2-setting-counter-discord-channel');
+    const counterEdgeStepInput = byId('hp2-setting-counter-edge-step');
     if (!startInput) return;
     try {
       const data = await apiGet('/api/handler/public-status');
       startInput.value = normalizeIsoDate(data?.days_caged_start_date);
+      if (counterEnabledInput) {
+        counterEnabledInput.value = data?.discord_counter_notify_enabled ? 'true' : 'false';
+      }
+      if (counterChannelInput) {
+        counterChannelInput.value = String(data?.discord_counter_channel_id || '');
+      }
+      if (counterEdgeStepInput) {
+        const stepRaw = Number(data?.discord_counter_edge_milestone_step || 10);
+        const step = Number.isFinite(stepRaw) ? Math.max(1, Math.min(1000, stepRaw)) : 10;
+        counterEdgeStepInput.value = String(step);
+      }
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
         setInlineResult('hp2-settings-result', `Failed to load Days Locked start date: ${err.message}`);
@@ -479,10 +493,19 @@
     }
 
     const daysStart = normalizeIsoDate(byId('hp2-setting-days-start')?.value || '');
+    const counterEnabled = String(byId('hp2-setting-counter-discord-enabled')?.value || 'false').trim().toLowerCase() === 'true';
+    const counterChannelId = String(byId('hp2-setting-counter-discord-channel')?.value || '').trim();
+    const counterEdgeStepRaw = Number(byId('hp2-setting-counter-edge-step')?.value || 10);
+    const counterEdgeStep = Number.isFinite(counterEdgeStepRaw)
+      ? Math.max(1, Math.min(1000, Math.trunc(counterEdgeStepRaw)))
+      : 10;
     let publicStatusSaved = false;
     try {
       await apiPost('/api/handler/public-status', {
         days_caged_start_date: daysStart || null,
+        discord_counter_notify_enabled: counterEnabled,
+        discord_counter_channel_id: counterChannelId,
+        discord_counter_edge_milestone_step: counterEdgeStep,
       });
       publicStatusSaved = true;
     } catch (err) {

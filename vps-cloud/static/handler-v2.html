@@ -1218,6 +1218,18 @@
 
               <label for="hp2-setting-days-start">Days Locked Start Date</label>
               <input id="hp2-setting-days-start" type="date" />
+
+              <label for="hp2-setting-counter-discord-enabled">Counter Discord Notifications</label>
+              <select id="hp2-setting-counter-discord-enabled">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+              </select>
+
+              <label for="hp2-setting-counter-discord-channel">Counter Discord Channel ID</label>
+              <input id="hp2-setting-counter-discord-channel" type="text" placeholder="e.g. 123456789012345678" />
+
+              <label for="hp2-setting-counter-edge-step">Edge Milestone Step</label>
+              <input id="hp2-setting-counter-edge-step" type="number" min="1" max="1000" value="10" />
             </div>
             <p class="hp2-muted">Set when the Days Locked counter starts counting from (saved to public status settings).</p>
             <div class="hp2-action-row">
@@ -1266,6 +1278,6 @@
   <div id="hp2-toast-stack" class="hp2-toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/handler-v2.js?v=20260531ds1" defer></script>
+  <script src="/handler-v2.js?v=20260531cn1" defer></script>
 </body>
 </html>

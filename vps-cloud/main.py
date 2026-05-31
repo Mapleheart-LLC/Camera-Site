@@ -3183,14 +3183,7 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         days_caged = accumulated if paused else accumulated + elapsed_days
 
     tasks_completed = max(0, _safe_int_setting(db, "public_tasks_completed", default=0))
-    confessions_setting = _safe_int_setting(db, "public_confessions_posted", default=-1)
-    if confessions_setting >= 0:
-        confessions_posted = confessions_setting
-    else:
-        row = db.execute(
-            "SELECT COUNT(*) AS n FROM questions WHERE answer IS NOT NULL"
-        ).fetchone()
-        confessions_posted = int(row["n"]) if row else 0
+    confessions_posted = max(0, _safe_int_setting(db, "public_confessions_posted", default=0))
 
     tasks_label = _safe_choice_setting(
         db, "public_tasks_label", PUBLIC_COUNTER_ONE_LABEL_OPTIONS, "Edges"

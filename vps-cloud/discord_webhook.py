@@ -40,6 +40,8 @@ import os
 import re
 import json
 import random
+import hashlib
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -58,6 +60,19 @@ _X_LINK_RE = re.compile(
     r"https?://(?:www\.|mobile\.)?(?:twitter\.com|x\.com)(?P<path>/[^\s<>'\"]*)?",
     flags=re.IGNORECASE,
 )
+
+_COUNTER_NOTIFY_DEDUPE_WINDOW_SEC = max(
+    10,
+    int((os.environ.get("DISCORD_COUNTER_DEDUPE_WINDOW_SEC", "60") or "60").strip() or "60"),
+)
+_COUNTER_NOTIFY_ENABLED_DEFAULT = (
+    os.environ.get("DISCORD_COUNTER_NOTIFY_ENABLED", "false").strip().lower() == "true"
+)
+_COUNTER_NOTIFY_EDGE_STEP_DEFAULT = max(
+    1,
+    int((os.environ.get("DISCORD_COUNTER_EDGE_MILESTONE_STEP", "10") or "10").strip() or "10"),
+)
+_COUNTER_NOTIFY_TABLE_READY = False
 
 
 def rewrite_x_links_to_fxtwitter(text: str) -> str:
@@ -158,6 +173,205 @@ def _safe_format_variant(template: str, context: dict[str, str]) -> str:
         # Keep delivery resilient even when admin-configured templates contain
         # unmatched braces or unknown placeholders.
         return template
+
+
+def _coerce_int(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _counter_event_kind(event_type: str) -> Optional[str]:
+    event = str(event_type or "").strip().lower()
+    if event == "orgasm_recorded":
+        return "orgasm"
+    if event == "edge_recorded":
+        return "edge"
+    return None
+
+
+def _counter_milestone_step() -> int:
+    raw = (
+        _get_setting("discord_counter_edge_milestone_step")
+        or os.environ.get("DISCORD_COUNTER_EDGE_MILESTONE_STEP", "")
+        or str(_COUNTER_NOTIFY_EDGE_STEP_DEFAULT)
+    )
+    try:
+        return max(1, min(int(str(raw).strip()), 1000))
+    except Exception:
+        return _COUNTER_NOTIFY_EDGE_STEP_DEFAULT
+
+
+def _counter_event_should_notify(kind: str, edge_count: Optional[int], step: int) -> bool:
+    if kind == "orgasm":
+        return True
+    if kind == "edge":
+        if edge_count is None:
+            return False
+        return edge_count > 0 and edge_count % step == 0
+    return False
+
+
+def _counter_bucket(timestamp_ms: Optional[int]) -> int:
+    if timestamp_ms is None or timestamp_ms <= 0:
+        timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    return max(0, int((timestamp_ms / 1000) // _COUNTER_NOTIFY_DEDUPE_WINDOW_SEC))
+
+
+def _counter_timestamp_iso(timestamp_ms: Optional[int]) -> str:
+    if timestamp_ms is None or timestamp_ms <= 0:
+        return datetime.now(timezone.utc).isoformat()
+    try:
+        return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
+    except Exception:
+        return datetime.now(timezone.utc).isoformat()
+
+
+def _ensure_counter_notify_table(conn: sqlite3.Connection) -> None:
+    global _COUNTER_NOTIFY_TABLE_READY
+    if _COUNTER_NOTIFY_TABLE_READY:
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS discord_counter_notification_events (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            fingerprint   TEXT NOT NULL UNIQUE,
+            event_type    TEXT NOT NULL,
+            edge_count    INTEGER,
+            orgasm_count  INTEGER,
+            source        TEXT,
+            device_id     TEXT,
+            dedupe_bucket INTEGER NOT NULL,
+            created_at    TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_counter_notify_created_at ON discord_counter_notification_events(created_at DESC)"
+    )
+    conn.commit()
+    _COUNTER_NOTIFY_TABLE_READY = True
+
+
+async def maybe_send_counter_update_notification(
+    *,
+    event_type: str,
+    edge_count: Any = None,
+    orgasm_count: Any = None,
+    source: str = "",
+    device_id: str = "",
+    timestamp_ms: Any = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    """Post deduplicated counter notifications to Discord.
+
+    Uses hybrid cadence:
+    - orgasms: notify every unique update
+    - edges: notify only at milestone step boundaries
+    """
+    kind = _counter_event_kind(event_type)
+    if kind is None:
+        return {"sent": False, "skipped": "unsupported_event"}
+
+    if not _is_feature_enabled(
+        "discord_counter_notify_enabled",
+        default=_COUNTER_NOTIFY_ENABLED_DEFAULT,
+    ):
+        return {"sent": False, "skipped": "disabled"}
+
+    channel_id = _effective_channel_id(
+        "discord_counter_channel_id",
+        "DISCORD_COUNTER_CHANNEL_ID",
+    )
+    if not channel_id:
+        return {"sent": False, "skipped": "missing_channel"}
+
+    edge_val = _coerce_int(edge_count)
+    orgasm_val = _coerce_int(orgasm_count)
+    step = _counter_milestone_step()
+    if not _counter_event_should_notify(kind, edge_val, step):
+        return {"sent": False, "skipped": "cadence"}
+
+    ts_ms = _coerce_int(timestamp_ms)
+    bucket = _counter_bucket(ts_ms)
+    fingerprint = hashlib.sha256(
+        f"{kind}|{edge_val}|{orgasm_val}|{bucket}".encode("utf-8")
+    ).hexdigest()
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    try:
+        from db import get_db_connection  # local import avoids circular import
+
+        conn = get_db_connection()
+        _ensure_counter_notify_table(conn)
+        conn.execute(
+            """
+            INSERT INTO discord_counter_notification_events
+                (fingerprint, event_type, edge_count, orgasm_count, source, device_id, dedupe_bucket, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                fingerprint,
+                str(event_type or "").strip().lower(),
+                edge_val,
+                orgasm_val,
+                str(source or "")[:100],
+                str(device_id or "")[:120],
+                bucket,
+                created_at,
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.IntegrityError:
+        return {"sent": False, "skipped": "deduped"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Counter notification dedupe insert failed: %s", exc)
+        return {"sent": False, "skipped": "dedupe_error"}
+
+    context = {
+        "event_type": "orgasm" if kind == "orgasm" else "edge milestone",
+        "edge_count": str(edge_val if edge_val is not None else 0),
+        "orgasm_count": str(orgasm_val if orgasm_val is not None else 0),
+        "device_id": str(device_id or "unknown device"),
+        "source": str(source or "unknown"),
+        "reason": str(reason or ""),
+        "timestamp": _counter_timestamp_iso(ts_ms),
+    }
+
+    defaults = [
+        "💗 Orgasm logged. Totals: {edge_count} edges • {orgasm_count} orgasms.",
+        "🐾 Counter update: {event_type}. Totals now {edge_count}/{orgasm_count}.",
+    ] if kind == "orgasm" else [
+        "📈 Edge milestone reached ({edge_count}). Totals: {edge_count} edges • {orgasm_count} orgasms.",
+        "⚡ Milestone hit: edge #{edge_count}. Current totals {edge_count}/{orgasm_count}.",
+    ]
+
+    message = _safe_format_variant(
+        _pick_message_variant(
+            "discord_counter_messages",
+            "DISCORD_COUNTER_MESSAGES",
+            defaults,
+        ),
+        context,
+    ).strip()
+    if not message:
+        message = f"Counter update: {context['event_type']} ({context['edge_count']}/{context['orgasm_count']})"
+
+    await send_discord_channel_message(channel_id=channel_id, content=message)
+    return {"sent": True, "event_type": kind, "edge_count": edge_val, "orgasm_count": orgasm_val}
 
 
 def load_reaction_role_options() -> dict[str, dict[str, Any]]:

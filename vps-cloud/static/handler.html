@@ -1116,6 +1116,17 @@
                     </div>
                   </div>
                   <div class="cmd-row" style="padding:.75rem 0 0 0">
+                    <span class="cmd-row-label">Counter Discord Notifications</span>
+                    <div class="cmd-inputs" style="display:flex;gap:.55rem;flex-wrap:wrap;align-items:center">
+                      <select id="public-counter-discord-enabled" style="max-width:150px">
+                        <option value="false">Disabled</option>
+                        <option value="true">Enabled</option>
+                      </select>
+                      <input id="public-counter-discord-channel" placeholder="Counter channel ID" style="min-width:220px" />
+                      <input id="public-counter-edge-step" type="number" min="1" max="1000" value="10" placeholder="Edge milestone step" style="max-width:170px" />
+                    </div>
+                  </div>
+                  <div class="cmd-row" style="padding:.75rem 0 0 0">
                     <span class="cmd-row-label">Public Exposure Controls</span>
                     <div class="cmd-inputs" style="display:flex;gap:.55rem;flex-wrap:wrap;align-items:center">
                       <select id="public-exposure-level" style="max-width:180px">
@@ -4158,6 +4169,9 @@
         _setInputValue('public-tasks-label', data.tasks_label || PUBLIC_DEFAULT_TASKS_LABEL);
         _setInputValue('public-confessions-label', data.confessions_label || PUBLIC_DEFAULT_CONFESSIONS_LABEL);
         _setInputValue('public-current-mode', data.current_status_mode || PUBLIC_DEFAULT_MODE);
+        _setInputValue('public-counter-discord-enabled', data.discord_counter_notify_enabled ? 'true' : 'false');
+        _setInputValue('public-counter-discord-channel', data.discord_counter_channel_id || '');
+        _setInputValue('public-counter-edge-step', data.discord_counter_edge_milestone_step != null ? data.discord_counter_edge_milestone_step : '10');
         _setSelectOptions('public-exposure-level', data.public_exposure_options);
         _setInputValue('public-exposure-level', data.public_exposure_level || 'controlled');
         _setCheckboxValue('public-profile-enabled', data.public_profile_enabled !== false);
@@ -4183,6 +4197,9 @@
         tasks_label: v('public-tasks-label') || null,
         confessions_label: v('public-confessions-label') || null,
         current_status_mode: v('public-current-mode') || null,
+        discord_counter_notify_enabled: v('public-counter-discord-enabled') === 'true',
+        discord_counter_channel_id: v('public-counter-discord-channel') || '',
+        discord_counter_edge_milestone_step: _optIntInput('public-counter-edge-step'),
         public_exposure_level: v('public-exposure-level') || null,
         public_profile_enabled: document.getElementById('public-profile-enabled').checked,
         public_evidence_feed_enabled: document.getElementById('public-evidence-feed-enabled').checked,

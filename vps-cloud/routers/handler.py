@@ -58,6 +58,7 @@ from dependencies import SECRET_KEY, ALGORITHM, role_required
 from discord_webhook import (
     build_reaction_role_components,
     load_reaction_role_options,
+    maybe_send_counter_update_notification,
     rewrite_x_links_to_fxtwitter,
     send_discord_channel_message,
     send_discord_channel_payload,
@@ -184,6 +185,13 @@ PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN = 18
 PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN = 6
 PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC = 900
 DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID = "1510453424993468448"
+DISCORD_COUNTER_NOTIFY_DEFAULT = (
+    os.environ.get("DISCORD_COUNTER_NOTIFY_ENABLED", "false").strip().lower() == "true"
+)
+DISCORD_COUNTER_EDGE_STEP_DEFAULT = max(
+    1,
+    int((os.environ.get("DISCORD_COUNTER_EDGE_MILESTONE_STEP", "10") or "10").strip() or "10"),
+)
 _SHARE_URL_RE = re.compile(r"https?://[^\s<>'\"]+", flags=re.IGNORECASE)
 _DEVICE_SHARE_PUP_LABEL_REGEX = re.compile(r"\bpup\b", flags=re.IGNORECASE)
 _DEVICE_SHARE_SUBJECT_LABELS = [
@@ -1597,6 +1605,9 @@ class PublicStatusUpdateRequest(BaseModel):
     public_toy_control_enabled: Optional[bool] = None
     public_exposure_level: Optional[str] = None
     public_toy_queue_cooldown_sec: Optional[int] = None
+    discord_counter_notify_enabled: Optional[bool] = None
+    discord_counter_channel_id: Optional[str] = None
+    discord_counter_edge_milestone_step: Optional[int] = None
 
 
 class PanelMacroItem(BaseModel):
@@ -5801,6 +5812,25 @@ def handler_get_public_status(
         ),
         "public_toy_queue_cooldown_sec": max(0, min(_safe_int(get_setting(db, "public_toy_queue_cooldown_sec", "30"), 30), 600)),
         "public_exposure_options": PUBLIC_EXPOSURE_LEVEL_OPTIONS,
+        "discord_counter_notify_enabled": _safe_bool(
+            get_setting(db, "discord_counter_notify_enabled", None),
+            DISCORD_COUNTER_NOTIFY_DEFAULT,
+        ),
+        "discord_counter_channel_id": (
+            get_setting(db, "discord_counter_channel_id", "")
+            or os.environ.get("DISCORD_COUNTER_CHANNEL_ID", "")
+            or ""
+        ),
+        "discord_counter_edge_milestone_step": max(
+            1,
+            min(
+                _safe_int(
+                    get_setting(db, "discord_counter_edge_milestone_step", None),
+                    DISCORD_COUNTER_EDGE_STEP_DEFAULT,
+                ),
+                1000,
+            ),
+        ),
         "public_live_control_active": bool(live),
         "public_live_control_url": (live["control_url"] if live else None),
         "public_live_control_label": (live["label"] if live else None),
@@ -6540,12 +6570,19 @@ def ai_warden_runtime_profile(
 
 
 @router.post("/api/handler/public-status")
-def handler_update_public_status(
+async def handler_update_public_status(
     payload: PublicStatusUpdateRequest,
     _current_user: dict = Depends(role_required("admin", "handler")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Update public status/counter settings consumed by the public UI."""
+    previous_tasks_completed = _safe_int(get_setting(db, "public_tasks_completed", "0"), 0)
+    previous_confessions_posted = _safe_int(get_setting(db, "public_confessions_posted", "0"), 0)
+    current_tasks_completed = previous_tasks_completed
+    current_confessions_posted = previous_confessions_posted
+    tasks_counter_changed = False
+    confessions_counter_changed = False
+
     if payload.days_caged_start_date is not None:
         set_setting(db, "days_caged_start_date", payload.days_caged_start_date.strip())
     if payload.days_caged_paused is not None:
@@ -6576,11 +6613,15 @@ def handler_update_public_status(
     if payload.tasks_completed is not None:
         if payload.tasks_completed < 0:
             raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")
-        set_setting(db, "public_tasks_completed", str(payload.tasks_completed))
+        current_tasks_completed = int(payload.tasks_completed)
+        tasks_counter_changed = current_tasks_completed != previous_tasks_completed
+        set_setting(db, "public_tasks_completed", str(current_tasks_completed))
     if payload.confessions_posted is not None:
         if payload.confessions_posted < 0:
             raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
-        set_setting(db, "public_confessions_posted", str(payload.confessions_posted))
+        current_confessions_posted = int(payload.confessions_posted)
+        confessions_counter_changed = current_confessions_posted != previous_confessions_posted
+        set_setting(db, "public_confessions_posted", str(current_confessions_posted))
     if payload.public_booking_enabled is not None:
         set_setting(
             db,
@@ -6625,6 +6666,47 @@ def handler_update_public_status(
     if payload.public_toy_queue_cooldown_sec is not None:
         cooldown = max(0, min(int(payload.public_toy_queue_cooldown_sec), 600))
         set_setting(db, "public_toy_queue_cooldown_sec", str(cooldown))
+    if payload.discord_counter_notify_enabled is not None:
+        set_setting(
+            db,
+            "discord_counter_notify_enabled",
+            "true" if payload.discord_counter_notify_enabled else "false",
+        )
+    if payload.discord_counter_channel_id is not None:
+        set_setting(db, "discord_counter_channel_id", payload.discord_counter_channel_id.strip())
+    if payload.discord_counter_edge_milestone_step is not None:
+        step = int(payload.discord_counter_edge_milestone_step)
+        if step < 1:
+            raise HTTPException(status_code=400, detail="discord_counter_edge_milestone_step must be >= 1")
+        set_setting(db, "discord_counter_edge_milestone_step", str(min(step, 1000)))
+
+    if tasks_counter_changed:
+        try:
+            await maybe_send_counter_update_notification(
+                event_type="edge_recorded",
+                edge_count=current_tasks_completed,
+                orgasm_count=current_confessions_posted,
+                source="handler_public_status",
+                device_id="",
+                timestamp_ms=int(time.time() * 1000),
+                reason="public_status_tasks_completed",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Counter Discord notification failed for tasks_completed update: %s", exc)
+
+    if confessions_counter_changed:
+        try:
+            await maybe_send_counter_update_notification(
+                event_type="orgasm_recorded",
+                edge_count=current_tasks_completed,
+                orgasm_count=current_confessions_posted,
+                source="handler_public_status",
+                device_id="",
+                timestamp_ms=int(time.time() * 1000),
+                reason="public_status_confessions_posted",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Counter Discord notification failed for confessions_posted update: %s", exc)
 
     return {"updated": True}
 

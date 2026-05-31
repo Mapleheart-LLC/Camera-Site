@@ -75,6 +75,7 @@ from pydantic import BaseModel, root_validator, validator
 
 from db import get_db, get_db_connection
 from dependencies import get_admin_user
+from discord_webhook import maybe_send_counter_update_notification
 from mqtt_client import mqtt_client as _mqtt_client, reload_mqtt
 from routers.ws_manager import handler_ws as _handler_ws
 
@@ -994,6 +995,22 @@ async def tpe_webhook(
         (event, reason, session_ts, payload_json, _now_iso()),
     )
     db.commit()
+
+    normalized_event = str(event or "").strip().lower()
+    if normalized_event in {"edge_recorded", "orgasm_recorded"}:
+        try:
+            await maybe_send_counter_update_notification(
+                event_type=normalized_event,
+                edge_count=body.get("edge_count"),
+                orgasm_count=body.get("orgasm_count"),
+                source=body.get("source") or "tpe_webhook",
+                device_id=body.get("device_id") or "",
+                timestamp_ms=body.get("timestamp"),
+                reason=reason,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Counter Discord notification failed for tpe webhook: %s", exc)
+
     logger.info("TPE webhook: event=%s reason=%r", event, reason)
     return {"status": "received"}
 
