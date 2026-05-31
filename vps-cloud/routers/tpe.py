@@ -998,6 +998,41 @@ async def tpe_webhook(
     return {"status": "received"}
 
 
+@device_router.get("/api/tpe/notification-command-policy")
+def tpe_get_notification_command_policy(
+    authorization: Optional[str] = Header(default=None),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return runtime notification command policy for the paired device app.
+
+    Reads JSON from ``settings.tpe_notification_command_policy_json``.
+    Auth uses the same optional Bearer webhook secret as ``/api/tpe/webhook``.
+    """
+    expected = _effective_webhook_secret(db)
+    if expected:
+        provided = ""
+        if authorization and authorization.startswith("Bearer "):
+            provided = authorization[len("Bearer "):].strip()
+        if not secrets.compare_digest(provided, expected):
+            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+    row = db.execute(
+        "SELECT value FROM settings WHERE key = 'tpe_notification_command_policy_json'"
+    ).fetchone()
+    raw = (row["value"] if row and row["value"] is not None else "")
+    if not str(raw).strip():
+        return {}
+
+    try:
+        parsed = json.loads(str(raw))
+    except Exception:
+        logger.warning("Invalid tpe_notification_command_policy_json; returning empty policy")
+        return {}
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
+
+
 # ===========================================================================
 # Admin endpoints
 # ===========================================================================
@@ -1042,6 +1077,7 @@ _TPE_SETTING_KEYS = {
     "tpe_notification_blocklist",
     "tpe_restricted_vocabulary",
     "tpe_strict_tone_mode",
+    "tpe_notification_command_policy_json",
     "tpe_mqtt_broker_host",
     "tpe_mqtt_broker_port",
     "tpe_mqtt_username",
@@ -1097,6 +1133,7 @@ class TpeSettingsPatch(BaseModel):
     tpe_notification_blocklist: Optional[str] = None
     tpe_restricted_vocabulary: Optional[str] = None
     tpe_strict_tone_mode: Optional[str] = None
+    tpe_notification_command_policy_json: Optional[str] = None
     tpe_mqtt_broker_host: Optional[str] = None
     tpe_mqtt_broker_port: Optional[str] = None
     tpe_mqtt_username: Optional[str] = None
@@ -1184,6 +1221,11 @@ class TpePushRequest(BaseModel):
       SET_RITUAL_TIMES             morning_minutes, evening_minutes
       SET_HONORIFIC                honorific
       SET_HONORIFIC_ENABLED        enabled (bool str)
+    SET_DISCORD_QL_HONORIFIC     honorific
+    SET_DISCORD_QL_HONORIFIC_ENABLED enabled (bool str)
+    SET_DISCORD_HONORIFIC_USERS  users (JSON array str)
+    ADD_DISCORD_HONORIFIC_USER   user
+    REMOVE_DISCORD_HONORIFIC_USER user
       SET_PTS_ENABLED              enabled (bool str)
       SET_PTS_APPROVED             packages (JSON array str)
       APP_PERMISSION_RESPONSE      request_id, granted (bool str)
@@ -1337,6 +1379,8 @@ class TpePushRequest(BaseModel):
 
     # SET_HONORIFIC
     honorific: Optional[str] = None
+    users: Optional[str] = None
+    user: Optional[str] = None
 
     # SET_PTS_APPROVED / SET_GATING_APPROVED
     packages: Optional[str] = None
@@ -1490,6 +1534,11 @@ _VALID_TPE_ACTIONS = {
     # Honorifics
     "SET_HONORIFIC",
     "SET_HONORIFIC_ENABLED",
+    "SET_DISCORD_QL_HONORIFIC",
+    "SET_DISCORD_QL_HONORIFIC_ENABLED",
+    "SET_DISCORD_HONORIFIC_USERS",
+    "ADD_DISCORD_HONORIFIC_USER",
+    "REMOVE_DISCORD_HONORIFIC_USER",
     # Permission to Speak
     "SET_PTS_ENABLED",
     "SET_PTS_APPROVED",
@@ -1841,6 +1890,8 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         "evening_minutes":    body.evening_minutes,
         # SET_HONORIFIC
         "honorific":          body.honorific,
+        "users":             body.users,
+        "user":              body.user,
         # SET_PTS_APPROVED / SET_GATING_APPROVED
         "packages":           body.packages,
         # APP_PERMISSION_RESPONSE
