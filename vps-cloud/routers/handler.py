@@ -7019,8 +7019,66 @@ def handler_answer_limbo_item(
         note="Answered limbo item",
         payload={"answer_preview": answer[:120]},
     )
+
+    published_question_id = None
+    auto_published = False
+    publish_row = db.execute(
+        """
+        SELECT prompt_text, answer_text, public_allowed, published_question_id, publication_tier
+        FROM limbo_items
+        WHERE id = ?
+        """,
+        (item_id,),
+    ).fetchone()
+    if publish_row and bool(publish_row["public_allowed"]) and not publish_row["published_question_id"]:
+        question_id = str(uuid.uuid4())
+        now = _now_iso()
+        db.execute(
+            """
+            INSERT INTO questions (id, text, answer, is_public, created_at, source_type, publication_tier)
+            VALUES (?, ?, ?, 1, ?, 'limbo', ?)
+            """,
+            (
+                question_id,
+                publish_row["prompt_text"],
+                publish_row["answer_text"],
+                now,
+                publish_row["publication_tier"],
+            ),
+        )
+        db.execute(
+            "UPDATE limbo_items SET published_at = ?, published_question_id = ? WHERE id = ?",
+            (now, question_id, item_id),
+        )
+        _log_drawer_correction_event(
+            db,
+            current_user=current_user,
+            event_type="limbo_published",
+            target_type="limbo",
+            target_id=item_id,
+            note="Auto-published limbo item on answer",
+            payload={"question_id": question_id},
+        )
+        published_question_id = question_id
+        auto_published = True
+
+        confessions_raw = get_setting(db, "public_confessions_posted")
+        if confessions_raw is not None:
+            try:
+                confessions_val = int(confessions_raw)
+                if confessions_val >= 0:
+                    set_setting(db, "public_confessions_posted", str(confessions_val + 1))
+            except ValueError:
+                pass
+
     db.commit()
-    return {"id": item_id, "status": "answered", "answered_at": answered_at}
+    return {
+        "id": item_id,
+        "status": "answered",
+        "answered_at": answered_at,
+        "auto_published": auto_published,
+        "question_id": published_question_id,
+    }
 
 
 @router.post("/api/handler/limbo/{item_id}/dismiss")
@@ -7153,6 +7211,69 @@ def handler_publish_limbo_item(
 
     db.commit()
     return {"published": True, "question_id": question_id, "already_published": False}
+
+
+@router.post("/api/handler/limbo/publish-backfill")
+def handler_backfill_publish_limbo_items(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Publish all eligible answered limbo items that were never published."""
+    rows = db.execute(
+        """
+        SELECT id, prompt_text, answer_text, publication_tier
+        FROM limbo_items
+        WHERE status = 'answered'
+          AND public_allowed = 1
+          AND published_question_id IS NULL
+          AND answer_text IS NOT NULL
+          AND trim(answer_text) <> ''
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    published: list[dict] = []
+    now = _now_iso()
+    for row in rows:
+        question_id = str(uuid.uuid4())
+        db.execute(
+            """
+            INSERT INTO questions (id, text, answer, is_public, created_at, source_type, publication_tier)
+            VALUES (?, ?, ?, 1, ?, 'limbo', ?)
+            """,
+            (question_id, row["prompt_text"], row["answer_text"], now, row["publication_tier"]),
+        )
+        db.execute(
+            "UPDATE limbo_items SET published_at = ?, published_question_id = ? WHERE id = ?",
+            (now, question_id, row["id"]),
+        )
+        _log_drawer_correction_event(
+            db,
+            current_user=_current_user,
+            event_type="limbo_published",
+            target_type="limbo",
+            target_id=row["id"],
+            note="Backfill-published limbo item",
+            payload={"question_id": question_id, "backfill": True},
+        )
+        published.append({"limbo_id": row["id"], "question_id": question_id})
+
+    if published:
+        confessions_raw = get_setting(db, "public_confessions_posted")
+        if confessions_raw is not None:
+            try:
+                confessions_val = int(confessions_raw)
+                if confessions_val >= 0:
+                    set_setting(db, "public_confessions_posted", str(confessions_val + len(published)))
+            except ValueError:
+                pass
+
+    db.commit()
+    return {
+        "checked": len(rows),
+        "published_count": len(published),
+        "published": published,
+    }
 
 
 @router.get("/api/handler/drawer/corrections")
