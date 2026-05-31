@@ -699,6 +699,26 @@ def _ensure_evidence_vault_tables(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_device_share_queue_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tpe_device_share_queue (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id       TEXT NOT NULL,
+            payload_json    TEXT NOT NULL,
+            dedupe_fingerprint TEXT NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            last_attempted  TEXT,
+            created_at      TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_device_share_queue_status ON tpe_device_share_queue(status, created_at)"
+    )
+
+
 def _ensure_behavior_log_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -1047,6 +1067,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_ai_warden_reports_table(conn)
         _ensure_device_app_inventory_tables(conn)
         _ensure_handler_maintenance_tables(conn)
+        _ensure_device_share_queue_table(conn)
         conn.commit()
         return
 
@@ -1101,6 +1122,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         _ensure_ai_warden_reports_table(conn)
         _ensure_device_app_inventory_tables(conn)
         _ensure_handler_maintenance_tables(conn)
+        _ensure_device_share_queue_table(conn)
         conn.commit()
         return
 
@@ -1131,6 +1153,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     _ensure_ai_warden_reports_table(conn)
     _ensure_device_app_inventory_tables(conn)
     _ensure_handler_maintenance_tables(conn)
+    _ensure_device_share_queue_table(conn)
     conn.commit()
 
 
@@ -3392,9 +3415,55 @@ async def handler_device_share(
             template_for_message = qwen_template
             generation_path = "hybrid_qwen"
         else:
-            template_for_message, generation_meta = _mutate_share_template(rendered_template, keywords)
-            generation_path = "hybrid_spacy_fallback"
-            fallback_reason = qwen_error or "qwen_unknown_failure"
+            # Qwen not ready — queue the post and return early; drain job will retry.
+            now_iso = _now_iso()
+            db.execute(
+                """
+                INSERT INTO tpe_device_share_queue
+                    (device_id, payload_json, dedupe_fingerprint, status, attempts, last_attempted, created_at)
+                VALUES (?, ?, ?, 'pending', 1, ?, ?)
+                """,
+                (
+                    resolved_device_id,
+                    json.dumps(
+                        {
+                            "text": share_text,
+                            "subject": share_subject,
+                            "mime_type": share_mime_type,
+                            "source_package": share_source_package,
+                            "stream_uris": share_stream_uris,
+                            "urls": share_urls,
+                            "generation_source_text": generation_source_text,
+                        },
+                        ensure_ascii=True,
+                    ),
+                    dedupe_fingerprint,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+            db.execute(
+                """
+                INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+                VALUES (?, 'device_share', 'quick_share_queued', ?, ?, ?)
+                """,
+                (
+                    resolved_device_id,
+                    share_urls[0] if share_urls else (share_subject or "shared_text"),
+                    json.dumps(
+                        {
+                            "text": share_text,
+                            "subject": share_subject,
+                            "dedupe_fingerprint": dedupe_fingerprint,
+                            "qwen_error": qwen_error or "qwen_not_ready",
+                        },
+                        ensure_ascii=True,
+                    ),
+                    now_iso,
+                ),
+            )
+            db.commit()
+            return {"status": "queued", "device_id": resolved_device_id, "reason": qwen_error or "qwen_not_ready"}
     else:
         generation_mode = DEVICE_SHARE_GEN_MODE_STOCK_ONLY
 
@@ -4820,6 +4889,156 @@ def _scheduled_weekly_stale_cleanup_job() -> None:
         db.close()
 
 
+_SHARE_QUEUE_DRAIN_JOB_ID = "device_share_queue_drain"
+_share_queue_drain_lock = asyncio.Lock()
+_SHARE_QUEUE_MAX_ATTEMPTS = 8
+_SHARE_QUEUE_STALE_HOURS = 24
+
+
+async def _drain_device_share_queue_job() -> None:
+    """Background task: process any pending quick-shares that were queued because Qwen wasn't ready."""
+    if _share_queue_drain_lock.locked():
+        return
+    async with _share_queue_drain_lock:
+        try:
+            conn = get_db_connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM tpe_device_share_queue
+                    WHERE status = 'pending'
+                      AND attempts < ?
+                      AND created_at >= ?
+                    ORDER BY created_at ASC
+                    LIMIT 5
+                    """,
+                    (
+                        _SHARE_QUEUE_MAX_ATTEMPTS,
+                        (datetime.now(timezone.utc) - timedelta(hours=_SHARE_QUEUE_STALE_HOURS)).isoformat(),
+                    ),
+                ).fetchall()
+            finally:
+                conn.close()
+        except Exception:
+            return
+
+        for row in rows:
+            await _process_queued_device_share(dict(row))
+
+
+async def _process_queued_device_share(row: dict) -> None:
+    row_id = row["id"]
+    device_id = row["device_id"]
+    try:
+        payload = json.loads(row["payload_json"])
+    except Exception:
+        _mark_share_queue_item(row_id, "failed", "invalid_payload_json")
+        return
+
+    share_text = payload.get("text") or ""
+    share_subject = payload.get("subject") or ""
+    share_mime_type = payload.get("mime_type") or ""
+    share_source_package = payload.get("source_package") or ""
+    share_stream_uris = payload.get("stream_uris") or []
+    share_urls = payload.get("urls") or []
+    generation_source_text = payload.get("generation_source_text") or ""
+    dedupe_fingerprint = row.get("dedupe_fingerprint") or ""
+
+    try:
+        conn = get_db_connection()
+        try:
+            selected_set, templates = _active_device_share_templates(conn)
+            qwen_template, qwen_error = await _generate_qwen_share_template(
+                db=conn,
+                payload_text=generation_source_text or share_text or share_subject,
+                selected_set=selected_set,
+                keywords=_extract_share_keywords(generation_source_text or share_text or share_subject),
+            )
+        finally:
+            conn.close()
+    except Exception as exc:
+        _mark_share_queue_item(row_id, "pending", str(exc))
+        return
+
+    if not qwen_template:
+        _mark_share_queue_item(row_id, "pending", qwen_error or "qwen_not_ready")
+        return
+
+    payload_text = _build_share_display_payload_text(
+        share_text=share_text,
+        share_subject=share_subject,
+        share_urls=share_urls,
+        mime_type=share_mime_type,
+        source_package=share_source_package,
+    )
+
+    message_line = qwen_template.format(payload=payload_text)
+    if share_urls and not any(url in message_line for url in share_urls):
+        message_line = f"{message_line}\n{share_urls[0]}"
+    if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
+        message_line = message_line[: _DISCORD_MESSAGE_MAX_LEN - 3].rstrip() + "..."
+
+    channel_id = DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
+    delivered = await send_discord_channel_message(channel_id=channel_id, content=message_line)
+
+    try:
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                """
+                INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+                VALUES (?, 'device_share', 'quick_share', ?, ?, ?)
+                """,
+                (
+                    device_id,
+                    share_urls[0] if share_urls else (share_subject or "shared_text"),
+                    json.dumps(
+                        {
+                            "queued": True,
+                            "text": share_text,
+                            "subject": share_subject,
+                            "source_package": share_source_package or None,
+                            "mime_type": share_mime_type or None,
+                            "stream_uris": share_stream_uris,
+                            "channel_id": channel_id,
+                            "urls": share_urls,
+                            "dedupe_fingerprint": dedupe_fingerprint,
+                            "generation_source_text": generation_source_text,
+                            "generation_path": "queued_qwen",
+                            "template_final": qwen_template,
+                            "delivery": {"ok": bool(delivered)},
+                        },
+                        ensure_ascii=True,
+                    ),
+                    _now_iso(),
+                ),
+            )
+            conn.execute(
+                "UPDATE tpe_device_share_queue SET status = ?, attempts = attempts + 1, last_attempted = ? WHERE id = ?",
+                ("delivered" if delivered else "failed", _now_iso(), row_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
+def _mark_share_queue_item(row_id: int, status: str, reason: str) -> None:
+    try:
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                "UPDATE tpe_device_share_queue SET status = ?, attempts = attempts + 1, last_attempted = ? WHERE id = ?",
+                (status, _now_iso(), row_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
 def start_handler_maintenance_scheduler() -> None:
     if _maintenance_scheduler.running:
         return
@@ -4831,8 +5050,17 @@ def start_handler_maintenance_scheduler() -> None:
         coalesce=True,
         max_instances=1,
     )
+    _maintenance_scheduler.add_job(
+        _drain_device_share_queue_job,
+        trigger="interval",
+        seconds=30,
+        id=_SHARE_QUEUE_DRAIN_JOB_ID,
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
     _maintenance_scheduler.start()
-    logger.info("Handler maintenance scheduler started (weekly stale cleanup Sunday 03:15 UTC).")
+    logger.info("Handler maintenance scheduler started (weekly stale cleanup Sunday 03:15 UTC; share queue drain every 30 s).")
 
 
 def stop_handler_maintenance_scheduler() -> None:
