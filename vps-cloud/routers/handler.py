@@ -2598,6 +2598,14 @@ def _extract_share_urls(text: str) -> list[str]:
     return unique
 
 
+def _strip_share_urls(text: str) -> str:
+    if not text:
+        return ""
+    stripped = _SHARE_URL_RE.sub(" ", text)
+    stripped = re.sub(r"\s+", " ", stripped).strip()
+    return stripped
+
+
 def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[str]]:
     selected_set = (
         (get_setting(db, "discord_device_share_message_set") or "").strip().lower()
@@ -3126,8 +3134,6 @@ async def handler_device_share(
         (body.channel_id or "").strip()
         or (get_setting(db, "discord_device_share_channel_id") or "").strip()
         or (os.environ.get("DISCORD_DEVICE_SHARE_CHANNEL_ID", "") or "").strip()
-        or (get_setting(db, "discord_notification_channel_id") or "").strip()
-        or (os.environ.get("DISCORD_NOTIFICATION_CHANNEL_ID", "") or "").strip()
         or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     )
     if not channel_id:
@@ -3136,7 +3142,12 @@ async def handler_device_share(
             detail="Discord device-share channel is not configured.",
         )
 
-    payload_text = (share_text or share_subject).strip()
+    payload_source = share_text or share_subject
+    payload_text = _strip_share_urls(payload_source)
+    if not payload_text:
+        payload_text = _strip_share_urls(share_subject)
+    if not payload_text:
+        payload_text = "this link"
     if len(payload_text) > 900:
         payload_text = payload_text[:897].rstrip() + "..."
 
