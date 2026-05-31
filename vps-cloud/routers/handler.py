@@ -226,8 +226,12 @@ DEVICE_SHARE_GEN_DEFAULT_MODE = DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN
 _DEVICE_SHARE_DEDUPE_WINDOW_SECONDS = 20
 _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_ENDPOINT", "").strip()
 _DEVICE_SHARE_QWEN_MODEL_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct").strip()
-_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS = float((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC", "2.6") or "2.6").strip() or "2.6")
+_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS = float((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC", "8.0") or "8.0").strip() or "8.0")
 _DEVICE_SHARE_QWEN_MAX_TOKENS = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS", "72") or "72").strip() or "72")
+_DEVICE_SHARE_QWEN_MAX_ATTEMPTS = max(
+    1,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_ATTEMPTS", "2") or "2").strip() or "2"),
+)
 _DEVICE_SHARE_QWEN_RUNTIME_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_RUNTIME", "auto") or "auto").strip().lower()
 _DEVICE_SHARE_QWEN_REPO_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REPO_ID", "thirdeyeai/Qwen2.5-1.5B-Instruct-uncensored-gguf") or "thirdeyeai/Qwen2.5-1.5B-Instruct-uncensored-gguf").strip()
 _DEVICE_SHARE_QWEN_FILE_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_FILENAME", "Qwen2.5-1.5B-Q8_0.gguf") or "Qwen2.5-1.5B-Q8_0.gguf").strip()
@@ -2607,6 +2611,76 @@ def _strip_share_urls(text: str) -> str:
     return stripped
 
 
+def _share_url_host(url: str) -> str:
+    parsed = urllib_parse.urlsplit((url or "").strip())
+    host = (parsed.netloc or "").strip().lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _share_url_kind(url: str, mime_type: str = "", source_package: str = "") -> str:
+    host = _share_url_host(url)
+    mime_lower = (mime_type or "").strip().lower()
+    package_lower = (source_package or "").strip().lower()
+    if host.endswith("twitter.com") or host == "x.com" or host.endswith("fxtwitter.com"):
+        return "post"
+    if "tiktok.com" in host:
+        return "clip"
+    if "youtube.com" in host or "youtu.be" in host:
+        return "video"
+    if "instagram.com" in host:
+        return "post"
+    if mime_lower.startswith("image/"):
+        return "image"
+    if mime_lower.startswith("video/"):
+        return "video"
+    if "twitter" in package_lower or package_lower == "com.x" or "instagram" in package_lower:
+        return "post"
+    return "link"
+
+
+def _build_share_display_payload_text(
+    *,
+    share_text: str,
+    share_subject: str,
+    share_urls: list[str],
+    mime_type: str,
+    source_package: str,
+) -> str:
+    payload_text = _strip_share_urls(share_text or share_subject)
+    if not payload_text:
+        payload_text = _strip_share_urls(share_subject)
+    if not payload_text and share_urls:
+        payload_text = f"this {_share_url_kind(share_urls[0], mime_type, source_package)}"
+    if not payload_text:
+        payload_text = "this post"
+    if len(payload_text) > 900:
+        payload_text = payload_text[:897].rstrip() + "..."
+    return payload_text
+
+
+def _build_share_generation_source_text(
+    *,
+    share_text: str,
+    share_subject: str,
+    share_urls: list[str],
+    mime_type: str,
+    source_package: str,
+) -> str:
+    source_text = _strip_share_urls(share_text)
+    if source_text:
+        return source_text[:900]
+    source_text = _strip_share_urls(share_subject)
+    if source_text:
+        return source_text[:900]
+    if share_urls:
+        host = _share_url_host(share_urls[0]) or "unknown host"
+        kind = _share_url_kind(share_urls[0], mime_type, source_package)
+        return f"shared {kind} from {host}"
+    return "shared post"
+
+
 def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[str]]:
     selected_set = (
         (get_setting(db, "discord_device_share_message_set") or "").strip().lower()
@@ -2734,7 +2808,7 @@ def _get_spacy_nlp() -> Any:
 
 
 def _extract_share_keywords(text: str, limit: int = 5) -> list[str]:
-    source = (text or "").strip()
+    source = _strip_share_urls((text or "").strip())
     if not source:
         return []
     keywords: list[str] = []
@@ -2833,6 +2907,20 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     return line
 
 
+def _extract_qwen_response_text(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    choices = data.get("choices")
+    if isinstance(choices, list) and choices:
+        choice = choices[0] or {}
+        if isinstance(choice, dict):
+            message = choice.get("message")
+            if isinstance(message, dict):
+                return str(message.get("content") or "")
+            return str(choice.get("text") or "")
+    return str(data.get("content") or data.get("response") or "")
+
+
 def _effective_device_share_qwen_runtime(db: sqlite3.Connection) -> str:
     raw = (
         (get_setting(db, "discord_device_share_qwen_runtime") or "").strip().lower()
@@ -2917,10 +3005,11 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
     payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
     keyword_hint = ", ".join(keywords[:3]) if keywords else ""
     prompt = (
-        "Write exactly one short Discord line in teasing kennel tone. "
+        "Write exactly one fresh Discord caption in teasing kennel tone. "
         f"Tone set: {selected_set}. "
-        f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
-        "No hashtags, no emojis, no extra lines."
+        f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
+        "No hashtags, no emojis, no quotes, no URLs, no extra lines. "
+        "Do not say 'this link'. Keep it under 18 words."
     )
     if keyword_hint:
         prompt += f" Weave in one of these words if natural: {keyword_hint}."
@@ -2956,7 +3045,26 @@ async def _generate_local_qwen_share_template(
         keywords=keywords,
     )
 
+    system_prompt = (
+        "You write short Discord quick-share captions. "
+        "Return exactly one caption line. "
+        f"Include {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
+        "Be teasing and original, not generic. "
+        "No URLs, no hashtags, no emojis, no quotes."
+    )
+
     def _infer() -> dict[str, Any]:
+        if hasattr(llm, "create_chat_completion"):
+            return llm.create_chat_completion(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=_DEVICE_SHARE_QWEN_MAX_TOKENS,
+                temperature=0.72,
+                top_p=0.92,
+                stop=["\n", "\r"],
+            )
         return llm(
             prompt,
             max_tokens=_DEVICE_SHARE_QWEN_MAX_TOKENS,
@@ -2965,21 +3073,24 @@ async def _generate_local_qwen_share_template(
             stop=["\n", "\r"],
         )
 
-    try:
-        data = await asyncio.wait_for(
-            asyncio.to_thread(_infer),
-            timeout=_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS,
-        )
-    except Exception:  # noqa: BLE001
-        return None, "local_qwen_infer_failed"
+    last_error = "local_qwen_infer_failed"
+    for _ in range(_DEVICE_SHARE_QWEN_MAX_ATTEMPTS):
+        try:
+            data = await asyncio.wait_for(
+                asyncio.to_thread(_infer),
+                timeout=_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS,
+            )
+        except Exception:  # noqa: BLE001
+            last_error = "local_qwen_infer_failed"
+            continue
 
-    raw = ""
-    if isinstance(data, dict):
-        raw = str((data.get("choices") or [{}])[0].get("text") or "")
-    cleaned = _sanitize_qwen_template(raw)
-    if not cleaned:
-        return None, "local_qwen_invalid_output"
-    return cleaned, None
+        raw = _extract_qwen_response_text(data)
+        cleaned = _sanitize_qwen_template(raw)
+        if cleaned:
+            return cleaned, None
+        last_error = "local_qwen_invalid_output"
+
+    return None, last_error
 
 
 async def _generate_qwen_share_template(
@@ -3243,14 +3354,20 @@ async def handler_device_share(
             detail="Discord device-share channel is not configured.",
         )
 
-    payload_source = share_text or share_subject
-    payload_text = _strip_share_urls(payload_source)
-    if not payload_text:
-        payload_text = _strip_share_urls(share_subject)
-    if not payload_text:
-        payload_text = "this link"
-    if len(payload_text) > 900:
-        payload_text = payload_text[:897].rstrip() + "..."
+    payload_text = _build_share_display_payload_text(
+        share_text=share_text,
+        share_subject=share_subject,
+        share_urls=share_urls,
+        mime_type=share_mime_type,
+        source_package=share_source_package,
+    )
+    generation_source_text = _build_share_generation_source_text(
+        share_text=share_text,
+        share_subject=share_subject,
+        share_urls=share_urls,
+        mime_type=share_mime_type,
+        source_package=share_source_package,
+    )
 
     selected_set, templates = _active_device_share_templates(db)
     rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
@@ -3258,7 +3375,7 @@ async def handler_device_share(
     generation_path = "stock_template"
     fallback_reason: Optional[str] = None
     generation_meta: dict[str, Any] = {}
-    keywords = _extract_share_keywords(share_text or share_subject)
+    keywords = _extract_share_keywords(generation_source_text)
 
     template_for_message = rendered_template
     if generation_mode == DEVICE_SHARE_GEN_MODE_SPACY_ONLY:
@@ -3267,7 +3384,7 @@ async def handler_device_share(
     elif generation_mode == DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN:
         qwen_template, qwen_error = await _generate_qwen_share_template(
             db=db,
-            payload_text=payload_text,
+            payload_text=generation_source_text,
             selected_set=selected_set,
             keywords=keywords,
         )
@@ -3308,6 +3425,7 @@ async def handler_device_share(
                     "channel_id": channel_id,
                     "urls": share_urls,
                     "dedupe_fingerprint": dedupe_fingerprint,
+                    "generation_source_text": generation_source_text,
                     "template_set": selected_set,
                     "generation_mode": generation_mode,
                     "generation_path": generation_path,
