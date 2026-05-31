@@ -1637,6 +1637,14 @@ class _DiscordSettingsPatch(BaseModel):
     discord_question_flair_messages: Optional[str] = None
     discord_answer_messages: Optional[str] = None
     discord_share_link_messages: Optional[str] = None
+    discord_device_share_generation_mode: Optional[str] = None
+    discord_device_share_qwen_endpoint: Optional[str] = None
+    discord_device_share_qwen_model: Optional[str] = None
+    discord_device_share_qwen_runtime: Optional[str] = None
+    discord_device_share_qwen_repo_id: Optional[str] = None
+    discord_device_share_qwen_filename: Optional[str] = None
+    discord_device_share_qwen_n_ctx: Optional[int] = None
+    discord_device_share_qwen_n_gpu_layers: Optional[int] = None
     discord_notify_questions: Optional[bool] = None
     discord_notify_answers: Optional[bool] = None
     discord_notify_purchases: Optional[bool] = None
@@ -1669,6 +1677,14 @@ def get_discord_settings(
         "discord_question_flair_messages":      get_setting(db, "discord_question_flair_messages"),
         "discord_answer_messages":              get_setting(db, "discord_answer_messages"),
         "discord_share_link_messages":          get_setting(db, "discord_share_link_messages"),
+        "discord_device_share_generation_mode": get_setting(db, "discord_device_share_generation_mode"),
+        "discord_device_share_qwen_endpoint":   get_setting(db, "discord_device_share_qwen_endpoint"),
+        "discord_device_share_qwen_model":      get_setting(db, "discord_device_share_qwen_model"),
+        "discord_device_share_qwen_runtime":    get_setting(db, "discord_device_share_qwen_runtime"),
+        "discord_device_share_qwen_repo_id":    get_setting(db, "discord_device_share_qwen_repo_id"),
+        "discord_device_share_qwen_filename":   get_setting(db, "discord_device_share_qwen_filename"),
+        "discord_device_share_qwen_n_ctx":      get_setting(db, "discord_device_share_qwen_n_ctx"),
+        "discord_device_share_qwen_n_gpu_layers": get_setting(db, "discord_device_share_qwen_n_gpu_layers"),
         "discord_notify_questions":             _bool_setting(db, "discord_notify_questions",             default=True),
         "discord_notify_answers":               _bool_setting(db, "discord_notify_answers",               default=True),
         "discord_notify_purchases":             _bool_setting(db, "discord_notify_purchases",             default=True),
@@ -1694,7 +1710,18 @@ def patch_discord_settings(
         ("discord_question_flair_messages", body.discord_question_flair_messages),
         ("discord_answer_messages",         body.discord_answer_messages),
         ("discord_share_link_messages",     body.discord_share_link_messages),
+        ("discord_device_share_generation_mode", body.discord_device_share_generation_mode),
+        ("discord_device_share_qwen_endpoint", body.discord_device_share_qwen_endpoint),
+        ("discord_device_share_qwen_model", body.discord_device_share_qwen_model),
+        ("discord_device_share_qwen_runtime", body.discord_device_share_qwen_runtime),
+        ("discord_device_share_qwen_repo_id", body.discord_device_share_qwen_repo_id),
+        ("discord_device_share_qwen_filename", body.discord_device_share_qwen_filename),
     ]
+    int_fields = [
+        ("discord_device_share_qwen_n_ctx", body.discord_device_share_qwen_n_ctx),
+        ("discord_device_share_qwen_n_gpu_layers", body.discord_device_share_qwen_n_gpu_layers),
+    ]
+
     bool_fields = [
         ("discord_stream_notifications_enabled", body.discord_stream_notifications_enabled),
         ("discord_welcome_dm_enabled",           body.discord_welcome_dm_enabled),
@@ -1706,6 +1733,11 @@ def patch_discord_settings(
     for key, val in str_fields:
         if val is not None:
             set_setting(db, key, val)
+            updated.append(key)
+
+    for key, val in int_fields:
+        if val is not None:
+            set_setting(db, key, str(val))
             updated.append(key)
 
     for key, val in bool_fields:

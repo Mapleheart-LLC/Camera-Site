@@ -281,8 +281,11 @@ class KennelSetupCog(commands.Cog):
     ) -> discord.CategoryChannel:
         category = discord.utils.get(guild.categories, name=name)
         if category is None:
-            category = await guild.create_category(name=name, overwrites=overwrites, reason=reason)
-        elif overwrites is not None:
+            if isinstance(overwrites, dict):
+                category = await guild.create_category(name=name, overwrites=overwrites, reason=reason)
+            else:
+                category = await guild.create_category(name=name, reason=reason)
+        elif isinstance(overwrites, dict):
             await category.edit(overwrites=overwrites, reason=reason)
         return category
 

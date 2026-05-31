@@ -44,7 +44,6 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from db import get_db_connection
-from discord_webhook import send_discord_channel_message
 
 try:
     import tweepy as _tweepy  # type: ignore[import-untyped]
@@ -173,36 +172,9 @@ def _find_existing_archive_row(conn, original_url: str, canonical_url: str):
 
 
 def _notify_new_items(new_items: list[tuple]) -> None:
-    """Send a concise Discord update for newly archived drool items."""
-    if not new_items:
-        return
-
-    channel_id = (os.environ.get("DISCORD_NOTIFICATION_CHANNEL_ID", "") or "").strip()
-    if not channel_id:
-        return
-
-    preview_lines: list[str] = []
-    for platform, orig_url, _media_url, text_content, _ts in new_items[:5]:
-        label = (platform or "item").strip().title()
-        snippet = (text_content or "").strip().replace("\n", " ")
-        if len(snippet) > 120:
-            snippet = snippet[:117].rstrip() + "..."
-        preview = f"- [{label}] {snippet or orig_url}"
-        preview_lines.append(preview)
-
-    extra = len(new_items) - len(preview_lines)
-    if extra > 0:
-        preview_lines.append(f"- +{extra} more item(s)")
-
-    content = "🗂️ Drool scraper archived new items:\n" + "\n".join(preview_lines)
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(send_discord_channel_message(channel_id=channel_id, content=content))
-    except RuntimeError:
-        try:
-            asyncio.run(send_discord_channel_message(channel_id=channel_id, content=content))
-        except Exception as exc:
-            logger.debug("Drool scraper notify failed: %s", exc)
+    """Drool scraper intentionally does not emit Discord alerts."""
+    if new_items:
+        logger.debug("Drool scraper archived %d new item(s); Discord alert suppressed.", len(new_items))
 
 
 

@@ -257,6 +257,29 @@ def _parse_bool_string(value: str) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _setting_value(db: sqlite3.Connection, key: str, default: str = "") -> str:
+    row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    if row and row["value"] is not None:
+        return str(row["value"])
+    return default
+
+
+def _setting_int(db: sqlite3.Connection, key: str, default: int = 0) -> int:
+    raw = _setting_value(db, key, str(default)).strip()
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
+    db.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+
+
 def _build_tpe_pairing_payload(db: sqlite3.Connection) -> Dict[str, str]:
     pairing_token = _effective_pairing_token(db)
     if not pairing_token:
@@ -998,6 +1021,29 @@ async def tpe_webhook(
 
     normalized_event = str(event or "").strip().lower()
     if normalized_event in {"edge_recorded", "orgasm_recorded"}:
+        # Keep public counters in sync with app-side edge/orgasm quick buttons.
+        edge_val = body.get("edge_count")
+        orgasm_val = body.get("orgasm_count")
+        try:
+            parsed_edge = int(edge_val) if edge_val is not None else None
+        except Exception:
+            parsed_edge = None
+        try:
+            parsed_orgasm = int(orgasm_val) if orgasm_val is not None else None
+        except Exception:
+            parsed_orgasm = None
+
+        if normalized_event == "edge_recorded":
+            current = _setting_int(db, "public_tasks_completed", 0)
+            next_val = parsed_edge if parsed_edge is not None else max(current + 1, 0)
+            _set_setting(db, "public_tasks_completed", str(max(next_val, 0)))
+        else:
+            current = _setting_int(db, "public_confessions_posted", 0)
+            next_val = parsed_orgasm if parsed_orgasm is not None else max(current + 1, 0)
+            _set_setting(db, "public_confessions_posted", str(max(next_val, 0)))
+
+        db.commit()
+
         try:
             await maybe_send_counter_update_notification(
                 event_type=normalized_event,

@@ -1,29 +1,29 @@
 """
-routers/handler.py – Handler Panel backend.
+routers/handler.py â€“ Handler Panel backend.
 
 Provides real-time device status updates and quick-action commands for the
 Handler Panel frontend (static/handler.html).
 
 Device-facing (protected by TPE webhook secret):
-  POST /api/handler/device-status  – Device reports battery, GPS, AI filter hit.
+  POST /api/handler/device-status  â€“ Device reports battery, GPS, AI filter hit.
 
-Handler/Admin-facing (JWT Bearer auth – role 'handler' or 'admin'):
-  GET  /api/handler/devices        – List devices (handlers see only assigned ones).
-  GET  /api/handler/status         – Latest status snapshot for a specific device.
-  POST /api/handler/lock           – Send LOCK_DEVICE FCM to a specific device.
-    POST /api/handler/tpe/vault/*    – Vault controls routed to assigned device.
-  DELETE /api/handler/devices/{device_id} – Delete device records (admin only).
+Handler/Admin-facing (JWT Bearer auth â€“ role 'handler' or 'admin'):
+  GET  /api/handler/devices        â€“ List devices (handlers see only assigned ones).
+  GET  /api/handler/status         â€“ Latest status snapshot for a specific device.
+  POST /api/handler/lock           â€“ Send LOCK_DEVICE FCM to a specific device.
+    POST /api/handler/tpe/vault/*    â€“ Vault controls routed to assigned device.
+  DELETE /api/handler/devices/{device_id} â€“ Delete device records (admin only).
 
-Admin-only (JWT Bearer auth – role 'admin'):
-  GET  /api/handler/assignments    – List all handler↔device assignments.
-  POST /api/handler/assignments    – Assign a handler to a device.
-  DELETE /api/handler/assignments  – Remove a handler↔device assignment.
+Admin-only (JWT Bearer auth â€“ role 'admin'):
+  GET  /api/handler/assignments    â€“ List all handlerâ†”device assignments.
+  POST /api/handler/assignments    â€“ Assign a handler to a device.
+  DELETE /api/handler/assignments  â€“ Remove a handlerâ†”device assignment.
 
 WebSocket (JWT via query parameter):
-  WS   /ws/handler                 – Real-time device status stream + binary audio relay target.
+  WS   /ws/handler                 â€“ Real-time device status stream + binary audio relay target.
 
 Device audio relay (webhook secret via query parameter):
-  WS   /ws/device-audio/{device_id} – Device streams binary audio; relayed to assigned handler.
+  WS   /ws/device-audio/{device_id} â€“ Device streams binary audio; relayed to assigned handler.
 """
 
 from __future__ import annotations
@@ -39,6 +39,8 @@ import re
 import secrets
 import sqlite3
 import uuid
+
+import httpx
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import time
@@ -46,6 +48,21 @@ from typing import Any, List, Optional
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
+
+try:
+    import spacy as _spacy
+except Exception:  # noqa: BLE001
+    _spacy = None
+
+try:
+    from huggingface_hub import hf_hub_download as _hf_hub_download
+except Exception:  # noqa: BLE001
+    _hf_hub_download = None
+
+try:
+    from llama_cpp import Llama as _Llama
+except Exception:  # noqa: BLE001
+    _Llama = None
 
 from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -196,6 +213,44 @@ DISCORD_COUNTER_EDGE_STEP_DEFAULT = max(
 _DISCORD_MESSAGE_MAX_LEN = 2000
 _SHARE_URL_RE = re.compile(r"https?://[^\s<>'\"]+", flags=re.IGNORECASE)
 _DEVICE_SHARE_PUP_LABEL_REGEX = re.compile(r"\bpup\b", flags=re.IGNORECASE)
+
+DEVICE_SHARE_GEN_MODE_STOCK_ONLY = "stock_only"
+DEVICE_SHARE_GEN_MODE_SPACY_ONLY = "spacy_only"
+DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN = "hybrid_spacy_qwen"
+DEVICE_SHARE_GEN_MODES = {
+    DEVICE_SHARE_GEN_MODE_STOCK_ONLY,
+    DEVICE_SHARE_GEN_MODE_SPACY_ONLY,
+    DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN,
+}
+DEVICE_SHARE_GEN_DEFAULT_MODE = DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN
+_DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_ENDPOINT", "").strip()
+_DEVICE_SHARE_QWEN_MODEL_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct").strip()
+_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS = float((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC", "2.6") or "2.6").strip() or "2.6")
+_DEVICE_SHARE_QWEN_MAX_TOKENS = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS", "72") or "72").strip() or "72")
+_DEVICE_SHARE_QWEN_RUNTIME_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_RUNTIME", "auto") or "auto").strip().lower()
+_DEVICE_SHARE_QWEN_REPO_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REPO_ID", "thirdeyeai/Qwen2.5-1.5B-Instruct-uncensored-gguf") or "thirdeyeai/Qwen2.5-1.5B-Instruct-uncensored-gguf").strip()
+_DEVICE_SHARE_QWEN_FILE_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_FILENAME", "Qwen2.5-1.5B-Q8_0.gguf") or "Qwen2.5-1.5B-Q8_0.gguf").strip()
+_DEVICE_SHARE_QWEN_CTX_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_CTX", "512") or "512").strip() or "512")
+_DEVICE_SHARE_QWEN_GPU_LAYERS_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS", "-1") or "-1").strip() or "-1")
+_LOCAL_QWEN_LLM: Any = None
+_LOCAL_QWEN_FAILED = False
+_LOCAL_QWEN_FINGERPRINT: Optional[str] = None
+_DEVICE_SHARE_PROMPT_PLACEHOLDER = "__PAYLOAD__"
+_DEVICE_SHARE_STOPWORDS = {
+    "this", "that", "with", "from", "have", "just", "like", "your", "about",
+    "into", "over", "after", "before", "would", "could", "there", "their",
+    "while", "where", "what", "when", "been", "then", "than", "here",
+}
+_DEVICE_SHARE_SYNONYM_SWAPS = {
+    "weak": ["soft", "fragile", "wobbly"],
+    "desperate": ["thirsty", "needy", "hungry"],
+    "shared": ["dropped", "handed over", "served"],
+    "offered": ["presented", "served up", "surrendered"],
+    "confession": ["admission", "spill", "exposure"],
+}
+_SPACY_NLP: Any = None
+_SPACY_FAILED = False
+
 _DEVICE_SHARE_SUBJECT_LABELS = [
     "pup",
     "puppy",
@@ -228,6 +283,21 @@ _DEVICE_SHARE_MEANER_LINES = [
     "Pup cracked under pressure and posted this: {payload}",
     "Discipline meter flatlined when pup found: {payload}",
     "Pup failed the self-control test with: {payload}",
+    "Pup mistook impulse for permission and served up: {payload}",
+    "Another sloppy lapse from pup landed here: {payload}",
+    "Pup took one look and abandoned all standards: {payload}",
+    "Willpower evaporated on contact, pup delivered: {payload}",
+    "Pup failed quietly, then posted loudly: {payload}",
+    "Same cycle again: craving first, dignity last, then: {payload}",
+    "Pup reached for restraint and grabbed this instead: {payload}",
+    "Discipline report stays catastrophic after: {payload}",
+    "Another weak-kneed submission from pup: {payload}",
+    "Pup called this a good idea and proved otherwise: {payload}",
+    "Pup keeps pretending to be in control, then shares: {payload}",
+    "The spiral continued and pup offered: {payload}",
+    "Pup got hungry for attention and posted: {payload}",
+    "Impulse won by knockout, pup surrendered: {payload}",
+    "Pup made this everyone's problem: {payload}",
 ]
 _DEVICE_SHARE_PLAYFUL_LINES = [
     "Pup found a new favorite and brought it over: {payload}",
@@ -278,6 +348,21 @@ _DEVICE_SHARE_HUMILIATION_LINES = [
     "Pup is red-faced and still posted this: {payload}",
     "Submission note from pup: {payload}",
     "Pup confessed and delivered this publicly: {payload}",
+    "Pup put this on display and accepted the blush: {payload}",
+    "Public shame bulletin from pup: {payload}",
+    "Pup is openly admitting this wrecked composure: {payload}",
+    "Another exposed craving from pup's confession desk: {payload}",
+    "Pup posted this with full face-heat: {payload}",
+    "Humiliation mode confirmed by pup sharing: {payload}",
+    "Pup made this a public admission on purpose: {payload}",
+    "Pup is owning this weakness where everyone can see it: {payload}",
+    "Confessional drop from pup, no cover story: {payload}",
+    "Pup posted this and took the embarrassment straight on: {payload}",
+    "Another dignity surrender signed by pup: {payload}",
+    "Pup exposed this urge in broad daylight: {payload}",
+    "Pup is blushing and still doubling down with: {payload}",
+    "Public accountability update: pup submitted: {payload}",
+    "Pup offered this up as a humiliation receipt: {payload}",
 ]
 _DEVICE_SHARE_MIXED_LINES = [
     "Pup confession drop: this one made it squirm - {payload}",
@@ -936,7 +1021,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
     col_names = {row[1] for row in info}  # row[1] is the column name
 
     if not info:
-        # Fresh install – create directly.
+        # Fresh install â€“ create directly.
         conn.execute(_CREATE_TABLE_SQL)
         _ensure_limbo_table(conn)
         _ensure_limbo_columns(conn)
@@ -961,7 +1046,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         return
 
     if "device_id" not in col_names:
-        # Old singleton schema detected – rename, recreate, migrate the one row.
+        # Old singleton schema detected â€“ rename, recreate, migrate the one row.
         conn.execute(
             "ALTER TABLE handler_device_status RENAME TO _handler_device_status_v1"
         )
@@ -1014,7 +1099,7 @@ def migrate_handler(conn: sqlite3.Connection) -> None:
         conn.commit()
         return
 
-    # Schema is current – ensure required columns + auxiliary tables exist.
+    # Schema is current â€“ ensure required columns + auxiliary tables exist.
     if "device_name" not in col_names:
         conn.execute("ALTER TABLE handler_device_status ADD COLUMN device_name TEXT")
     if "toy_info_json" not in col_names:
@@ -1361,7 +1446,7 @@ class DeviceStatusReport(BaseModel):
         validation_alias=AliasChoices("device_name", "deviceName", "name"),
     )
     fcm_token: Optional[str] = None     # FCM registration token (stored for targeted pushes; append-only)
-    battery_pct: Optional[int] = Field( # 0–100
+    battery_pct: Optional[int] = Field( # 0â€“100
         default=None,
         validation_alias=AliasChoices(
             "battery_pct",
@@ -2547,6 +2632,354 @@ def _render_device_share_template(template: str) -> tuple[str, str]:
 
     return _DEVICE_SHARE_PUP_LABEL_REGEX.sub(_replace, template), label
 
+def _effective_device_share_generation_mode(db: sqlite3.Connection) -> str:
+    raw = (
+        (get_setting(db, "discord_device_share_generation_mode") or "").strip().lower()
+        or (os.environ.get("DISCORD_DEVICE_SHARE_GENERATION_MODE", "") or "").strip().lower()
+        or DEVICE_SHARE_GEN_DEFAULT_MODE
+    )
+    if raw in DEVICE_SHARE_GEN_MODES:
+        return raw
+    return DEVICE_SHARE_GEN_DEFAULT_MODE
+
+
+def _get_spacy_nlp() -> Any:
+    global _SPACY_NLP, _SPACY_FAILED
+    if _SPACY_NLP is not None:
+        return _SPACY_NLP
+    if _SPACY_FAILED or _spacy is None:
+        return None
+    try:
+        _SPACY_NLP = _spacy.load("en_core_web_sm")
+        return _SPACY_NLP
+    except Exception:  # noqa: BLE001
+        try:
+            _SPACY_NLP = _spacy.blank("en")
+            return _SPACY_NLP
+        except Exception:  # noqa: BLE001
+            _SPACY_FAILED = True
+            return None
+
+
+def _extract_share_keywords(text: str, limit: int = 5) -> list[str]:
+    source = (text or "").strip()
+    if not source:
+        return []
+    keywords: list[str] = []
+    seen: set[str] = set()
+    nlp = _get_spacy_nlp()
+    if nlp is not None:
+        try:
+            doc = nlp(source)
+            for token in doc:
+                raw = (getattr(token, "lemma_", "") or str(token.text or "")).strip().lower()
+                cleaned = re.sub(r"[^a-z0-9_\-]+", "", raw)
+                if not cleaned or len(cleaned) < 3:
+                    continue
+                if cleaned in _DEVICE_SHARE_STOPWORDS or cleaned in seen:
+                    continue
+                seen.add(cleaned)
+                keywords.append(cleaned)
+                if len(keywords) >= limit:
+                    break
+        except Exception:  # noqa: BLE001
+            keywords = []
+    if keywords:
+        return keywords
+    for token in re.findall(r"[A-Za-z0-9_\-]{3,}", source.lower()):
+        if token in _DEVICE_SHARE_STOPWORDS or token in seen:
+            continue
+        seen.add(token)
+        keywords.append(token)
+        if len(keywords) >= limit:
+            break
+    return keywords
+
+
+def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple[str, dict[str, Any]]:
+    template = rendered_template or "Pup shared this: {payload}"
+    head, marker, tail = template.partition("{payload}")
+    if not marker:
+        head = template
+        marker = "{payload}"
+
+    mutated = head
+    swaps_applied: list[str] = []
+    for token, candidates in _DEVICE_SHARE_SYNONYM_SWAPS.items():
+        pattern = re.compile(rf"\b{re.escape(token)}\b", flags=re.IGNORECASE)
+        if not pattern.search(mutated):
+            continue
+        if random.random() > 0.38:
+            continue
+        replacement = random.choice(candidates)
+        mutated = pattern.sub(replacement, mutated, count=1)
+        swaps_applied.append(token)
+
+    keyword_used = None
+    if keywords and random.random() < 0.62:
+        keyword_used = random.choice(keywords)
+        suffix = random.choice([
+            f" after seeing {keyword_used}",
+            f" over {keyword_used}",
+            f" because {keyword_used} hit too hard",
+        ])
+        stripped = mutated.rstrip()
+        if stripped.endswith(":"):
+            stripped = stripped[:-1].rstrip()
+        mutated = f"{stripped}{suffix}: "
+
+    candidate = f"{mutated}{marker}{tail}"
+    candidate = re.sub(r"\s+", " ", candidate).strip()
+    if "{payload}" not in candidate:
+        candidate = f"{candidate}: {{payload}}"
+
+    return candidate, {
+        "path": "spacy_mutation",
+        "swaps": swaps_applied,
+        "keyword": keyword_used,
+    }
+
+
+def _sanitize_qwen_template(raw: str) -> Optional[str]:
+    line = (raw or "").strip().strip('"').strip("'")
+    if not line:
+        return None
+    line = line.replace("{payload}", _DEVICE_SHARE_PROMPT_PLACEHOLDER)
+    line = re.sub(r"\s+", " ", line).strip()
+    if _DEVICE_SHARE_PROMPT_PLACEHOLDER not in line:
+        if line.endswith(":"):
+            line = f"{line} {_DEVICE_SHARE_PROMPT_PLACEHOLDER}"
+        else:
+            line = f"{line}: {_DEVICE_SHARE_PROMPT_PLACEHOLDER}"
+    line = line.replace(_DEVICE_SHARE_PROMPT_PLACEHOLDER, "{payload}")
+    if "{payload}" not in line:
+        return None
+    if len(line) > 320:
+        line = line[:317].rstrip() + "..."
+        if "{payload}" not in line:
+            return None
+    return line
+
+
+def _effective_device_share_qwen_runtime(db: sqlite3.Connection) -> str:
+    raw = (
+        (get_setting(db, "discord_device_share_qwen_runtime") or "").strip().lower()
+        or _DEVICE_SHARE_QWEN_RUNTIME_DEFAULT
+    )
+    if raw in {"auto", "local", "endpoint"}:
+        return raw
+    return "auto"
+
+
+def _effective_device_share_qwen_repo_id(db: sqlite3.Connection) -> str:
+    return (
+        (get_setting(db, "discord_device_share_qwen_repo_id") or "").strip()
+        or _DEVICE_SHARE_QWEN_REPO_DEFAULT
+    )
+
+
+def _effective_device_share_qwen_filename(db: sqlite3.Connection) -> str:
+    return (
+        (get_setting(db, "discord_device_share_qwen_filename") or "").strip()
+        or _DEVICE_SHARE_QWEN_FILE_DEFAULT
+    )
+
+
+def _effective_device_share_qwen_n_ctx(db: sqlite3.Connection) -> int:
+    raw = (
+        (get_setting(db, "discord_device_share_qwen_n_ctx") or "").strip()
+        or str(_DEVICE_SHARE_QWEN_CTX_DEFAULT)
+    )
+    try:
+        return max(256, int(raw))
+    except Exception:  # noqa: BLE001
+        return _DEVICE_SHARE_QWEN_CTX_DEFAULT
+
+
+def _effective_device_share_qwen_n_gpu_layers(db: sqlite3.Connection) -> int:
+    raw = (
+        (get_setting(db, "discord_device_share_qwen_n_gpu_layers") or "").strip()
+        or str(_DEVICE_SHARE_QWEN_GPU_LAYERS_DEFAULT)
+    )
+    try:
+        return int(raw)
+    except Exception:  # noqa: BLE001
+        return _DEVICE_SHARE_QWEN_GPU_LAYERS_DEFAULT
+
+
+def _load_local_qwen_llm(
+    *,
+    repo_id: str,
+    filename: str,
+    n_ctx: int,
+    n_gpu_layers: int,
+) -> tuple[Optional[Any], Optional[str]]:
+    global _LOCAL_QWEN_LLM, _LOCAL_QWEN_FAILED, _LOCAL_QWEN_FINGERPRINT
+
+    if _hf_hub_download is None or _Llama is None:
+        return None, "local_qwen_deps_missing"
+
+    fingerprint = f"{repo_id}|{filename}|{n_ctx}|{n_gpu_layers}"
+    if _LOCAL_QWEN_LLM is not None and _LOCAL_QWEN_FINGERPRINT == fingerprint:
+        return _LOCAL_QWEN_LLM, None
+    if _LOCAL_QWEN_FAILED and _LOCAL_QWEN_FINGERPRINT == fingerprint:
+        return None, "local_qwen_init_failed"
+
+    try:
+        model_file = _hf_hub_download(repo_id=repo_id, filename=filename)
+        _LOCAL_QWEN_LLM = _Llama(
+            model_path=model_file,
+            n_ctx=n_ctx,
+            n_gpu_layers=n_gpu_layers,
+        )
+        _LOCAL_QWEN_FINGERPRINT = fingerprint
+        _LOCAL_QWEN_FAILED = False
+        return _LOCAL_QWEN_LLM, None
+    except Exception:  # noqa: BLE001
+        _LOCAL_QWEN_FAILED = True
+        _LOCAL_QWEN_FINGERPRINT = fingerprint
+        return None, "local_qwen_init_failed"
+
+
+def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, keywords: list[str]) -> str:
+    payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
+    keyword_hint = ", ".join(keywords[:3]) if keywords else ""
+    prompt = (
+        "Write exactly one short Discord line in teasing kennel tone. "
+        f"Tone set: {selected_set}. "
+        f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
+        "No hashtags, no emojis, no extra lines."
+    )
+    if keyword_hint:
+        prompt += f" Weave in one of these words if natural: {keyword_hint}."
+    prompt += f" Source text: {payload_excerpt}"
+    return prompt
+
+
+async def _generate_local_qwen_share_template(
+    *,
+    db: sqlite3.Connection,
+    payload_text: str,
+    selected_set: str,
+    keywords: list[str],
+) -> tuple[Optional[str], Optional[str]]:
+    repo_id = _effective_device_share_qwen_repo_id(db)
+    filename = _effective_device_share_qwen_filename(db)
+    n_ctx = _effective_device_share_qwen_n_ctx(db)
+    n_gpu_layers = _effective_device_share_qwen_n_gpu_layers(db)
+
+    llm, err = await asyncio.to_thread(
+        _load_local_qwen_llm,
+        repo_id=repo_id,
+        filename=filename,
+        n_ctx=n_ctx,
+        n_gpu_layers=n_gpu_layers,
+    )
+    if llm is None:
+        return None, err or "local_qwen_unavailable"
+
+    prompt = _build_device_share_qwen_prompt(
+        payload_text=payload_text,
+        selected_set=selected_set,
+        keywords=keywords,
+    )
+
+    def _infer() -> dict[str, Any]:
+        return llm(
+            prompt,
+            max_tokens=_DEVICE_SHARE_QWEN_MAX_TOKENS,
+            temperature=0.72,
+            top_p=0.92,
+            stop=["\n", "\r"],
+        )
+
+    try:
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_infer),
+            timeout=_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS,
+        )
+    except Exception:  # noqa: BLE001
+        return None, "local_qwen_infer_failed"
+
+    raw = ""
+    if isinstance(data, dict):
+        raw = str((data.get("choices") or [{}])[0].get("text") or "")
+    cleaned = _sanitize_qwen_template(raw)
+    if not cleaned:
+        return None, "local_qwen_invalid_output"
+    return cleaned, None
+
+
+async def _generate_qwen_share_template(
+    *,
+    db: sqlite3.Connection,
+    payload_text: str,
+    selected_set: str,
+    keywords: list[str],
+) -> tuple[Optional[str], Optional[str]]:
+    runtime = _effective_device_share_qwen_runtime(db)
+    local_error: Optional[str] = None
+
+    if runtime in {"auto", "local"}:
+        local_line, local_error = await _generate_local_qwen_share_template(
+            db=db,
+            payload_text=payload_text,
+            selected_set=selected_set,
+            keywords=keywords,
+        )
+        if local_line:
+            return local_line, None
+        if runtime == "local":
+            return None, local_error or "local_qwen_failed"
+
+    endpoint = (
+        (get_setting(db, "discord_device_share_qwen_endpoint") or "").strip()
+        or _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT
+    )
+    if not endpoint:
+        return None, local_error or "qwen_endpoint_missing"
+
+    model_name = (
+        (get_setting(db, "discord_device_share_qwen_model") or "").strip()
+        or _DEVICE_SHARE_QWEN_MODEL_DEFAULT
+    )
+    prompt = _build_device_share_qwen_prompt(
+        payload_text=payload_text,
+        selected_set=selected_set,
+        keywords=keywords,
+    )
+
+    request_payload: dict[str, Any] = {
+        "prompt": prompt,
+        "n_predict": _DEVICE_SHARE_QWEN_MAX_TOKENS,
+        "temperature": 0.72,
+        "top_p": 0.92,
+        "stop": ["\n", "\r"],
+    }
+    if model_name:
+        request_payload["model"] = model_name
+
+    try:
+        async with httpx.AsyncClient(timeout=_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS) as client:
+            response = await client.post(endpoint, json=request_payload)
+        if response.status_code >= 400:
+            return None, f"qwen_http_{response.status_code}"
+        data = response.json()
+    except Exception:  # noqa: BLE001
+        return None, "qwen_request_failed"
+
+    raw = ""
+    if isinstance(data, dict):
+        raw = (
+            str(data.get("content") or "")
+            or str(data.get("response") or "")
+            or str((data.get("choices") or [{}])[0].get("text") or "")
+        )
+    cleaned = _sanitize_qwen_template(raw)
+    if not cleaned:
+        return None, "qwen_invalid_output"
+    return cleaned, None
+
 @router.post("/api/handler/device-status")
 async def handler_device_status(
     body: DeviceStatusReport,
@@ -2693,6 +3126,9 @@ async def handler_device_share(
         (body.channel_id or "").strip()
         or (get_setting(db, "discord_device_share_channel_id") or "").strip()
         or (os.environ.get("DISCORD_DEVICE_SHARE_CHANNEL_ID", "") or "").strip()
+        or (get_setting(db, "discord_notification_channel_id") or "").strip()
+        or (os.environ.get("DISCORD_NOTIFICATION_CHANNEL_ID", "") or "").strip()
+        or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     )
     if not channel_id:
         raise HTTPException(
@@ -2703,9 +3139,37 @@ async def handler_device_share(
     payload_text = (share_text or share_subject).strip()
     if len(payload_text) > 900:
         payload_text = payload_text[:897].rstrip() + "..."
+
     selected_set, templates = _active_device_share_templates(db)
     rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
-    message_line = rendered_template.format(payload=payload_text)
+    generation_mode = _effective_device_share_generation_mode(db)
+    generation_path = "stock_template"
+    fallback_reason: Optional[str] = None
+    generation_meta: dict[str, Any] = {}
+    keywords = _extract_share_keywords(share_text or share_subject)
+
+    template_for_message = rendered_template
+    if generation_mode == DEVICE_SHARE_GEN_MODE_SPACY_ONLY:
+        template_for_message, generation_meta = _mutate_share_template(rendered_template, keywords)
+        generation_path = "spacy_mutation"
+    elif generation_mode == DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN:
+        qwen_template, qwen_error = await _generate_qwen_share_template(
+            db=db,
+            payload_text=payload_text,
+            selected_set=selected_set,
+            keywords=keywords,
+        )
+        if qwen_template:
+            template_for_message = qwen_template
+            generation_path = "hybrid_qwen"
+        else:
+            template_for_message, generation_meta = _mutate_share_template(rendered_template, keywords)
+            generation_path = "hybrid_spacy_fallback"
+            fallback_reason = qwen_error or "qwen_unknown_failure"
+    else:
+        generation_mode = DEVICE_SHARE_GEN_MODE_STOCK_ONLY
+
+    message_line = template_for_message.format(payload=payload_text)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
     if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
@@ -2732,8 +3196,18 @@ async def handler_device_share(
                     "channel_id": channel_id,
                     "urls": share_urls,
                     "template_set": selected_set,
+                    "generation_mode": generation_mode,
+                    "generation_path": generation_path,
                     "template_used": rendered_template,
+                    "template_final": template_for_message,
                     "subject_label": rendered_label,
+                    "generation": {
+                        "mode": generation_mode,
+                        "path": generation_path,
+                        "fallback_reason": fallback_reason,
+                        "keywords": keywords,
+                        "meta": generation_meta,
+                    },
                     "delivery": {
                         "ok": bool(delivered),
                         "error": delivery_error or None,
@@ -2757,6 +3231,8 @@ async def handler_device_share(
         "device_id": resolved_device_id,
         "channel_id": channel_id,
         "template_set": selected_set,
+        "generation_mode": generation_mode,
+        "generation_path": generation_path,
         "shared_urls": share_urls,
         "rewritten_text": share_text,
         "delivery_ok": True,
@@ -4683,7 +5159,7 @@ def handler_list_assignments(
     current_user: dict = Depends(role_required("admin")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> list:
-    """Return all handler↔device assignments (admin only)."""
+    """Return all handlerâ†”device assignments (admin only)."""
     rows = db.execute(
         "SELECT handler_id, device_id FROM handler_device_assignments ORDER BY handler_id, device_id"
     ).fetchall()
@@ -4716,7 +5192,7 @@ def handler_delete_assignment(
     current_user: dict = Depends(role_required("admin")),
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
-    """Remove a handler↔device assignment (admin only)."""
+    """Remove a handlerâ†”device assignment (admin only)."""
     resolved_handler_id = _normalize_handler_assignment_id(db, handler_id)
     username_row = db.execute(
         "SELECT username FROM users WHERE id = ? LIMIT 1",
@@ -9806,7 +10282,7 @@ def handler_approve_social_post_draft(
     new_status = "failed" if any_error else "approved"
 
     # Log per-platform outcomes server-side.  Exception strings and post
-    # identifiers are kept in the server log and the DB only – they are not
+    # identifiers are kept in the server log and the DB only â€“ they are not
     # forwarded to the API response to avoid leaking internal details.
     for r in result.get("results", []):
         if r.get("status") == "error":
