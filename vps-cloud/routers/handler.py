@@ -60,11 +60,10 @@ from discord_webhook import (
     load_reaction_role_options,
     maybe_send_counter_update_notification,
     rewrite_x_links_to_fxtwitter,
-    send_answer_notification,
     send_discord_channel_message,
     send_discord_channel_payload,
 )
-from routers.admin import _post_answer_bluesky, _post_answer_tweet
+from routers.admin import _persist_and_publish_question_answer
 from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
 from shame import activate_shame_escalation, ensure_shame_tables, list_shame_escalations, record_shame_event, resolve_shame_escalation
 from routers.tpe import (
@@ -2713,11 +2712,7 @@ async def handler_device_share(
         message_line = message_line[:_DISCORD_MESSAGE_MAX_LEN - 3].rstrip() + "..."
 
     delivered = await send_discord_channel_message(channel_id=channel_id, content=message_line)
-    if not delivered:
-        raise HTTPException(
-            status_code=502,
-            detail="Discord quick-share delivery failed.",
-        )
+    delivery_error = "" if delivered else "discord_channel_post_failed"
 
     db.execute(
         """
@@ -2739,12 +2734,23 @@ async def handler_device_share(
                     "template_set": selected_set,
                     "template_used": rendered_template,
                     "subject_label": rendered_label,
+                    "delivery": {
+                        "ok": bool(delivered),
+                        "error": delivery_error or None,
+                        "message_chars": len(message_line),
+                    },
                 }
             ),
             _now_iso(),
         ),
     )
     db.commit()
+
+    if not delivered:
+        raise HTTPException(
+            status_code=502,
+            detail="Discord quick-share delivery failed.",
+        )
 
     return {
         "status": "shared",
@@ -2753,6 +2759,7 @@ async def handler_device_share(
         "template_set": selected_set,
         "shared_urls": share_urls,
         "rewritten_text": share_text,
+        "delivery_ok": True,
     }
 
 
@@ -2944,11 +2951,12 @@ async def device_answer_question(
     )
     db.commit()
 
-    _post_answer_tweet(question_id, answer_text)
-    _post_answer_bluesky(question_id, answer_text)
-    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
-    share_url = f"{base_url}/q/{question_id}" if base_url else ""
-    await send_answer_notification(share_url=share_url)
+    await _persist_and_publish_question_answer(
+        question_id=question_id,
+        answer_text=answer_text,
+        db=db,
+        only_if_unanswered=True,
+    )
 
     return {"id": question_id, "status": "answered", "is_public": True}
 
@@ -5128,18 +5136,12 @@ async def handler_answer_question(
     if not row:
         raise HTTPException(status_code=404, detail="Question not found.")
 
-    answer_text = payload.answer.strip()
-    db.execute(
-        "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
-        (answer_text, question_id),
+    await _persist_and_publish_question_answer(
+        question_id=question_id,
+        answer_text=payload.answer,
+        db=db,
+        only_if_unanswered=False,
     )
-    db.commit()
-
-    _post_answer_tweet(question_id, answer_text)
-    _post_answer_bluesky(question_id, answer_text)
-    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
-    share_url = f"{base_url}/q/{question_id}" if base_url else ""
-    await send_answer_notification(share_url=share_url)
 
     return {
         "id": question_id,

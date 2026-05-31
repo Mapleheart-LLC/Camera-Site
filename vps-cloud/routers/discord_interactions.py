@@ -18,7 +18,6 @@ DISCORD_PUBLIC_KEY
 
 import logging
 import os
-import sqlite3
 import httpx
 
 from cryptography.exceptions import InvalidSignature
@@ -26,8 +25,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, HTTPException, Request, status
 
 from db import get_db_connection
-from discord_webhook import load_reaction_role_options, send_answer_notification
-from routers.admin import _post_answer_tweet, _post_answer_bluesky
+from discord_webhook import load_reaction_role_options
+from routers.admin import _persist_and_publish_question_answer
 
 
 logger = logging.getLogger(__name__)
@@ -214,8 +213,15 @@ async def discord_interactions(request: Request):
                 },
             }
 
-        saved = _save_answer(question_id, answer_text.strip())
-        if not saved:
+        with get_db_connection() as db:
+            publish_result = await _persist_and_publish_question_answer(
+                question_id=question_id,
+                answer_text=answer_text.strip(),
+                db=db,
+                only_if_unanswered=True,
+            )
+
+        if not publish_result.get("saved"):
             return {
                 "type": _CHANNEL_MESSAGE,
                 "data": {
@@ -223,19 +229,11 @@ async def discord_interactions(request: Request):
                     "flags": 64,
                 },
             }
-                  # Trigger the social media posts!
-        _post_answer_tweet(question_id, answer_text.strip())
-        _post_answer_bluesky(question_id, answer_text.strip())
-      
 
-        base_url: str = os.environ.get("BASE_URL", "").rstrip("/")
-        share_url = f"{base_url}/q/{question_id}" if base_url else ""
+        share_url = str(publish_result.get("share_url") or "")
         lines = ["✅ Reply saved and published!"]
         if share_url:
             lines.append(f"Share it: {share_url}")
-
-        # Notify the notification channel that an answer has been published.
-        await send_answer_notification(share_url=share_url)
 
         return {
             "type": _CHANNEL_MESSAGE,
@@ -258,21 +256,6 @@ def _fetch_question_text(question_id: str) -> str | None:
             (question_id,),
         ).fetchone()
     return row["text"] if row else None
-
-
-def _save_answer(question_id: str, answer: str) -> bool:
-    """Persist the answer and mark the question public.  Returns True on success."""
-    try:
-        with get_db_connection() as db:
-            cur = db.execute(
-                "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ? AND answer IS NULL",
-                (answer, question_id),
-            )
-            db.commit()
-        return cur.rowcount > 0
-    except sqlite3.Error as exc:
-        logger.error("Failed to save Discord modal answer: %s", exc)
-        return False
 
 
 def _extract_component_value(interaction_data: dict, custom_id: str) -> str:

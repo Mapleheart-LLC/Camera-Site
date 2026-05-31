@@ -36,6 +36,7 @@ import logging
 import os
 import secrets
 import sqlite3
+import json
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote as _url_quote
@@ -280,6 +281,39 @@ def admin_update_camera(
         (cam_id,),
     ).fetchone()
     return dict(updated)
+
+@router.get("/drool/scraper/status")
+def get_drool_scraper_status(
+    _: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Return the latest persisted drool scraper run status snapshots."""
+
+    def _load_json(key: str) -> dict | None:
+        row = db.execute("SELECT value, updated_at FROM settings WHERE key = ?", (key,)).fetchone()
+        if not row or not row["value"]:
+            return None
+        try:
+            payload = json.loads(row["value"])
+        except Exception:
+            payload = {"raw": row["value"]}
+        if isinstance(payload, dict):
+            payload.setdefault("updated_at", row["updated_at"])
+        return payload if isinstance(payload, dict) else {"value": payload, "updated_at": row["updated_at"]}
+
+    run = _load_json("drool_scraper_last_run_json")
+    reddit = _load_json("drool_scraper_last_reddit_json")
+    twitter = _load_json("drool_scraper_last_twitter_json")
+    bluesky = _load_json("drool_scraper_last_bluesky_json")
+
+    return {
+        "run": run,
+        "sources": {
+            "reddit": reddit,
+            "twitter": twitter,
+            "bluesky": bluesky,
+        },
+    }
 
 
 @router.delete("/cameras/{cam_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -612,6 +646,62 @@ def _post_answer_bluesky(question_id: str, answer_text: str) -> bool:
     except Exception as exc:
         logger.warning("Bluesky post failed for question %s: %s", question_id, exc)
         return False
+
+
+async def _persist_and_publish_question_answer(
+    *,
+    question_id: str,
+    answer_text: str,
+    db: sqlite3.Connection,
+    only_if_unanswered: bool = False,
+) -> dict:
+    """Persist answer, mark public, and fan out notifications/social posts.
+
+    Returns a dict containing save status and fan-out delivery booleans.
+    """
+    trimmed = (answer_text or "").strip()
+    if not trimmed:
+        return {
+            "saved": False,
+            "already_answered": False,
+            "tweeted": False,
+            "bluesky_posted": False,
+            "share_url": "",
+        }
+
+    if only_if_unanswered:
+        cur = db.execute(
+            "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ? AND answer IS NULL",
+            (trimmed, question_id),
+        )
+    else:
+        cur = db.execute(
+            "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
+            (trimmed, question_id),
+        )
+    db.commit()
+
+    if int(cur.rowcount or 0) <= 0:
+        return {
+            "saved": False,
+            "already_answered": bool(only_if_unanswered),
+            "tweeted": False,
+            "bluesky_posted": False,
+            "share_url": "",
+        }
+
+    tweeted = _post_answer_tweet(question_id, trimmed)
+    bluesky_posted = _post_answer_bluesky(question_id, trimmed)
+    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
+    share_url = f"{base_url}/q/{question_id}" if base_url else ""
+    await send_answer_notification(share_url=share_url)
+    return {
+        "saved": True,
+        "already_answered": False,
+        "tweeted": tweeted,
+        "bluesky_posted": bluesky_posted,
+        "share_url": share_url,
+    }
       
 
 
@@ -665,21 +755,18 @@ async def admin_answer_question(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Question not found.",
         )
-    db.execute(
-        "UPDATE questions SET answer = ?, is_public = 1 WHERE id = ?",
-        (payload.answer, question_id),
+    result = await _persist_and_publish_question_answer(
+        question_id=question_id,
+        answer_text=payload.answer,
+        db=db,
+        only_if_unanswered=False,
     )
-    db.commit()
-    tweeted = _post_answer_tweet(question_id, payload.answer)
-    bluesky_posted = _post_answer_bluesky(question_id, payload.answer)
-    base_url = (os.environ.get("BASE_URL", "") or "").rstrip("/")
-    share_url = f"{base_url}/q/{question_id}" if base_url else ""
-    await send_answer_notification(share_url=share_url)
     return {
         "id": question_id,
         "message": "Answer saved and question is now public ðŸ¾",
-        "tweeted": tweeted,
-        "bluesky_posted": bluesky_posted,
+        "tweeted": result["tweeted"],
+        "bluesky_posted": result["bluesky_posted"],
+        "share_url": result["share_url"],
     }
   
 @router.delete("/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1637,23 +1724,53 @@ async def get_discord_status(_: str = Depends(get_admin_user)):
     return await get_bot_status()
 
 
+@router.post("/discord/health-check", status_code=status.HTTP_200_OK)
+async def discord_health_check(
+    admin_user: str = Depends(get_admin_user),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """Run an end-to-end Discord health check and send a probe message."""
+    from discord_webhook import get_bot_status, send_discord_channel_message
+
+    bot_status = await get_bot_status()
+    channel_id = (
+        (get_setting(db, "discord_admin_channel_id") or "").strip()
+        or (os.environ.get("DISCORD_ADMIN_CHANNEL_ID", "") or "").strip()
+    )
+    if not channel_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="DISCORD_ADMIN_CHANNEL_ID is not configured.",
+        )
+
+    delivered = await send_discord_channel_message(
+        channel_id=channel_id,
+        content=(
+            "🧪 Discord health-check ping from admin panel\n"
+            f"Triggered by: {admin_user}\n"
+            f"Bot valid: {bool(bot_status.get('bot_valid'))}"
+        ),
+    )
+    if not delivered:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Discord message delivery failed. Check bot token, channel ID, and bot channel permissions.",
+        )
+
+    return {
+        "sent": True,
+        "channel_id": channel_id,
+        "bot": bot_status,
+    }
+
+
 @router.post("/discord/test", status_code=status.HTTP_200_OK)
 async def discord_test_notification(
     admin_user: str = Depends(get_admin_user),
     db: sqlite3.Connection = Depends(get_db),
 ):
-    """Send a test notification to the admin Discord channel."""
-    from discord_webhook import send_admin_notification
-    admin_channel = get_setting(db, "discord_admin_channel_id") or os.environ.get("DISCORD_ADMIN_CHANNEL_ID", "")
-    if not admin_channel:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="DISCORD_ADMIN_CHANNEL_ID is not configured.",
-        )
-    await send_admin_notification(
-        f"ðŸ§ª Test notification from the admin panel (triggered by **{admin_user}**) ðŸ¾"
-    )
-    return {"sent": True}
+    """Backward-compatible alias for the richer health-check endpoint."""
+    return await discord_health_check(admin_user=admin_user, db=db)
 
 
 # ---------------------------------------------------------------------------

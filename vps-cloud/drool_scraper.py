@@ -68,6 +68,34 @@ _TWITTER_AUTH_BACKOFF_UNTIL: dict[str, float] = {
     "bookmarks": 0.0,
 }
 
+
+def _archive_count() -> int:
+    try:
+        conn = get_db_connection()
+        row = conn.execute("SELECT COUNT(*) AS c FROM drool_archive").fetchone()
+        conn.close()
+        return int((row[0] if row else 0) or 0)
+    except Exception:
+        return 0
+
+
+def _persist_scraper_status(key: str, payload: dict) -> None:
+    """Persist scraper status payload in settings for admin observability."""
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            """
+            INSERT INTO settings (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """,
+            (key, json.dumps(payload, ensure_ascii=True)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        logger.debug("Could not persist scraper status '%s': %s", key, exc)
+
 # ---------------------------------------------------------------------------
 # Credential helper – DB-first with env-var fallback
 # ---------------------------------------------------------------------------
@@ -953,19 +981,55 @@ def _scrape_bluesky() -> None:
 
 async def run_drool_scrape() -> None:
     """Entry point called by APScheduler every 5 minutes."""
+    started_at = datetime.now(timezone.utc).isoformat()
     logger.info("Drool scraper: starting run.")
+    status = {
+        "started_at": started_at,
+        "finished_at": None,
+        "sources": {
+            "reddit": {"inserted": 0, "error": None},
+            "twitter": {"inserted": 0, "error": None},
+            "bluesky": {"inserted": 0, "error": None},
+        },
+    }
+
+    baseline = _archive_count()
     try:
         _scrape_reddit()
     except Exception as exc:  # noqa: BLE001
         logger.error("Drool scraper: Reddit job error: %s", exc)
+        status["sources"]["reddit"]["error"] = str(exc)[:240]
+    after_reddit = _archive_count()
+    status["sources"]["reddit"]["inserted"] = max(0, after_reddit - baseline)
+    baseline = after_reddit
+
     try:
         _scrape_twitter()
     except Exception as exc:  # noqa: BLE001
         logger.error("Drool scraper: Twitter job error: %s", exc)
+        status["sources"]["twitter"]["error"] = str(exc)[:240]
+    after_twitter = _archive_count()
+    status["sources"]["twitter"]["inserted"] = max(0, after_twitter - baseline)
+    baseline = after_twitter
+
     try:
         _scrape_bluesky()
     except Exception as exc:  # noqa: BLE001
         logger.error("Drool scraper: Bluesky job error: %s", exc)
+        status["sources"]["bluesky"]["error"] = str(exc)[:240]
+    after_bluesky = _archive_count()
+    status["sources"]["bluesky"]["inserted"] = max(0, after_bluesky - baseline)
+
+    status["finished_at"] = datetime.now(timezone.utc).isoformat()
+    status["total_inserted"] = (
+        int(status["sources"]["reddit"]["inserted"])
+        + int(status["sources"]["twitter"]["inserted"])
+        + int(status["sources"]["bluesky"]["inserted"])
+    )
+    _persist_scraper_status("drool_scraper_last_run_json", status)
+    _persist_scraper_status("drool_scraper_last_reddit_json", status["sources"]["reddit"])
+    _persist_scraper_status("drool_scraper_last_twitter_json", status["sources"]["twitter"])
+    _persist_scraper_status("drool_scraper_last_bluesky_json", status["sources"]["bluesky"])
     logger.info("Drool scraper: run complete.")
 
 

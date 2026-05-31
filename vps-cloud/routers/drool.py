@@ -17,7 +17,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -348,6 +348,7 @@ async def post_reaction(
     item_id: int,
     payload: ReactSubmit,
     request: Request,
+    allow_replace: bool = Query(default=False, description="Allow replacing an existing reaction in one request"),
     db: sqlite3.Connection = Depends(get_db),
 ):
     """One-tap reaction. Each pack member can react once per item (upsert). Rate-limited to 20/hour per IP."""
@@ -361,10 +362,45 @@ async def post_reaction(
             (item_id, pack_id),
         ).fetchone()
         if prior is not None:
+            current_reaction = str(prior["reaction_type"])
+            if current_reaction == payload.reaction_type:
+                return {
+                    "message": "Reaction already recorded for this item.",
+                    "pack_member_id": pack_id,
+                    "reaction_type": current_reaction,
+                    "changed": False,
+                }
+
+            if allow_replace:
+                db.execute(
+                    "UPDATE drool_reactions SET reaction_type = ? WHERE drool_id = ? AND pack_member_id = ?",
+                    (payload.reaction_type, item_id, pack_id),
+                )
+                record_shame_event(
+                    db,
+                    "drool_reaction_added",
+                    points=1,
+                    metadata={
+                        "drool_id": item_id,
+                        "pack_member_id": pack_id,
+                        "reaction_type": payload.reaction_type,
+                        "changed": True,
+                    },
+                )
+                db.commit()
+                return {
+                    "message": f"Reaction changed to '{payload.reaction_type}' 🐾",
+                    "pack_member_id": pack_id,
+                    "reaction_type": payload.reaction_type,
+                    "changed": True,
+                }
+
             return {
                 "message": "Reaction already recorded for this item. Remove it first to change.",
                 "pack_member_id": pack_id,
-                "reaction_type": prior["reaction_type"],
+                "reaction_type": current_reaction,
+                "changed": False,
+                "can_replace_in_one_call": True,
             }
 
         db.execute(

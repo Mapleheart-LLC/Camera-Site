@@ -918,6 +918,19 @@
             </div>
           </div>
 
+          <div class="card" style="margin-top:1rem">
+            <div class="card-header">
+              <h2>🧭 Scraper Run Status</h2>
+              <button id="refresh-drool-status-btn" class="btn-sm btn-edit" style="font-size:.75rem">↻ Refresh</button>
+            </div>
+            <div class="card-body">
+              <p id="drool-scraper-status-summary" style="font-size:.82rem;color:#9e7e82;margin:0 0 .7rem 0">Loading latest scrape status…</p>
+              <div id="drool-scraper-status-grid" class="settings-grid">
+                <div class="setting-tile"><div class="setting-label">Loading…</div></div>
+              </div>
+            </div>
+          </div>
+
           <div class="card">
             <div class="card-header"><h2>🟠 Reddit</h2></div>
             <div class="card-body">
@@ -1357,7 +1370,8 @@
             <div class="card-header"><h2>Actions</h2></div>
             <div class="card-body">
               <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
-                <button id="discord-test-btn" class="btn-sm btn-edit">🔔 Send Test Notification</button>
+                <button id="discord-health-btn" class="btn-sm btn-edit">🩺 Run Health Check</button>
+                <button id="discord-test-btn" class="btn-sm btn-edit">🔔 Legacy Test Ping</button>
               </div>
               <p id="discord-action-status" style="margin-top:.6rem;font-size:.82rem;color:#9e7e82;min-height:1.2em"></p>
               <p style="font-size:.78rem;color:#9e7e82;margin-top:.75rem">
@@ -1679,6 +1693,7 @@
     async function loadAll() {
       await Promise.all([
         loadDroolCredentials(),
+        loadDroolScraperStatus(),
         loadDroolArchive(),
       ]);
     }
@@ -2655,6 +2670,48 @@
       }
     }
 
+    async function loadDroolScraperStatus() {
+      const summaryEl = document.getElementById('drool-scraper-status-summary');
+      const grid = document.getElementById('drool-scraper-status-grid');
+      if (!summaryEl || !grid) return;
+
+      summaryEl.style.color = '#9e7e82';
+      summaryEl.textContent = 'Loading latest scrape status…';
+      grid.innerHTML = '<div class="setting-tile"><div class="setting-label">Loading…</div></div>';
+
+      try {
+        const data = await apiGet('/api/admin/drool/scraper/status');
+        const run = data.run || {};
+        const src = run.sources || data.sources || {};
+        const started = run.started_at ? new Date(run.started_at).toLocaleString() : '—';
+        const finished = run.finished_at ? new Date(run.finished_at).toLocaleString() : '—';
+        const totalInserted = Number(run.total_inserted || 0);
+        summaryEl.textContent = `Last run: ${finished} | Started: ${started} | New items: ${totalInserted}`;
+
+        const sources = [
+          { key: 'reddit', label: 'Reddit' },
+          { key: 'twitter', label: 'Twitter/X' },
+          { key: 'bluesky', label: 'Bluesky' },
+        ];
+        grid.innerHTML = sources.map((s) => {
+          const item = src[s.key] || {};
+          const inserted = Number(item.inserted || 0);
+          const err = item.error ? escHtml(String(item.error)) : '';
+          return `<div class="setting-tile">
+            <div class="setting-label">${s.label}</div>
+            <div class="setting-value">${inserted} new</div>
+            <div style="font-size:.75rem;color:${err ? '#f87171' : '#9e7e82'};margin-top:.2rem">${err || 'No error recorded'}</div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        if (err.message !== '401') {
+          summaryEl.style.color = '#f87171';
+          summaryEl.textContent = 'Failed to load scraper status.';
+          grid.innerHTML = '<div class="setting-tile"><div class="setting-label">No status data</div></div>';
+        }
+      }
+    }
+
     function _refreshIftttUrl() {
       const urlEl = document.getElementById('ifttt-webhook-url');
       const secret = ''; // secret is never returned – show placeholder
@@ -2697,7 +2754,11 @@
       }
     }
 
-    document.getElementById('refresh-drool-btn').addEventListener('click', loadDroolCredentials);
+    document.getElementById('refresh-drool-btn').addEventListener('click', async () => {
+      await loadDroolCredentials();
+      await loadDroolScraperStatus();
+    });
+    document.getElementById('refresh-drool-status-btn').addEventListener('click', loadDroolScraperStatus);
 
     // Source enable/disable toggles
     document.getElementById('drool-source-toggles').addEventListener('click', async e => {
@@ -2713,6 +2774,7 @@
         if (resp.ok) {
           await loadDroolCredentials();
           await loadDroolArchive();
+          await loadDroolScraperStatus();
           showToast(newVal === '1' ? `✔ ${source} enabled.` : `✘ ${source} disabled.`);
         } else {
           const data = await resp.json().catch(() => ({}));
@@ -2862,6 +2924,7 @@
           const data = await resp.json().catch(() => ({}));
           showToast(`🧹 Purged ${data.deleted ?? 0} bad entr${data.deleted === 1 ? 'y' : 'ies'}.`);
           await loadDroolArchive();
+          await loadDroolScraperStatus();
         } else {
           const data = await resp.json().catch(() => ({}));
           showToast('❌ ' + (data.detail || `Error ${resp.status}`));
@@ -3306,6 +3369,28 @@
 
     document.getElementById('discord-refresh-status-btn').addEventListener('click', loadDiscordStatus);
 
+    document.getElementById('discord-health-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('discord-action-status');
+      statusEl.style.color = '#9e7e82';
+      statusEl.textContent = 'Running health check…';
+      try {
+        const res = await apiPost('/api/admin/discord/health-check');
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          statusEl.style.color = '#4ade80';
+          statusEl.textContent = `✓ Health check passed. Channel ${data.channel_id || '—'} is reachable.`;
+          showToast('Discord health-check passed!');
+          loadDiscordStatus();
+        } else {
+          statusEl.style.color = '#f87171';
+          statusEl.textContent = '✗ ' + (data.detail || 'Health check failed.');
+        }
+      } catch {
+        statusEl.style.color = '#f87171';
+        statusEl.textContent = '✗ Network error.';
+      }
+    });
+
     document.getElementById('discord-test-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('discord-action-status');
       statusEl.style.color = '#9e7e82';
@@ -3315,8 +3400,9 @@
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           statusEl.style.color = '#4ade80';
-          statusEl.textContent = '✓ Test notification sent to admin channel 🐾';
+          statusEl.textContent = `✓ Test notification sent to admin channel ${data.channel_id || ''} 🐾`;
           showToast('Discord test notification sent!');
+          loadDiscordStatus();
         } else {
           statusEl.style.color = '#f87171';
           statusEl.textContent = '✗ ' + (data.detail || 'Failed to send.');
@@ -3336,6 +3422,7 @@
           if (!_discordStatusLoaded) {
             _discordStatusLoaded = true;
             loadDiscordStatus();
+            loadDiscordSettings();
           }
         });
       }
