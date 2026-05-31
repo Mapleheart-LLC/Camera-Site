@@ -273,10 +273,11 @@ def _setting_int(db: sqlite3.Connection, key: str, default: int = 0) -> int:
 
 
 def _set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
+    now = _now_iso()
     db.execute(
-        "INSERT INTO settings (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (key, value),
+        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+        (key, value, now),
     )
 
 
