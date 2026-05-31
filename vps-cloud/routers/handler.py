@@ -169,6 +169,9 @@ PUBLIC_USE_PHONE_CONTROL_OPTIONS = [
 PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN = 18
 PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN = 6
 PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC = 900
+HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS = int(
+    os.environ.get("HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS", "72")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -3306,7 +3309,19 @@ def _fetch_devices_by_ids(
     ).fetchall()
 
 
-def _device_dedupe_key(row: dict[str, Any]) -> str:
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _device_dedupe_key(row: dict[str, Any], *, include_name_fallback: bool = False) -> str:
     """Build a stable grouping key for panel device rows.
 
     The same physical device may occasionally show up under a new device_id
@@ -3316,6 +3331,10 @@ def _device_dedupe_key(row: dict[str, Any]) -> str:
     token = str(row.get("fcm_token") or "").strip()
     if token:
         return f"fcm:{token}"
+    if include_name_fallback:
+        name = str(row.get("device_name") or "").strip().lower()
+        if name:
+            return f"name:{name}"
     return f"device:{str(row.get('device_id') or '').strip()}"
 
 
@@ -3339,6 +3358,33 @@ def _collapse_panel_devices(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
         if existing is None or _device_freshness_key(candidate) > _device_freshness_key(existing):
             grouped[key] = candidate
     return sorted(grouped.values(), key=_device_freshness_key, reverse=True)
+
+
+def _is_device_row_stale(row: dict[str, Any], *, now_utc: datetime, stale_hours: int) -> bool:
+    if int(row.get("is_online") or 0) == 1:
+        return False
+    if stale_hours <= 0:
+        return False
+    reference_time = _parse_iso_datetime(str(row.get("last_seen") or ""))
+    if reference_time is None:
+        reference_time = _parse_iso_datetime(str(row.get("updated_at") or ""))
+    if reference_time is None:
+        return True
+    cutoff = now_utc - timedelta(hours=stale_hours)
+    return reference_time < cutoff
+
+
+def _filter_panel_visible_devices(
+    rows: list[dict[str, Any]], *, now_utc: datetime, stale_hours: int
+) -> tuple[list[dict[str, Any]], int]:
+    visible: list[dict[str, Any]] = []
+    hidden_count = 0
+    for row in rows:
+        if _is_device_row_stale(row, now_utc=now_utc, stale_hours=stale_hours):
+            hidden_count += 1
+            continue
+        visible.append(row)
+    return visible, hidden_count
 
 
 @router.get("/api/handler/devices")
@@ -3366,9 +3412,91 @@ def handler_list_devices(
             response.headers["X-Handler-Devices-Notice"] = "no-assignment"
             response.headers["X-Handler-Devices-Known-Total"] = str(known_total)
     collapsed = _collapse_panel_devices(rows)
-    for row in collapsed:
+    filtered, hidden_count = _filter_panel_visible_devices(
+        collapsed,
+        now_utc=datetime.now(timezone.utc),
+        stale_hours=HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS,
+    )
+    if hidden_count > 0:
+        response.headers["X-Handler-Devices-Hidden-Stale"] = str(hidden_count)
+    for row in filtered:
         row.pop("fcm_token", None)
-    return collapsed
+    return filtered
+
+
+@router.post("/api/handler/devices/cleanup-stale")
+def handler_cleanup_stale_devices(
+    older_than_hours: int = Query(default=72, ge=1, le=24 * 365),
+    include_name_fallback: bool = Query(default=True),
+    dry_run: bool = Query(default=False),
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Prune stale duplicate device rows to keep handler panel lists clean."""
+    rows = db.execute(
+        "SELECT device_id, device_name, fcm_token, is_online, last_seen, updated_at "
+        "FROM handler_device_status"
+    ).fetchall()
+    if not rows:
+        return {
+            "deleted": 0,
+            "candidates": 0,
+            "remaining": 0,
+            "dry_run": bool(dry_run),
+            "older_than_hours": int(older_than_hours),
+            "include_name_fallback": bool(include_name_fallback),
+        }
+
+    now_utc = datetime.now(timezone.utc)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        payload = dict(row)
+        key = _device_dedupe_key(payload, include_name_fallback=include_name_fallback)
+        grouped.setdefault(key, []).append(payload)
+
+    delete_ids: list[str] = []
+    for group_rows in grouped.values():
+        if len(group_rows) < 2:
+            continue
+        keep = max(group_rows, key=_device_freshness_key)
+        keep_id = str(keep.get("device_id") or "").strip()
+        for candidate in group_rows:
+            candidate_id = str(candidate.get("device_id") or "").strip()
+            if not candidate_id or candidate_id == keep_id:
+                continue
+            if not _is_device_row_stale(candidate, now_utc=now_utc, stale_hours=older_than_hours):
+                continue
+            assigned = db.execute(
+                "SELECT 1 FROM handler_device_assignments WHERE device_id = ? LIMIT 1",
+                (candidate_id,),
+            ).fetchone()
+            if assigned:
+                continue
+            delete_ids.append(candidate_id)
+
+    deleted_count = 0
+    if delete_ids and not dry_run:
+        db.executemany(
+            "DELETE FROM handler_device_status WHERE device_id = ?",
+            [(device_id,) for device_id in delete_ids],
+        )
+        db.executemany(
+            "DELETE FROM tpe_paired_devices WHERE fcm_token = ?",
+            [(device_id,) for device_id in delete_ids],
+        )
+        db.commit()
+        deleted_count = len(delete_ids)
+
+    remaining = db.execute("SELECT COUNT(*) AS n FROM handler_device_status").fetchone()["n"]
+    return {
+        "deleted": deleted_count,
+        "candidates": len(delete_ids),
+        "remaining": int(remaining),
+        "dry_run": bool(dry_run),
+        "older_than_hours": int(older_than_hours),
+        "include_name_fallback": bool(include_name_fallback),
+        "deleted_device_ids": delete_ids,
+    }
 
 
 @router.get("/api/handler/status")
