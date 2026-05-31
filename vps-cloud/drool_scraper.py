@@ -1,43 +1,19 @@
 """
 drool_scraper.py – Permanent Record scraper for The Drool Log.
 
-Fetches liked/saved content from Reddit (via praw or Google Sheets),
+Fetches liked/saved content from Reddit (via private JSON feed URLs),
 Twitter/X (via tweepy), and Bluesky (via atproto) on a 5-minute schedule
 using APScheduler, saving only new items to the drool_archive table.
 
 Configuration (environment variables – all also settable via admin panel)
 -------------------------------------------------------------------------
-REDDIT_MODE            – 'api' (default), 'ifttt', or 'gsheet'
-                         'api'    – poll Reddit directly via praw (requires OAuth app)
-                         'ifttt'  – items arrive via the /api/drool/ifttt/reddit webhook
-                         'gsheet' – poll a Google Sheet that IFTTT writes to (recommended
-                                    when the direct webhook is blocked by a proxy/WAF)
+REDDIT_JSON_SAVED_URL   – Full private JSON feed URL for saved posts.
+                          Obtain from old.reddit.com by appending
+                          ?feed=<token>&user=<username> to the saved feed path.
+REDDIT_JSON_UPVOTED_URL – Full private JSON feed URL for upvoted posts.
+                          Same format as REDDIT_JSON_SAVED_URL.
 
-REDDIT_GSHEET_CSV_URL  – (mode=gsheet) Public CSV export URL of the first Google Sheet that
-                         your IFTTT applet writes to (e.g. upvoted posts).  Share the sheet
-                         as "Anyone with the link can view", then publish as CSV via:
-                           File → Share → Publish to web → CSV → copy link
-                         e.g. https://docs.google.com/spreadsheets/d/<ID>/pub?output=csv
-                         IMPORTANT: The URL must end with ?output=csv (or &output=csv).
-                         A plain share link or the editor URL will return HTML, not CSV.
-                         The scraper auto-detects IFTTT column headers (Title / PostURL /
-                         ImageURL / PostedAt …).  If no headers are recognised it falls back
-                         to the standard IFTTT Reddit ingredient order:
-                           col0=PostedAt, col1=Author, col2=Title, col3=Content,
-                           col4=ImageURL, col5=Subreddit, col6=PostURL.
-
-REDDIT_GSHEET_CSV_URL_2 – (mode=gsheet, optional) CSV export URL of a second Google Sheet
-                          (e.g. saved posts).  IFTTT requires a separate applet for upvotes
-                          and saves, which write to different sheets – configure both here to
-                          capture everything.  Same column-detection rules apply.
-
-REDDIT_CLIENT_ID       – Reddit OAuth app client ID (mode=api only)
-REDDIT_CLIENT_SECRET   – Reddit OAuth app client secret (mode=api only)
-REDDIT_USERNAME        – Reddit account username to scrape (mode=api only)
-REDDIT_PASSWORD        – Reddit account password (mode=api only)
-REDDIT_USER_AGENT      – User-agent string (e.g. "drool-log/1.0 by u/yourname") (mode=api only)
-
-TWITTER_BEARER_TOKEN   – Twitter/X app-only Bearer Token (optional if user auth is set)
+TWITTER_BEARER_TOKEN   – Twitter/X app-only ****** (optional if user auth is set)
 TWITTER_USER_ID        – Numeric Twitter/X user ID to scrape
 TWITTER_API_KEY        – Twitter/X API Key (consumer key) – for OAuth 1.0a user auth
 TWITTER_API_SECRET     – Twitter/X API Secret
@@ -56,12 +32,9 @@ DISCORD_WEBHOOK_URL    – (shared) Discord webhook for new-item pings
 """
 
 import asyncio
-import csv
-import io
 import json
 import logging
 import os
-import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -70,15 +43,6 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from db import get_db_connection
-
-# Optional dependencies – imported at module level with graceful fallback.
-# When credentials are absent the scrapers short-circuit before any API call.
-try:
-    import praw as _praw  # type: ignore[import-untyped]
-    _PRAW_AVAILABLE = True
-except ImportError:  # noqa: BLE001
-    _praw = None  # type: ignore[assignment]
-    _PRAW_AVAILABLE = False
 
 try:
     import tweepy as _tweepy  # type: ignore[import-untyped]
@@ -121,9 +85,6 @@ def _load_credential(db_key: str, env_key: str) -> str:
     return os.environ.get(env_key, "")
 
 
-def _reddit_mode() -> str:
-    """Return 'api', 'ifttt', or 'gsheet' based on the stored drool_reddit_mode setting."""
-    return _load_credential("drool_reddit_mode", "REDDIT_MODE") or "api"
 
 # ---------------------------------------------------------------------------
 # Scheduler (module-level singleton; started / stopped by main.py lifespan)
@@ -142,98 +103,171 @@ scheduler = AsyncIOScheduler()
 # Reddit scraper
 # ---------------------------------------------------------------------------
 
+_REDDIT_JSON_FEED_HEADERS = {"User-Agent": "CameraSiteDroolFeed/1.0"}
 
-def _get_praw_reddit() -> Optional[object]:
-    """Return an authenticated praw.Reddit instance or None if creds are missing."""
-    if not _PRAW_AVAILABLE:
-        logger.debug("praw is not installed; Reddit scraper disabled.")
-        return None
 
-    client_id     = _load_credential("drool_reddit_client_id",     "REDDIT_CLIENT_ID")
-    client_secret = _load_credential("drool_reddit_client_secret", "REDDIT_CLIENT_SECRET")
-    username      = _load_credential("drool_reddit_username",      "REDDIT_USERNAME")
-    password      = _load_credential("drool_reddit_password",      "REDDIT_PASSWORD")
-    user_agent    = _load_credential("drool_reddit_user_agent",    "REDDIT_USER_AGENT") or "drool-log/1.0"
+def _extract_reddit_media(child_data: dict) -> tuple:
+    """Return (primary_media_url, media_urls_json) for a Reddit post.
 
-    if not all([client_id, client_secret, username, password]):
-        return None
+    Extraction priority:
+    1. Reddit-hosted video  – media.reddit_video.fallback_url (direct MP4)
+    2. Gallery post         – all images from media_metadata in gallery order
+    3. Animated GIF/image   – preview.images[0].variants.gif or .source URL
+    4. Direct media URL     – post's url field when it points to a media file
+    5. Link preview / thumb – preview image or thumbnail as a last resort
+    """
+    media_urls: list[str] = []
 
-    try:
-        return _praw.Reddit(
-            client_id=client_id,
-            client_secret=client_secret,
-            username=username,
-            password=password,
-            user_agent=user_agent,
+    # 1. Reddit-hosted video (v.redd.it DASH stream)
+    if child_data.get("is_video"):
+        for key in ("secure_media", "media"):
+            rv = (child_data.get(key) or {}).get("reddit_video") or {}
+            fallback = rv.get("fallback_url", "") or ""
+            if fallback:
+                media_urls.append(fallback)
+                break
+
+    # 2. Gallery post – collect every image in gallery order
+    if not media_urls and child_data.get("is_gallery"):
+        metadata: dict = child_data.get("media_metadata") or {}
+        gallery_items = (child_data.get("gallery_data") or {}).get("items") or []
+        ordered_ids = (
+            [str(it.get("media_id", "")) for it in gallery_items]
+            if gallery_items
+            else list(metadata.keys())
         )
-    except Exception as exc:
-        logger.warning("Could not initialise praw Reddit client: %s", exc)
-        return None
+        for mid in ordered_ids:
+            entry = metadata.get(mid) or {}
+            if entry.get("status") == "valid":
+                src = entry.get("s") or {}
+                # "gif" key is present for animated gallery items
+                img_url = src.get("gif") or src.get("u") or ""
+                if img_url:
+                    media_urls.append(img_url.replace("&amp;", "&"))
+
+    # 3. Preview variants (animated GIF → static image)
+    if not media_urls:
+        preview_images = (child_data.get("preview") or {}).get("images") or []
+        if preview_images:
+            first = preview_images[0]
+            variants = first.get("variants") or {}
+            # Prefer the GIF variant (animated); fall back to MP4, then source
+            for variant_key in ("gif", "mp4"):
+                v_url = (variants.get(variant_key) or {}).get("source", {}).get("url", "") or ""
+                if v_url:
+                    media_urls.append(v_url.replace("&amp;", "&"))
+                    break
+            if not media_urls:
+                src_url = (first.get("source") or {}).get("url", "") or ""
+                if src_url:
+                    media_urls.append(src_url.replace("&amp;", "&"))
+
+    # 4. Direct media URL – i.redd.it, imgur, or any obvious media extension
+    if not media_urls:
+        raw_url = child_data.get("url", "") or ""
+        if raw_url.startswith("http"):
+            lower = raw_url.lower().split("?")[0]
+            _media_exts = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".gifv", ".mov")
+            if any(lower.endswith(ext) for ext in _media_exts) or "i.redd.it" in lower:
+                # Convert Imgur .gifv to direct .mp4
+                media_urls.append(raw_url[:-5] + ".mp4" if lower.endswith(".gifv") else raw_url)
+
+    # 5. Thumbnail as last resort (Reddit uses "self"/"nsfw"/etc. for non-image posts)
+    if not media_urls:
+        thumb = child_data.get("thumbnail") or ""
+        if thumb.startswith("http"):
+            media_urls.append(thumb)
+
+    primary: Optional[str] = media_urls[0] if media_urls else None
+    media_urls_json: Optional[str] = json.dumps(media_urls) if media_urls else None
+    return primary, media_urls_json
 
 
 def _scrape_reddit() -> None:
-    """Fetch upvoted and saved Reddit items and store new ones in drool_archive.
+    """Fetch saved and upvoted Reddit posts via private JSON feed URLs.
 
-    Skipped when reddit_mode is 'ifttt' (items arrive via the webhook endpoint
-    instead of being polled).  When mode is 'gsheet', delegates to
-    _scrape_gsheet_reddit() instead of using praw.
+    No OAuth is required – the URLs embed a personal feed token.  Configure
+    the URLs via the settings DB or environment variables:
+
+    - ``drool_reddit_json_saved_url``   / ``REDDIT_JSON_SAVED_URL``
+    - ``drool_reddit_json_upvoted_url`` / ``REDDIT_JSON_UPVOTED_URL``
     """
-    mode = _reddit_mode()
-    if mode == "ifttt":
-        logger.debug("Reddit scraper: mode is 'ifttt', skipping poll.")
-        return
-    if mode == "gsheet":
-        _scrape_gsheet_reddit()
-        return
+    saved_url   = _load_credential("drool_reddit_json_saved_url",   "REDDIT_JSON_SAVED_URL")
+    upvoted_url = _load_credential("drool_reddit_json_upvoted_url", "REDDIT_JSON_UPVOTED_URL")
 
-    reddit = _get_praw_reddit()
-    if reddit is None:
-        logger.debug("Reddit scraper: credentials not configured, skipping.")
+    feed_urls = [
+        (saved_url,   "saved"),
+        (upvoted_url, "upvoted"),
+    ]
+
+    items: list[tuple] = []
+
+    for feed_url, label in feed_urls:
+        if not feed_url:
+            logger.debug("Reddit JSON feed scraper (%s): URL not configured, skipping.", label)
+            continue
+        try:
+            resp = httpx.get(
+                feed_url,
+                headers=_REDDIT_JSON_FEED_HEADERS,
+                follow_redirects=True,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.warning("Reddit JSON feed scraper (%s): fetch failed: %s", label, exc)
+            continue
+
+        try:
+            children = data["data"]["children"]
+        except (KeyError, TypeError) as exc:
+            logger.warning("Reddit JSON feed scraper (%s): unexpected JSON structure: %s", label, exc)
+            continue
+
+        for child in children:
+            child_data = child.get("data", {})
+
+            # Filter out comments – only posts have a title field.
+            if "title" not in child_data:
+                continue
+
+            title     = child_data.get("title", "") or ""
+            subreddit = child_data.get("subreddit", "") or ""
+            permalink = child_data.get("permalink", "")
+
+            media_url, media_urls_json = _extract_reddit_media(child_data)
+
+            orig_url = (
+                f"https://reddit.com{permalink}"
+                if permalink
+                else (child_data.get("url", "") or "")
+            )
+            if not orig_url:
+                continue
+
+            created_utc = child_data.get("created_utc")
+            if created_utc:
+                try:
+                    ts = datetime.fromtimestamp(float(created_utc), tz=timezone.utc).isoformat()
+                except (ValueError, OSError):
+                    ts = datetime.now(timezone.utc).isoformat()
+            else:
+                ts = datetime.now(timezone.utc).isoformat()
+
+            text_content = f"[r/{subreddit}] {title}" if subreddit else title
+
+            items.append(("reddit", orig_url, media_url, text_content, ts, media_urls_json))
+
+    if not items:
+        logger.debug("Reddit JSON feed scraper: no posts retrieved.")
         return
 
     conn = get_db_connection()
     try:
-        items: list[tuple] = []
-
-        try:
-            me = reddit.user.me()
-        except Exception as exc:
-            logger.warning("Reddit scraper: could not authenticate: %s", exc)
-            return
-
-        # Upvoted posts – use limit=None to capture the full history, not just
-        # the most recent 50 (mirrors the reddit-save library's approach).
-        try:
-            for submission in me.upvoted(limit=None):
-                url = f"https://www.reddit.com{submission.permalink}"
-                media = getattr(submission, "url", None)
-                text = getattr(submission, "title", "") or ""
-                ts = datetime.fromtimestamp(
-                    submission.created_utc, tz=timezone.utc
-                ).isoformat()
-                items.append(("reddit", url, media, text, ts))
-        except Exception as exc:
-            logger.warning("Reddit scraper: upvoted fetch failed: %s", exc)
-
-        # Saved items – filter to Submission objects only; Comment objects also
-        # have a permalink but their .url points back to the parent post which
-        # would store a duplicate of an already-scraped post.
-        try:
-            for item in me.saved(limit=None):
-                if item.__class__.__name__ == "Submission":
-                    url = f"https://www.reddit.com{item.permalink}"
-                    media = getattr(item, "url", None)
-                    text = getattr(item, "title", "")
-                    ts = datetime.fromtimestamp(
-                        item.created_utc, tz=timezone.utc
-                    ).isoformat()
-                    items.append(("reddit", url, media, text, ts))
-        except Exception as exc:
-            logger.warning("Reddit scraper: saved fetch failed: %s", exc)
-
         new_count = 0
         newly_inserted: list[tuple] = []
-        for platform, orig_url, media_url, text_content, ts in items:
+        for platform, orig_url, media_url, text_content, ts, media_urls_json in items:
             existing = conn.execute(
                 "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
             ).fetchone()
@@ -241,269 +275,21 @@ def _scrape_reddit() -> None:
                 continue
             conn.execute(
                 """
-                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO drool_archive (platform, original_url, media_url, media_urls, text_content, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (platform, orig_url, media_url or None, text_content or None, ts),
+                (platform, orig_url, media_url or None, media_urls_json, text_content or None, ts),
             )
             newly_inserted.append((platform, orig_url, media_url, text_content, ts))
             new_count += 1
         conn.commit()
         if new_count:
-            logger.info("Reddit scraper: archived %d new item(s).", new_count)
-            _notify_new_items(newly_inserted)
-    except Exception as exc:
-        logger.error("Reddit scraper error: %s", exc)
-    finally:
-        conn.close()
-
-
-# ---------------------------------------------------------------------------
-# Google Sheets Reddit scraper (mode='gsheet')
-# ---------------------------------------------------------------------------
-
-# Column-header aliases recognised in IFTTT-generated Google Sheets.
-# Keys are normalised lower-case header names; values are the field they map to.
-_GSHEET_URL_ALIASES   = {"posturl", "url", "link", "permalink", "post url", "post link"}
-_GSHEET_TITLE_ALIASES = {"title", "posttitle", "post title", "subject", "name",
-                          "content", "text", "body", "selftext", "self text"}
-_GSHEET_MEDIA_ALIASES = {"imageurl", "image url", "image", "media", "mediaurl", "media url",
-                          "thumbnail", "thumbnailurl", "thumbnail url", "imgurl", "img url"}
-_GSHEET_TS_ALIASES    = {"createdat", "created at", "created", "date", "timestamp",
-                          "time", "datetime", "date created", "postedat", "posted at"}
-
-# Pre-compiled regex for extracting the URL from an =IMAGE("url";1) formula cell.
-_IMAGE_FORMULA_RE = re.compile(r'=IMAGE\(["\']([^"\']+)["\']', re.IGNORECASE)
-
-
-def _detect_gsheet_columns(header_row: list[str]) -> dict[str, int]:
-    """Map field names to column indices from a CSV header row.
-
-    Returns a dict with keys 'url', 'title', 'media', 'timestamp' (any may be
-    absent if no matching header is found).
-    """
-    mapping: dict[str, int] = {}
-    for idx, raw in enumerate(header_row):
-        norm = raw.strip().lower()
-        if "url" not in mapping and norm in _GSHEET_URL_ALIASES:
-            mapping["url"] = idx
-        elif "title" not in mapping and norm in _GSHEET_TITLE_ALIASES:
-            mapping["title"] = idx
-        elif "media" not in mapping and norm in _GSHEET_MEDIA_ALIASES:
-            mapping["media"] = idx
-        elif "timestamp" not in mapping and norm in _GSHEET_TS_ALIASES:
-            mapping["timestamp"] = idx
-    return mapping
-
-
-def _scrape_gsheet_from_url(csv_url: str, label: str = "") -> list[tuple]:
-    """Fetch Reddit items from a single Google Sheet CSV export URL.
-
-    Returns a list of ``(platform, orig_url, media_url, title, ts)`` tuples
-    for rows that have not yet been inserted into drool_archive.  Insertion
-    itself is left to the caller so that both sheets share one DB commit.
-
-    ``label`` is a human-readable name used in log messages (e.g. 'sheet 1').
-
-    Column detection is flexible: any row 0 header matching common IFTTT
-    ingredient names (PostURL, Title, ImageURL, PostedAt …) is used.  If no
-    header row is recognised the scraper falls back to the standard IFTTT
-    Reddit ingredient order:
-      col 0 = PostedAt (timestamp)
-      col 1 = Author   (ignored)
-      col 2 = Title    (text_content)
-      col 3 = Content  (ignored when Title present)
-      col 4 = ImageURL (media_url)
-      col 5 = Subreddit (ignored)
-      col 6 = PostURL  (original_url)
-
-    The CSV URL MUST end with ``?output=csv`` (or ``&output=csv``).  A plain
-    share/editor URL returns an HTML page instead of CSV data; if the response
-    looks like HTML it is rejected with an error log.
-    """
-    tag = f"Reddit gsheet scraper ({label})" if label else "Reddit gsheet scraper"
-
-    try:
-        resp = httpx.get(csv_url, follow_redirects=True, timeout=20)
-        resp.raise_for_status()
-    except Exception as exc:
-        logger.warning("%s: failed to fetch CSV: %s", tag, exc)
-        return []
-
-    # Reject HTML responses – these occur when the URL is a share/editor link
-    # instead of a "Publish to web → CSV" link, or when the sheet requires login.
-    content_type = resp.headers.get("content-type", "")
-    text_start = resp.text.lstrip()[:100].lower()
-    if "text/html" in content_type or text_start.startswith(("<!doctype", "<html")):
-        logger.error(
-            "%s: URL returned an HTML page instead of CSV data. "
-            "Make sure you are using a 'Publish to web → CSV' URL "
-            "(File → Share → Publish to web → CSV in Google Sheets) "
-            "and that the sheet is publicly accessible.",
-            tag,
-        )
-        return []
-
-    try:
-        reader = csv.reader(io.StringIO(resp.text))
-        rows = list(reader)
-    except Exception as exc:
-        logger.warning("%s: failed to parse CSV: %s", tag, exc)
-        return []
-
-    if not rows:
-        logger.debug("%s: CSV is empty.", tag)
-        return []
-
-    # Detect whether the first row is a header.
-    first = rows[0]
-    col_map = _detect_gsheet_columns(first)
-    if col_map:
-        data_rows = rows[1:]  # skip header
-        logger.debug("%s: detected columns %s", tag, col_map)
-    else:
-        # No recognisable header – assume IFTTT Reddit ingredient column order:
-        # PostedAt(0) | Author(1) | Title(2) | Content(3) | ImageURL(4) | Subreddit(5) | PostURL(6)
-        data_rows = rows
-        col_map = {"timestamp": 0, "title": 2, "media": 4, "url": 6}
-        logger.debug("%s: no header detected, using IFTTT positional columns.", tag)
-
-    url_col   = col_map.get("url")
-    title_col = col_map.get("title")
-    media_col = col_map.get("media")
-    ts_col    = col_map.get("timestamp")
-
-    if url_col is None:
-        logger.warning(
-            "%s: could not identify a URL column. "
-            "Check that the sheet has a header row with a column named "
-            "'PostURL', 'URL', 'Link', or 'Permalink'.",
-            tag,
-        )
-        return []
-
-    conn = get_db_connection()
-    newly_found: list[tuple] = []
-    try:
-        for row in data_rows:
-            if not row or url_col >= len(row):
-                continue
-
-            orig_url = row[url_col].strip()
-            if not orig_url:
-                continue
-
-            title     = row[title_col].strip() if title_col is not None and title_col < len(row) else ""
-            media_raw = row[media_col].strip() if media_col is not None and media_col < len(row) else ""
-            ts_raw    = row[ts_col].strip()    if ts_col    is not None and ts_col    < len(row) else ""
-
-            # If the media cell is an =IMAGE("url";1) or =IMAGE("url",1) formula
-            # (as written by IFTTT into Google Sheets), extract the bare URL.
-            media_url = media_raw
-            if media_url:
-                _img_match = _IMAGE_FORMULA_RE.match(media_url)
-                if _img_match:
-                    media_url = _img_match.group(1)
-
-            # Parse timestamp; fall back to now if unparseable.
-            ts: str
-            if ts_raw:
-                try:
-                    parsed = datetime.fromisoformat(ts_raw)
-                    ts = parsed.isoformat()
-                except ValueError:
-                    try:
-                        # Common IFTTT format: "April 3, 2025 at 05:00PM"
-                        parsed = datetime.strptime(ts_raw, "%B %d, %Y at %I:%M%p")
-                        ts = parsed.replace(tzinfo=timezone.utc).isoformat()
-                    except ValueError:
-                        ts = datetime.now(timezone.utc).isoformat()
-            else:
-                ts = datetime.now(timezone.utc).isoformat()
-
-            existing = conn.execute(
-                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
-            ).fetchone()
-            if existing:
-                continue
-
-            newly_found.append(("reddit", orig_url, media_url or None, title or None, ts))
-    except Exception as exc:
-        logger.error("%s: error reading rows: %s", tag, exc)
-    finally:
-        conn.close()
-
-    return newly_found
-
-
-def _scrape_gsheet_reddit() -> None:
-    """Fetch Reddit items from one or two Google Sheets that IFTTT writes to.
-
-    IFTTT typically requires separate applets for upvoted posts and saved posts,
-    each writing to its own sheet.  Configure both URLs to capture everything:
-
-    - ``REDDIT_GSHEET_CSV_URL``   – first sheet (e.g. upvoted posts)
-    - ``REDDIT_GSHEET_CSV_URL_2`` – second sheet (e.g. saved posts), optional
-
-    Each sheet must be publicly readable ("Anyone with the link can view").
-    Publish as CSV via *File → Share → Publish to web → CSV* and paste the URL.
-    """
-    url1 = _load_credential("drool_reddit_gsheet_csv_url",   "REDDIT_GSHEET_CSV_URL")
-    url2 = _load_credential("drool_reddit_gsheet_csv_url_2", "REDDIT_GSHEET_CSV_URL_2")
-
-    if not url1 and not url2:
-        logger.debug("Reddit gsheet scraper: no CSV URLs configured, skipping.")
-        return
-
-    # Collect new items from each configured sheet.
-    all_new: list[tuple] = []
-    if url1:
-        all_new.extend(_scrape_gsheet_from_url(url1, label="sheet 1"))
-    if url2:
-        all_new.extend(_scrape_gsheet_from_url(url2, label="sheet 2"))
-
-    if not all_new:
-        logger.debug("Reddit gsheet scraper: no new items across all sheets.")
-        return
-
-    # De-duplicate across the two sheets (same URL appearing in both).
-    seen: set[str] = set()
-    deduped: list[tuple] = []
-    for item in all_new:
-        orig_url = item[1]
-        if orig_url not in seen:
-            seen.add(orig_url)
-            deduped.append(item)
-
-    conn = get_db_connection()
-    try:
-        new_count = 0
-        newly_inserted: list[tuple] = []
-        for platform, orig_url, media_url, title, ts in deduped:
-            # Re-check DB in case the first sheet already inserted a duplicate
-            # from the second sheet during this same run.
-            existing = conn.execute(
-                "SELECT id FROM drool_archive WHERE original_url = ?", (orig_url,)
-            ).fetchone()
-            if existing:
-                continue
-            conn.execute(
-                """
-                INSERT INTO drool_archive (platform, original_url, media_url, text_content, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (platform, orig_url, media_url, title, ts),
-            )
-            newly_inserted.append((platform, orig_url, media_url, title, ts))
-            new_count += 1
-        conn.commit()
-        if new_count:
-            logger.info("Reddit gsheet scraper: archived %d new item(s).", new_count)
+            logger.info("Reddit JSON feed scraper: archived %d new item(s).", new_count)
             _notify_new_items(newly_inserted)
         else:
-            logger.debug("Reddit gsheet scraper: no new items after DB dedup.")
+            logger.debug("Reddit JSON feed scraper: no new items.")
     except Exception as exc:
-        logger.error("Reddit gsheet scraper error: %s", exc)
+        logger.error("Reddit JSON feed scraper error: %s", exc)
     finally:
         conn.close()
 
