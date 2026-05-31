@@ -1299,6 +1299,8 @@
     setVisible('hp2-app', false);
     setVisible('hp2-login', true);
     byId('hp2-login-error').textContent = message;
+    state.role = null;
+    byId('hp2-role').textContent = 'GUEST';
     clearJwt();
   }
 
@@ -1625,6 +1627,7 @@
     renderDashboardAlerts();
     renderLiveMap();
     applyCommandGating();
+    applyAdminBulkDeviceControlsAccess();
     renderDeviceApps();
     renderVpnStatus();
   }
@@ -2157,6 +2160,7 @@
       saveJwt(data.access_token);
       state.role = data.role;
       byId('hp2-role').textContent = data.role.toUpperCase();
+      applyAdminBulkDeviceControlsAccess();
       showApp();
       await hydrateApp();
     } catch (_e) {
@@ -4763,6 +4767,148 @@
     }
   }
 
+  function isAdminRole() {
+    return String(state.role || '').toLowerCase() === 'admin';
+  }
+
+  function applyAdminBulkDeviceControlsAccess() {
+    const isAdmin = isAdminRole();
+    const reason = isAdmin ? '' : 'Admin role required.';
+    setButtonEnabled('hp2-devices-cleanup-stale-btn', isAdmin, reason);
+    setButtonEnabled('hp2-devices-delete-all-btn', isAdmin, reason);
+    if (!isAdmin) {
+      setInlineResult('hp2-devices-bulk-result', 'Only admins can run bulk device operations.');
+    }
+  }
+
+  async function cleanupStaleDevicesFromPanel() {
+    if (!isAdminRole()) {
+      setInlineResult('hp2-devices-bulk-result', 'Only admins can run stale cleanup.');
+      return;
+    }
+
+    const hoursInput = await askInlineText({
+      title: 'Cleanup Stale Duplicates',
+      message: 'Enter staleness threshold hours (1-8760). Dry-run happens first.',
+      inputLabel: 'Older Than Hours',
+      inputValue: '72',
+      confirmText: 'Dry Run',
+    });
+    if (!hoursInput.confirmed) return;
+    if (hoursInput.invalidEmpty) {
+      setInlineResult('hp2-devices-bulk-result', 'Hours value is required.');
+      return;
+    }
+
+    const olderThanHours = Number.parseInt(String(hoursInput.value || '').trim(), 10);
+    if (!Number.isFinite(olderThanHours) || olderThanHours < 1 || olderThanHours > 8760) {
+      setInlineResult('hp2-devices-bulk-result', 'Hours must be between 1 and 8760.');
+      return;
+    }
+
+    setInlineResult('hp2-devices-bulk-result', 'Running stale cleanup dry-run...');
+
+    let dryRun;
+    try {
+      const dryResp = await apiFetch(
+        `/api/handler/devices/cleanup-stale?older_than_hours=${encodeURIComponent(String(olderThanHours))}&include_name_fallback=true&dry_run=true`,
+        { method: 'POST' },
+      );
+      dryRun = await dryResp.json().catch(() => ({}));
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-bulk-result', `Dry-run failed: ${err.message}`);
+      }
+      return;
+    }
+
+    const candidates = Number(dryRun?.candidates || 0);
+    if (candidates <= 0) {
+      setInlineResult('hp2-devices-bulk-result', 'Dry-run found no stale duplicate device rows.');
+      return;
+    }
+
+    const confirm = await askInlineConfirm({
+      title: 'Apply Stale Cleanup',
+      message: `Dry-run found ${candidates} stale duplicate row(s). Delete now?`,
+      confirmText: 'Delete Stale',
+      danger: true,
+    });
+    if (!confirm.confirmed) {
+      setInlineResult('hp2-devices-bulk-result', `Cancelled. ${candidates} candidate row(s) unchanged.`);
+      return;
+    }
+
+    setInlineResult('hp2-devices-bulk-result', 'Deleting stale duplicate rows...');
+    try {
+      const runResp = await apiFetch(
+        `/api/handler/devices/cleanup-stale?older_than_hours=${encodeURIComponent(String(olderThanHours))}&include_name_fallback=true&dry_run=false`,
+        { method: 'POST' },
+      );
+      const result = await runResp.json().catch(() => ({}));
+      const deleted = Number(result?.deleted || 0);
+      const remaining = Number(result?.remaining || 0);
+
+      await loadDevices();
+      setInlineResult('hp2-devices-bulk-result', `Deleted ${deleted} stale duplicate row(s). Remaining devices: ${remaining}.`);
+      pushFeed(`Stale cleanup removed ${deleted} device row(s).`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-bulk-result', `Cleanup failed: ${err.message}`);
+      }
+    }
+  }
+
+  async function deleteAllDevicesFromPanel() {
+    if (!isAdminRole()) {
+      setInlineResult('hp2-devices-bulk-result', 'Only admins can delete all devices.');
+      return;
+    }
+
+    const expectedPhrase = 'DELETE ALL DEVICES';
+    const phraseInput = await askInlineText({
+      title: 'Delete All Devices',
+      message: `This permanently removes all tracked devices. Type ${expectedPhrase} to continue.`,
+      inputLabel: 'Confirmation Phrase',
+      inputPlaceholder: expectedPhrase,
+      confirmText: 'Delete All',
+      danger: true,
+    });
+    if (!phraseInput.confirmed) return;
+    if (phraseInput.invalidEmpty) {
+      setInlineResult('hp2-devices-bulk-result', 'Confirmation phrase is required.');
+      return;
+    }
+
+    const providedPhrase = String(phraseInput.value || '').trim();
+    if (providedPhrase !== expectedPhrase) {
+      setInlineResult('hp2-devices-bulk-result', `Confirmation mismatch. Type ${expectedPhrase} exactly.`);
+      return;
+    }
+
+    setInlineResult('hp2-devices-bulk-result', 'Deleting all tracked devices...');
+    try {
+      const result = await apiPost('/api/handler/devices/delete-all', {
+        confirm_phrase: providedPhrase,
+      });
+
+      const deletedDevices = Number(result?.deleted_device_count || 0);
+      const deletedAssignments = Number(result?.deleted_assignment_rows || 0);
+      const deletedPairings = Number(result?.deleted_pairing_rows || 0);
+
+      await loadDevices();
+      setInlineResult(
+        'hp2-devices-bulk-result',
+        `Deleted ${deletedDevices} devices, ${deletedAssignments} assignments, ${deletedPairings} pairings.`,
+      );
+      pushFeed(`Admin wipe removed ${deletedDevices} devices.`);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-devices-bulk-result', `Delete-all failed: ${err.message}`);
+      }
+    }
+  }
+
   function handleDeviceListClick(event) {
     const btn = event.target.closest('button[data-device-id]');
     if (!btn) return;
@@ -4847,6 +4993,8 @@
     byId('hp2-shock-30-btn').addEventListener('click', () => shockSelected(30).catch(() => {}));
     byId('hp2-shock-60-btn').addEventListener('click', () => shockSelected(60).catch(() => {}));
     byId('hp2-rename-device-btn').addEventListener('click', () => renameSelectedDevice().catch(() => {}));
+    byId('hp2-devices-cleanup-stale-btn')?.addEventListener('click', () => cleanupStaleDevicesFromPanel().catch(() => {}));
+    byId('hp2-devices-delete-all-btn')?.addEventListener('click', () => deleteAllDevicesFromPanel().catch(() => {}));
     byId('hp2-device-apps-poll-btn')?.addEventListener('click', () => pollDeviceApps().catch(() => {}));
     byId('hp2-device-apps-refresh-btn')?.addEventListener('click', () => loadDeviceApps().catch(() => {}));
     byId('hp2-device-apps-search')?.addEventListener('input', () => {
@@ -5093,6 +5241,7 @@
     }
     state.telemetry.freshnessTimer = setInterval(renderFreshness, 15000);
     renderAutoFollowButton();
+    applyAdminBulkDeviceControlsAccess();
     const jwt = getJwt();
     if (!jwt) {
       showLogin('');
@@ -5103,6 +5252,7 @@
       const me = await apiGet('/api/handler/status');
       state.role = me?.role || state.role || 'handler';
       byId('hp2-role').textContent = String(state.role || 'handler').toUpperCase();
+      applyAdminBulkDeviceControlsAccess();
       showApp();
       await loadMacrosFromServer();
       await hydrateApp();

@@ -51,6 +51,7 @@ from drool_scraper import start_drool_scheduler, stop_drool_scheduler
 from routers.discord_oauth import register_metadata_schema, router as discord_oauth_router
 from routers.twitter_auth import router as twitter_auth_router
 from routers.spotify import router as spotify_router
+from routers.discord_interactions import router as discord_interactions_router
 from routers.age_gate import router as age_gate_router
 from routers.tpe import (
     device_router as tpe_device_router,
@@ -1180,6 +1181,7 @@ app.include_router(drool_router)
 app.include_router(discord_oauth_router)
 app.include_router(twitter_auth_router)
 app.include_router(spotify_router)
+app.include_router(discord_interactions_router)
 app.include_router(age_gate_router)
 app.include_router(tpe_device_router)
 app.include_router(tpe_admin_router)

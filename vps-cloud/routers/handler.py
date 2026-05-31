@@ -53,7 +53,13 @@ from pydantic import AliasChoices, BaseModel, Field
 import jwt as _jwt
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import SECRET_KEY, ALGORITHM, role_required
-from discord_webhook import rewrite_x_links_to_fxtwitter, send_discord_channel_message
+from discord_webhook import (
+    build_reaction_role_components,
+    load_reaction_role_options,
+    rewrite_x_links_to_fxtwitter,
+    send_discord_channel_message,
+    send_discord_channel_payload,
+)
 from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
 from routers.tpe import (
     _effective_webhook_secret,
@@ -1279,6 +1285,12 @@ class DeviceShareRequest(BaseModel):
     )
 
 
+class DiscordReactionRolePublishRequest(BaseModel):
+    channel_id: Optional[str] = Field(default=None, validation_alias=AliasChoices("channel_id", "channelId"))
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+
 class DeviceAppInventoryItem(BaseModel):
     package_name: str = Field(validation_alias=AliasChoices("package_name", "packageName", "package"))
     app_label: Optional[str] = Field(default=None, validation_alias=AliasChoices("app_label", "appLabel", "label", "name"))
@@ -1312,6 +1324,13 @@ class LockRequest(BaseModel):
 
 class DeviceRenameRequest(BaseModel):
     device_name: str
+
+
+class DeviceDeleteAllRequest(BaseModel):
+    confirm_phrase: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("confirm_phrase", "confirmPhrase", "confirmation"),
+    )
 
 
 class RuleEngineRuleCreateRequest(BaseModel):
@@ -2567,6 +2586,70 @@ async def handler_device_share(
         "template_set": selected_set,
         "shared_urls": share_urls,
         "rewritten_text": share_text,
+    }
+
+
+@router.get("/api/handler/discord/reaction-roles")
+def handler_get_discord_reaction_roles(
+    _current_user: dict = Depends(role_required("admin")),
+) -> dict:
+    """Return normalized reaction-role options used by Discord onboarding buttons."""
+    options = load_reaction_role_options()
+    return {
+        "count": len(options),
+        "options": options,
+    }
+
+
+@router.post("/api/handler/discord/reaction-roles/publish")
+async def handler_publish_discord_reaction_roles(
+    body: DiscordReactionRolePublishRequest,
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Publish reaction-role onboarding buttons to a Discord channel."""
+    options = load_reaction_role_options()
+    if not options:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No reaction role options configured. "
+                "Set setting 'discord_reaction_roles_json' or env 'DISCORD_REACTION_ROLES_JSON'."
+            ),
+        )
+
+    channel_id = (
+        (body.channel_id or "").strip()
+        or (get_setting(db, "discord_reaction_roles_channel_id") or "").strip()
+        or (os.environ.get("DISCORD_REACTION_ROLES_CHANNEL_ID", "") or "").strip()
+    )
+    if not channel_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Missing channel_id. "
+                "Provide channel_id or configure 'discord_reaction_roles_channel_id'."
+            ),
+        )
+
+    title = (body.title or "").strip() or "Choose Your Roles"
+    description = (
+        (body.description or "").strip()
+        or "Tap a button to toggle that role on yourself."
+    )
+    components = build_reaction_role_components(options, prefix="rr")
+    if not components:
+        raise HTTPException(status_code=400, detail="No valid reaction role buttons to publish.")
+
+    payload = {
+        "content": f"**{title}**\n{description}",
+        "components": components,
+    }
+    await send_discord_channel_payload(channel_id, payload)
+    return {
+        "published": True,
+        "channel_id": channel_id,
+        "option_count": len(options),
     }
 
 
@@ -4073,6 +4156,67 @@ async def handler_delete_device(
 
     await _handler_ws.broadcast({"type": "device_deleted", "device_id": device_id})
     return {"deleted": True, "device_id": device_id}
+
+
+@router.post("/api/handler/devices/delete-all")
+async def handler_delete_all_devices(
+    body: DeviceDeleteAllRequest,
+    _current_user: dict = Depends(role_required("admin")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Delete all tracked devices and linked assignment/pairing rows (admin only)."""
+    expected_phrase = "DELETE ALL DEVICES"
+    provided_phrase = str(body.confirm_phrase or "").strip()
+    if provided_phrase != expected_phrase:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Confirmation phrase mismatch. Type "{expected_phrase}" exactly.',
+        )
+
+    rows = db.execute(
+        "SELECT device_id, fcm_token FROM handler_device_status"
+    ).fetchall()
+
+    device_ids: list[str] = []
+    pairing_keys: set[str] = set()
+    for row in rows:
+        device_id = str(row["device_id"] or "").strip()
+        if not device_id:
+            continue
+        device_ids.append(device_id)
+        pairing_keys.add(device_id)
+        token = str(row["fcm_token"] or "").strip()
+        if token:
+            pairing_keys.add(token)
+
+    assignment_deleted = db.execute(
+        "DELETE FROM handler_device_assignments"
+    ).rowcount
+    status_deleted = db.execute(
+        "DELETE FROM handler_device_status"
+    ).rowcount
+
+    pairing_deleted = 0
+    if pairing_keys:
+        pairing_deleted = db.executemany(
+            "DELETE FROM tpe_paired_devices WHERE fcm_token = ?",
+            [(key,) for key in pairing_keys],
+        ).rowcount
+
+    db.commit()
+
+    for device_id in device_ids:
+        await _handler_ws.broadcast({"type": "device_deleted", "device_id": device_id})
+
+    return {
+        "deleted": True,
+        "expected_phrase": expected_phrase,
+        "deleted_device_count": len(device_ids),
+        "deleted_assignment_rows": int(assignment_deleted or 0),
+        "deleted_status_rows": int(status_deleted or 0),
+        "deleted_pairing_rows": int(pairing_deleted or 0),
+        "deleted_device_ids": device_ids,
+    }
 
 
 # ---------------------------------------------------------------------------

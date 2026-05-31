@@ -19,13 +19,14 @@ DISCORD_PUBLIC_KEY
 import logging
 import os
 import sqlite3
+import httpx
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import APIRouter, HTTPException, Request, status
 
 from db import get_db_connection
-from discord_webhook import send_answer_notification
+from discord_webhook import load_reaction_role_options, send_answer_notification
 from routers.admin import _post_answer_tweet, _post_answer_bluesky
 
 
@@ -84,6 +85,64 @@ async def discord_interactions(request: Request):
     # ── Button click → open reply modal ─────────────────────────────────────
     if interaction_type == _MESSAGE_COMPONENT:
         custom_id: str = data.get("data", {}).get("custom_id", "")
+        if custom_id.startswith("rr:"):
+            option_key = custom_id[len("rr:"):].strip().lower()
+            options = load_reaction_role_options()
+            selected = options.get(option_key)
+            if not selected:
+                return {
+                    "type": _CHANNEL_MESSAGE,
+                    "data": {
+                        "content": "⚠️ That role option is not available anymore.",
+                        "flags": 64,
+                    },
+                }
+
+            guild_id = str(data.get("guild_id") or os.environ.get("DISCORD_GUILD_ID", "")).strip()
+            member = data.get("member") or {}
+            user = member.get("user") or data.get("user") or {}
+            user_id = str(user.get("id") or "").strip()
+            member_roles = {str(r).strip() for r in (member.get("roles") or [])}
+            role_id = str(selected.get("role_id") or "").strip()
+            role_label = str(selected.get("label") or option_key).strip()
+
+            if not guild_id or not user_id or not role_id:
+                return {
+                    "type": _CHANNEL_MESSAGE,
+                    "data": {
+                        "content": "⚠️ Could not process that role toggle right now.",
+                        "flags": 64,
+                    },
+                }
+
+            should_add = role_id not in member_roles
+            ok = await _toggle_member_role(
+                guild_id=guild_id,
+                user_id=user_id,
+                role_id=role_id,
+                should_add=should_add,
+            )
+            if not ok:
+                return {
+                    "type": _CHANNEL_MESSAGE,
+                    "data": {
+                        "content": "⚠️ Role update failed. Check bot permissions and role hierarchy.",
+                        "flags": 64,
+                    },
+                }
+
+            return {
+                "type": _CHANNEL_MESSAGE,
+                "data": {
+                    "content": (
+                        f"✅ Role added: **{role_label}**"
+                        if should_add
+                        else f"🗑️ Role removed: **{role_label}**"
+                    ),
+                    "flags": 64,
+                },
+            }
+
         if not custom_id.startswith("reply:"):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown component")
 
@@ -223,3 +282,28 @@ def _extract_component_value(interaction_data: dict, custom_id: str) -> str:
             if component.get("custom_id") == custom_id:
                 return component.get("value", "")
     return ""
+
+
+async def _toggle_member_role(
+    *,
+    guild_id: str,
+    user_id: str,
+    role_id: str,
+    should_add: bool,
+) -> bool:
+    bot_token = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
+    if not bot_token:
+        return False
+
+    method = "PUT" if should_add else "DELETE"
+    url = f"https://discord.com/api/v10/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.request(
+                method,
+                url,
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            return resp.status_code in (200, 201, 204)
+    except Exception:
+        return False

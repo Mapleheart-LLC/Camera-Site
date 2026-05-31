@@ -38,8 +38,9 @@ Configuration
 import logging
 import os
 import re
+import json
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -47,6 +48,8 @@ _DISCORD_API = "https://discord.com/api/v10"
 
 # Discord colour for mochii.live muted pink.
 _MOCHII_PINK: int = 0xE8AEB7
+_DISCORD_COMPONENTS_MAX_BUTTONS = 25
+_DISCORD_COMPONENTS_ROW_SIZE = 5
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +109,96 @@ def _is_feature_enabled(setting_key: str, default: bool = True) -> bool:
 def _effective_channel_id(setting_key: str, env_var: str) -> str:
     """Return channel ID: settings table value takes precedence over env var."""
     return (_get_setting(setting_key) or os.environ.get(env_var, "")).strip()
+
+
+def load_reaction_role_options() -> dict[str, dict[str, Any]]:
+    """Load normalized reaction-role options from settings/env JSON.
+
+    Supported raw JSON formats:
+    - {"puppy": "1234567890123", "mutt": "223..."}
+    - {"puppy": {"role_id": "123...", "label": "Puppy", "emoji": "🐶"}}
+    """
+    raw = (
+        _get_setting("discord_reaction_roles_json")
+        or os.environ.get("DISCORD_REACTION_ROLES_JSON", "")
+    ).strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        logger.warning("Could not parse discord_reaction_roles_json as JSON")
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for key, value in parsed.items():
+        option_key = str(key or "").strip().lower()
+        if not option_key:
+            continue
+
+        role_id = ""
+        label = option_key.replace("_", " ").title()
+        emoji = ""
+        style = 2  # Secondary
+
+        if isinstance(value, str):
+            role_id = value.strip()
+        elif isinstance(value, dict):
+            role_id = str(value.get("role_id") or value.get("roleId") or "").strip()
+            label = str(value.get("label") or label).strip() or label
+            emoji = str(value.get("emoji") or "").strip()
+            style_raw = value.get("style")
+            if isinstance(style_raw, int) and style_raw in {1, 2, 3, 4}:
+                style = style_raw
+        else:
+            continue
+
+        if not role_id:
+            continue
+
+        normalized[option_key] = {
+            "role_id": role_id,
+            "label": label,
+            "emoji": emoji,
+            "style": style,
+        }
+    return normalized
+
+
+def build_reaction_role_components(
+    options: dict[str, dict[str, Any]],
+    *,
+    prefix: str = "rr",
+) -> list[dict[str, Any]]:
+    """Build Discord button rows for reaction-role self-assignment."""
+    buttons: list[dict[str, Any]] = []
+    for key, meta in options.items():
+        if len(buttons) >= _DISCORD_COMPONENTS_MAX_BUTTONS:
+            break
+        label = str(meta.get("label") or key).strip()[:80]
+        style = int(meta.get("style") or 2)
+        if style not in {1, 2, 3, 4}:
+            style = 2
+        button: dict[str, Any] = {
+            "type": 2,
+            "style": style,
+            "custom_id": f"{prefix}:{key}",
+            "label": label,
+        }
+        emoji = str(meta.get("emoji") or "").strip()
+        if emoji:
+            button["emoji"] = {"name": emoji}
+        buttons.append(button)
+
+    rows: list[dict[str, Any]] = []
+    for i in range(0, len(buttons), _DISCORD_COMPONENTS_ROW_SIZE):
+        rows.append({
+            "type": 1,
+            "components": buttons[i:i + _DISCORD_COMPONENTS_ROW_SIZE],
+        })
+    return rows
 
 
 async def _post_to_channel(channel_id: str, payload: dict) -> None:
@@ -340,6 +433,14 @@ async def send_discord_channel_message(channel_id: str, content: str) -> None:
     if not resolved or not body:
         return
     await _post_to_channel(resolved, {"content": body})
+
+
+async def send_discord_channel_payload(channel_id: str, payload: dict[str, Any]) -> None:
+    """Post an arbitrary Discord message payload to a specific channel."""
+    resolved = (channel_id or "").strip()
+    if not resolved:
+        return
+    await _post_to_channel(resolved, payload)
 
 
 async def get_bot_status() -> dict:
