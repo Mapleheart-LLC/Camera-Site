@@ -223,6 +223,7 @@ DEVICE_SHARE_GEN_MODES = {
     DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN,
 }
 DEVICE_SHARE_GEN_DEFAULT_MODE = DEVICE_SHARE_GEN_MODE_HYBRID_SPACY_QWEN
+_DEVICE_SHARE_DEDUPE_WINDOW_SECONDS = 20
 _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_ENDPOINT", "").strip()
 _DEVICE_SHARE_QWEN_MODEL_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct").strip()
 _DEVICE_SHARE_QWEN_TIMEOUT_SECONDS = float((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC", "2.6") or "2.6").strip() or "2.6")
@@ -2640,6 +2641,69 @@ def _render_device_share_template(template: str) -> tuple[str, str]:
 
     return _DEVICE_SHARE_PUP_LABEL_REGEX.sub(_replace, template), label
 
+
+def _device_share_fingerprint(
+    *,
+    device_id: str,
+    text: str,
+    subject: str,
+    mime_type: str,
+    source_package: str,
+    stream_uris: Optional[list[str]],
+) -> str:
+    normalized = {
+        "device_id": (device_id or "").strip(),
+        "text": (text or "").strip(),
+        "subject": (subject or "").strip(),
+        "mime_type": (mime_type or "").strip().lower(),
+        "source_package": (source_package or "").strip().lower(),
+        "stream_uris": sorted(
+            {
+                value.strip()
+                for value in (stream_uris or [])
+                if isinstance(value, str) and value.strip()
+            }
+        ),
+    }
+    canonical = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _is_duplicate_device_share_submission(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    fingerprint: str,
+) -> bool:
+    if not device_id or not fingerprint:
+        return False
+
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=_DEVICE_SHARE_DEDUPE_WINDOW_SECONDS)
+    rows = db.execute(
+        """
+        SELECT payload_json, created_at
+        FROM tpe_behavior_logs
+        WHERE device_id = ? AND source = 'device_share' AND event_type = 'quick_share'
+        ORDER BY created_at DESC
+        LIMIT 8
+        """,
+        (device_id,),
+    ).fetchall()
+    for row in rows:
+        created_at = _parse_iso_datetime(str(row["created_at"] or ""))
+        if created_at is None or created_at < cutoff:
+            continue
+        raw_payload = str(row["payload_json"] or "").strip()
+        if not raw_payload:
+            continue
+        try:
+            payload = json.loads(raw_payload)
+        except Exception:
+            continue
+        if str(payload.get("dedupe_fingerprint") or "").strip() == fingerprint:
+            return True
+    return False
+
 def _effective_device_share_generation_mode(db: sqlite3.Connection) -> str:
     raw = (
         (get_setting(db, "discord_device_share_generation_mode") or "").strip().lower()
@@ -3123,12 +3187,54 @@ async def handler_device_share(
 
     share_text_raw = (body.text or "").strip()
     share_subject = (body.subject or "").strip()
+    share_mime_type = (body.mime_type or "").strip()
+    share_source_package = (body.source_package or "").strip()
+    share_stream_uris = [value.strip() for value in (body.stream_uris or []) if isinstance(value, str) and value.strip()]
     if not share_text_raw and not share_subject:
         raise HTTPException(status_code=400, detail="text or subject is required")
 
     share_text = rewrite_x_links_to_fxtwitter(share_text_raw)
     share_subject = rewrite_x_links_to_fxtwitter(share_subject)
     share_urls = _extract_share_urls(share_text)
+    dedupe_fingerprint = _device_share_fingerprint(
+        device_id=resolved_device_id,
+        text=share_text,
+        subject=share_subject,
+        mime_type=share_mime_type,
+        source_package=share_source_package,
+        stream_uris=share_stream_uris,
+    )
+    if _is_duplicate_device_share_submission(
+        db,
+        device_id=resolved_device_id,
+        fingerprint=dedupe_fingerprint,
+    ):
+        db.execute(
+            """
+            INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+            VALUES (?, 'device_share', 'quick_share_duplicate_ignored', ?, ?, ?)
+            """,
+            (
+                resolved_device_id,
+                share_urls[0] if share_urls else (share_subject or "shared_text"),
+                json.dumps(
+                    {
+                        "text": share_text,
+                        "subject": share_subject,
+                        "source_package": share_source_package or None,
+                        "mime_type": share_mime_type or None,
+                        "stream_uris": share_stream_uris,
+                        "urls": share_urls,
+                        "dedupe_fingerprint": dedupe_fingerprint,
+                        "dedupe_window_seconds": _DEVICE_SHARE_DEDUPE_WINDOW_SECONDS,
+                    },
+                    ensure_ascii=True,
+                ),
+                _now_iso(),
+            ),
+        )
+        db.commit()
+        return {"status": "duplicate_ignored", "device_id": resolved_device_id}
 
     channel_id = DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
     if not channel_id:
@@ -3196,11 +3302,12 @@ async def handler_device_share(
                 {
                     "text": share_text,
                     "subject": share_subject,
-                    "source_package": (body.source_package or "").strip() or None,
-                    "mime_type": (body.mime_type or "").strip() or None,
-                    "stream_uris": body.stream_uris or [],
+                    "source_package": share_source_package or None,
+                    "mime_type": share_mime_type or None,
+                    "stream_uris": share_stream_uris,
                     "channel_id": channel_id,
                     "urls": share_urls,
+                    "dedupe_fingerprint": dedupe_fingerprint,
                     "template_set": selected_set,
                     "generation_mode": generation_mode,
                     "generation_path": generation_path,
