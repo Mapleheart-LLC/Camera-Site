@@ -37,6 +37,7 @@ Configuration
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -48,6 +49,33 @@ _DISCORD_API = "https://discord.com/api/v10"
 _MOCHII_PINK: int = 0xE8AEB7
 
 logger = logging.getLogger(__name__)
+
+_X_LINK_RE = re.compile(
+    r"https?://(?:www\.|mobile\.)?(?:twitter\.com|x\.com)(?P<path>/[^\s<>'\"]*)?",
+    flags=re.IGNORECASE,
+)
+
+
+def rewrite_x_links_to_fxtwitter(text: str) -> str:
+    """Rewrite Twitter/X public links to fxtwitter links for embeds/previews."""
+    if not text:
+        return text
+
+    def _replace(match: re.Match[str]) -> str:
+        path = (match.group("path") or "").strip()
+        return f"https://fxtwitter.com{path}"
+
+    return _X_LINK_RE.sub(_replace, text)
+
+
+def _rewrite_payload_links(value):
+    if isinstance(value, str):
+        return rewrite_x_links_to_fxtwitter(value)
+    if isinstance(value, list):
+        return [_rewrite_payload_links(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _rewrite_payload_links(v) for k, v in value.items()}
+    return value
 
 
 # ── Settings-table helpers ───────────────────────────────────────────────────
@@ -85,6 +113,7 @@ async def _post_to_channel(channel_id: str, payload: dict) -> None:
     bot_token: str = os.environ.get("DISCORD_BOT_TOKEN", "")
     if not bot_token:
         return
+    payload = _rewrite_payload_links(payload)
     url = f"{_DISCORD_API}/channels/{channel_id}/messages"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -105,6 +134,7 @@ async def _post_to_channel(channel_id: str, payload: dict) -> None:
 
 async def _post_to_webhook(webhook_url: str, payload: dict) -> None:
     """POST *payload* to a Discord Incoming Webhook URL."""
+    payload = _rewrite_payload_links(payload)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json=payload)
@@ -301,6 +331,15 @@ async def send_discord_dm(discord_id: str, content: str) -> bool:
     except Exception as exc:
         logger.warning("Failed to send DM to discord_id=%s: %s", discord_id, exc)
         return False
+
+
+async def send_discord_channel_message(channel_id: str, content: str) -> None:
+    """Post plain text content to a specific Discord channel via bot API."""
+    resolved = (channel_id or "").strip()
+    body = (content or "").strip()
+    if not resolved or not body:
+        return
+    await _post_to_channel(resolved, {"content": body})
 
 
 async def get_bot_status() -> dict:

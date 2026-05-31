@@ -34,6 +34,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import uuid
@@ -51,6 +52,7 @@ from pydantic import AliasChoices, BaseModel, Field
 import jwt as _jwt
 from db import get_db, get_db_connection, get_setting, set_setting
 from dependencies import SECRET_KEY, ALGORITHM, role_required
+from discord_webhook import rewrite_x_links_to_fxtwitter, send_discord_channel_message
 from mqtt_client import enqueue_device_command_outbox, mqtt_client as _mqtt_client
 from routers.tpe import (
     _effective_webhook_secret,
@@ -169,6 +171,8 @@ PUBLIC_USE_PHONE_CONTROL_OPTIONS = [
 PUBLIC_USE_GUEST_DEFAULT_RATE_PER_MIN = 18
 PUBLIC_USE_GUEST_DEFAULT_RATE_PER_ACTION_PER_MIN = 6
 PUBLIC_USE_GUEST_DEFAULT_SESSION_TTL_SEC = 900
+DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID = "1510453424993468448"
+_SHARE_URL_RE = re.compile(r"https?://[^\s<>'\"]+", flags=re.IGNORECASE)
 HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS = int(
     os.environ.get("HANDLER_PANEL_HIDE_STALE_DEVICE_HOURS", "72")
 )
@@ -1188,6 +1192,35 @@ class DeviceStatusReport(BaseModel):
     ai_score: Optional[float] = Field(
         default=None,
         validation_alias=AliasChoices("ai_score", "aiScore", "score"),
+    )
+
+
+class DeviceShareRequest(BaseModel):
+    device_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("device_id", "deviceId"),
+    )
+    device_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("device_name", "deviceName", "name"),
+    )
+    text: Optional[str] = None
+    subject: Optional[str] = None
+    mime_type: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("mime_type", "mimeType"),
+    )
+    source_package: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("source_package", "sourcePackage"),
+    )
+    stream_uris: Optional[list[str]] = Field(
+        default=None,
+        validation_alias=AliasChoices("stream_uris", "streamUris"),
+    )
+    channel_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("channel_id", "channelId"),
     )
 
 
@@ -2241,6 +2274,20 @@ def _require_device_webhook_secret(
         ),
     )
 
+
+def _extract_share_urls(text: str) -> list[str]:
+    if not text:
+        return []
+    found = _SHARE_URL_RE.findall(text)
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in found:
+        cleaned = item.strip().rstrip(').,]')
+        if cleaned and cleaned not in seen:
+            unique.append(cleaned)
+            seen.add(cleaned)
+    return unique
+
 @router.post("/api/handler/device-status")
 async def handler_device_status(
     body: DeviceStatusReport,
@@ -2349,6 +2396,97 @@ async def handler_device_status(
     ).fetchone()
     await _handler_ws.broadcast({"type": "status_update", **dict(row)})
     return {"status": "received", "device_id": resolved_device_id}
+
+
+@router.post("/api/handler/device-share")
+async def handler_device_share(
+    body: DeviceShareRequest,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_device_id: Optional[str] = Header(default=None, alias="X-Device-ID"),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Receive Android quick-share payload from device and mirror it to Discord."""
+    _require_device_webhook_secret(
+        db,
+        authorization=authorization,
+        request=request,
+        endpoint_name="/api/handler/device-share",
+        device_hint=(body.device_id or x_device_id),
+    )
+
+    body_device_id = (body.device_id or "").strip()
+    header_device_id = (x_device_id or "").strip()
+    resolved_device_id = body_device_id or header_device_id
+    if not resolved_device_id:
+        raise HTTPException(status_code=400, detail="device_id must not be empty")
+
+    share_text_raw = (body.text or "").strip()
+    share_subject = (body.subject or "").strip()
+    if not share_text_raw and not share_subject:
+        raise HTTPException(status_code=400, detail="text or subject is required")
+
+    share_text = rewrite_x_links_to_fxtwitter(share_text_raw)
+    share_subject = rewrite_x_links_to_fxtwitter(share_subject)
+    share_urls = _extract_share_urls(share_text)
+
+    channel_id = (
+        (body.channel_id or "").strip()
+        or (get_setting(db, "discord_device_share_channel_id") or "").strip()
+        or (os.environ.get("DISCORD_DEVICE_SHARE_CHANNEL_ID", "") or "").strip()
+        or DISCORD_DEVICE_SHARE_DEFAULT_CHANNEL_ID
+    )
+
+    lines = [
+        "📤 Device Quick Share",
+        f"Device: {resolved_device_id}",
+    ]
+    resolved_device_name = (body.device_name or "").strip()
+    if resolved_device_name:
+        lines.append(f"Name: {resolved_device_name}")
+    if (body.source_package or "").strip():
+        lines.append(f"Source: {(body.source_package or '').strip()}")
+    if (body.mime_type or "").strip():
+        lines.append(f"Type: {(body.mime_type or '').strip()}")
+    if share_subject:
+        lines.append(f"Subject: {share_subject}")
+    if share_text:
+        lines.append("")
+        lines.append(share_text)
+
+    await send_discord_channel_message(channel_id=channel_id, content="\n".join(lines).strip())
+
+    db.execute(
+        """
+        INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
+        VALUES (?, 'device_share', 'quick_share', ?, ?, ?)
+        """,
+        (
+            resolved_device_id,
+            share_urls[0] if share_urls else (share_subject or "shared_text"),
+            json.dumps(
+                {
+                    "text": share_text,
+                    "subject": share_subject,
+                    "source_package": (body.source_package or "").strip() or None,
+                    "mime_type": (body.mime_type or "").strip() or None,
+                    "stream_uris": body.stream_uris or [],
+                    "channel_id": channel_id,
+                    "urls": share_urls,
+                }
+            ),
+            _now_iso(),
+        ),
+    )
+    db.commit()
+
+    return {
+        "status": "shared",
+        "device_id": resolved_device_id,
+        "channel_id": channel_id,
+        "shared_urls": share_urls,
+        "rewritten_text": share_text,
+    }
 
 
 @router.post("/api/handler/device-apps/upload")

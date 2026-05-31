@@ -672,7 +672,7 @@ def _scrape_twitter() -> None:
                             m, "preview_image_url", None
                         )
                 for tweet in resp.data:
-                    url = f"https://x.com/i/web/status/{tweet.id}"
+                    url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
                     att = getattr(tweet, "attachments", None) or {}
                     mks = att.get("media_keys") or []
                     tweet_media_urls = []
@@ -709,7 +709,7 @@ def _scrape_twitter() -> None:
                                 m, "preview_image_url", None
                             )
                     for tweet in bk_resp.data:
-                        url = f"https://x.com/i/web/status/{tweet.id}"
+                        url = f"https://fxtwitter.com/i/web/status/{tweet.id}"
                         att = getattr(tweet, "attachments", None) or {}
                         mks = att.get("media_keys") or []
                         bk_tweet_media_urls = []
