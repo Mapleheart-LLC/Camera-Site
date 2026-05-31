@@ -323,6 +323,22 @@ async def send_discord_notification(
             "🦴 Another secret just landed in the pouch.",
             "✨ New anonymous note received. Time to snoop.",
             "🐾 A new confession is waiting for attention.",
+            "📬 New puppy mail arrived. Who wants first read?",
+            "👀 A fresh note just hit the kennel queue.",
+            "📝 New anonymous message in the pouch.",
+            "💌 Someone sent a new secret to the pack.",
+            "🚨 New question dropped. Reply squad assemble.",
+            "🐕 New message posted. Time for pack wisdom.",
+            "🌙 Late-night confession just came in.",
+            "☕ Morning mail is here: one new anonymous note.",
+            "🎀 The Puppy Pouch has a fresh entry.",
+            "📦 New pouch delivery: one anonymous question.",
+            "🔔 New question notification: ready for replies.",
+            "🫶 Another brave message just arrived.",
+            "🧷 Fresh note pinned to the pack board.",
+            "📣 Pack update: new anonymous question received.",
+            "🧠 New thought dropped in the Puppy Pouch.",
+            "🐾 Mail call: the pouch has a new message.",
         ],
         ),
         variant_context,
@@ -396,12 +412,49 @@ async def send_answer_notification(share_url: str = "") -> None:
             "📣 Fresh answer posted in the Puppy Pouch.",
             "🐕 The kennel just dropped a new published reply.",
             "🗞️ New answer is live for the pack to read.",
+            "🎉 New reply just went live in the Puppy Pouch.",
+            "💬 Answer published. The thread is ready.",
+            "🌟 A fresh response is now live.",
+            "📬 The pack posted a new public answer.",
+            "📝 A new answer has been published.",
+            "🔔 Update: one more answer is now live.",
+            "🐾 Reply posted and visible now.",
+            "📢 New published answer in the kennel feed.",
+            "✨ Another response has officially dropped.",
+            "🧵 Thread updated with a brand-new answer.",
+            "📖 New answer available for the pack to read.",
+            "🧠 Fresh insight posted in the Puppy Pouch.",
+            "💗 New response just landed and is live.",
+            "✅ Published: latest answer is up now.",
+            "🐶 The pouch just got a new answer update.",
+            "📌 New answer pinned in the feed.",
         ],
     )
 
     lines = [answer_line]
     if share_url:
-        lines.append(f"Share it: {share_url}")
+        share_line = _safe_format_variant(
+            _pick_message_variant(
+                "discord_share_link_messages",
+                "DISCORD_SHARE_LINK_MESSAGES",
+                [
+                    "Share it: {share_url}",
+                    "Read and share: {share_url}",
+                    "Pass it around the pack: {share_url}",
+                    "Open the live share page: {share_url}",
+                    "Jump to the published thread: {share_url}",
+                    "Link drop: {share_url}",
+                    "Pack link: {share_url}",
+                    "Fresh share URL: {share_url}",
+                    "Public view link: {share_url}",
+                    "See it live here: {share_url}",
+                    "Take a look and forward it: {share_url}",
+                    "Direct link to share: {share_url}",
+                ],
+            ),
+            {"share_url": share_url},
+        )
+        lines.append(share_line or f"Share it: {share_url}")
 
     await _post_to_channel(notification_channel_id, {"content": "\n".join(lines)})
 

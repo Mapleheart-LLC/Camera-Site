@@ -431,7 +431,26 @@
     syncControlReadouts();
   }
 
-  function saveSettingsFromForm() {
+  function normalizeIsoDate(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    return raw.slice(0, 10);
+  }
+
+  async function loadPublicStatusSettingsForForm() {
+    const startInput = byId('hp2-setting-days-start');
+    if (!startInput) return;
+    try {
+      const data = await apiGet('/api/handler/public-status');
+      startInput.value = normalizeIsoDate(data?.days_caged_start_date);
+    } catch (err) {
+      if (err.message !== AUTH_EXPIRED_ERROR) {
+        setInlineResult('hp2-settings-result', `Failed to load Days Locked start date: ${err.message}`);
+      }
+    }
+  }
+
+  async function saveSettingsFromForm() {
     const refreshSecs = Number(byId('hp2-setting-refresh-secs')?.value || state.settings.refreshSecs);
     const warnSecs = Number(byId('hp2-setting-fresh-warn')?.value || state.settings.freshnessWarnSecs);
     const staleSecs = Number(byId('hp2-setting-fresh-stale')?.value || state.settings.freshnessStaleSecs);
@@ -458,6 +477,21 @@
     if (byId('hp2-view-drawer')?.classList.contains('hp2-view-active')) {
       setActiveView('drawer');
     }
+
+    const daysStart = normalizeIsoDate(byId('hp2-setting-days-start')?.value || '');
+    let publicStatusSaved = false;
+    try {
+      await apiPost('/api/handler/public-status', {
+        days_caged_start_date: daysStart || null,
+      });
+      publicStatusSaved = true;
+    } catch (err) {
+      if (err.message === AUTH_EXPIRED_ERROR) {
+        throw err;
+      }
+    }
+
+    return { publicStatusSaved };
   }
 
   function renderCommandHistory() {
@@ -2253,6 +2287,7 @@
       loadQueueHub(),
       loadSmsThreadPresets(),
       loadPushSchema(),
+      loadPublicStatusSettingsForForm(),
     ];
     const results = await Promise.allSettled(jobs);
     state.telemetry.hydratedAt = Date.now();
@@ -5365,9 +5400,24 @@
         el.addEventListener('change', syncControlReadouts);
       });
 
-    byId('hp2-settings-save-btn').addEventListener('click', () => {
-      saveSettingsFromForm();
-      setInlineResult('hp2-settings-result', 'Settings saved.');
+    byId('hp2-settings-save-btn').addEventListener('click', async () => {
+      const saveBtn = byId('hp2-settings-save-btn');
+      if (saveBtn) saveBtn.disabled = true;
+      setInlineResult('hp2-settings-result', 'Saving...');
+      try {
+        const result = await saveSettingsFromForm();
+        if (result.publicStatusSaved) {
+          setInlineResult('hp2-settings-result', 'Settings saved. Days Locked start date updated.');
+        } else {
+          setInlineResult('hp2-settings-result', 'Settings saved locally. Days Locked start date update failed.');
+        }
+      } catch (err) {
+        if (err.message !== AUTH_EXPIRED_ERROR) {
+          setInlineResult('hp2-settings-result', `Save failed: ${err.message}`);
+        }
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
     });
     byId('hp2-settings-reset-btn').addEventListener('click', () => {
       state.settings = { ...defaultSettings };

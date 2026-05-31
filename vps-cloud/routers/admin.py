@@ -1541,6 +1541,9 @@ class _DiscordSettingsPatch(BaseModel):
     discord_stream_live_message: Optional[str] = None
     discord_welcome_dm_enabled: Optional[bool] = None
     discord_welcome_dm_message: Optional[str] = None
+    discord_question_flair_messages: Optional[str] = None
+    discord_answer_messages: Optional[str] = None
+    discord_share_link_messages: Optional[str] = None
     discord_notify_questions: Optional[bool] = None
     discord_notify_answers: Optional[bool] = None
     discord_notify_purchases: Optional[bool] = None
@@ -1570,6 +1573,9 @@ def get_discord_settings(
         "discord_stream_live_message":          get_setting(db, "discord_stream_live_message"),
         "discord_welcome_dm_enabled":           _bool_setting(db, "discord_welcome_dm_enabled",          default=False),
         "discord_welcome_dm_message":           get_setting(db, "discord_welcome_dm_message"),
+        "discord_question_flair_messages":      get_setting(db, "discord_question_flair_messages"),
+        "discord_answer_messages":              get_setting(db, "discord_answer_messages"),
+        "discord_share_link_messages":          get_setting(db, "discord_share_link_messages"),
         "discord_notify_questions":             _bool_setting(db, "discord_notify_questions",             default=True),
         "discord_notify_answers":               _bool_setting(db, "discord_notify_answers",               default=True),
         "discord_notify_purchases":             _bool_setting(db, "discord_notify_purchases",             default=True),
@@ -1592,6 +1598,9 @@ def patch_discord_settings(
         ("discord_stream_channel_id",       body.discord_stream_channel_id),
         ("discord_stream_live_message",     body.discord_stream_live_message),
         ("discord_welcome_dm_message",      body.discord_welcome_dm_message),
+        ("discord_question_flair_messages", body.discord_question_flair_messages),
+        ("discord_answer_messages",         body.discord_answer_messages),
+        ("discord_share_link_messages",     body.discord_share_link_messages),
     ]
     bool_fields = [
         ("discord_stream_notifications_enabled", body.discord_stream_notifications_enabled),

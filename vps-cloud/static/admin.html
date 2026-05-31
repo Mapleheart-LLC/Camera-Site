@@ -1327,6 +1327,24 @@
                 <textarea id="dtemplate-welcome" rows="3" placeholder="Hey, welcome to the pack! 🐾"></textarea>
               </div>
 
+              <div class="form-field" style="max-width:760px;margin-bottom:.75rem">
+                <label for="dtemplate-question-flair">Question Flair Variants (one per line)</label>
+                <textarea id="dtemplate-question-flair" rows="4" placeholder="🐶 The pack inbox has fresh mail."></textarea>
+                <small style="color:#9e7e82;display:block;margin-top:.25rem">Used for new question posts. You can include plain text only.</small>
+              </div>
+
+              <div class="form-field" style="max-width:760px;margin-bottom:.75rem">
+                <label for="dtemplate-answer-variants">Answer Variants (one per line)</label>
+                <textarea id="dtemplate-answer-variants" rows="4" placeholder="✅ A note in the Puppy Pouch has been answered and published!"></textarea>
+                <small style="color:#9e7e82;display:block;margin-top:.25rem">Used when an answer is published.</small>
+              </div>
+
+              <div class="form-field" style="max-width:760px;margin-bottom:.75rem">
+                <label for="dtemplate-share-variants">Share-Link Variants (one per line)</label>
+                <textarea id="dtemplate-share-variants" rows="4" placeholder="Share it: {share_url}"></textarea>
+                <small style="color:#9e7e82;display:block;margin-top:.25rem">Supports <code>{share_url}</code> token.</small>
+              </div>
+
               <div class="form-row" style="margin-top:.5rem;align-items:center">
                 <button id="discord-save-settings-btn" class="btn-sm btn-edit">Save Notification Settings 🐾</button>
                 <span id="discord-settings-status" style="font-size:.82rem;color:#9e7e82;margin-left:.75rem"></span>
@@ -3224,6 +3242,9 @@
         document.getElementById('dtoggle-welcome-dm').checked   = !!d.discord_welcome_dm_enabled;
         document.getElementById('dtemplate-live').value         = d.discord_stream_live_message    || '';
         document.getElementById('dtemplate-welcome').value      = d.discord_welcome_dm_message     || '';
+        document.getElementById('dtemplate-question-flair').value = d.discord_question_flair_messages || '';
+        document.getElementById('dtemplate-answer-variants').value = d.discord_answer_messages || '';
+        document.getElementById('dtemplate-share-variants').value  = d.discord_share_link_messages || '';
       } catch (err) {
         if (err.message !== '401') showToast('Failed to load Discord settings.');
       }
@@ -3265,6 +3286,9 @@
           discord_welcome_dm_enabled:           document.getElementById('dtoggle-welcome-dm').checked,
           discord_stream_live_message:          document.getElementById('dtemplate-live').value.trim()   || null,
           discord_welcome_dm_message:           document.getElementById('dtemplate-welcome').value.trim() || null,
+          discord_question_flair_messages:      document.getElementById('dtemplate-question-flair').value.trim() || null,
+          discord_answer_messages:              document.getElementById('dtemplate-answer-variants').value.trim() || null,
+          discord_share_link_messages:          document.getElementById('dtemplate-share-variants').value.trim() || null,
         });
         if (res.ok) {
           statusEl.style.color = '#4ade80';
