@@ -1327,10 +1327,7 @@ class DeviceRenameRequest(BaseModel):
 
 
 class DeviceDeleteAllRequest(BaseModel):
-    confirm_phrase: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("confirm_phrase", "confirmPhrase", "confirmation"),
-    )
+    confirm_phrase: Optional[str] = None
 
 
 class RuleEngineRuleCreateRequest(BaseModel):
