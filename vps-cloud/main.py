@@ -909,6 +909,32 @@ async def auth_login(
         }
 
     username_normalized = body.username.strip().lower()
+
+    # Give the configured Basic-auth admin credentials precedence so the
+    # operator account always receives admin role claims, even if a DB user
+    # exists with the same username and a lower role.
+    if ADMIN_USERNAME and ADMIN_PASSWORD:
+        _username_match = secrets.compare_digest(
+            username_normalized.encode(),
+            _ADMIN_USERNAME_LOWER.encode(),
+        )
+        _password_match = secrets.compare_digest(
+            body.password.encode(),
+            ADMIN_PASSWORD.encode(),
+        )
+        if _username_match and _password_match:
+            admin_token = create_access_token(
+                {"sub": "admin", "access_level": 3, "role": "admin"},
+                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+            )
+            return {
+                "access_token": admin_token,
+                "token_type": "bearer",
+                "role": "admin",
+                "user_id": "admin",
+                "username": ADMIN_USERNAME,
+            }
+
     row = db.execute(
         "SELECT id, password_hash, access_level, role FROM users WHERE username COLLATE NOCASE = ?",
         (username_normalized,),
@@ -921,30 +947,6 @@ async def auth_login(
     password_ok = _verify_password(body.password, stored_hash)
 
     if not row or not password_ok:
-        # Fallback: allow the HTTP-Basic admin env-var credentials to also log
-        # in via this endpoint so the admin user can access the handler panel
-        # with the same username/password used for admin.html.
-        if ADMIN_USERNAME and ADMIN_PASSWORD:
-            _username_match = secrets.compare_digest(
-                username_normalized.encode(),
-                _ADMIN_USERNAME_LOWER.encode(),
-            )
-            _password_match = secrets.compare_digest(
-                body.password.encode(),
-                ADMIN_PASSWORD.encode(),
-            )
-            if _username_match and _password_match:
-                admin_token = create_access_token(
-                    {"sub": "admin", "access_level": 3, "role": "admin"},
-                    expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-                )
-                return {
-                    "access_token": admin_token,
-                    "token_type": "bearer",
-                    "role": "admin",
-                    "user_id": "admin",
-                    "username": ADMIN_USERNAME,
-                }
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
