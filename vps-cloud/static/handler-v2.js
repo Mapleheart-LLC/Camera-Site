@@ -571,6 +571,7 @@
         hr_edge_ramp_down_step: hrEdgeRampDown,
       });
       publicStatusSaved = true;
+      await loadPublicStatusSettingsForForm();
     } catch (err) {
       if (err.message === AUTH_EXPIRED_ERROR) {
         throw err;

@@ -8702,6 +8702,7 @@ async def handler_update_public_status(
     db: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     """Update public status/counter settings consumed by the public UI."""
+    now_ms = int(time.time() * 1000)
     previous_tasks_completed = _safe_int(get_setting(db, "public_tasks_completed", "0"), 0)
     previous_confessions_posted = _safe_int(get_setting(db, "public_confessions_posted", "0"), 0)
     current_tasks_completed = previous_tasks_completed
@@ -8742,6 +8743,7 @@ async def handler_update_public_status(
             raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")
         current_tasks_completed = min(tasks_completed, 1000000)
         set_setting(db, "public_tasks_completed", str(current_tasks_completed))
+        set_setting(db, "public_tasks_manual_set_at_ms", str(now_ms))
         tasks_counter_changed = current_tasks_completed != previous_tasks_completed
 
     if payload.confessions_posted is not None:
@@ -8750,6 +8752,7 @@ async def handler_update_public_status(
             raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
         current_confessions_posted = min(confessions_posted, 1000000)
         set_setting(db, "public_confessions_posted", str(current_confessions_posted))
+        set_setting(db, "public_confessions_manual_set_at_ms", str(now_ms))
         confessions_counter_changed = current_confessions_posted != previous_confessions_posted
     if payload.public_booking_enabled is not None:
         set_setting(
