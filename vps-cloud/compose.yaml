@@ -66,6 +66,8 @@ services:
       - DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS=${DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS:--1}
       # In hybrid mode, probability of taking Qwen line vs template mutation (0.0-1.0).
       - DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT=${DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT:-0.40}
+      # Template mutation bias for reflexive wording like "... on pup" (0.0-1.0).
+      - DISCORD_DEVICE_SHARE_REFLEXIVE_BIAS=${DISCORD_DEVICE_SHARE_REFLEXIVE_BIAS:-0.35}
       # Comma-separated hard slur denylist for quick-share captions.
       - DISCORD_DEVICE_SHARE_HARD_SLURS=${DISCORD_DEVICE_SHARE_HARD_SLURS:-}
       # Optional stricter output gates (default relaxed for better delivery rate).

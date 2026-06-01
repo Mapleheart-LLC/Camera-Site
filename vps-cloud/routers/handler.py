@@ -244,6 +244,13 @@ _DEVICE_SHARE_HYBRID_QWEN_WEIGHT = min(
         float((os.environ.get("DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT", "0.40") or "0.40").strip() or "0.40"),
     ),
 )
+_DEVICE_SHARE_REFLEXIVE_BIAS = min(
+    1.0,
+    max(
+        0.0,
+        float((os.environ.get("DISCORD_DEVICE_SHARE_REFLEXIVE_BIAS", "0.35") or "0.35").strip() or "0.35"),
+    ),
+)
 _DEVICE_SHARE_TEMPLATE_RECENT_COUNT = max(
     4,
     int((os.environ.get("DISCORD_DEVICE_SHARE_TEMPLATE_RECENT_COUNT", "18") or "18").strip() or "18"),
@@ -3408,6 +3415,7 @@ def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple
         swaps_applied.append(token)
 
     keyword_used = None
+    reflexive_tail = None
     if keywords and random.random() < 0.62:
         keyword_used = random.choice(keywords)
         suffix = random.choice([
@@ -3420,6 +3428,19 @@ def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple
             stripped = stripped[:-1].rstrip()
         mutated = f"{stripped}{suffix}: "
 
+    if random.random() < _DEVICE_SHARE_REFLEXIVE_BIAS:
+        reflexive_tail = random.choice([
+            "and used it on pup",
+            "and turned it on pup",
+            "and put it right back on pup",
+        ])
+        stripped = mutated.rstrip()
+        if stripped.endswith(":"):
+            stripped = stripped[:-1].rstrip()
+        if not re.search(r"\bon\s+pup\b", stripped, flags=re.IGNORECASE):
+            punctuation_gap = " " if stripped.endswith((".", "!", "?")) else ", "
+            mutated = f"{stripped}{punctuation_gap}{reflexive_tail}: "
+
     candidate = f"{mutated}{marker}{tail}"
     candidate = re.sub(r"\s+", " ", candidate).strip()
     if "{payload}" not in candidate:
@@ -3429,7 +3450,25 @@ def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple
         "path": "spacy_mutation",
         "swaps": swaps_applied,
         "keyword": keyword_used,
+        "reflexive_tail": reflexive_tail,
     }
+
+
+def _build_qwen_template_inspiration(templates: list[str], sample_size: int = 4) -> str:
+    if not templates:
+        return ""
+    unique_templates = list(dict.fromkeys([line for line in templates if isinstance(line, str) and line.strip()]))
+    if not unique_templates:
+        return ""
+    count = min(sample_size, len(unique_templates))
+    sampled = random.sample(unique_templates, count) if len(unique_templates) > count else unique_templates
+    lines: list[str] = []
+    for item in sampled:
+        normalized = re.sub(r"\s+", " ", item.replace("{payload}", "{payload}")).strip()
+        if not normalized:
+            continue
+        lines.append(f"- {normalized}")
+    return "\n".join(lines)
 
 
 def _sanitize_qwen_template(raw: str) -> Optional[str]:
@@ -3480,7 +3519,6 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     line = re.sub(r":\s*shared\s+drop\s*$", ": {payload}", line, flags=re.IGNORECASE)
 
     # Reframe second-person targeting back onto the mutt so output stays self-focused.
-    line = re.sub(r"\bon\s+you\b", "for pup", line, flags=re.IGNORECASE)
     line = re.sub(r"\byou['’]re\b", "pup is", line, flags=re.IGNORECASE)
     line = re.sub(r"\byour\b", "pup's", line, flags=re.IGNORECASE)
     line = re.sub(r"\byou\b", "pup", line, flags=re.IGNORECASE)
@@ -3637,9 +3675,16 @@ def _load_local_qwen_llm(
         return None, "local_qwen_init_failed"
 
 
-def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, keywords: list[str]) -> str:
+def _build_device_share_qwen_prompt(
+    *,
+    payload_text: str,
+    selected_set: str,
+    keywords: list[str],
+    inspiration_templates: list[str],
+) -> str:
     payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
     keyword_hint = ", ".join(keywords[:3]) if keywords else ""
+    template_inspiration = _build_qwen_template_inspiration(inspiration_templates)
     prompt = (
         "Write one brutal Discord caption in third person about the mutt. "
         f"Tone set: {selected_set}. Make it harsh, degrading, and self-confessional. "
@@ -3653,6 +3698,9 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
         "No hashtags, no emojis, no quotes, no URLs. "
         "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
     )
+    if template_inspiration:
+        prompt += " Mirror the cadence and structure of these templates without copying lines verbatim:\n"
+        prompt += template_inspiration
     if keyword_hint:
         prompt += f" Ground it in one of these cues if natural: {keyword_hint}."
     prompt += f" Source text: {payload_excerpt}"
@@ -3665,6 +3713,7 @@ async def _generate_local_qwen_share_template(
     payload_text: str,
     selected_set: str,
     keywords: list[str],
+    inspiration_templates: list[str],
 ) -> tuple[Optional[str], Optional[str]]:
     repo_id = _effective_device_share_qwen_repo_id(db)
     filename = _effective_device_share_qwen_filename(db)
@@ -3685,6 +3734,7 @@ async def _generate_local_qwen_share_template(
         payload_text=payload_text,
         selected_set=selected_set,
         keywords=keywords,
+        inspiration_templates=inspiration_templates,
     )
 
     system_prompt = (
@@ -3745,6 +3795,7 @@ async def _generate_qwen_share_template(
     payload_text: str,
     selected_set: str,
     keywords: list[str],
+    inspiration_templates: list[str],
 ) -> tuple[Optional[str], Optional[str]]:
     runtime = _effective_device_share_qwen_runtime(db)
     local_error: Optional[str] = None
@@ -3755,6 +3806,7 @@ async def _generate_qwen_share_template(
             payload_text=payload_text,
             selected_set=selected_set,
             keywords=keywords,
+            inspiration_templates=inspiration_templates,
         )
         if local_line:
             return local_line, None
@@ -3776,6 +3828,7 @@ async def _generate_qwen_share_template(
         payload_text=payload_text,
         selected_set=selected_set,
         keywords=keywords,
+        inspiration_templates=inspiration_templates,
     )
 
     request_payload: dict[str, Any] = {
@@ -4057,6 +4110,7 @@ async def handler_device_share(
             payload_text=generation_source_text,
             selected_set=selected_set,
             keywords=keywords,
+            inspiration_templates=templates,
         )
         if qwen_template:
             template_for_message, generation_path, generation_meta = _select_hybrid_template(
@@ -5620,6 +5674,7 @@ async def _process_queued_device_share(row: dict) -> None:
                 payload_text=generation_source_text or share_text or share_subject,
                 selected_set=selected_set,
                 keywords=_extract_share_keywords(generation_source_text or share_text or share_subject),
+                inspiration_templates=templates,
             )
         finally:
             conn.close()
