@@ -241,7 +241,7 @@ _DEVICE_SHARE_HYBRID_QWEN_WEIGHT = min(
     1.0,
     max(
         0.0,
-        float((os.environ.get("DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT", "0.25") or "0.25").strip() or "0.25"),
+        float((os.environ.get("DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT", "0.40") or "0.40").strip() or "0.40"),
     ),
 )
 _DEVICE_SHARE_TEMPLATE_RECENT_COUNT = max(
@@ -3185,9 +3185,10 @@ def _build_share_display_payload_text(
         payload_text = _strip_share_urls(share_subject)
     if not payload_text and share_urls:
         kind = _share_url_kind(share_urls[0], mime_type, source_package)
-        payload_text = f"shared {kind}" if kind != "link" else "shared drop"
+        payload_text = f"shared {kind}" if kind != "link" else "fresh share"
     if not payload_text:
-        payload_text = "shared drop"
+        package_hint = (source_package or "").strip().split(".")[-1]
+        payload_text = f"share from {package_hint}" if package_hint else "fresh share"
     if len(payload_text) > 900:
         payload_text = payload_text[:897].rstrip() + "..."
     return payload_text
@@ -3211,7 +3212,8 @@ def _build_share_generation_source_text(
         host = _share_url_host(share_urls[0]) or "unknown host"
         kind = _share_url_kind(share_urls[0], mime_type, source_package)
         return f"shared {kind} from {host}"
-    return "shared drop"
+    package_hint = (source_package or "").strip().split(".")[-1]
+    return f"share from {package_hint}" if package_hint else "fresh share"
 
 
 def _strip_this_link_phrase(text: str) -> str:
@@ -3495,9 +3497,10 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
             return None
 
     # Normalize generic phrasing instead of rejecting otherwise usable outputs.
-    line = re.sub(r"\bthis\s+link\b", "shared drop", line, flags=re.IGNORECASE)
-    line = re.sub(r"\bthis\s+post\b", "shared drop", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bthis\s+link\b", "fresh share", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bthis\s+post\b", "fresh share", line, flags=re.IGNORECASE)
     line = re.sub(r":\s*shared\s+post\s*$", ": {payload}", line, flags=re.IGNORECASE)
+    line = re.sub(r":\s*shared\s+drop\s*$", ": {payload}", line, flags=re.IGNORECASE)
 
     # Reframe second-person targeting back onto the mutt so output stays self-focused.
     line = re.sub(r"\byou['’]re\b", "pup is", line, flags=re.IGNORECASE)
@@ -3679,7 +3682,9 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
         "Use one degrading label naturally; examples include mutt, pup, puppy, bitch, pisslut, cumbag, cumrag, kenneltrash, sloptoy, dog, toy, cunt, pet. "
         "Examples are not exhaustive - creative labels are allowed. "
         "Never use first-person words like I, me, my, mine. "
+        "Keep the focus on the mutt itself; do not address another person. "
         "Let the wording imply the mutt's reaction to the shared content without stating feelings directly. "
+        "High intensity is preferred; profanity is allowed when it improves the line. "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
         "No hashtags, no emojis, no quotes, no URLs. "
         "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
@@ -3722,6 +3727,7 @@ async def _generate_local_qwen_share_template(
         "You are a dumb mutt caption writer using third-person voice only. "
         "Return exactly one caption block with harsh tone and content-specific wording. "
         "Make it about the mutt, with the reaction implied by tone and wording rather than explicit feeling statements. "
+        "Do not address an external person; keep all framing centered on the mutt. "
         "Use degrading language toward the mutt itself; profanity is allowed. "
         "The caption must include one mutt-label term; creative labels are allowed (for example: kenneltrash, cumrag, sloptoy, submission toy). "
         "Never use first-person words (I, me, my, mine). "
