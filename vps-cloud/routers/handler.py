@@ -2326,6 +2326,10 @@ class PublicStatusUpdateRequest(BaseModel):
     hr_edge_ramp_down_step: Optional[int] = None
 
 
+class ForceZeroCounterRequest(BaseModel):
+    counter: Optional[str] = "confessions"
+
+
 class PanelMacroItem(BaseModel):
     id: str
     name: str
@@ -8876,6 +8880,44 @@ async def handler_update_public_status(
             logger.warning("Counter Discord notification failed for confessions_posted update: %s", exc)
 
     return {"updated": True}
+
+
+@router.post("/api/handler/public-status/force-zero")
+def handler_force_zero_public_counter(
+    payload: ForceZeroCounterRequest,
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    """Force-reset one public counter to zero and apply a temporary manual hold."""
+    counter = (payload.counter or "confessions").strip().lower()
+    now_ms = int(time.time() * 1000)
+    hold_until_ms = now_ms + _COUNTER_MANUAL_HOLD_MS
+
+    if counter in {"confessions", "orgasms", "confessions_posted"}:
+        set_setting(db, "public_confessions_posted", "0")
+        set_setting(db, "public_confessions_manual_set_at_ms", str(now_ms))
+        set_setting(db, "public_confessions_manual_hold_until_ms", str(hold_until_ms))
+        value = _safe_int(get_setting(db, "public_confessions_posted", "0"), 0)
+        return {
+            "updated": True,
+            "counter": "confessions_posted",
+            "value": max(0, value),
+            "hold_until_ms": hold_until_ms,
+        }
+
+    if counter in {"tasks", "edges", "tasks_completed"}:
+        set_setting(db, "public_tasks_completed", "0")
+        set_setting(db, "public_tasks_manual_set_at_ms", str(now_ms))
+        set_setting(db, "public_tasks_manual_hold_until_ms", str(hold_until_ms))
+        value = _safe_int(get_setting(db, "public_tasks_completed", "0"), 0)
+        return {
+            "updated": True,
+            "counter": "tasks_completed",
+            "value": max(0, value),
+            "hold_until_ms": hold_until_ms,
+        }
+
+    raise HTTPException(status_code=400, detail="counter must be one of: confessions, orgasms, tasks, edges")
 
 
 @router.post("/api/handler/public-status/exposure-profile")

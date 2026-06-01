@@ -581,6 +581,11 @@
     return { publicStatusSaved };
   }
 
+  async function forceOrgasmsCounterZero() {
+    await apiPost('/api/handler/public-status/force-zero', { counter: 'confessions' });
+    await loadPublicStatusSettingsForForm();
+  }
+
   function renderCommandHistory() {
     const host = byId('hp2-command-history');
     if (!host) return;
@@ -5587,6 +5592,21 @@
       applyCommandDefaults();
       renderFreshness();
       setInlineResult('hp2-settings-result', 'Settings reset to defaults.');
+    });
+    byId('hp2-settings-force-orgasms-zero-btn')?.addEventListener('click', async () => {
+      const btn = byId('hp2-settings-force-orgasms-zero-btn');
+      if (btn) btn.disabled = true;
+      setInlineResult('hp2-settings-result', 'Forcing Orgasms counter to 0...');
+      try {
+        await forceOrgasmsCounterZero();
+        setInlineResult('hp2-settings-result', 'Orgasms counter forced to 0.');
+      } catch (err) {
+        if (err.message !== AUTH_EXPIRED_ERROR) {
+          setInlineResult('hp2-settings-result', `Force reset failed: ${err.message}`);
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     });
 
     byId('hp2-shared-filter-queue').addEventListener('change', (event) => {
