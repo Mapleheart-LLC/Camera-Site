@@ -411,6 +411,12 @@ button:focus-visible {
   margin-bottom: 0.5rem;
 }
 
+#hp2-settings-force-orgasms-zero-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
 .hp2-quick-actions-grid .hp2-btn {
   flex: 1;
   min-width: 140px;
