@@ -241,6 +241,37 @@ _LOCAL_QWEN_LLM: Any = None
 _LOCAL_QWEN_FAILED = False
 _LOCAL_QWEN_FINGERPRINT: Optional[str] = None
 _DEVICE_SHARE_PROMPT_PLACEHOLDER = "__PAYLOAD__"
+_DEVICE_SHARE_SELF_REF_TERMS = {
+    "pup",
+    "puppy",
+    "mutt",
+    "bitch",
+    "cunt",
+    "pet",
+}
+_DEVICE_SHARE_HARSH_TERMS = {
+    "weak",
+    "pathetic",
+    "needy",
+    "shame",
+    "humiliation",
+    "humiliated",
+    "degraded",
+    "degrading",
+    "desperate",
+    "submissive",
+    "submission",
+    "dumb",
+    "stupid",
+    "worthless",
+    "punching bag",
+    "cumbag",
+}
+_DEVICE_SHARE_HARD_SLUR_TERMS = [
+    value.strip().lower()
+    for value in (os.environ.get("DISCORD_DEVICE_SHARE_HARD_SLURS", "") or "").split(",")
+    if value and value.strip()
+]
 _DEVICE_SHARE_STOPWORDS = {
     "this", "that", "with", "from", "have", "just", "like", "your", "about",
     "into", "over", "after", "before", "would", "could", "there", "their",
@@ -310,7 +341,7 @@ _DEVICE_SHARE_PLAYFUL_LINES = [
     "Pup discovered a spicy little treasure: {payload}",
     "Zoomies level high, so pup shared this gem: {payload}",
     "Pup's 'just one peek' became this share: {payload}",
-    "Happy yips, flushed cheeks, and this link: {payload}",
+    "Happy yips, flushed cheeks, and this post: {payload}",
     "Pup got butterflies and dropped this here: {payload}",
     "Playful pup energy unlocked by: {payload}",
     "Pup lit up and had to share this one: {payload}",
@@ -2648,6 +2679,10 @@ def _share_url_kind(url: str, mime_type: str = "", source_package: str = "") -> 
     package_lower = (source_package or "").strip().lower()
     if host.endswith("twitter.com") or host == "x.com" or host.endswith("fxtwitter.com"):
         return "post"
+    if host.endswith("reddit.com") or host == "redd.it":
+        return "post"
+    if host == "bsky.app":
+        return "post"
     if "tiktok.com" in host:
         return "clip"
     if "youtube.com" in host or "youtu.be" in host:
@@ -2673,7 +2708,7 @@ _FXTWITTER_URL_RE = re.compile(
     re.IGNORECASE,
 )
 _REDDIT_URL_RE = re.compile(
-    r"(?:https?://)?(?:www\.)?reddit\.com(/r/[^/]+/comments/[A-Za-z0-9_]+)(?:/[^/?]*)?(?:\?.*)?$",
+    r"(?:https?://)?(?:www\.|old\.|np\.)?reddit\.com/(r/[^/]+/comments/[A-Za-z0-9_]+(?:/[^/?#]+)?|comments/[A-Za-z0-9_]+(?:/[^/?#]+)?)",
     re.IGNORECASE,
 )
 _BSKY_URL_RE = re.compile(
@@ -2716,11 +2751,26 @@ async def _fetch_fxtwitter_content(url: str) -> Optional[str]:
 
 async def _fetch_reddit_content(url: str) -> Optional[str]:
     """Return post title (+ selftext excerpt) from the Reddit JSON API, or None on failure."""
-    m = _REDDIT_URL_RE.search(url)
-    if not m:
+    parsed = urllib_parse.urlsplit((url or "").strip())
+    host = (parsed.netloc or "").lower().strip()
+    if host.startswith("www."):
+        host = host[4:]
+
+    api_url: Optional[str] = None
+    if host == "redd.it":
+        short_id = parsed.path.strip("/").split("/")[0].strip()
+        if not short_id:
+            return None
+        api_url = f"https://www.reddit.com/comments/{short_id}.json?raw_json=1&limit=1"
+    elif host.endswith("reddit.com"):
+        m = _REDDIT_URL_RE.search(url)
+        if not m:
+            return None
+        path = "/" + m.group(1).lstrip("/").rstrip("/")
+        api_url = f"https://www.reddit.com{path}.json?raw_json=1&limit=1"
+    else:
         return None
-    path = m.group(1).rstrip("/")
-    api_url = f"https://www.reddit.com{path}.json?raw_json=1&limit=1"
+
     try:
         async with httpx.AsyncClient(timeout=_URL_FETCH_TIMEOUT) as client:
             resp = await client.get(
@@ -2813,7 +2863,8 @@ def _build_share_display_payload_text(
     if not payload_text:
         payload_text = _strip_share_urls(share_subject)
     if not payload_text and share_urls:
-        payload_text = f"this {_share_url_kind(share_urls[0], mime_type, source_package)}"
+        kind = _share_url_kind(share_urls[0], mime_type, source_package)
+        payload_text = f"this {kind}" if kind != "link" else "shared post"
     if not payload_text:
         payload_text = "this post"
     if len(payload_text) > 900:
@@ -3065,6 +3116,22 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         line = line[:317].rstrip() + "..."
         if "{payload}" not in line:
             return None
+
+    # Hard-slur-only moderation: allow harsh degrading language, but block configured hard slurs.
+    lowered = line.lower().replace("{payload}", "")
+    for token in _DEVICE_SHARE_HARD_SLUR_TERMS:
+        if re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", lowered):
+            return None
+
+    has_self_ref = any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered) for term in _DEVICE_SHARE_SELF_REF_TERMS)
+    has_harsh_tone = any(term in lowered for term in _DEVICE_SHARE_HARSH_TERMS)
+    if not has_self_ref:
+        return None
+    if not has_harsh_tone:
+        return None
+    if "this link" in lowered:
+        return None
+
     return line
 
 
@@ -3166,14 +3233,15 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
     payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
     keyword_hint = ", ".join(keywords[:3]) if keywords else ""
     prompt = (
-        "Write exactly one fresh Discord caption in teasing kennel tone. "
-        f"Tone set: {selected_set}. "
+        "Write exactly one brutal Discord caption in first person from the mutt's perspective. "
+        f"Tone set: {selected_set}. Make it harsh, degrading, and self-confessional. "
+        "Use one self-reference naturally (mutt, puppy, bitch, cunt, or pup-style wording). "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
         "No hashtags, no emojis, no quotes, no URLs, no extra lines. "
-        "Do not say 'this link'. Keep it under 18 words."
+        "Do not use slurs. Keep it under 18 words."
     )
     if keyword_hint:
-        prompt += f" Weave in one of these words if natural: {keyword_hint}."
+        prompt += f" Ground it in one of these cues if natural: {keyword_hint}."
     prompt += f" Source text: {payload_excerpt}"
     return prompt
 
@@ -3207,11 +3275,11 @@ async def _generate_local_qwen_share_template(
     )
 
     system_prompt = (
-        "You write short Discord quick-share captions. "
-        "Return exactly one caption line. "
+        "You are a dumb mutt writing first-person self-degrading confession captions. "
+        "Return exactly one short caption line with harsh tone and content-specific wording. "
+        "Use degrading language toward the mutt itself; profanity is allowed. "
         f"Include {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
-        "Be teasing and original, not generic. "
-        "No URLs, no hashtags, no emojis, no quotes."
+        "No slurs. No URLs, no hashtags, no emojis, no quotes."
     )
 
     def _infer() -> dict[str, Any]:

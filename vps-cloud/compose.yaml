@@ -64,6 +64,8 @@ services:
       - DISCORD_DEVICE_SHARE_QWEN_FILENAME=${DISCORD_DEVICE_SHARE_QWEN_FILENAME:-Qwen2.5-1.5B-Q8_0.gguf}
       - DISCORD_DEVICE_SHARE_QWEN_N_CTX=${DISCORD_DEVICE_SHARE_QWEN_N_CTX:-512}
       - DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS=${DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS:--1}
+      # Comma-separated hard slur denylist for quick-share captions.
+      - DISCORD_DEVICE_SHARE_HARD_SLURS=${DISCORD_DEVICE_SHARE_HARD_SLURS:-}
       # Optional Hugging Face auth and persistent cache for local GGUF downloads.
       - HF_TOKEN=${HF_TOKEN:-}
       - HF_HOME=/app/hf-cache
