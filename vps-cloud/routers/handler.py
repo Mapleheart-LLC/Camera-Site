@@ -272,6 +272,14 @@ _DEVICE_SHARE_HARD_SLUR_TERMS = [
     for value in (os.environ.get("DISCORD_DEVICE_SHARE_HARD_SLURS", "") or "").split(",")
     if value and value.strip()
 ]
+_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF = (
+    (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF", "false") or "false").strip().lower()
+    == "true"
+)
+_DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE = (
+    (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE", "false") or "false").strip().lower()
+    == "true"
+)
 _DEVICE_SHARE_STOPWORDS = {
     "this", "that", "with", "from", "have", "just", "like", "your", "about",
     "into", "over", "after", "before", "would", "could", "there", "their",
@@ -2893,6 +2901,17 @@ def _build_share_generation_source_text(
     return "shared post"
 
 
+def _strip_this_link_phrase(text: str) -> str:
+    """Remove generic 'this link' phrasing before delivery without altering payload URLs."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"\bthis\s+link\b", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+([:;,.!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r":\s*:", ":", cleaned)
+    return cleaned.strip()
+
+
 def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[str]]:
     selected_set = (
         (get_setting(db, "discord_device_share_message_set") or "").strip().lower()
@@ -3123,13 +3142,18 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         if re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", lowered):
             return None
 
-    has_self_ref = any(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered) for term in _DEVICE_SHARE_SELF_REF_TERMS)
+    # Normalize generic phrasing instead of rejecting otherwise usable outputs.
+    line = re.sub(r"\bthis\s+link\b", "this post", line, flags=re.IGNORECASE)
+    lowered = line.lower().replace("{payload}", "")
+
+    has_self_ref = any(
+        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
+        for term in _DEVICE_SHARE_SELF_REF_TERMS
+    )
     has_harsh_tone = any(term in lowered for term in _DEVICE_SHARE_HARSH_TERMS)
-    if not has_self_ref:
+    if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_self_ref:
         return None
-    if not has_harsh_tone:
-        return None
-    if "this link" in lowered:
+    if _DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE and not has_harsh_tone:
         return None
 
     return line
@@ -3238,7 +3262,7 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
         "Use one self-reference naturally (mutt, puppy, bitch, cunt, or pup-style wording). "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
         "No hashtags, no emojis, no quotes, no URLs, no extra lines. "
-        "Do not use slurs. Keep it under 18 words."
+        "Do not use slurs. Keep it concise (prefer under 24 words)."
     )
     if keyword_hint:
         prompt += f" Ground it in one of these cues if natural: {keyword_hint}."
@@ -3628,7 +3652,7 @@ async def handler_device_share(
                 """
                 INSERT INTO tpe_device_share_queue
                     (device_id, payload_json, dedupe_fingerprint, status, attempts, last_attempted, created_at)
-                VALUES (?, ?, ?, 'pending', 1, ?, ?)
+                VALUES (?, ?, ?, 'pending', 0, NULL, ?)
                 """,
                 (
                     resolved_device_id,
@@ -3645,7 +3669,6 @@ async def handler_device_share(
                         ensure_ascii=True,
                     ),
                     dedupe_fingerprint,
-                    now_iso,
                     now_iso,
                 ),
             )
@@ -3675,6 +3698,7 @@ async def handler_device_share(
         generation_mode = DEVICE_SHARE_GEN_MODE_STOCK_ONLY
 
     message_line = template_for_message.format(payload=payload_text)
+    message_line = _strip_this_link_phrase(message_line)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
     if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
@@ -5098,7 +5122,14 @@ def _scheduled_weekly_stale_cleanup_job() -> None:
 
 _SHARE_QUEUE_DRAIN_JOB_ID = "device_share_queue_drain"
 _share_queue_drain_lock = asyncio.Lock()
-_SHARE_QUEUE_MAX_ATTEMPTS = 8
+_SHARE_QUEUE_MAX_ATTEMPTS = max(
+    1,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QUEUE_MAX_ATTEMPTS", "8") or "8").strip() or "8"),
+)
+_SHARE_QUEUE_DRAIN_INTERVAL_SECONDS = max(
+    5,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QUEUE_DRAIN_SEC", "30") or "30").strip() or "30"),
+)
 _SHARE_QUEUE_STALE_HOURS = 24
 
 
@@ -5136,6 +5167,12 @@ async def _drain_device_share_queue_job() -> None:
 async def _process_queued_device_share(row: dict) -> None:
     row_id = row["id"]
     device_id = row["device_id"]
+    attempts_so_far = int(row.get("attempts") or 0)
+
+    def _retry_status() -> str:
+        # When the next increment would hit the cap, mark failed so rows don't stay pending forever.
+        return "failed" if (attempts_so_far + 1) >= _SHARE_QUEUE_MAX_ATTEMPTS else "pending"
+
     try:
         payload = json.loads(row["payload_json"])
     except Exception:
@@ -5167,11 +5204,11 @@ async def _process_queued_device_share(row: dict) -> None:
         finally:
             conn.close()
     except Exception as exc:
-        _mark_share_queue_item(row_id, "pending", str(exc))
+        _mark_share_queue_item(row_id, _retry_status(), str(exc))
         return
 
     if not qwen_template:
-        _mark_share_queue_item(row_id, "pending", qwen_error or "qwen_not_ready")
+        _mark_share_queue_item(row_id, _retry_status(), qwen_error or "qwen_not_ready")
         return
 
     payload_text = _build_share_display_payload_text(
@@ -5183,6 +5220,7 @@ async def _process_queued_device_share(row: dict) -> None:
     )
 
     message_line = qwen_template.format(payload=payload_text)
+    message_line = _strip_this_link_phrase(message_line)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
     if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
@@ -5247,6 +5285,12 @@ def _mark_share_queue_item(row_id: int, status: str, reason: str) -> None:
             conn.close()
     except Exception:
         pass
+    logger.info(
+        "Device share queue item update: id=%s status=%s reason=%s",
+        row_id,
+        status,
+        reason,
+    )
 
 
 def start_handler_maintenance_scheduler() -> None:
@@ -5263,14 +5307,17 @@ def start_handler_maintenance_scheduler() -> None:
     _maintenance_scheduler.add_job(
         _drain_device_share_queue_job,
         trigger="interval",
-        seconds=30,
+        seconds=_SHARE_QUEUE_DRAIN_INTERVAL_SECONDS,
         id=_SHARE_QUEUE_DRAIN_JOB_ID,
         replace_existing=True,
         coalesce=True,
         max_instances=1,
     )
     _maintenance_scheduler.start()
-    logger.info("Handler maintenance scheduler started (weekly stale cleanup Sunday 03:15 UTC; share queue drain every 30 s).")
+    logger.info(
+        "Handler maintenance scheduler started (weekly stale cleanup Sunday 03:15 UTC; share queue drain every %s s).",
+        _SHARE_QUEUE_DRAIN_INTERVAL_SECONDS,
+    )
 
 
 def stop_handler_maintenance_scheduler() -> None:
