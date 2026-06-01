@@ -2663,6 +2663,144 @@ def _share_url_kind(url: str, mime_type: str = "", source_package: str = "") -> 
     return "link"
 
 
+# ---------------------------------------------------------------------------
+# URL content enrichment (feed real post text to Qwen instead of a domain stub)
+# ---------------------------------------------------------------------------
+
+_FXTWITTER_API = "https://api.fxtwitter.com/status/{tweet_id}"
+_FXTWITTER_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?(?:fxtwitter\.com|twitter\.com|x\.com)/(?:[^/]+/)*(?:status|statuses)/([0-9]+)",
+    re.IGNORECASE,
+)
+_REDDIT_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?reddit\.com(/r/[^/]+/comments/[A-Za-z0-9_]+)(?:/[^/?]*)?(?:\?.*)?$",
+    re.IGNORECASE,
+)
+_BSKY_URL_RE = re.compile(
+    r"(?:https?://)?bsky\.app/profile/([^/]+)/post/([A-Za-z0-9]+)",
+    re.IGNORECASE,
+)
+_BSKY_RESOLVE_API = "https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle"
+_BSKY_THREAD_API = "https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread"
+_URL_FETCH_TIMEOUT = 4.0
+
+
+async def _fetch_fxtwitter_content(url: str) -> Optional[str]:
+    """Return tweet body text (+ media alt text) from the fxtwitter API, or None on failure."""
+    m = _FXTWITTER_URL_RE.search(url)
+    if not m:
+        return None
+    tweet_id = m.group(1)
+    try:
+        async with httpx.AsyncClient(timeout=_URL_FETCH_TIMEOUT) as client:
+            resp = await client.get(
+                _FXTWITTER_API.format(tweet_id=tweet_id),
+                headers={"User-Agent": "mochii-live-bot/1.0"},
+            )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        tweet = (data.get("tweet") or {})
+        parts: list[str] = []
+        body = (tweet.get("text") or "").strip()
+        if body:
+            parts.append(body)
+        for media in (tweet.get("media") or {}).get("all") or []:
+            alt = (media.get("altText") or media.get("description") or "").strip()
+            if alt and alt not in parts:
+                parts.append(alt)
+        return " | ".join(parts) if parts else None
+    except Exception:
+        return None
+
+
+async def _fetch_reddit_content(url: str) -> Optional[str]:
+    """Return post title (+ selftext excerpt) from the Reddit JSON API, or None on failure."""
+    m = _REDDIT_URL_RE.search(url)
+    if not m:
+        return None
+    path = m.group(1).rstrip("/")
+    api_url = f"https://www.reddit.com{path}.json?raw_json=1&limit=1"
+    try:
+        async with httpx.AsyncClient(timeout=_URL_FETCH_TIMEOUT) as client:
+            resp = await client.get(
+                api_url,
+                headers={"User-Agent": "mochii-live-bot/1.0"},
+                follow_redirects=True,
+            )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        listing = data[0] if isinstance(data, list) and data else {}
+        post = ((listing.get("data") or {}).get("children") or [{}])[0]
+        post_data = (post.get("data") or {})
+        title = (post_data.get("title") or "").strip()
+        selftext = (post_data.get("selftext") or "").strip()[:300]
+        subreddit = (post_data.get("subreddit_name_prefixed") or "").strip()
+        parts = [p for p in [title, selftext] if p]
+        if subreddit:
+            parts.insert(0, subreddit)
+        return " | ".join(parts) if parts else None
+    except Exception:
+        return None
+
+
+async def _fetch_bsky_content(url: str) -> Optional[str]:
+    """Return post text from the Bluesky public API, or None on failure."""
+    m = _BSKY_URL_RE.search(url)
+    if not m:
+        return None
+    handle, rkey = m.group(1), m.group(2)
+    try:
+        async with httpx.AsyncClient(timeout=_URL_FETCH_TIMEOUT) as client:
+            resolve = await client.get(
+                _BSKY_RESOLVE_API,
+                params={"handle": handle},
+                headers={"User-Agent": "mochii-live-bot/1.0"},
+            )
+            if resolve.status_code != 200:
+                return None
+            did = (resolve.json().get("did") or "").strip()
+            if not did:
+                return None
+            at_uri = f"at://{did}/app.bsky.feed.post/{rkey}"
+            thread_resp = await client.get(
+                _BSKY_THREAD_API,
+                params={"uri": at_uri, "depth": "0"},
+                headers={"User-Agent": "mochii-live-bot/1.0"},
+            )
+        if thread_resp.status_code != 200:
+            return None
+        post = (
+            (thread_resp.json().get("thread") or {})
+            .get("post", {})
+            .get("record", {})
+        )
+        text = (post.get("text") or "").strip()
+        return text or None
+    except Exception:
+        return None
+
+
+async def _enrich_generation_source_text(source_text: str, urls: list[str]) -> str:
+    """If source_text is just a domain stub, try fetching real content from the first recognised URL."""
+    # Already has real user text — no need to fetch.
+    if source_text and not source_text.startswith("shared "):
+        return source_text
+    if not urls:
+        return source_text
+    url = urls[0]
+    host = _share_url_host(url)
+    fetched: Optional[str] = None
+    if host.endswith("fxtwitter.com") or host.endswith("twitter.com") or host == "x.com":
+        fetched = await _fetch_fxtwitter_content(url)
+    elif host.endswith("reddit.com"):
+        fetched = await _fetch_reddit_content(url)
+    elif host == "bsky.app":
+        fetched = await _fetch_bsky_content(url)
+    return fetched.strip()[:900] if fetched else source_text
+
+
 def _build_share_display_payload_text(
     *,
     share_text: str,
@@ -3391,6 +3529,7 @@ async def handler_device_share(
         mime_type=share_mime_type,
         source_package=share_source_package,
     )
+    generation_source_text = await _enrich_generation_source_text(generation_source_text, share_urls)
 
     selected_set, templates = _active_device_share_templates(db)
     rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
@@ -4943,6 +5082,9 @@ async def _process_queued_device_share(row: dict) -> None:
     share_urls = payload.get("urls") or []
     generation_source_text = payload.get("generation_source_text") or ""
     dedupe_fingerprint = row.get("dedupe_fingerprint") or ""
+
+    # Re-attempt URL enrichment in case it failed or wasn't run when first queued.
+    generation_source_text = await _enrich_generation_source_text(generation_source_text, share_urls)
 
     try:
         conn = get_db_connection()
