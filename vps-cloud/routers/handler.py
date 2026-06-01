@@ -529,7 +529,7 @@ _DEVICE_SHARE_PLAYFUL_LINES = [
     "Pup discovered a spicy little treasure: {payload}",
     "Zoomies level high, so pup shared this gem: {payload}",
     "Pup's 'just one peek' became this share: {payload}",
-    "Happy yips, flushed cheeks, and this post: {payload}",
+    "Happy yips, flushed cheeks, and this drop: {payload}",
     "Pup got butterflies and dropped this here: {payload}",
     "Playful pup energy unlocked by: {payload}",
     "Pup lit up and had to share this one: {payload}",
@@ -3132,9 +3132,9 @@ def _build_share_display_payload_text(
         payload_text = _strip_share_urls(share_subject)
     if not payload_text and share_urls:
         kind = _share_url_kind(share_urls[0], mime_type, source_package)
-        payload_text = f"this {kind}" if kind != "link" else "shared post"
+        payload_text = f"shared {kind}" if kind != "link" else "shared drop"
     if not payload_text:
-        payload_text = "this post"
+        payload_text = "shared drop"
     if len(payload_text) > 900:
         payload_text = payload_text[:897].rstrip() + "..."
     return payload_text
@@ -3162,10 +3162,10 @@ def _build_share_generation_source_text(
 
 
 def _strip_this_link_phrase(text: str) -> str:
-    """Remove generic 'this link' phrasing before delivery without altering payload URLs."""
+    """Remove generic placeholder phrasing before delivery without altering payload URLs."""
     if not text:
         return ""
-    cleaned = re.sub(r"\bthis\s+link\b", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bthis\s+(link|post)\b", "", text, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+([:;,.!?])", r"\1", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     cleaned = re.sub(r":\s*:", ":", cleaned)
@@ -3442,7 +3442,7 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
             return None
 
     # Normalize generic phrasing instead of rejecting otherwise usable outputs.
-    line = re.sub(r"\bthis\s+link\b", "this post", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bthis\s+link\b", "shared drop", line, flags=re.IGNORECASE)
     lowered = line.lower().replace("{payload}", "")
 
     # Repair first-person phrasing into enforced third-person voice instead of hard-failing.
