@@ -237,6 +237,13 @@ _DEVICE_SHARE_QWEN_REPO_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REP
 _DEVICE_SHARE_QWEN_FILE_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_FILENAME", "Qwen2.5-1.5B-Q8_0.gguf") or "Qwen2.5-1.5B-Q8_0.gguf").strip()
 _DEVICE_SHARE_QWEN_CTX_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_CTX", "512") or "512").strip() or "512")
 _DEVICE_SHARE_QWEN_GPU_LAYERS_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS", "-1") or "-1").strip() or "-1")
+_DEVICE_SHARE_HYBRID_QWEN_WEIGHT = min(
+    1.0,
+    max(
+        0.0,
+        float((os.environ.get("DISCORD_DEVICE_SHARE_HYBRID_QWEN_WEIGHT", "0.25") or "0.25").strip() or "0.25"),
+    ),
+)
 _DEVICE_SHARE_TEMPLATE_RECENT_COUNT = max(
     4,
     int((os.environ.get("DISCORD_DEVICE_SHARE_TEMPLATE_RECENT_COUNT", "18") or "18").strip() or "18"),
@@ -377,6 +384,52 @@ _DEVICE_SHARE_HARSH_TERMS = {
     "cumrag",
     "cumbag",
 }
+_DEVICE_SHARE_VIOLENT_TERMS = {
+    "fight",
+    "kill",
+    "hurt",
+    "harm",
+    "beat",
+    "blood",
+    "stab",
+    "shoot",
+    "choke",
+    "strangle",
+    "attack",
+    "violent",
+}
+_DEVICE_SHARE_THREAT_PATTERNS = [
+    re.compile(r"\bshow\s+you\s+who'?s\s+who\b", re.IGNORECASE),
+    re.compile(r"\b(done|finished)\s+with\s+you\b", re.IGNORECASE),
+    re.compile(r"\bin\s+a\s+fight\b", re.IGNORECASE),
+    re.compile(r"\b(hurt|harm|kill|attack|beat)\s+(you|them)\b", re.IGNORECASE),
+]
+_DEVICE_SHARE_FEELING_CUES = {
+    "shame",
+    "embarrassed",
+    "humiliated",
+    "desperate",
+    "needy",
+    "craving",
+    "exposed",
+    "cornered",
+    "squirm",
+    "squirming",
+    "blushing",
+    "blush",
+    "red-faced",
+    "shaky",
+    "nerves",
+    "nervous",
+}
+_DEVICE_SHARE_FEELING_PHRASES = [
+    "all blush and static",
+    "caught squirming in public",
+    "on a shaky leash tonight",
+    "red-faced and craving noise",
+    "running hot with shame",
+    "all nerves and bad decisions",
+]
 _DEVICE_SHARE_HARD_SLUR_TERMS = [
     value.strip().lower()
     for value in (os.environ.get("DISCORD_DEVICE_SHARE_HARD_SLURS", "") or "").split(",")
@@ -3158,7 +3211,7 @@ def _build_share_generation_source_text(
         host = _share_url_host(share_urls[0]) or "unknown host"
         kind = _share_url_kind(share_urls[0], mime_type, source_package)
         return f"shared {kind} from {host}"
-    return "shared post"
+    return "shared drop"
 
 
 def _strip_this_link_phrase(text: str) -> str:
@@ -3380,9 +3433,9 @@ def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple
     if keywords and random.random() < 0.62:
         keyword_used = random.choice(keywords)
         suffix = random.choice([
-            f" after seeing {keyword_used}",
-            f" over {keyword_used}",
-            f" because {keyword_used} hit too hard",
+            f" after seeing {keyword_used}, all blush and static",
+            f" over {keyword_used}, caught squirming in public",
+            f" because {keyword_used} hit too hard, on a shaky leash tonight",
         ])
         stripped = mutated.rstrip()
         if stripped.endswith(":"):
@@ -3443,6 +3496,14 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
 
     # Normalize generic phrasing instead of rejecting otherwise usable outputs.
     line = re.sub(r"\bthis\s+link\b", "shared drop", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bthis\s+post\b", "shared drop", line, flags=re.IGNORECASE)
+    line = re.sub(r":\s*shared\s+post\s*$", ": {payload}", line, flags=re.IGNORECASE)
+
+    # Reframe second-person targeting back onto the mutt so output stays self-focused.
+    line = re.sub(r"\byou['’]re\b", "pup is", line, flags=re.IGNORECASE)
+    line = re.sub(r"\byour\b", "pup's", line, flags=re.IGNORECASE)
+    line = re.sub(r"\byou\b", "pup", line, flags=re.IGNORECASE)
+    line = re.sub(r"\s+", " ", line).strip()
     lowered = line.lower().replace("{payload}", "")
 
     # Repair first-person phrasing into enforced third-person voice instead of hard-failing.
@@ -3467,6 +3528,11 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         for token in tokens
     )
     has_harsh_tone = any(term in lowered for term in _DEVICE_SHARE_HARSH_TERMS)
+    has_violent_tone = any(
+        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
+        for term in _DEVICE_SHARE_VIOLENT_TERMS
+    )
+    has_threat_pattern = any(pattern.search(lowered) for pattern in _DEVICE_SHARE_THREAT_PATTERNS)
     if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
         # Inject a minimal label frame instead of rejecting an otherwise decent caption.
         if line.endswith(": {payload}"):
@@ -3484,9 +3550,25 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
             for token in tokens
         )
 
+    has_feeling_cue = any(
+        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
+        for term in _DEVICE_SHARE_FEELING_CUES
+    )
+    if not has_feeling_cue:
+        feeling_phrase = random.choice(_DEVICE_SHARE_FEELING_PHRASES)
+        base = re.sub(r"\s*:\s*\{payload\}\s*$", "", line).strip()
+        if base:
+            line = f"{base}; {feeling_phrase}: {{payload}}"
+        else:
+            line = f"{feeling_phrase}: {{payload}}"
+        line = re.sub(r"\s+", " ", line).strip()
+        lowered = line.lower().replace("{payload}", "")
+
     if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
         return None
     if _DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE and not has_harsh_tone:
+        return None
+    if has_violent_tone or has_threat_pattern:
         return None
     if _DEVICE_SHARE_FIRST_PERSON_RE.search(lowered):
         return None
@@ -3597,6 +3679,7 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
         "Use one degrading label naturally; examples include mutt, pup, puppy, bitch, pisslut, cumbag, cumrag, kenneltrash, sloptoy, dog, toy, cunt, pet. "
         "Examples are not exhaustive - creative labels are allowed. "
         "Never use first-person words like I, me, my, mine. "
+        "Let the wording imply the mutt's reaction to the shared content without stating feelings directly. "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
         "No hashtags, no emojis, no quotes, no URLs. "
         "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
@@ -3638,6 +3721,7 @@ async def _generate_local_qwen_share_template(
     system_prompt = (
         "You are a dumb mutt caption writer using third-person voice only. "
         "Return exactly one caption block with harsh tone and content-specific wording. "
+        "Make it about the mutt, with the reaction implied by tone and wording rather than explicit feeling statements. "
         "Use degrading language toward the mutt itself; profanity is allowed. "
         "The caption must include one mutt-label term; creative labels are allowed (for example: kenneltrash, cumrag, sloptoy, submission toy). "
         "Never use first-person words (I, me, my, mine). "
@@ -3754,6 +3838,29 @@ async def _generate_qwen_share_template(
     if not cleaned:
         return None, "qwen_invalid_output"
     return cleaned, None
+
+
+def _select_hybrid_template(
+    *,
+    rendered_template: str,
+    qwen_template: Optional[str],
+    keywords: list[str],
+) -> tuple[str, str, dict[str, Any]]:
+    """Prefer template mutations; only occasionally swap in a valid Qwen line."""
+    template_for_message, generation_meta = _mutate_share_template(rendered_template, keywords)
+    generation_path = "hybrid_template_bias"
+    generation_meta = dict(generation_meta)
+    generation_meta["qwen_weight"] = _DEVICE_SHARE_HYBRID_QWEN_WEIGHT
+    generation_meta["qwen_available"] = bool(qwen_template)
+
+    if qwen_template and random.random() < _DEVICE_SHARE_HYBRID_QWEN_WEIGHT:
+        template_for_message = qwen_template
+        generation_path = "hybrid_qwen"
+        generation_meta["qwen_selected"] = True
+    else:
+        generation_meta["qwen_selected"] = False
+
+    return template_for_message, generation_path, generation_meta
 
 @router.post("/api/handler/device-status")
 async def handler_device_status(
@@ -3982,8 +4089,11 @@ async def handler_device_share(
             keywords=keywords,
         )
         if qwen_template:
-            template_for_message = qwen_template
-            generation_path = "hybrid_qwen"
+            template_for_message, generation_path, generation_meta = _select_hybrid_template(
+                rendered_template=rendered_template,
+                qwen_template=qwen_template,
+                keywords=keywords,
+            )
         else:
             # Qwen not ready — queue the post and return early; drain job will retry.
             now_iso = _now_iso()
@@ -5534,6 +5644,7 @@ async def _process_queued_device_share(row: dict) -> None:
         conn = get_db_connection()
         try:
             selected_set, templates = _active_device_share_templates(conn)
+            rendered_template, _ = _render_device_share_template(_choose_device_share_template(templates))
             qwen_template, qwen_error = await _generate_qwen_share_template(
                 db=conn,
                 payload_text=generation_source_text or share_text or share_subject,
@@ -5550,6 +5661,13 @@ async def _process_queued_device_share(row: dict) -> None:
         _mark_share_queue_item(row_id, _retry_status(), qwen_error or "qwen_not_ready")
         return
 
+    keywords = _extract_share_keywords(generation_source_text or share_text or share_subject)
+    template_for_message, generation_path, generation_meta = _select_hybrid_template(
+        rendered_template=rendered_template,
+        qwen_template=qwen_template,
+        keywords=keywords,
+    )
+
     payload_text = _build_share_display_payload_text(
         share_text=share_text,
         share_subject=share_subject,
@@ -5558,7 +5676,7 @@ async def _process_queued_device_share(row: dict) -> None:
         source_package=share_source_package,
     )
 
-    message_line = qwen_template.format(payload=payload_text)
+    message_line = template_for_message.format(payload=payload_text)
     message_line = _strip_this_link_phrase(message_line)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
@@ -5591,8 +5709,9 @@ async def _process_queued_device_share(row: dict) -> None:
                             "urls": share_urls,
                             "dedupe_fingerprint": dedupe_fingerprint,
                             "generation_source_text": generation_source_text,
-                            "generation_path": "queued_qwen",
-                            "template_final": qwen_template,
+                            "generation_path": generation_path,
+                            "template_final": template_for_message,
+                            "generation_meta": generation_meta,
                             "delivery": {"ok": bool(delivered)},
                         },
                         ensure_ascii=True,
