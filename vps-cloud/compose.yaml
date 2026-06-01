@@ -59,6 +59,9 @@ services:
       - DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC=${DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC:-8.0}
       - DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS=${DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS:-140}
       - DISCORD_DEVICE_SHARE_QWEN_MAX_ATTEMPTS=${DISCORD_DEVICE_SHARE_QWEN_MAX_ATTEMPTS:-2}
+      - DISCORD_DEVICE_SHARE_QWEN_BREAKER_WINDOW_SEC=${DISCORD_DEVICE_SHARE_QWEN_BREAKER_WINDOW_SEC:-180}
+      - DISCORD_DEVICE_SHARE_QWEN_BREAKER_FAILURE_THRESHOLD=${DISCORD_DEVICE_SHARE_QWEN_BREAKER_FAILURE_THRESHOLD:-5}
+      - DISCORD_DEVICE_SHARE_QWEN_BREAKER_COOLDOWN_SEC=${DISCORD_DEVICE_SHARE_QWEN_BREAKER_COOLDOWN_SEC:-180}
       - DISCORD_DEVICE_SHARE_QWEN_RUNTIME=${DISCORD_DEVICE_SHARE_QWEN_RUNTIME:-auto}
       - DISCORD_DEVICE_SHARE_QWEN_REPO_ID=${DISCORD_DEVICE_SHARE_QWEN_REPO_ID:-thirdeyeai/Qwen2.5-1.5B-Instruct-uncensored-gguf}
       - DISCORD_DEVICE_SHARE_QWEN_FILENAME=${DISCORD_DEVICE_SHARE_QWEN_FILENAME:-Qwen2.5-1.5B-Q8_0.gguf}
@@ -111,6 +114,9 @@ services:
       - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
       # Redis connection URL for teaser rate-limiting
       - REDIS_URL=redis://redis:6379
+      # Readiness gate controls for /readyz endpoint.
+      - READINESS_REQUIRE_REDIS=${READINESS_REQUIRE_REDIS:-true}
+      - READINESS_REQUIRE_MQTT=${READINESS_REQUIRE_MQTT:-false}
       # ── Store / Payment ───────────────────────────────
       # Payment provider selection (default: segpay)
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-segpay}
@@ -254,8 +260,20 @@ services:
     networks:
       - camera_net
     depends_on:
-      - go2rtc
-      - redis
+      go2rtc:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import sys,urllib.request;
+          sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).getcode()==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   # ── go2rtc – RTSP → WebRTC bridge ───────────────────
@@ -277,6 +295,12 @@ services:
     image: redis:7-alpine
     networks:
       - camera_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   # ── Cloudflare Tunnel – VPS to public web ───────────
@@ -307,7 +331,8 @@ services:
     networks:
       - camera_net
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   # ── Tailscale – secure site-to-site VPN ─────────────
@@ -370,8 +395,10 @@ services:
     networks:
       - camera_net
     depends_on:
-      - backend
-      - go2rtc
+      backend:
+        condition: service_healthy
+      go2rtc:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

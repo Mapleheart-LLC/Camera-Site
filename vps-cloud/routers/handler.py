@@ -259,6 +259,21 @@ _DEVICE_SHARE_RECENT_TEMPLATE_SIGNATURES: deque[str] = deque(maxlen=_DEVICE_SHAR
 _LOCAL_QWEN_LLM: Any = None
 _LOCAL_QWEN_FAILED = False
 _LOCAL_QWEN_FINGERPRINT: Optional[str] = None
+_QWEN_BREAKER_FAILURE_WINDOW_SECONDS = max(
+    30,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_BREAKER_WINDOW_SEC", "180") or "180").strip() or "180"),
+)
+_QWEN_BREAKER_FAILURE_THRESHOLD = max(
+    2,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_BREAKER_FAILURE_THRESHOLD", "5") or "5").strip() or "5"),
+)
+_QWEN_BREAKER_COOLDOWN_SECONDS = max(
+    10,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_BREAKER_COOLDOWN_SEC", "180") or "180").strip() or "180"),
+)
+_QWEN_BREAKER_FAILURE_TIMES: deque[float] = deque(maxlen=256)
+_QWEN_BREAKER_OPEN_UNTIL: float = 0.0
+_QWEN_BREAKER_LAST_REASON: str = ""
 _DEVICE_SHARE_PROMPT_PLACEHOLDER = "__PAYLOAD__"
 _DEVICE_SHARE_LABEL_TERMS = {
     "pup",
@@ -3948,6 +3963,51 @@ def _extract_qwen_response_text(data: Any) -> str:
     return str(data.get("content") or data.get("response") or "")
 
 
+def _qwen_breaker_is_open(now_ts: Optional[float] = None) -> bool:
+    now = now_ts if now_ts is not None else time.time()
+    return _QWEN_BREAKER_OPEN_UNTIL > now
+
+
+def _qwen_breaker_prune(now_ts: Optional[float] = None) -> None:
+    now = now_ts if now_ts is not None else time.time()
+    cutoff = now - float(_QWEN_BREAKER_FAILURE_WINDOW_SECONDS)
+    while _QWEN_BREAKER_FAILURE_TIMES and _QWEN_BREAKER_FAILURE_TIMES[0] < cutoff:
+        _QWEN_BREAKER_FAILURE_TIMES.popleft()
+
+
+def _qwen_breaker_record_failure(reason: str) -> None:
+    global _QWEN_BREAKER_OPEN_UNTIL, _QWEN_BREAKER_LAST_REASON
+    now = time.time()
+    _qwen_breaker_prune(now)
+    _QWEN_BREAKER_FAILURE_TIMES.append(now)
+    _QWEN_BREAKER_LAST_REASON = str(reason or "qwen_failed")
+    if len(_QWEN_BREAKER_FAILURE_TIMES) >= _QWEN_BREAKER_FAILURE_THRESHOLD:
+        _QWEN_BREAKER_OPEN_UNTIL = now + float(_QWEN_BREAKER_COOLDOWN_SECONDS)
+
+
+def _qwen_breaker_record_success() -> None:
+    global _QWEN_BREAKER_OPEN_UNTIL, _QWEN_BREAKER_LAST_REASON
+    _QWEN_BREAKER_FAILURE_TIMES.clear()
+    _QWEN_BREAKER_OPEN_UNTIL = 0.0
+    _QWEN_BREAKER_LAST_REASON = ""
+
+
+def _qwen_breaker_status() -> dict[str, Any]:
+    now = time.time()
+    _qwen_breaker_prune(now)
+    open_now = _qwen_breaker_is_open(now)
+    remaining = max(0, int(round(_QWEN_BREAKER_OPEN_UNTIL - now))) if open_now else 0
+    return {
+        "open": open_now,
+        "remaining_sec": remaining,
+        "failures_in_window": len(_QWEN_BREAKER_FAILURE_TIMES),
+        "failure_threshold": _QWEN_BREAKER_FAILURE_THRESHOLD,
+        "window_sec": _QWEN_BREAKER_FAILURE_WINDOW_SECONDS,
+        "cooldown_sec": _QWEN_BREAKER_COOLDOWN_SECONDS,
+        "last_reason": _QWEN_BREAKER_LAST_REASON or None,
+    }
+
+
 def _effective_device_share_qwen_runtime(db: sqlite3.Connection) -> str:
     raw = (
         (get_setting(db, "discord_device_share_qwen_runtime") or "").strip().lower()
@@ -4152,10 +4212,22 @@ async def _generate_qwen_share_template(
     keywords: list[str],
     inspiration_templates: list[str],
 ) -> tuple[Optional[str], Optional[str]]:
+    if _qwen_breaker_is_open():
+        return None, "qwen_circuit_open"
+
     runtime = _effective_device_share_qwen_runtime(db)
+    endpoint = (
+        (get_setting(db, "discord_device_share_qwen_endpoint") or "").strip()
+        or _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT
+    )
     local_error: Optional[str] = None
 
-    if runtime in {"auto", "local"}:
+    # In auto mode, prefer endpoint inference first. This avoids local llama.cpp
+    # initialization/inference crashes from taking down the backend process.
+    if runtime == "auto" and endpoint:
+        runtime = "endpoint"
+
+    if runtime == "local":
         local_line, local_error = await _generate_local_qwen_share_template(
             db=db,
             payload_text=payload_text,
@@ -4164,16 +4236,16 @@ async def _generate_qwen_share_template(
             inspiration_templates=inspiration_templates,
         )
         if local_line:
+            _qwen_breaker_record_success()
             return local_line, None
-        if runtime == "local":
-            return None, local_error or "local_qwen_failed"
+        _qwen_breaker_record_failure(local_error or "local_qwen_failed")
+        return None, local_error or "local_qwen_failed"
 
-    endpoint = (
-        (get_setting(db, "discord_device_share_qwen_endpoint") or "").strip()
-        or _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT
-    )
+    if runtime == "auto" and not endpoint:
+        return None, "qwen_endpoint_missing"
+
     if not endpoint:
-        return None, local_error or "qwen_endpoint_missing"
+        return None, "qwen_endpoint_missing"
 
     model_name = (
         (get_setting(db, "discord_device_share_qwen_model") or "").strip()
@@ -4200,9 +4272,11 @@ async def _generate_qwen_share_template(
         async with httpx.AsyncClient(timeout=_DEVICE_SHARE_QWEN_TIMEOUT_SECONDS) as client:
             response = await client.post(endpoint, json=request_payload)
         if response.status_code >= 400:
+            _qwen_breaker_record_failure(f"qwen_http_{response.status_code}")
             return None, f"qwen_http_{response.status_code}"
         data = response.json()
     except Exception:  # noqa: BLE001
+        _qwen_breaker_record_failure("qwen_request_failed")
         return None, "qwen_request_failed"
 
     raw = ""
@@ -4214,7 +4288,9 @@ async def _generate_qwen_share_template(
         )
     cleaned = _sanitize_qwen_template(raw)
     if not cleaned:
+        _qwen_breaker_record_failure("qwen_invalid_output")
         return None, "qwen_invalid_output"
+    _qwen_breaker_record_success()
     return cleaned, None
 
 
@@ -4474,54 +4550,13 @@ async def handler_device_share(
                 keywords=keywords,
             )
         else:
-            # Qwen not ready — queue the post and return early; drain job will retry.
-            now_iso = _now_iso()
-            db.execute(
-                """
-                INSERT INTO tpe_device_share_queue
-                    (device_id, payload_json, dedupe_fingerprint, status, attempts, last_attempted, created_at)
-                VALUES (?, ?, ?, 'pending', 0, NULL, ?)
-                """,
-                (
-                    resolved_device_id,
-                    json.dumps(
-                        {
-                            "text": share_text,
-                            "subject": share_subject,
-                            "mime_type": share_mime_type,
-                            "source_package": share_source_package,
-                            "stream_uris": share_stream_uris,
-                            "urls": share_urls,
-                            "generation_source_text": generation_source_text,
-                        },
-                        ensure_ascii=True,
-                    ),
-                    dedupe_fingerprint,
-                    now_iso,
-                ),
-            )
-            db.execute(
-                """
-                INSERT INTO tpe_behavior_logs (device_id, source, event_type, event_value, payload_json, created_at)
-                VALUES (?, 'device_share', 'quick_share_queued', ?, ?, ?)
-                """,
-                (
-                    resolved_device_id,
-                    share_urls[0] if share_urls else (share_subject or "shared_text"),
-                    json.dumps(
-                        {
-                            "text": share_text,
-                            "subject": share_subject,
-                            "dedupe_fingerprint": dedupe_fingerprint,
-                            "qwen_error": qwen_error or "qwen_not_ready",
-                        },
-                        ensure_ascii=True,
-                    ),
-                    now_iso,
-                ),
-            )
-            db.commit()
-            return {"status": "queued", "device_id": resolved_device_id, "reason": qwen_error or "qwen_not_ready"}
+            # Keep quick-share live even when Qwen fails: degrade to deterministic
+            # mutation path instead of stalling/queueing the post.
+            template_for_message, generation_meta = _mutate_share_template(rendered_template, keywords)
+            generation_path = "spacy_fallback"
+            fallback_reason = qwen_error or "qwen_not_ready"
+            generation_meta = dict(generation_meta)
+            generation_meta["qwen_error"] = fallback_reason
     else:
         generation_mode = DEVICE_SHARE_GEN_MODE_STOCK_ONLY
 
@@ -6234,6 +6269,115 @@ def handler_devices_maintenance_status(
         "scheduler_running": bool(_maintenance_scheduler.running),
         "next_run_utc": job.next_run_time.isoformat() if job and job.next_run_time else None,
         "last_run": dict(run) if run else None,
+    }
+
+
+@router.get("/api/handler/ops/queue-health")
+def handler_ops_queue_health(
+    _current_user: dict = Depends(role_required("admin", "handler")),
+    db: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    now = datetime.now(timezone.utc)
+
+    share_counts = {
+        "pending": 0,
+        "delivered": 0,
+        "failed": 0,
+    }
+    share_oldest_pending_age_sec: Optional[int] = None
+    share_last_failed_at: Optional[str] = None
+    try:
+        share_rows = db.execute(
+            """
+            SELECT status, COUNT(*) AS n
+            FROM tpe_device_share_queue
+            GROUP BY status
+            """
+        ).fetchall()
+        for row in share_rows:
+            status = str(row["status"] or "").strip().lower()
+            count = int(row["n"] or 0)
+            if status in share_counts:
+                share_counts[status] = count
+
+        oldest_pending = db.execute(
+            "SELECT created_at FROM tpe_device_share_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+        ).fetchone()
+        if oldest_pending and oldest_pending["created_at"]:
+            try:
+                created = datetime.fromisoformat(str(oldest_pending["created_at"]).replace("Z", "+00:00"))
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                share_oldest_pending_age_sec = max(0, int((now - created).total_seconds()))
+            except Exception:
+                share_oldest_pending_age_sec = None
+
+        last_failed = db.execute(
+            "SELECT last_attempted FROM tpe_device_share_queue WHERE status = 'failed' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        share_last_failed_at = str(last_failed["last_attempted"] or "").strip() or None if last_failed else None
+    except sqlite3.OperationalError:
+        pass
+
+    outbox_counts = {
+        "pending": 0,
+        "dead": 0,
+    }
+    outbox_oldest_pending_age_sec: Optional[int] = None
+    outbox_last_dead_at: Optional[str] = None
+    try:
+        outbox_rows = db.execute(
+            """
+            SELECT status, COUNT(*) AS n
+            FROM handler_command_outbox
+            GROUP BY status
+            """
+        ).fetchall()
+        for row in outbox_rows:
+            status = str(row["status"] or "").strip().lower()
+            count = int(row["n"] or 0)
+            if status in outbox_counts:
+                outbox_counts[status] = count
+
+        oldest_outbox = db.execute(
+            "SELECT created_at FROM handler_command_outbox WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+        ).fetchone()
+        if oldest_outbox and oldest_outbox["created_at"]:
+            try:
+                created = datetime.fromisoformat(str(oldest_outbox["created_at"]).replace("Z", "+00:00"))
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                outbox_oldest_pending_age_sec = max(0, int((now - created).total_seconds()))
+            except Exception:
+                outbox_oldest_pending_age_sec = None
+
+        last_dead = db.execute(
+            "SELECT updated_at FROM handler_command_outbox WHERE status = 'dead' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        outbox_last_dead_at = str(last_dead["updated_at"] or "").strip() or None if last_dead else None
+    except sqlite3.OperationalError:
+        pass
+
+    return {
+        "time": now.isoformat(),
+        "share_queue": {
+            **share_counts,
+            "oldest_pending_age_sec": share_oldest_pending_age_sec,
+            "last_failed_at": share_last_failed_at,
+        },
+        "command_outbox": {
+            **outbox_counts,
+            "oldest_pending_age_sec": outbox_oldest_pending_age_sec,
+            "last_dead_at": outbox_last_dead_at,
+        },
+        "qwen_circuit_breaker": _qwen_breaker_status(),
+        "mqtt": {
+            "enabled": bool(_mqtt_client.enabled),
+            "started": bool(_mqtt_client.started),
+            "connected": bool(_mqtt_client.connected),
+            "last_connect_rc": _mqtt_client.last_connect_rc,
+            "last_connect_error": _mqtt_client.last_connect_error,
+        },
     }
 
 

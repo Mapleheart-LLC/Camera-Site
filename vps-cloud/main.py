@@ -41,7 +41,7 @@ from dependencies import (
     role_required,
     verify_password,
 )
-from mqtt_client import initialize_mqtt, shutdown_mqtt
+from mqtt_client import initialize_mqtt, shutdown_mqtt, mqtt_client as _mqtt_client_service
 from routers.interactive import router as interactive_router
 from routers.admin import router as admin_router
 from routers.questions import router as questions_router
@@ -72,7 +72,7 @@ from routers.sms_proxy import (
     admin_sms_router,
     migrate_sms_proxy,
 )
-from redis_client import close_redis
+from redis_client import close_redis, get_redis
 from shame import compute_shame_summary, ensure_shame_tables
 from slowapi.errors import RateLimitExceeded
 
@@ -82,6 +82,15 @@ from slowapi.errors import RateLimitExceeded
 GO2RTC_HOST: str = os.environ.get("GO2RTC_HOST", "localhost")
 GO2RTC_PORT: str = os.environ.get("GO2RTC_PORT", "1984")
 GO2RTC_TIMEOUT: float = 15.0
+
+# Readiness policy controls. Keep defaults non-breaking while allowing stricter
+# production posture via environment toggles.
+READINESS_REQUIRE_REDIS: bool = (
+    str(os.environ.get("READINESS_REQUIRE_REDIS", "false")).strip().lower() == "true"
+)
+READINESS_REQUIRE_MQTT: bool = (
+    str(os.environ.get("READINESS_REQUIRE_MQTT", "false")).strip().lower() == "true"
+)
 
 # Pre-compute the lowercased admin username once at startup so the auth-login
 # fallback comparison uses a fixed-length string with no runtime .lower() call.
@@ -825,6 +834,86 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _check_sqlite_health() -> dict:
+    try:
+        conn = get_db_connection()
+        try:
+            conn.execute("SELECT 1").fetchone()
+        finally:
+            conn.close()
+        return {"ok": True}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+async def _check_redis_health() -> dict:
+    try:
+        client = await get_redis()
+        if client is None:
+            return {"ok": False, "error": "redis_unavailable"}
+        pong = await client.ping()
+        return {"ok": bool(pong)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+def _check_mqtt_health() -> dict:
+    enabled = bool(_mqtt_client_service.enabled)
+    started = bool(_mqtt_client_service.started)
+    connected = bool(_mqtt_client_service.connected)
+    payload = {
+        "ok": (connected if enabled else True),
+        "enabled": enabled,
+        "started": started,
+        "connected": connected,
+        "last_connect_rc": _mqtt_client_service.last_connect_rc,
+        "last_connect_error": _mqtt_client_service.last_connect_error,
+    }
+    return payload
+
+
+@app.get("/healthz")
+async def healthz() -> dict:
+    return {
+        "ok": True,
+        "service": "backend",
+        "time": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    sqlite_status = _check_sqlite_health()
+    redis_status = await _check_redis_health()
+    mqtt_status = _check_mqtt_health()
+
+    blocking_reasons: list[str] = []
+    if not sqlite_status.get("ok"):
+        blocking_reasons.append("sqlite")
+    if READINESS_REQUIRE_REDIS and not redis_status.get("ok"):
+        blocking_reasons.append("redis")
+    if READINESS_REQUIRE_MQTT and not mqtt_status.get("ok"):
+        blocking_reasons.append("mqtt")
+
+    ready = len(blocking_reasons) == 0
+    payload = {
+        "ok": ready,
+        "service": "backend",
+        "time": datetime.now(timezone.utc).isoformat(),
+        "required": {
+            "redis": READINESS_REQUIRE_REDIS,
+            "mqtt": READINESS_REQUIRE_MQTT,
+        },
+        "checks": {
+            "sqlite": sqlite_status,
+            "redis": redis_status,
+            "mqtt": mqtt_status,
+        },
+        "blocking_reasons": blocking_reasons,
+    }
+    return JSONResponse(status_code=200 if ready else 503, content=payload)
 
 # ---------------------------------------------------------------------------
 # Response model

@@ -706,7 +706,7 @@
   function normalizeLovenseCommand(cmd) {
     const normalized = String(cmd || '').trim().toLowerCase();
     if (normalized === 'pulse' || normalized === 'wave' || normalized === 'tease') {
-      return 'vibrate';
+      return normalized;
     }
     return normalized;
   }
@@ -1855,6 +1855,47 @@
     return parts.length ? parts.join(' · ') : '-';
   }
 
+  function readEdgeTelemetry(device) {
+    if (!device || typeof device !== 'object') return null;
+
+    const edge = (device.hr_edge && typeof device.hr_edge === 'object') ? device.hr_edge : null;
+    const toNum = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const rawState = String(
+      edge?.state
+      || device.edge_hr_state
+      || device.hr_edge_state
+      || ''
+    ).trim();
+    const state = rawState || null;
+    const stateLabel = state ? state.replaceAll('_', ' ') : '-';
+
+    const lastLevel = toNum(edge?.last_level ?? device.edge_hr_last_level ?? device.hr_edge_last_level);
+    const pauseBpm = toNum(edge?.pause_bpm ?? device.edge_hr_pause_bpm ?? device.hr_edge_pause_bpm);
+    const resumeBpm = toNum(edge?.resume_bpm ?? device.edge_hr_resume_bpm ?? device.hr_edge_resume_bpm);
+    const updatedAt = String(
+      edge?.updated_at
+      || device.edge_hr_updated_at
+      || device.hr_edge_updated_at
+      || ''
+    ).trim() || null;
+
+    const hasData = Boolean(state || lastLevel != null || pauseBpm != null || resumeBpm != null || updatedAt);
+    if (!hasData) return null;
+
+    return {
+      state,
+      stateLabel,
+      lastLevel,
+      pauseBpm,
+      resumeBpm,
+      updatedAt,
+    };
+  }
+
   function renderEdgeStatusCard() {
     const stateEl = byId('hp2-dashboard-edge-state');
     const levelEl = byId('hp2-dashboard-edge-level');
@@ -1863,8 +1904,8 @@
     if (!stateEl || !levelEl || !thresholdsEl || !updatedEl) return;
 
     const d = selectedDevice();
-    const edge = d?.hr_edge || null;
-    if (!edge || typeof edge !== 'object') {
+    const edge = readEdgeTelemetry(d);
+    if (!edge) {
       stateEl.textContent = '-';
       levelEl.textContent = '-';
       thresholdsEl.textContent = '-';
@@ -1872,18 +1913,12 @@
       return;
     }
 
-    const edgeState = String(edge.state || 'idle').trim() || 'idle';
-    const lastLevel = Number(edge.last_level);
-    const pause = Number(edge.pause_bpm);
-    const resume = Number(edge.resume_bpm);
-    const updatedAt = String(edge.updated_at || '').trim();
-
-    stateEl.textContent = edgeState.replaceAll('_', ' ');
-    levelEl.textContent = Number.isFinite(lastLevel) && lastLevel >= 0 ? `${Math.trunc(lastLevel)}/20` : '-';
-    thresholdsEl.textContent = Number.isFinite(resume) && Number.isFinite(pause)
-      ? `${Math.trunc(resume)} to ${Math.trunc(pause)} bpm`
+    stateEl.textContent = edge.stateLabel;
+    levelEl.textContent = edge.lastLevel != null && edge.lastLevel >= 0 ? `${Math.trunc(edge.lastLevel)}/20` : '-';
+    thresholdsEl.textContent = edge.resumeBpm != null && edge.pauseBpm != null
+      ? `${Math.trunc(edge.resumeBpm)} to ${Math.trunc(edge.pauseBpm)} bpm`
       : '-';
-    updatedEl.textContent = updatedAt ? fmtDate(updatedAt) : '-';
+    updatedEl.textContent = edge.updatedAt ? fmtDate(edge.updatedAt) : '-';
   }
 
   function renderDeviceList() {
@@ -1903,12 +1938,15 @@
         const selected = d.device_id === state.selectedDeviceId;
         const statusLabel = deviceOnline(d) ? 'online' : 'offline';
         const battery = Number.isFinite(Number(d.battery_pct)) ? `${Number(d.battery_pct)}%` : '-';
+        const edge = readEdgeTelemetry(d);
+        const edgeSummary = edge ? `edge ${edge.stateLabel}` : 'edge -';
         return `<li>
           <button type="button" data-device-id="${escapeHtml(d.device_id || '')}">
             <strong>${escapeHtml(d.device_name || d.device_id || 'Unknown')}</strong>
             <div class="hp2-device-meta">
               <span>${escapeHtml(statusLabel)}</span>
               <span>${escapeHtml(battery)}</span>
+              <span>${escapeHtml(edgeSummary)}</span>
               <span>${selected ? 'selected' : ''}</span>
             </div>
           </button>
@@ -1919,6 +1957,7 @@
 
   function renderSelectedDevice() {
     const d = selectedDevice();
+    const edge = readEdgeTelemetry(d);
     byId('hp2-title').textContent = d ? (d.device_name || d.device_id || 'Selected Device') : 'No Device Selected';
     byId('hp2-detail-id').textContent = d?.device_id || '-';
     byId('hp2-detail-name').textContent = d?.device_name || '-';
@@ -1928,6 +1967,12 @@
     byId('hp2-detail-heart-rate').textContent = formatHeartRate(d);
     byId('hp2-detail-vitals-at').textContent = d?.latest_vitals_at ? fmtDate(d.latest_vitals_at) : '-';
     byId('hp2-detail-last').textContent = d ? fmtDate(d.last_seen) : '-';
+    byId('hp2-detail-edge-state').textContent = edge ? edge.stateLabel : '-';
+    byId('hp2-detail-edge-level').textContent = edge && edge.lastLevel != null && edge.lastLevel >= 0 ? `${Math.trunc(edge.lastLevel)}/20` : '-';
+    byId('hp2-detail-edge-thresholds').textContent = edge && edge.resumeBpm != null && edge.pauseBpm != null
+      ? `${Math.trunc(edge.resumeBpm)} to ${Math.trunc(edge.pauseBpm)} bpm`
+      : '-';
+    byId('hp2-detail-edge-updated').textContent = edge?.updatedAt ? fmtDate(edge.updatedAt) : '-';
     byId('hp2-dashboard-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
     byId('hp2-dashboard-heart-rate').textContent = formatHeartRate(d);
     byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
