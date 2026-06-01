@@ -453,7 +453,7 @@
     const hrEdgeRampDownInput = byId('hp2-setting-hr-edge-ramp-down');
     if (!startInput) return;
     try {
-      const data = await apiGet('/api/handler/public-status');
+      const data = await apiGet(`/api/handler/public-status?_=${Date.now()}`);
       startInput.value = normalizeIsoDate(data?.days_caged_start_date);
       if (counterEnabledInput) {
         counterEnabledInput.value = data?.discord_counter_notify_enabled ? 'true' : 'false';
@@ -1770,6 +1770,9 @@
     }
     if (viewName === 'commands') {
       setCommandSection(state.commands.activeSection || 'all');
+    }
+    if (viewName === 'settings') {
+      loadPublicStatusSettingsForForm().catch(() => {});
     }
   }
 

@@ -7263,6 +7263,16 @@ def _safe_int(value: Optional[str], default: int = 0) -> int:
         return default
 
 
+_COUNTER_MANUAL_HOLD_MS = 15 * 60 * 1000
+
+
+def _counter_manual_hold_active(db: sqlite3.Connection, counter_name: str) -> bool:
+    """Return True when automatic counter increments should be temporarily blocked."""
+    key = f"public_{counter_name}_manual_hold_until_ms"
+    hold_until_ms = _safe_int(get_setting(db, key, "0"), 0)
+    return hold_until_ms > int(time.time() * 1000)
+
+
 def _safe_bool(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
@@ -8744,6 +8754,7 @@ async def handler_update_public_status(
         current_tasks_completed = min(tasks_completed, 1000000)
         set_setting(db, "public_tasks_completed", str(current_tasks_completed))
         set_setting(db, "public_tasks_manual_set_at_ms", str(now_ms))
+        set_setting(db, "public_tasks_manual_hold_until_ms", str(now_ms + _COUNTER_MANUAL_HOLD_MS))
         tasks_counter_changed = current_tasks_completed != previous_tasks_completed
 
     if payload.confessions_posted is not None:
@@ -8753,6 +8764,7 @@ async def handler_update_public_status(
         current_confessions_posted = min(confessions_posted, 1000000)
         set_setting(db, "public_confessions_posted", str(current_confessions_posted))
         set_setting(db, "public_confessions_manual_set_at_ms", str(now_ms))
+        set_setting(db, "public_confessions_manual_hold_until_ms", str(now_ms + _COUNTER_MANUAL_HOLD_MS))
         confessions_counter_changed = current_confessions_posted != previous_confessions_posted
     if payload.public_booking_enabled is not None:
         set_setting(
@@ -9181,7 +9193,7 @@ def handler_answer_limbo_item(
         auto_published = True
 
         confessions_raw = get_setting(db, "public_confessions_posted")
-        if confessions_raw is not None:
+        if confessions_raw is not None and not _counter_manual_hold_active(db, "confessions"):
             try:
                 confessions_val = int(confessions_raw)
                 if confessions_val >= 0:
@@ -9319,7 +9331,7 @@ def handler_publish_limbo_item(
     )
 
     confessions_raw = get_setting(db, "public_confessions_posted")
-    if confessions_raw is not None:
+    if confessions_raw is not None and not _counter_manual_hold_active(db, "confessions"):
         try:
             confessions_val = int(confessions_raw)
             if confessions_val >= 0:
@@ -9378,7 +9390,7 @@ def handler_backfill_publish_limbo_items(
 
     if published:
         confessions_raw = get_setting(db, "public_confessions_posted")
-        if confessions_raw is not None:
+        if confessions_raw is not None and not _counter_manual_hold_active(db, "confessions"):
             try:
                 confessions_val = int(confessions_raw)
                 if confessions_val >= 0:

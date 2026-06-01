@@ -1033,8 +1033,11 @@ async def tpe_webhook(
         edge_val = body.get("edge_count")
         orgasm_val = body.get("orgasm_count")
         event_ts_ms = _safe_int(body.get("timestamp"), int(datetime.now(timezone.utc).timestamp() * 1000))
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         tasks_manual_set_at_ms = _setting_int(db, "public_tasks_manual_set_at_ms", 0)
         confessions_manual_set_at_ms = _setting_int(db, "public_confessions_manual_set_at_ms", 0)
+        tasks_manual_hold_until_ms = _setting_int(db, "public_tasks_manual_hold_until_ms", 0)
+        confessions_manual_hold_until_ms = _setting_int(db, "public_confessions_manual_hold_until_ms", 0)
         try:
             parsed_edge = int(edge_val) if edge_val is not None else None
         except Exception:
@@ -1045,6 +1048,13 @@ async def tpe_webhook(
             parsed_orgasm = None
 
         if normalized_event == "edge_recorded":
+            if tasks_manual_hold_until_ms > now_ms:
+                logger.info(
+                    "Ignoring edge_recorded webhook during manual hold: now_ms=%s hold_until_ms=%s",
+                    now_ms,
+                    tasks_manual_hold_until_ms,
+                )
+                return {"status": "received", "counter_update": "ignored_manual_hold"}
             if tasks_manual_set_at_ms and event_ts_ms <= tasks_manual_set_at_ms:
                 logger.info(
                     "Ignoring stale edge_recorded webhook older than manual counter set: event_ts=%s manual_ts=%s",
@@ -1056,6 +1066,13 @@ async def tpe_webhook(
             next_val = parsed_edge if parsed_edge is not None else max(current + 1, 0)
             _set_setting(db, "public_tasks_completed", str(max(next_val, 0)))
         else:
+            if confessions_manual_hold_until_ms > now_ms:
+                logger.info(
+                    "Ignoring orgasm_recorded webhook during manual hold: now_ms=%s hold_until_ms=%s",
+                    now_ms,
+                    confessions_manual_hold_until_ms,
+                )
+                return {"status": "received", "counter_update": "ignored_manual_hold"}
             if confessions_manual_set_at_ms and event_ts_ms <= confessions_manual_set_at_ms:
                 logger.info(
                     "Ignoring stale orgasm_recorded webhook older than manual counter set: event_ts=%s manual_ts=%s",
