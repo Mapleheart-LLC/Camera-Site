@@ -106,6 +106,8 @@
       freshnessTimer: null,
       authRefreshTimer: null,
       commandAckTimer: null,
+      liveStatusRefreshTimer: null,
+      liveStatusRefreshInFlight: false,
     },
     settings: { ...defaultSettings },
     commands: {
@@ -443,6 +445,8 @@
     const counterChannelInput = byId('hp2-setting-counter-discord-channel');
     const counterEdgeStepInput = byId('hp2-setting-counter-edge-step');
     const edgeTargetCountInput = byId('hp2-setting-edge-target-count');
+    const tasksCompletedInput = byId('hp2-setting-tasks-completed');
+    const confessionsPostedInput = byId('hp2-setting-confessions-posted');
     const edgeTargetShockAtPeakInput = byId('hp2-setting-edge-target-shock-at-peak');
     const hrEdgeAllowReleaseInput = byId('hp2-setting-hr-edge-allow-release');
     const hrEdgeRampUpInput = byId('hp2-setting-hr-edge-ramp-up');
@@ -466,6 +470,16 @@
         const raw = Number(data?.edge_target_count || 0);
         const target = Number.isFinite(raw) ? Math.max(0, Math.min(1000000, Math.trunc(raw))) : 0;
         edgeTargetCountInput.value = String(target);
+      }
+      if (tasksCompletedInput) {
+        const raw = Number(data?.tasks_completed || 0);
+        const value = Number.isFinite(raw) ? Math.max(0, Math.min(1000000, Math.trunc(raw))) : 0;
+        tasksCompletedInput.value = String(value);
+      }
+      if (confessionsPostedInput) {
+        const raw = Number(data?.confessions_posted || 0);
+        const value = Number.isFinite(raw) ? Math.max(0, Math.min(1000000, Math.trunc(raw))) : 0;
+        confessionsPostedInput.value = String(value);
       }
       if (edgeTargetShockAtPeakInput) {
         edgeTargetShockAtPeakInput.value = data?.edge_target_shock_at_peak ? 'true' : 'false';
@@ -527,6 +541,14 @@
     const edgeTargetCount = Number.isFinite(edgeTargetCountRaw)
       ? Math.max(0, Math.min(1000000, Math.trunc(edgeTargetCountRaw)))
       : 0;
+    const tasksCompletedRaw = Number(byId('hp2-setting-tasks-completed')?.value || 0);
+    const tasksCompleted = Number.isFinite(tasksCompletedRaw)
+      ? Math.max(0, Math.min(1000000, Math.trunc(tasksCompletedRaw)))
+      : 0;
+    const confessionsPostedRaw = Number(byId('hp2-setting-confessions-posted')?.value || 0);
+    const confessionsPosted = Number.isFinite(confessionsPostedRaw)
+      ? Math.max(0, Math.min(1000000, Math.trunc(confessionsPostedRaw)))
+      : 0;
     const edgeTargetShockAtPeak = String(byId('hp2-setting-edge-target-shock-at-peak')?.value || 'false').trim().toLowerCase() === 'true';
     const hrEdgeAllowRelease = String(byId('hp2-setting-hr-edge-allow-release')?.value || 'false').trim().toLowerCase() === 'true';
     const hrEdgeRampUpRaw = Number(byId('hp2-setting-hr-edge-ramp-up')?.value || 2);
@@ -541,6 +563,8 @@
         discord_counter_channel_id: counterChannelId,
         discord_counter_edge_milestone_step: counterEdgeStep,
         edge_target_count: edgeTargetCount,
+        tasks_completed: tasksCompleted,
+        confessions_posted: confessionsPosted,
         edge_target_shock_at_peak: edgeTargetShockAtPeak,
         hr_edge_allow_release: hrEdgeAllowRelease,
         hr_edge_ramp_up_step: hrEdgeRampUp,
@@ -1189,6 +1213,29 @@
     }, COMMAND_ACK_POLL_MS);
   }
 
+  async function refreshLiveStatusTelemetry() {
+    if (state.telemetry.liveStatusRefreshInFlight) return;
+    state.telemetry.liveStatusRefreshInFlight = true;
+    try {
+      await Promise.allSettled([
+        loadDevices(),
+        loadDashboardIntelligence(),
+      ]);
+    } finally {
+      state.telemetry.liveStatusRefreshInFlight = false;
+    }
+  }
+
+  function startLiveStatusAutoRefresh() {
+    if (state.telemetry.liveStatusRefreshTimer) {
+      clearInterval(state.telemetry.liveStatusRefreshTimer);
+      state.telemetry.liveStatusRefreshTimer = null;
+    }
+    state.telemetry.liveStatusRefreshTimer = setInterval(() => {
+      refreshLiveStatusTelemetry().catch(() => {});
+    }, getQueueRefreshMs());
+  }
+
   function selectedDevice() {
     return state.selectedDeviceId ? state.devices[state.selectedDeviceId] : null;
   }
@@ -1421,6 +1468,11 @@
       clearInterval(state.telemetry.commandAckTimer);
       state.telemetry.commandAckTimer = null;
     }
+    if (state.telemetry.liveStatusRefreshTimer) {
+      clearInterval(state.telemetry.liveStatusRefreshTimer);
+      state.telemetry.liveStatusRefreshTimer = null;
+    }
+    state.telemetry.liveStatusRefreshInFlight = false;
     if (state.queue.autoRefreshTimer) {
       clearInterval(state.queue.autoRefreshTimer);
       state.queue.autoRefreshTimer = null;
@@ -2204,6 +2256,7 @@
     }
     state.telemetry.devicesAt = Date.now();
     renderFreshness();
+    startLiveStatusAutoRefresh();
   }
 
   async function refreshSelectedStatus() {
@@ -5708,6 +5761,7 @@
       clearInterval(state.telemetry.freshnessTimer);
     }
     state.telemetry.freshnessTimer = setInterval(renderFreshness, 15000);
+    startLiveStatusAutoRefresh();
     renderAutoFollowButton();
     applyAdminBulkDeviceControlsAccess();
     const jwt = getJwt();

@@ -8736,11 +8736,21 @@ async def handler_update_public_status(
         if current_mode not in PUBLIC_MODE_OPTIONS:
             raise HTTPException(status_code=400, detail="current_status_mode is not a valid option")
         set_setting(db, "current_status_mode", current_mode)
-    if payload.tasks_completed is not None or payload.confessions_posted is not None:
-        raise HTTPException(
-            status_code=403,
-            detail="Counter updates are app-managed only and cannot be set from handler panel.",
-        )
+    if payload.tasks_completed is not None:
+        tasks_completed = int(payload.tasks_completed)
+        if tasks_completed < 0:
+            raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")
+        current_tasks_completed = min(tasks_completed, 1000000)
+        set_setting(db, "public_tasks_completed", str(current_tasks_completed))
+        tasks_counter_changed = current_tasks_completed != previous_tasks_completed
+
+    if payload.confessions_posted is not None:
+        confessions_posted = int(payload.confessions_posted)
+        if confessions_posted < 0:
+            raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
+        current_confessions_posted = min(confessions_posted, 1000000)
+        set_setting(db, "public_confessions_posted", str(current_confessions_posted))
+        confessions_counter_changed = current_confessions_posted != previous_confessions_posted
     if payload.public_booking_enabled is not None:
         set_setting(
             db,
