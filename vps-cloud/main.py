@@ -3192,7 +3192,7 @@ class PublicDaysLockedAdjustRequest(BaseModel):
 
 
 @app.get("/api/public/status")
-def get_public_status(db: sqlite3.Connection = Depends(get_db)):
+def get_public_status(request: Request, db: sqlite3.Connection = Depends(get_db)):
     """Return public-facing counters and status metadata for landing pages."""
     now_utc = datetime.now(timezone.utc)
     start_dt = _safe_date_setting(db, "days_caged_start_date")
@@ -3209,6 +3209,86 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
 
     tasks_completed = max(0, _safe_int_setting(db, "public_tasks_completed", default=0))
     confessions_posted = max(0, _safe_int_setting(db, "public_confessions_posted", default=0))
+    edge_target_count = max(0, _safe_int_setting(db, "edge_target_count", default=0))
+    edge_target_shock_at_peak = _safe_bool_setting(db, "edge_target_shock_at_peak", default=True)
+    hr_edge_enabled = _safe_bool_setting(db, "hr_edge_enabled", default=True)
+    hr_edge_allow_release = _safe_bool_setting(db, "hr_edge_allow_release", default=False)
+
+    latest_heart_rate: Optional[int] = None
+    latest_vitals_at: Optional[str] = None
+    edge_hr_state = "idle"
+    edge_hr_pause_bpm: Optional[int] = None
+    edge_hr_resume_bpm: Optional[int] = None
+    edge_hr_last: Optional[int] = None
+    edge_hr_updated_at: Optional[str] = None
+    edge_hr_zap_allowed = False
+
+    device_id = (request.headers.get("x-device-id", "") or "").strip()
+    if device_id:
+        try:
+            latest_vitals = db.execute(
+                """
+                SELECT heart_rate, timestamp
+                FROM device_vitals
+                WHERE device_id = ? AND heart_rate > 0
+                ORDER BY timestamp DESC, id DESC
+                LIMIT 1
+                """,
+                (device_id,),
+            ).fetchone()
+            if latest_vitals:
+                latest_heart_rate = int(latest_vitals["heart_rate"] or 0)
+                if latest_heart_rate <= 0:
+                    latest_heart_rate = None
+                latest_vitals_at = str(latest_vitals["timestamp"] or "").strip() or None
+        except Exception:
+            latest_heart_rate = None
+            latest_vitals_at = None
+
+        safe_device = "".join(
+            ch if (ch.isalnum() or ch in "_-:.") else "_" for ch in device_id
+        )[:80]
+        raw_state = (get_setting(db, f"hr_edge_state_{safe_device}", "") or "").strip()
+        state: dict = {}
+        if raw_state:
+            try:
+                import json as _json
+
+                parsed = _json.loads(raw_state)
+                if isinstance(parsed, dict):
+                    state = parsed
+            except Exception:
+                state = {}
+
+        edge_hr_state = str(state.get("last_state") or "idle").strip().lower() or "idle"
+        edge_hr_updated_at = str(state.get("updated_at") or "").strip() or None
+
+        try:
+            edge_hr_pause_bpm = int(state.get("last_pause_bpm")) if state.get("last_pause_bpm") is not None else None
+        except Exception:
+            edge_hr_pause_bpm = None
+
+        try:
+            edge_hr_resume_bpm = int(state.get("last_resume_bpm")) if state.get("last_resume_bpm") is not None else None
+        except Exception:
+            edge_hr_resume_bpm = None
+
+        try:
+            edge_hr_last = int(state.get("last_hr")) if state.get("last_hr") is not None else None
+        except Exception:
+            edge_hr_last = None
+
+        if edge_hr_last is None:
+            edge_hr_last = latest_heart_rate
+
+        edge_hr_zap_allowed = bool(
+            hr_edge_enabled
+            and not hr_edge_allow_release
+            and edge_hr_state == "holding_edge"
+            and edge_hr_last is not None
+            and edge_hr_pause_bpm is not None
+            and edge_hr_last >= edge_hr_pause_bpm
+        )
 
     tasks_label = _safe_choice_setting(
         db, "public_tasks_label", PUBLIC_COUNTER_ONE_LABEL_OPTIONS, "Edges"
@@ -3233,6 +3313,16 @@ def get_public_status(db: sqlite3.Connection = Depends(get_db)):
         "days_caged": days_caged,
         "days_locked_goal_days": days_locked_goal,
         "tasks_completed": tasks_completed,
+        "edge_target_count": edge_target_count,
+        "edge_target_shock_at_peak": edge_target_shock_at_peak,
+        "latest_heart_rate": latest_heart_rate,
+        "latest_vitals_at": latest_vitals_at,
+        "edge_hr_state": edge_hr_state,
+        "edge_hr_last": edge_hr_last,
+        "edge_hr_pause_bpm": edge_hr_pause_bpm,
+        "edge_hr_resume_bpm": edge_hr_resume_bpm,
+        "edge_hr_updated_at": edge_hr_updated_at,
+        "edge_hr_zap_allowed": edge_hr_zap_allowed,
         "tasks_label": tasks_label,
         "confessions_posted": confessions_posted,
         "confessions_label": confessions_label,

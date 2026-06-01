@@ -442,6 +442,11 @@
     const counterEnabledInput = byId('hp2-setting-counter-discord-enabled');
     const counterChannelInput = byId('hp2-setting-counter-discord-channel');
     const counterEdgeStepInput = byId('hp2-setting-counter-edge-step');
+    const edgeTargetCountInput = byId('hp2-setting-edge-target-count');
+    const edgeTargetShockAtPeakInput = byId('hp2-setting-edge-target-shock-at-peak');
+    const hrEdgeAllowReleaseInput = byId('hp2-setting-hr-edge-allow-release');
+    const hrEdgeRampUpInput = byId('hp2-setting-hr-edge-ramp-up');
+    const hrEdgeRampDownInput = byId('hp2-setting-hr-edge-ramp-down');
     if (!startInput) return;
     try {
       const data = await apiGet('/api/handler/public-status');
@@ -456,6 +461,25 @@
         const stepRaw = Number(data?.discord_counter_edge_milestone_step || 10);
         const step = Number.isFinite(stepRaw) ? Math.max(1, Math.min(1000, stepRaw)) : 10;
         counterEdgeStepInput.value = String(step);
+      }
+      if (edgeTargetCountInput) {
+        const raw = Number(data?.edge_target_count || 0);
+        const target = Number.isFinite(raw) ? Math.max(0, Math.min(1000000, Math.trunc(raw))) : 0;
+        edgeTargetCountInput.value = String(target);
+      }
+      if (edgeTargetShockAtPeakInput) {
+        edgeTargetShockAtPeakInput.value = data?.edge_target_shock_at_peak ? 'true' : 'false';
+      }
+      if (hrEdgeAllowReleaseInput) {
+        hrEdgeAllowReleaseInput.value = data?.hr_edge_allow_release ? 'true' : 'false';
+      }
+      if (hrEdgeRampUpInput) {
+        const raw = Number(data?.hr_edge_ramp_up_step || 2);
+        hrEdgeRampUpInput.value = String(Number.isFinite(raw) ? Math.max(1, Math.min(8, Math.trunc(raw))) : 2);
+      }
+      if (hrEdgeRampDownInput) {
+        const raw = Number(data?.hr_edge_ramp_down_step || 3);
+        hrEdgeRampDownInput.value = String(Number.isFinite(raw) ? Math.max(1, Math.min(10, Math.trunc(raw))) : 3);
       }
     } catch (err) {
       if (err.message !== AUTH_EXPIRED_ERROR) {
@@ -499,6 +523,16 @@
     const counterEdgeStep = Number.isFinite(counterEdgeStepRaw)
       ? Math.max(1, Math.min(1000, Math.trunc(counterEdgeStepRaw)))
       : 10;
+    const edgeTargetCountRaw = Number(byId('hp2-setting-edge-target-count')?.value || 0);
+    const edgeTargetCount = Number.isFinite(edgeTargetCountRaw)
+      ? Math.max(0, Math.min(1000000, Math.trunc(edgeTargetCountRaw)))
+      : 0;
+    const edgeTargetShockAtPeak = String(byId('hp2-setting-edge-target-shock-at-peak')?.value || 'false').trim().toLowerCase() === 'true';
+    const hrEdgeAllowRelease = String(byId('hp2-setting-hr-edge-allow-release')?.value || 'false').trim().toLowerCase() === 'true';
+    const hrEdgeRampUpRaw = Number(byId('hp2-setting-hr-edge-ramp-up')?.value || 2);
+    const hrEdgeRampDownRaw = Number(byId('hp2-setting-hr-edge-ramp-down')?.value || 3);
+    const hrEdgeRampUp = Number.isFinite(hrEdgeRampUpRaw) ? Math.max(1, Math.min(8, Math.trunc(hrEdgeRampUpRaw))) : 2;
+    const hrEdgeRampDown = Number.isFinite(hrEdgeRampDownRaw) ? Math.max(1, Math.min(10, Math.trunc(hrEdgeRampDownRaw))) : 3;
     let publicStatusSaved = false;
     try {
       await apiPost('/api/handler/public-status', {
@@ -506,6 +540,11 @@
         discord_counter_notify_enabled: counterEnabled,
         discord_counter_channel_id: counterChannelId,
         discord_counter_edge_milestone_step: counterEdgeStep,
+        edge_target_count: edgeTargetCount,
+        edge_target_shock_at_peak: edgeTargetShockAtPeak,
+        hr_edge_allow_release: hrEdgeAllowRelease,
+        hr_edge_ramp_up_step: hrEdgeRampUp,
+        hr_edge_ramp_down_step: hrEdgeRampDown,
       });
       publicStatusSaved = true;
     } catch (err) {
@@ -1720,6 +1759,37 @@
     return `${Math.round(bpm)} bpm`;
   }
 
+  function renderEdgeStatusCard() {
+    const stateEl = byId('hp2-dashboard-edge-state');
+    const levelEl = byId('hp2-dashboard-edge-level');
+    const thresholdsEl = byId('hp2-dashboard-edge-thresholds');
+    const updatedEl = byId('hp2-dashboard-edge-updated');
+    if (!stateEl || !levelEl || !thresholdsEl || !updatedEl) return;
+
+    const d = selectedDevice();
+    const edge = d?.hr_edge || null;
+    if (!edge || typeof edge !== 'object') {
+      stateEl.textContent = '-';
+      levelEl.textContent = '-';
+      thresholdsEl.textContent = '-';
+      updatedEl.textContent = '-';
+      return;
+    }
+
+    const edgeState = String(edge.state || 'idle').trim() || 'idle';
+    const lastLevel = Number(edge.last_level);
+    const pause = Number(edge.pause_bpm);
+    const resume = Number(edge.resume_bpm);
+    const updatedAt = String(edge.updated_at || '').trim();
+
+    stateEl.textContent = edgeState.replaceAll('_', ' ');
+    levelEl.textContent = Number.isFinite(lastLevel) && lastLevel >= 0 ? `${Math.trunc(lastLevel)}/20` : '-';
+    thresholdsEl.textContent = Number.isFinite(resume) && Number.isFinite(pause)
+      ? `${Math.trunc(resume)} to ${Math.trunc(pause)} bpm`
+      : '-';
+    updatedEl.textContent = updatedAt ? fmtDate(updatedAt) : '-';
+  }
+
   function renderDeviceList() {
     const container = byId('hp2-device-list');
     const devices = Object.values(state.devices).sort((a, b) => {
@@ -1765,6 +1835,7 @@
     byId('hp2-dashboard-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
     byId('hp2-dashboard-heart-rate').textContent = formatHeartRate(d);
     byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
+    renderEdgeStatusCard();
     renderDashboardAlerts();
     renderLiveMap();
     applyCommandGating();

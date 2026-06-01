@@ -1792,6 +1792,269 @@ async def _send_command_with_ws_fallback(
     }
 
 
+def _parse_boolish(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raw = str(value).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _safe_setting_int(db: sqlite3.Connection, key: str, default: int, min_value: int, max_value: int) -> int:
+    raw = get_setting(db, key, str(default))
+    try:
+        value = int(str(raw or default).strip())
+    except Exception:
+        value = default
+    return max(min_value, min(value, max_value))
+
+
+def _latest_device_heart_rate(db: sqlite3.Connection, device_id: str) -> Optional[int]:
+    try:
+        row = db.execute(
+            """
+            SELECT heart_rate
+            FROM device_vitals
+            WHERE device_id = ? AND heart_rate > 0
+            ORDER BY timestamp DESC, id DESC
+            LIMIT 1
+            """,
+            (device_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    try:
+        bpm = int(row["heart_rate"] or 0)
+    except Exception:
+        return None
+    return bpm if bpm > 0 else None
+
+
+def _learn_device_hr_profile(db: sqlite3.Connection, device_id: str) -> dict[str, int]:
+    sample_limit = _safe_setting_int(db, "hr_edge_learning_sample_limit", 120, 30, 600)
+    default_baseline = _safe_setting_int(db, "hr_edge_default_baseline_bpm", 74, 50, 120)
+
+    values: list[int] = []
+    try:
+        rows = db.execute(
+            """
+            SELECT heart_rate
+            FROM device_vitals
+            WHERE device_id = ? AND heart_rate > 0
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+            """,
+            (device_id, sample_limit),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+
+    for row in rows:
+        try:
+            bpm = int(row["heart_rate"] or 0)
+        except Exception:
+            bpm = 0
+        if bpm > 0:
+            values.append(bpm)
+
+    if values:
+        sorted_vals = sorted(values)
+        baseline = int(sorted_vals[len(sorted_vals) // 2])
+        q75 = int(sorted_vals[min(len(sorted_vals) - 1, int(len(sorted_vals) * 0.75))])
+    else:
+        baseline = default_baseline
+        q75 = baseline + 12
+
+    pause_bpm = max(baseline + 18, q75)
+    resume_gap = _safe_setting_int(db, "hr_edge_resume_gap_bpm", 14, 6, 30)
+    pause_bpm = max(85, min(pause_bpm, 180))
+    resume_bpm = max(55, min(pause_bpm - 2, pause_bpm - resume_gap))
+
+    return {
+        "baseline_bpm": baseline,
+        "pause_bpm": pause_bpm,
+        "resume_bpm": resume_bpm,
+        "sample_count": len(values),
+    }
+
+
+def _hr_edge_state_key(device_id: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9_\-:.]", "_", (device_id or "").strip())[:80]
+    return f"hr_edge_state_{safe}"
+
+
+def _load_hr_edge_state(db: sqlite3.Connection, device_id: str) -> dict[str, Any]:
+    raw = (get_setting(db, _hr_edge_state_key(device_id), "") or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _save_hr_edge_state(db: sqlite3.Connection, device_id: str, state: dict[str, Any]) -> None:
+    try:
+        set_setting(db, _hr_edge_state_key(device_id), json.dumps(state, ensure_ascii=True))
+    except Exception:
+        pass
+
+
+def _is_buzz_payload(payload: dict[str, Any]) -> bool:
+    action = str(payload.get("action") or "").strip().lower()
+    if action == "lovense_command":
+        command = str(payload.get("toy_command") or payload.get("command") or "vibrate").strip().lower()
+        return command not in {"stop", "battery", "scan", "pair", "stopscan", "stop_scan", "disconnect"}
+    if action == "toy.live.control":
+        command = str(payload.get("toy_command") or payload.get("command") or "vibrate").strip().lower()
+        return command != "stop"
+    return False
+
+
+def _apply_hr_edge_to_payload(
+    db: sqlite3.Connection,
+    *,
+    device_id: str,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], Optional[dict[str, Any]]]:
+    adjusted = dict(payload)
+
+    edge_enabled = _parse_boolish(get_setting(db, "hr_edge_enabled", "true"), default=True)
+    if not edge_enabled:
+        return adjusted, None
+
+    buzz_only = _parse_boolish(get_setting(db, "hr_edge_buzz_only", "true"), default=True)
+    if buzz_only and not _is_buzz_payload(adjusted):
+        return adjusted, None
+
+    action = str(adjusted.get("action") or "").strip().lower()
+    if action not in {"lovense_command", "toy.live.control"}:
+        return adjusted, None
+
+    command = str(adjusted.get("toy_command") or adjusted.get("command") or "vibrate").strip().lower()
+    if command in {"stop", "battery", "scan", "pair", "stopscan", "stop_scan", "disconnect"}:
+        return adjusted, None
+
+    try:
+        requested_level = int(str(adjusted.get("toy_level") or adjusted.get("level") or "10").strip())
+    except Exception:
+        requested_level = 10
+
+    if command == "pump":
+        requested_level = max(0, min(requested_level, 3))
+    else:
+        requested_level = max(0, min(requested_level, 20))
+
+    if requested_level <= 0:
+        return adjusted, None
+
+    release_allowed = _parse_boolish(get_setting(db, "hr_edge_allow_release", "false"), default=False)
+    release_allowed = release_allowed or _parse_boolish(adjusted.get("edge_allow_release"), default=False)
+    if release_allowed:
+        adjusted["edge_mode"] = "release_allowed"
+        return adjusted, {
+            "applied": False,
+            "reason": "release_allowed",
+            "requested_level": requested_level,
+        }
+
+    current_hr = _latest_device_heart_rate(db, device_id)
+    if current_hr is None:
+        return adjusted, {
+            "applied": False,
+            "reason": "missing_heart_rate",
+            "requested_level": requested_level,
+        }
+
+    profile = _learn_device_hr_profile(db, device_id)
+    pause_bpm = int(profile["pause_bpm"])
+    resume_bpm = int(profile["resume_bpm"])
+
+    floor_percent = _safe_setting_int(db, "hr_edge_floor_percent", 2, 1, 15)
+    floor_level = max(1, int(round(20 * (floor_percent / 100.0))))
+    if command == "pump":
+        floor_level = 1
+
+    if current_hr >= pause_bpm:
+        target_level = floor_level
+        state_label = "holding_edge"
+    elif current_hr <= resume_bpm:
+        target_level = requested_level
+        state_label = "resume_window"
+    else:
+        span = max(1, pause_bpm - resume_bpm)
+        ratio = (pause_bpm - current_hr) / span
+        target_level = int(round(floor_level + ratio * max(0, requested_level - floor_level)))
+        state_label = "transition"
+
+    state = _load_hr_edge_state(db, device_id)
+    previous_level = None
+    try:
+        previous_level = int(state.get("last_level")) if state.get("last_level") is not None else None
+    except Exception:
+        previous_level = None
+
+    ramp_up_step = _safe_setting_int(db, "hr_edge_ramp_up_step", 2, 1, 8)
+    ramp_down_step = _safe_setting_int(db, "hr_edge_ramp_down_step", 3, 1, 10)
+    if previous_level is None:
+        final_level = target_level
+    elif target_level > previous_level:
+        final_level = min(target_level, previous_level + ramp_up_step)
+    elif target_level < previous_level:
+        final_level = max(target_level, previous_level - ramp_down_step)
+    else:
+        final_level = target_level
+
+    if command == "pump":
+        final_level = max(0, min(final_level, 3))
+    else:
+        final_level = max(0, min(final_level, 20))
+
+    adjusted["toy_level"] = str(final_level)
+    adjusted["edge_mode"] = "soft_hr"
+    adjusted["edge_state"] = state_label
+    adjusted["edge_hr"] = str(current_hr)
+    adjusted["edge_pause_bpm"] = str(pause_bpm)
+    adjusted["edge_resume_bpm"] = str(resume_bpm)
+
+    _save_hr_edge_state(
+        db,
+        device_id,
+        {
+            "last_level": final_level,
+            "last_requested_level": requested_level,
+            "last_hr": current_hr,
+            "last_pause_bpm": pause_bpm,
+            "last_resume_bpm": resume_bpm,
+            "last_state": state_label,
+            "updated_at": _now_iso(),
+        },
+    )
+
+    return adjusted, {
+        "applied": True,
+        "state": state_label,
+        "hr": current_hr,
+        "pause_bpm": pause_bpm,
+        "resume_bpm": resume_bpm,
+        "requested_level": requested_level,
+        "target_level": target_level,
+        "final_level": final_level,
+        "baseline_bpm": int(profile["baseline_bpm"]),
+        "sample_count": int(profile["sample_count"]),
+        "floor_percent": floor_percent,
+        "floor_level": floor_level,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
@@ -2056,6 +2319,11 @@ class PublicStatusUpdateRequest(BaseModel):
     discord_counter_notify_enabled: Optional[bool] = None
     discord_counter_channel_id: Optional[str] = None
     discord_counter_edge_milestone_step: Optional[int] = None
+    edge_target_count: Optional[int] = None
+    edge_target_shock_at_peak: Optional[bool] = None
+    hr_edge_allow_release: Optional[bool] = None
+    hr_edge_ramp_up_step: Optional[int] = None
+    hr_edge_ramp_down_step: Optional[int] = None
 
 
 class PanelMacroItem(BaseModel):
@@ -2309,6 +2577,12 @@ def _send_shared_toy_control(
     else:
         payload = _toy_live_payload(normalized_mode, command, level)
 
+    payload, edge_meta = _apply_hr_edge_to_payload(
+        db,
+        device_id=device_id,
+        payload=payload,
+    )
+
     result = _send_mqtt_to_device(db, device_id, payload)
     db.execute(
         """
@@ -2318,7 +2592,13 @@ def _send_shared_toy_control(
         (
             device_id,
             f"{normalized_mode}:{normalized_command}",
-            json.dumps(payload),
+            json.dumps(
+                {
+                    "payload": payload,
+                    "hr_edge": edge_meta,
+                },
+                ensure_ascii=True,
+            ),
             _now_iso(),
         ),
     )
@@ -6037,6 +6317,34 @@ def handler_get_status(
         payload["latest_steps"] = steps_value if steps_value > 0 else None
         payload["latest_vitals_at"] = str(latest_vitals["timestamp"] or "").strip() or None
 
+    hr_state = _load_hr_edge_state(db, device_id)
+    hr_profile = _learn_device_hr_profile(db, device_id)
+    try:
+        last_level = int(hr_state.get("last_level")) if hr_state.get("last_level") is not None else None
+    except Exception:
+        last_level = None
+
+    payload["hr_edge"] = {
+        "enabled": _parse_boolish(get_setting(db, "hr_edge_enabled", "true"), default=True),
+        "buzz_only": _parse_boolish(get_setting(db, "hr_edge_buzz_only", "true"), default=True),
+        "allow_release": _parse_boolish(get_setting(db, "hr_edge_allow_release", "false"), default=False),
+        "ramp_up_step": _safe_setting_int(db, "hr_edge_ramp_up_step", 2, 1, 8),
+        "ramp_down_step": _safe_setting_int(db, "hr_edge_ramp_down_step", 3, 1, 10),
+        "floor_percent": _safe_setting_int(db, "hr_edge_floor_percent", 2, 1, 15),
+        "baseline_bpm": int(hr_profile.get("baseline_bpm") or 0),
+        "pause_bpm": int(hr_profile.get("pause_bpm") or 0),
+        "resume_bpm": int(hr_profile.get("resume_bpm") or 0),
+        "sample_count": int(hr_profile.get("sample_count") or 0),
+        "state": str(hr_state.get("last_state") or "idle").strip() or "idle",
+        "last_level": last_level,
+        "last_hr": (
+            int(hr_state.get("last_hr"))
+            if isinstance(hr_state.get("last_hr"), (int, float, str)) and str(hr_state.get("last_hr")).strip().isdigit()
+            else None
+        ),
+        "updated_at": str(hr_state.get("updated_at") or "").strip() or None,
+    }
+
     return payload
 
 
@@ -7644,6 +7952,11 @@ def handler_get_public_status(
                 1000,
             ),
         ),
+        "edge_target_count": max(0, _safe_int(get_setting(db, "edge_target_count", "0"), 0)),
+        "edge_target_shock_at_peak": _safe_bool(get_setting(db, "edge_target_shock_at_peak", "true")),
+        "hr_edge_allow_release": _safe_bool(get_setting(db, "hr_edge_allow_release", "false")),
+        "hr_edge_ramp_up_step": _safe_setting_int(db, "hr_edge_ramp_up_step", 2, 1, 8),
+        "hr_edge_ramp_down_step": _safe_setting_int(db, "hr_edge_ramp_down_step", 3, 1, 10),
         "public_live_control_active": bool(live),
         "public_live_control_url": (live["control_url"] if live else None),
         "public_live_control_label": (live["label"] if live else None),
@@ -8423,18 +8736,11 @@ async def handler_update_public_status(
         if current_mode not in PUBLIC_MODE_OPTIONS:
             raise HTTPException(status_code=400, detail="current_status_mode is not a valid option")
         set_setting(db, "current_status_mode", current_mode)
-    if payload.tasks_completed is not None:
-        if payload.tasks_completed < 0:
-            raise HTTPException(status_code=400, detail="tasks_completed must be >= 0")
-        current_tasks_completed = int(payload.tasks_completed)
-        tasks_counter_changed = current_tasks_completed != previous_tasks_completed
-        set_setting(db, "public_tasks_completed", str(current_tasks_completed))
-    if payload.confessions_posted is not None:
-        if payload.confessions_posted < 0:
-            raise HTTPException(status_code=400, detail="confessions_posted must be >= 0")
-        current_confessions_posted = int(payload.confessions_posted)
-        confessions_counter_changed = current_confessions_posted != previous_confessions_posted
-        set_setting(db, "public_confessions_posted", str(current_confessions_posted))
+    if payload.tasks_completed is not None or payload.confessions_posted is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="Counter updates are app-managed only and cannot be set from handler panel.",
+        )
     if payload.public_booking_enabled is not None:
         set_setting(
             db,
@@ -8492,6 +8798,29 @@ async def handler_update_public_status(
         if step < 1:
             raise HTTPException(status_code=400, detail="discord_counter_edge_milestone_step must be >= 1")
         set_setting(db, "discord_counter_edge_milestone_step", str(min(step, 1000)))
+    if payload.edge_target_count is not None:
+        target = int(payload.edge_target_count)
+        if target < 0:
+            raise HTTPException(status_code=400, detail="edge_target_count must be >= 0")
+        set_setting(db, "edge_target_count", str(min(target, 1000000)))
+    if payload.edge_target_shock_at_peak is not None:
+        set_setting(
+            db,
+            "edge_target_shock_at_peak",
+            "true" if payload.edge_target_shock_at_peak else "false",
+        )
+    if payload.hr_edge_allow_release is not None:
+        set_setting(
+            db,
+            "hr_edge_allow_release",
+            "true" if payload.hr_edge_allow_release else "false",
+        )
+    if payload.hr_edge_ramp_up_step is not None:
+        step = max(1, min(int(payload.hr_edge_ramp_up_step), 8))
+        set_setting(db, "hr_edge_ramp_up_step", str(step))
+    if payload.hr_edge_ramp_down_step is not None:
+        step = max(1, min(int(payload.hr_edge_ramp_down_step), 10))
+        set_setting(db, "hr_edge_ramp_down_step", str(step))
 
     if tasks_counter_changed:
         try:
@@ -9959,6 +10288,11 @@ async def handler_tpe_push(
             raise HTTPException(status_code=403, detail="Access denied to this device.")
 
     payload = _build_tpe_payload(body)
+    payload, hr_edge_meta = _apply_hr_edge_to_payload(
+        db,
+        device_id=body.device_id,
+        payload=payload,
+    )
     ws_fallback_sent = 0
     mqtt_error = ""
     try:
@@ -10003,7 +10337,13 @@ async def handler_tpe_push(
         (
             body.device_id,
             body.action,
-            json.dumps(payload),
+            json.dumps(
+                {
+                    "payload": payload,
+                    "hr_edge": hr_edge_meta,
+                },
+                ensure_ascii=True,
+            ),
             _now_iso(),
         ),
     )

@@ -94,6 +94,24 @@
               <span id="hp2-freshness-pill" class="hp2-pill">Data age: -</span>
               <span id="hp2-freshness-note" class="hp2-muted">Waiting for telemetry...</span>
             </div>
+            <div class="hp2-status-grid hp2-edge-status-grid">
+              <article>
+                <p>Edge State</p>
+                <h3 id="hp2-dashboard-edge-state">-</h3>
+              </article>
+              <article>
+                <p>Applied Level</p>
+                <h3 id="hp2-dashboard-edge-level">-</h3>
+              </article>
+              <article>
+                <p>Thresholds</p>
+                <h3 id="hp2-dashboard-edge-thresholds">-</h3>
+              </article>
+              <article>
+                <p>Edge Updated</p>
+                <h3 id="hp2-dashboard-edge-updated">-</h3>
+              </article>
+            </div>
             <ul id="hp2-alert-list" class="hp2-feed"></ul>
           </section>
         </div>
@@ -1236,6 +1254,27 @@
 
               <label for="hp2-setting-counter-edge-step">Edge Milestone Step</label>
               <input id="hp2-setting-counter-edge-step" type="number" min="1" max="1000" value="10" />
+
+              <label for="hp2-setting-edge-target-count">Edge Target Count (app)</label>
+              <input id="hp2-setting-edge-target-count" type="number" min="0" max="1000000" value="0" />
+
+              <label for="hp2-setting-edge-target-shock-at-peak">Edge Target: Shock At Peak</label>
+              <select id="hp2-setting-edge-target-shock-at-peak">
+                <option value="true" selected>Yes</option>
+                <option value="false">No</option>
+              </select>
+
+              <label for="hp2-setting-hr-edge-allow-release">HR Edge: Allow Release</label>
+              <select id="hp2-setting-hr-edge-allow-release">
+                <option value="false">No (edge-only)</option>
+                <option value="true">Yes (release allowed)</option>
+              </select>
+
+              <label for="hp2-setting-hr-edge-ramp-up">HR Edge Ramp Up Step</label>
+              <input id="hp2-setting-hr-edge-ramp-up" type="number" min="1" max="8" value="2" />
+
+              <label for="hp2-setting-hr-edge-ramp-down">HR Edge Ramp Down Step</label>
+              <input id="hp2-setting-hr-edge-ramp-down" type="number" min="1" max="10" value="3" />
             </div>
             <p class="hp2-muted">Set when the Days Locked counter starts counting from (saved to public status settings).</p>
             <div class="hp2-action-row">

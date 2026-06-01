@@ -1499,6 +1499,7 @@ class TpePushRequest(BaseModel):
     toy_pattern: Optional[str] = None
     toy_duration_ms: Optional[str] = None
     toy_sequence: Optional[str] = None
+    edge_allow_release: Optional[str] = None
 
     # SET_LOVENSE_SCHEDULES
     schedules: Optional[str] = None
@@ -1991,6 +1992,7 @@ def _build_tpe_payload(body: "TpePushRequest") -> "dict[str, str]":
         "toy_pattern":        body.toy_pattern,
         "toy_duration_ms":    body.toy_duration_ms,
         "toy_sequence":       body.toy_sequence,
+        "edge_allow_release": body.edge_allow_release,
         # SET_LOVENSE_SCHEDULES
         "schedules":          body.schedules,
         # PAVLOK_COMMAND
