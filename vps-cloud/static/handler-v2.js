@@ -1,6 +1,8 @@
 (() => {
   'use strict';
 
+  const shownToastKeys = new Set();
+
   const JWT_KEY = 'handler_panel_jwt';
   const SETTINGS_KEY = 'handler_panel_v2_settings';
   const MACROS_KEY = 'handler_panel_v2_macros';
@@ -1616,6 +1618,11 @@
   function showToast(message, tone = 'info') {
     const host = byId('hp2-toast-stack');
     if (!host || !message) return;
+    const toastKey = `${tone}:${String(message).trim().toLowerCase()}`;
+    if (shownToastKeys.has(toastKey)) {
+      return;
+    }
+    shownToastKeys.add(toastKey);
     const toast = document.createElement('div');
     toast.className = `hp2-toast ${tone === 'ok' ? 'hp2-toast-ok' : tone === 'warn' ? 'hp2-toast-warn' : tone === 'bad' ? 'hp2-toast-bad' : ''}`.trim();
     toast.textContent = message;
