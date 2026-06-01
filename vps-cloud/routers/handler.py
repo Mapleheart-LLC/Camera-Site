@@ -3445,6 +3445,19 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     line = re.sub(r"\bthis\s+link\b", "this post", line, flags=re.IGNORECASE)
     lowered = line.lower().replace("{payload}", "")
 
+    # Repair first-person phrasing into enforced third-person voice instead of hard-failing.
+    if _DEVICE_SHARE_FIRST_PERSON_RE.search(lowered):
+        # Convert common first-person forms into third-person mutt framing.
+        line = re.sub(r"\b(i am|i'm|im)\b", "pup is", line, flags=re.IGNORECASE)
+        line = re.sub(r"\b(i was|i've been|i have been)\b", "pup was", line, flags=re.IGNORECASE)
+        line = re.sub(r"\b(i'll|i will)\b", "pup will", line, flags=re.IGNORECASE)
+        line = re.sub(r"\b(i'd|i would)\b", "pup would", line, flags=re.IGNORECASE)
+        line = re.sub(r"\b(i've|i have)\b", "pup has", line, flags=re.IGNORECASE)
+        line = re.sub(r"\bmyself\b", "pup", line, flags=re.IGNORECASE)
+        line = re.sub(r"\b(mine|my|me|i)\b", "pup", line, flags=re.IGNORECASE)
+        line = re.sub(r"\s+", " ", line).strip()
+        lowered = line.lower().replace("{payload}", "")
+
     tokens = re.findall(r"[a-z][a-z0-9_-]{1,30}", lowered)
     has_label_ref = any(
         re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
@@ -3454,6 +3467,23 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         for token in tokens
     )
     has_harsh_tone = any(term in lowered for term in _DEVICE_SHARE_HARSH_TERMS)
+    if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
+        # Inject a minimal label frame instead of rejecting an otherwise decent caption.
+        if line.endswith(": {payload}"):
+            line = f"Mutt confession {line}"
+        else:
+            line = f"Mutt confession: {line}"
+        line = re.sub(r"\s+", " ", line).strip()
+        lowered = line.lower().replace("{payload}", "")
+        tokens = re.findall(r"[a-z][a-z0-9_-]{1,30}", lowered)
+        has_label_ref = any(
+            re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
+            for term in _DEVICE_SHARE_LABEL_TERMS
+        ) or any(
+            any(token.endswith(suffix) for suffix in _DEVICE_SHARE_LABEL_SUFFIXES)
+            for token in tokens
+        )
+
     if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
         return None
     if _DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE and not has_harsh_tone:
