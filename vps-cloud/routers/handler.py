@@ -404,32 +404,6 @@ _DEVICE_SHARE_THREAT_PATTERNS = [
     re.compile(r"\bin\s+a\s+fight\b", re.IGNORECASE),
     re.compile(r"\b(hurt|harm|kill|attack|beat)\s+(you|them)\b", re.IGNORECASE),
 ]
-_DEVICE_SHARE_FEELING_CUES = {
-    "shame",
-    "embarrassed",
-    "humiliated",
-    "desperate",
-    "needy",
-    "craving",
-    "exposed",
-    "cornered",
-    "squirm",
-    "squirming",
-    "blushing",
-    "blush",
-    "red-faced",
-    "shaky",
-    "nerves",
-    "nervous",
-}
-_DEVICE_SHARE_FEELING_PHRASES = [
-    "all blush and static",
-    "caught squirming in public",
-    "on a shaky leash tonight",
-    "red-faced and craving noise",
-    "running hot with shame",
-    "all nerves and bad decisions",
-]
 _DEVICE_SHARE_HARD_SLUR_TERMS = [
     value.strip().lower()
     for value in (os.environ.get("DISCORD_DEVICE_SHARE_HARD_SLURS", "") or "").split(",")
@@ -3189,6 +3163,7 @@ def _build_share_display_payload_text(
     if not payload_text:
         package_hint = (source_package or "").strip().split(".")[-1]
         payload_text = f"share from {package_hint}" if package_hint else "fresh share"
+    payload_text = re.sub(r"\bshared\s+(post|drop)\b", "fresh share", payload_text, flags=re.IGNORECASE)
     if len(payload_text) > 900:
         payload_text = payload_text[:897].rstrip() + "..."
     return payload_text
@@ -3221,6 +3196,7 @@ def _strip_this_link_phrase(text: str) -> str:
     if not text:
         return ""
     cleaned = re.sub(r"\bthis\s+(link|post)\b", "", text, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\bshared\s+(post|drop)\b", "fresh share", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+([:;,.!?])", r"\1", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     cleaned = re.sub(r":\s*:", ":", cleaned)
@@ -3390,7 +3366,7 @@ def _extract_share_keywords(text: str, limit: int = 5) -> list[str]:
             for token in doc:
                 raw = (getattr(token, "lemma_", "") or str(token.text or "")).strip().lower()
                 cleaned = re.sub(r"[^a-z0-9_\-]+", "", raw)
-                if not cleaned or len(cleaned) < 3:
+                if not cleaned or len(cleaned) < 4:
                     continue
                 if cleaned in _DEVICE_SHARE_STOPWORDS or cleaned in seen:
                     continue
@@ -3402,7 +3378,7 @@ def _extract_share_keywords(text: str, limit: int = 5) -> list[str]:
             keywords = []
     if keywords:
         return keywords
-    for token in re.findall(r"[A-Za-z0-9_\-]{3,}", source.lower()):
+    for token in re.findall(r"[A-Za-z0-9_\-]{4,}", source.lower()):
         if token in _DEVICE_SHARE_STOPWORDS or token in seen:
             continue
         seen.add(token)
@@ -3435,9 +3411,9 @@ def _mutate_share_template(rendered_template: str, keywords: list[str]) -> tuple
     if keywords and random.random() < 0.62:
         keyword_used = random.choice(keywords)
         suffix = random.choice([
-            f" after seeing {keyword_used}, all blush and static",
-            f" over {keyword_used}, caught squirming in public",
-            f" because {keyword_used} hit too hard, on a shaky leash tonight",
+            f" after seeing {keyword_used}",
+            f" over {keyword_used}",
+            f" because {keyword_used} hit too hard",
         ])
         stripped = mutated.rstrip()
         if stripped.endswith(":"):
@@ -3499,10 +3475,12 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     # Normalize generic phrasing instead of rejecting otherwise usable outputs.
     line = re.sub(r"\bthis\s+link\b", "fresh share", line, flags=re.IGNORECASE)
     line = re.sub(r"\bthis\s+post\b", "fresh share", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bshared\s+(post|drop)\b", "fresh share", line, flags=re.IGNORECASE)
     line = re.sub(r":\s*shared\s+post\s*$", ": {payload}", line, flags=re.IGNORECASE)
     line = re.sub(r":\s*shared\s+drop\s*$", ": {payload}", line, flags=re.IGNORECASE)
 
     # Reframe second-person targeting back onto the mutt so output stays self-focused.
+    line = re.sub(r"\bon\s+you\b", "for pup", line, flags=re.IGNORECASE)
     line = re.sub(r"\byou['’]re\b", "pup is", line, flags=re.IGNORECASE)
     line = re.sub(r"\byour\b", "pup's", line, flags=re.IGNORECASE)
     line = re.sub(r"\byou\b", "pup", line, flags=re.IGNORECASE)
@@ -3552,20 +3530,6 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
             any(token.endswith(suffix) for suffix in _DEVICE_SHARE_LABEL_SUFFIXES)
             for token in tokens
         )
-
-    has_feeling_cue = any(
-        re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
-        for term in _DEVICE_SHARE_FEELING_CUES
-    )
-    if not has_feeling_cue:
-        feeling_phrase = random.choice(_DEVICE_SHARE_FEELING_PHRASES)
-        base = re.sub(r"\s*:\s*\{payload\}\s*$", "", line).strip()
-        if base:
-            line = f"{base}; {feeling_phrase}: {{payload}}"
-        else:
-            line = f"{feeling_phrase}: {{payload}}"
-        line = re.sub(r"\s+", " ", line).strip()
-        lowered = line.lower().replace("{payload}", "")
 
     if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
         return None
