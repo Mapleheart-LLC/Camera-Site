@@ -5231,8 +5231,14 @@
     setButtonEnabled('hp2-devices-maintenance-run-btn', isAdmin, reason);
     setButtonEnabled('hp2-devices-delete-all-btn', isAdmin, reason);
     if (!isAdmin) {
-      setInlineResult('hp2-devices-bulk-result', 'Only admins can run bulk device operations.');
-      setInlineResult('hp2-devices-maintenance-status', 'Weekly hygiene status requires admin access.');
+      const bulkMsg = 'Only admins can run bulk device operations.';
+      const hygieneMsg = 'Weekly hygiene status requires admin access.';
+      if (byId('hp2-devices-bulk-result')?.textContent !== bulkMsg) {
+        setInlineResult('hp2-devices-bulk-result', bulkMsg);
+      }
+      if (byId('hp2-devices-maintenance-status')?.textContent !== hygieneMsg) {
+        setInlineResult('hp2-devices-maintenance-status', hygieneMsg);
+      }
       return;
     }
     loadDeviceMaintenanceStatus().catch(() => {});
