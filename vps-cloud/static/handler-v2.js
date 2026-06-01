@@ -1820,6 +1820,34 @@
     return `${Math.round(bpm)} bpm`;
   }
 
+  function formatToyBattery(device) {
+    const info = parseToyInfo(device);
+    if (!info || typeof info !== 'object') return '-';
+
+    const parsePct = (value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return null;
+      if (n < 0 || n > 100) return null;
+      return Math.round(n);
+    };
+
+    const extractBattery = (node) => {
+      if (!node || typeof node !== 'object') return null;
+      return parsePct(node.battery_pct)
+        ?? parsePct(node.battery)
+        ?? parsePct(node.battery_level)
+        ?? parsePct(node.batteryPercent)
+        ?? parsePct(node.battery_percentage);
+    };
+
+    const lovensePct = extractBattery(info.lovense);
+    const pavlokPct = extractBattery(info.pavlok);
+    const parts = [];
+    if (lovensePct != null) parts.push(`LV ${lovensePct}%`);
+    if (pavlokPct != null) parts.push(`PV ${pavlokPct}%`);
+    return parts.length ? parts.join(' · ') : '-';
+  }
+
   function renderEdgeStatusCard() {
     const stateEl = byId('hp2-dashboard-edge-state');
     const levelEl = byId('hp2-dashboard-edge-level');
@@ -1896,6 +1924,7 @@
     byId('hp2-dashboard-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
     byId('hp2-dashboard-heart-rate').textContent = formatHeartRate(d);
     byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
+    byId('hp2-dashboard-toy-battery').textContent = formatToyBattery(d);
     renderEdgeStatusCard();
     renderDashboardAlerts();
     renderLiveMap();
