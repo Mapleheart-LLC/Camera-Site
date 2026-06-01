@@ -227,7 +227,7 @@ _DEVICE_SHARE_DEDUPE_WINDOW_SECONDS = 20
 _DEVICE_SHARE_QWEN_ENDPOINT_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_ENDPOINT", "").strip()
 _DEVICE_SHARE_QWEN_MODEL_DEFAULT = os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MODEL", "Qwen/Qwen2.5-1.5B-Instruct").strip()
 _DEVICE_SHARE_QWEN_TIMEOUT_SECONDS = float((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_TIMEOUT_SEC", "8.0") or "8.0").strip() or "8.0")
-_DEVICE_SHARE_QWEN_MAX_TOKENS = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS", "72") or "72").strip() or "72")
+_DEVICE_SHARE_QWEN_MAX_TOKENS = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_TOKENS", "140") or "140").strip() or "140")
 _DEVICE_SHARE_QWEN_MAX_ATTEMPTS = max(
     1,
     int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_MAX_ATTEMPTS", "2") or "2").strip() or "2"),
@@ -3123,11 +3123,26 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         return None
     line = line.replace("{payload}", _DEVICE_SHARE_PROMPT_PLACEHOLDER)
     line = re.sub(r"\s+", " ", line).strip()
-    if _DEVICE_SHARE_PROMPT_PLACEHOLDER not in line:
+
+    # Keep a single payload marker and force it to the end to avoid malformed phrases
+    # like "I am a {payload}" when fallback payload text is generic.
+    marker_count = line.count(_DEVICE_SHARE_PROMPT_PLACEHOLDER)
+    line_without_marker = line.replace(_DEVICE_SHARE_PROMPT_PLACEHOLDER, " ")
+    line_without_marker = re.sub(r"\s+", " ", line_without_marker).strip()
+
+    if marker_count == 0:
+        line = line_without_marker
+    else:
+        line = line_without_marker
+
+    if line:
         if line.endswith(":"):
             line = f"{line} {_DEVICE_SHARE_PROMPT_PLACEHOLDER}"
         else:
             line = f"{line}: {_DEVICE_SHARE_PROMPT_PLACEHOLDER}"
+    else:
+        line = _DEVICE_SHARE_PROMPT_PLACEHOLDER
+
     line = line.replace(_DEVICE_SHARE_PROMPT_PLACEHOLDER, "{payload}")
     if "{payload}" not in line:
         return None
@@ -3257,12 +3272,12 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
     payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
     keyword_hint = ", ".join(keywords[:3]) if keywords else ""
     prompt = (
-        "Write exactly one brutal Discord caption in first person from the mutt's perspective. "
+        "Write one brutal Discord caption in first person from the mutt's perspective. "
         f"Tone set: {selected_set}. Make it harsh, degrading, and self-confessional. "
         "Use one self-reference naturally (mutt, puppy, bitch, cunt, or pup-style wording). "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
-        "No hashtags, no emojis, no quotes, no URLs, no extra lines. "
-        "Do not use slurs. Keep it concise (prefer under 24 words)."
+        "No hashtags, no emojis, no quotes, no URLs. "
+        "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
     )
     if keyword_hint:
         prompt += f" Ground it in one of these cues if natural: {keyword_hint}."
@@ -3300,10 +3315,10 @@ async def _generate_local_qwen_share_template(
 
     system_prompt = (
         "You are a dumb mutt writing first-person self-degrading confession captions. "
-        "Return exactly one short caption line with harsh tone and content-specific wording. "
+        "Return exactly one caption block with harsh tone and content-specific wording. "
         "Use degrading language toward the mutt itself; profanity is allowed. "
         f"Include {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
-        "No slurs. No URLs, no hashtags, no emojis, no quotes."
+        "No slurs. No URLs, no hashtags, no emojis, no quotes. Prefer short output, but allow a short paragraph."
     )
 
     def _infer() -> dict[str, Any]:
