@@ -3210,6 +3210,52 @@ def _strip_this_link_phrase(text: str) -> str:
     return cleaned.strip()
 
 
+def _is_generic_share_payload(payload_text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (payload_text or "").strip().lower())
+    if not normalized:
+        return True
+    if normalized in {"fresh share", "shared link", "shared clip", "shared media"}:
+        return True
+    if normalized.startswith("share from "):
+        return True
+    if re.fullmatch(r"shared\s+(link|clip|post|media)", normalized):
+        return True
+    return False
+
+
+def _has_low_coherence_caption(text: str) -> bool:
+    sample = re.sub(r"\s+", " ", (text or "").strip())
+    if not sample:
+        return True
+    lowered = sample.lower()
+    if re.search(r"\bthe only one who knows\b.+\bis the one who\b", lowered):
+        return True
+    if re.search(r"\bpure\s*,\s*unadulterated\s+to\b", lowered):
+        return True
+    if lowered.count(" who ") >= 3:
+        return True
+    if re.search(r"\b(?:of|to|for|with|from|about|than)\s*[:;,.!?]?$", lowered):
+        return True
+    return False
+
+
+def _finalize_device_share_message_line(template_for_message: str, payload_text: str) -> str:
+    safe_payload = (payload_text or "fresh share").strip() or "fresh share"
+    try:
+        line = (template_for_message or "").format(payload=safe_payload)
+    except Exception:
+        line = f"Pup shared this: {safe_payload}"
+
+    line = _strip_this_link_phrase(line)
+    line = re.sub(r"\s+", " ", line).strip()
+
+    if _is_generic_share_payload(safe_payload) and _has_low_coherence_caption(line):
+        return f"Pup shared this: {safe_payload}"
+    if _has_low_coherence_caption(line):
+        return f"Mutt shared this: {safe_payload}"
+    return line
+
+
 def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[str]]:
     selected_set = (
         (get_setting(db, "discord_device_share_message_set") or "").strip().lower()
@@ -3522,6 +3568,19 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     line = re.sub(r"\byou['’]re\b", "pup is", line, flags=re.IGNORECASE)
     line = re.sub(r"\byour\b", "pup's", line, flags=re.IGNORECASE)
     line = re.sub(r"\byou\b", "pup", line, flags=re.IGNORECASE)
+    line = re.sub(r"\bpup\s+need\b", "pup needs", line, flags=re.IGNORECASE)
+    line = re.sub(
+        r"\bshot\s+of\s+pure,\s*unadulterated\s+to\b",
+        "shot of pure filth to",
+        line,
+        flags=re.IGNORECASE,
+    )
+    line = re.sub(
+        r"\bthe\s+only\s+one\s+who\s+knows\s+pup\s+is\s+the\s+one\s+who\b",
+        "the one who",
+        line,
+        flags=re.IGNORECASE,
+    )
     line = re.sub(r"\s+", " ", line).strip()
     lowered = line.lower().replace("{payload}", "")
 
@@ -3577,6 +3636,16 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
         return None
     if _DEVICE_SHARE_FIRST_PERSON_RE.search(lowered):
         return None
+
+    # If no clear sharing/action verb survived cleanup, use a deterministic fallback.
+    if not re.search(
+        r"\b(share|shared|shares|sharing|send|sent|sends|post|posted|posts|drop|dropped|drops|forward|forwarded|forwards|offer|offered|offers|serve|served|serves|upload|uploaded|uploads|admit|admitted|admits|confess|confessed|confesses)\b",
+        lowered,
+    ):
+        return "Mutt shared this: {payload}"
+
+    if _has_low_coherence_caption(line):
+        return "Mutt shared this: {payload}"
 
     return line
 
@@ -3695,6 +3764,7 @@ def _build_device_share_qwen_prompt(
         "Let the wording imply the mutt's reaction to the shared content without stating feelings directly. "
         "High intensity is preferred; profanity is allowed when it improves the line. "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
+        "Write one complete grammatical sentence and place the payload token at the end after a colon. "
         "No hashtags, no emojis, no quotes, no URLs. "
         "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
     )
@@ -3746,6 +3816,7 @@ async def _generate_local_qwen_share_template(
         "The caption must include one mutt-label term; creative labels are allowed (for example: kenneltrash, cumrag, sloptoy, submission toy). "
         "Never use first-person words (I, me, my, mine). "
         f"Include {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
+        "Output one complete grammatical sentence ending with ': __PAYLOAD__'. "
         "No slurs. No URLs, no hashtags, no emojis, no quotes. Prefer short output, but allow a short paragraph."
     )
 
@@ -4170,8 +4241,7 @@ async def handler_device_share(
     else:
         generation_mode = DEVICE_SHARE_GEN_MODE_STOCK_ONLY
 
-    message_line = template_for_message.format(payload=payload_text)
-    message_line = _strip_this_link_phrase(message_line)
+    message_line = _finalize_device_share_message_line(template_for_message, payload_text)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
     if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
@@ -5701,8 +5771,7 @@ async def _process_queued_device_share(row: dict) -> None:
         source_package=share_source_package,
     )
 
-    message_line = template_for_message.format(payload=payload_text)
-    message_line = _strip_this_link_phrase(message_line)
+    message_line = _finalize_device_share_message_line(template_for_message, payload_text)
     if share_urls and not any(url in message_line for url in share_urls):
         message_line = f"{message_line}\n{share_urls[0]}"
     if len(message_line) > _DISCORD_MESSAGE_MAX_LEN:
@@ -5936,7 +6005,39 @@ def handler_get_status(
     row = db.execute(
         "SELECT * FROM handler_device_status WHERE device_id = ?", (device_id,)
     ).fetchone()
-    return dict(row) if row else {}
+    if not row:
+        return {}
+
+    payload = dict(row)
+    try:
+        latest_vitals = db.execute(
+            """
+            SELECT heart_rate, steps, timestamp
+            FROM device_vitals
+            WHERE device_id = ?
+            ORDER BY timestamp DESC, id DESC
+            LIMIT 1
+            """,
+            (device_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        latest_vitals = None
+
+    if latest_vitals:
+        try:
+            heart_rate_value = int(latest_vitals["heart_rate"] or 0)
+        except Exception:
+            heart_rate_value = 0
+        try:
+            steps_value = int(latest_vitals["steps"] or 0)
+        except Exception:
+            steps_value = 0
+
+        payload["latest_heart_rate"] = heart_rate_value if heart_rate_value > 0 else None
+        payload["latest_steps"] = steps_value if steps_value > 0 else None
+        payload["latest_vitals_at"] = str(latest_vitals["timestamp"] or "").strip() or None
+
+    return payload
 
 
 @router.get("/api/handler/device-apps")

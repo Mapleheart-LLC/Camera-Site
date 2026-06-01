@@ -1713,6 +1713,13 @@
     byId('hp2-kpi-battery').textContent = avgBattery;
   }
 
+  function formatHeartRate(device) {
+    if (!device) return '-';
+    const bpm = Number(device.latest_heart_rate);
+    if (!Number.isFinite(bpm) || bpm <= 0) return '-';
+    return `${Math.round(bpm)} bpm`;
+  }
+
   function renderDeviceList() {
     const container = byId('hp2-device-list');
     const devices = Object.values(state.devices).sort((a, b) => {
@@ -1752,8 +1759,11 @@
     byId('hp2-detail-online').textContent = d ? (deviceOnline(d) ? 'Online' : 'Offline') : '-';
     byId('hp2-detail-lock').textContent = d ? (Number(d.is_locked || 0) === 1 ? 'Locked' : 'Unlocked') : '-';
     byId('hp2-detail-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
+    byId('hp2-detail-heart-rate').textContent = formatHeartRate(d);
+    byId('hp2-detail-vitals-at').textContent = d?.latest_vitals_at ? fmtDate(d.latest_vitals_at) : '-';
     byId('hp2-detail-last').textContent = d ? fmtDate(d.last_seen) : '-';
     byId('hp2-dashboard-battery').textContent = d && Number.isFinite(Number(d.battery_pct)) ? `${d.battery_pct}%` : '-';
+    byId('hp2-dashboard-heart-rate').textContent = formatHeartRate(d);
     byId('hp2-dashboard-connection').textContent = d ? (deviceOnline(d) ? 'Connected' : 'Offline') : '-';
     renderDashboardAlerts();
     renderLiveMap();
