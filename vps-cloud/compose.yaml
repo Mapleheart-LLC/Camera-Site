@@ -67,7 +67,7 @@ services:
       # Comma-separated hard slur denylist for quick-share captions.
       - DISCORD_DEVICE_SHARE_HARD_SLURS=${DISCORD_DEVICE_SHARE_HARD_SLURS:-}
       # Optional stricter output gates (default relaxed for better delivery rate).
-      - DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF=${DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF:-false}
+      - DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF=${DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF:-true}
       - DISCORD_DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE=${DISCORD_DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE:-false}
       # Queue tuning for deferred AI caption delivery.
       - DISCORD_DEVICE_SHARE_QUEUE_MAX_ATTEMPTS=${DISCORD_DEVICE_SHARE_QUEUE_MAX_ATTEMPTS:-8}

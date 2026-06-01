@@ -29,7 +29,7 @@ Device audio relay (webhook secret via query parameter):
 from __future__ import annotations
 
 import asyncio
-from collections import Counter
+from collections import Counter, deque
 import hashlib
 import json
 import logging
@@ -237,34 +237,144 @@ _DEVICE_SHARE_QWEN_REPO_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REP
 _DEVICE_SHARE_QWEN_FILE_DEFAULT = (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_FILENAME", "Qwen2.5-1.5B-Q8_0.gguf") or "Qwen2.5-1.5B-Q8_0.gguf").strip()
 _DEVICE_SHARE_QWEN_CTX_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_CTX", "512") or "512").strip() or "512")
 _DEVICE_SHARE_QWEN_GPU_LAYERS_DEFAULT = int((os.environ.get("DISCORD_DEVICE_SHARE_QWEN_N_GPU_LAYERS", "-1") or "-1").strip() or "-1")
+_DEVICE_SHARE_TEMPLATE_RECENT_COUNT = max(
+    4,
+    int((os.environ.get("DISCORD_DEVICE_SHARE_TEMPLATE_RECENT_COUNT", "18") or "18").strip() or "18"),
+)
+_DEVICE_SHARE_RECENT_TEMPLATE_SIGNATURES: deque[str] = deque(maxlen=_DEVICE_SHARE_TEMPLATE_RECENT_COUNT)
 _LOCAL_QWEN_LLM: Any = None
 _LOCAL_QWEN_FAILED = False
 _LOCAL_QWEN_FINGERPRINT: Optional[str] = None
 _DEVICE_SHARE_PROMPT_PLACEHOLDER = "__PAYLOAD__"
-_DEVICE_SHARE_SELF_REF_TERMS = {
+_DEVICE_SHARE_LABEL_TERMS = {
     "pup",
     "puppy",
     "mutt",
+    "stray",
+    "mongrel",
     "bitch",
+    "pisslut",
+    "cumbag",
+    "cumtoy",
+    "fucktoy",
+    "leashpet",
+    "kenneltoy",
+    "trashdog",
+    "floorpet",
+    "obedience toy",
+    "cum dump",
+    "driptoy",
+    "kenneltrash",
+    "floor toy",
+    "leash toy",
+    "good-for-nothing mutt",
+    "dumb kennel pet",
+    "messpet",
+    "cumrag",
+    "drooltoy",
+    "sloptoy",
+    "ragdoll mutt",
+    "heelpet",
+    "bootpet",
+    "wastepet",
+    "obedience mutt",
+    "kennel bitch",
+    "submission toy",
+    "punishment toy",
+    "humiliation toy",
+    "dog",
+    "toy",
     "cunt",
     "pet",
 }
+_DEVICE_SHARE_LABEL_SUFFIXES = {
+    "slut",
+    "bag",
+    "dump",
+    "rag",
+    "mat",
+    "trash",
+    "worm",
+    "drip",
+    "mess",
+    "slave",
+    "sock",
+    "stain",
+    "wreck",
+    "toy",
+    "pet",
+    "dog",
+    "mutt",
+    "pup",
+    "bitch",
+    "cunt",
+    "hole",
+    "pig",
+    "whore",
+    "brat",
+    "thing",
+}
+_DEVICE_SHARE_FIRST_PERSON_RE = re.compile(
+    r"\b(i|i'm|im|i’ll|i'd|i've|me|my|mine|myself)\b",
+    re.IGNORECASE,
+)
 _DEVICE_SHARE_HARSH_TERMS = {
     "weak",
     "pathetic",
     "needy",
     "shame",
+    "shameless",
+    "embarrassed",
+    "embarrassing",
+    "blushing",
+    "red-faced",
     "humiliation",
     "humiliated",
+    "humiliating",
+    "debase",
+    "debased",
+    "debasement",
     "degraded",
     "degrading",
+    "degrade",
     "desperate",
+    "desperation",
+    "craving",
+    "cravings",
     "submissive",
     "submission",
+    "submitting",
+    "obedient",
+    "obedience",
+    "obediently",
+    "servile",
+    "docile",
+    "feral",
     "dumb",
     "stupid",
+    "idiotic",
+    "brain-dead",
+    "mindless",
     "worthless",
+    "spineless",
+    "grovelling",
+    "groveling",
+    "begging",
+    "beg",
+    "surrender",
+    "surrendered",
+    "folded",
+    "owned",
+    "wrecked",
+    "ruined",
+    "used",
+    "disgrace",
+    "disgusting",
+    "filthy",
+    "dirty",
     "punching bag",
+    "cum dump",
+    "cumrag",
     "cumbag",
 }
 _DEVICE_SHARE_HARD_SLUR_TERMS = [
@@ -273,7 +383,7 @@ _DEVICE_SHARE_HARD_SLUR_TERMS = [
     if value and value.strip()
 ]
 _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF = (
-    (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF", "false") or "false").strip().lower()
+    (os.environ.get("DISCORD_DEVICE_SHARE_QWEN_REQUIRE_SELF_REF", "true") or "true").strip().lower()
     == "true"
 )
 _DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE = (
@@ -291,6 +401,17 @@ _DEVICE_SHARE_SYNONYM_SWAPS = {
     "shared": ["dropped", "handed over", "served"],
     "offered": ["presented", "served up", "surrendered"],
     "confession": ["admission", "spill", "exposure"],
+    "submission": ["surrender", "obedience", "fold"],
+    "submitted": ["surrendered", "folded", "caved"],
+    "pathetic": ["pitiful", "embarrassing", "sad"],
+    "humiliation": ["face-heat", "shame spiral", "public shame"],
+    "humiliated": ["red-faced", "blushing", "publicly exposed"],
+    "dumb": ["brain-empty", "mindless", "airheaded"],
+    "worthless": ["disposable", "throwaway", "good-for-nothing"],
+    "needy": ["clingy", "attention-starved", "validation-hungry"],
+    "toy": ["plaything", "thing", "obedience toy"],
+    "pet": ["leashpet", "kennelpet", "floorpet"],
+    "mutt": ["stray", "mongrel", "trashdog"],
 }
 _SPACY_NLP: Any = None
 _SPACY_FAILED = False
@@ -299,7 +420,26 @@ _DEVICE_SHARE_SUBJECT_LABELS = [
     "pup",
     "puppy",
     "mutt",
+    "stray",
+    "mongrel",
     "bitch",
+    "pisslut",
+    "cumbag",
+    "cumtoy",
+    "fucktoy",
+    "leashpet",
+    "kenneltoy",
+    "trashdog",
+    "floorpet",
+    "cumrag",
+    "sloptoy",
+    "driptoy",
+    "heelpet",
+    "bootpet",
+    "wastepet",
+    "dog",
+    "toy",
+    "cunt",
     "pet",
 ]
 _DEVICE_SHARE_MEANER_LINES = [
@@ -342,6 +482,46 @@ _DEVICE_SHARE_MEANER_LINES = [
     "Pup got hungry for attention and posted: {payload}",
     "Impulse won by knockout, pup surrendered: {payload}",
     "Pup made this everyone's problem: {payload}",
+    "Another obedience failure logged under pup's name: {payload}",
+    "Leashpet instincts took over and pup served this up: {payload}",
+    "Pup tried to act refined, then dropped this feral receipt: {payload}",
+    "Self-respect tapped out and pup published this anyway: {payload}",
+    "Pup found this and folded like wet paper: {payload}",
+    "Another trashdog impulse burst straight into chat: {payload}",
+    "Pup's standards hit the floor right before sharing: {payload}",
+    "Pup begged for restraint, then ignored itself and sent: {payload}",
+    "Weak little cycle repeated on schedule: {payload}",
+    "Pup walked itself onto the humiliation conveyor with: {payload}",
+    "Mutt behavior report remains catastrophic after: {payload}",
+    "Pup made eye contact with shame and still posted: {payload}",
+    "Another kenneltrash decision from pup's feed: {payload}",
+    "Pup reached for discipline, found desperation, and shared: {payload}",
+    "Control slipped, composure died, and pup offered: {payload}",
+    "Pup turned one urge into a public exhibit: {payload}",
+    "Nothing says fragile like pup posting this immediately: {payload}",
+    "Another low-friction collapse from pup: {payload}",
+    "Pup had one job and failed it with: {payload}",
+    "Caution failed, impulse succeeded, pup delivered: {payload}",
+    "Pup dressed this up as curiosity and still surrendered: {payload}",
+    "A fresh bad choice, signed by pup: {payload}",
+    "Pup keeps feeding the same hunger with shares like: {payload}",
+    "Another face-heat moment from pup's timeline: {payload}",
+    "Mongrel-level self-control shown here by pup: {payload}",
+    "Pup made this a room problem without hesitation: {payload}",
+    "Another proof-of-weakness upload from pup: {payload}",
+    "Pup let cravings drive and parked right here: {payload}",
+    "Judgment clocked out before pup hit share: {payload}",
+    "Pup advertised this lapse in real time: {payload}",
+    "The brain said no, the mutt said this: {payload}",
+    "Pup keeps speedrunning dignity loss with: {payload}",
+    "Another sloppy surrender from pup's side of town: {payload}",
+    "Pup saw this and immediately chose chaos: {payload}",
+    "No brakes, no shame, just pup posting: {payload}",
+    "Another needy little spiral archived by pup: {payload}",
+    "Pup called this harmless and then broadcast it: {payload}",
+    "Weak-kneed and predictable, pup delivered: {payload}",
+    "Pup keeps proving the leash is imaginary with: {payload}",
+    "Another discipline outage from pup featuring: {payload}",
 ]
 _DEVICE_SHARE_PLAYFUL_LINES = [
     "Pup found a new favorite and brought it over: {payload}",
@@ -407,6 +587,46 @@ _DEVICE_SHARE_HUMILIATION_LINES = [
     "Pup is blushing and still doubling down with: {payload}",
     "Public accountability update: pup submitted: {payload}",
     "Pup offered this up as a humiliation receipt: {payload}",
+    "Another confession drafted by shame and signed by pup: {payload}",
+    "Pup brought this to the room and swallowed the blush: {payload}",
+    "Public face-heat bulletin from pup: {payload}",
+    "Pup made this weakness visible on purpose: {payload}",
+    "A fresh humiliation docket entry from pup: {payload}",
+    "Pup exposed this urge and accepted the fallout: {payload}",
+    "Another red-cheeked surrender from pup: {payload}",
+    "Pup posted this like a confession under oath: {payload}",
+    "Public shame compliance from pup: {payload}",
+    "Pup delivered this with trembling dignity: {payload}",
+    "Another blush-heavy admission from pup's desk: {payload}",
+    "Pup presented this and forfeited all cover stories: {payload}",
+    "Humiliation file updated by pup with: {payload}",
+    "Pup offered this up and stood in the spotlight: {payload}",
+    "Another exposed weakness from pup for everyone to inspect: {payload}",
+    "Pup made this public and wore the embarrassment: {payload}",
+    "Shame-forward share from pup landed here: {payload}",
+    "Pup signed this confession in full view: {payload}",
+    "Another accountability stamp on pup's cravings: {payload}",
+    "Pup accepted ridicule and shared this anyway: {payload}",
+    "Public composure failure from pup: {payload}",
+    "Pup posted this and let the room judge: {payload}",
+    "Another humiliation exhibit submitted by pup: {payload}",
+    "Pup dragged this urge into daylight on purpose: {payload}",
+    "This confession came pre-blushed from pup: {payload}",
+    "Pup filed this under 'embarrassing but true': {payload}",
+    "Another dignity leak publicly reported by pup: {payload}",
+    "Pup made this weakness everyone's reading material: {payload}",
+    "Public shame telemetry from pup reads: {payload}",
+    "Pup posted this and accepted open-court embarrassment: {payload}",
+    "Another no-excuses surrender note from pup: {payload}",
+    "Pup handed this over with visible face-heat: {payload}",
+    "Public confession protocol executed by pup: {payload}",
+    "Another humbled display from pup's confession lane: {payload}",
+    "Pup exposed this and stayed for the consequences: {payload}",
+    "Shame receipt issued by pup for: {payload}",
+    "Pup put this in front of everyone and bowed: {payload}",
+    "Another barefaced admission from pup in the open: {payload}",
+    "Pup turned this craving into a public record: {payload}",
+    "Confession complete. Embarrassment accepted. Pup shared: {payload}",
 ]
 _DEVICE_SHARE_MIXED_LINES = [
     "Pup confession drop: this one made it squirm - {payload}",
@@ -431,6 +651,46 @@ _DEVICE_SHARE_MIXED_LINES = [
     "Pup offered this up as tribute: {payload}",
     "Pup found this and made a quick confession: {payload}",
     "Pup pushed this through the quick-share pipeline: {payload}",
+    "Pup made another soft little mistake and posted: {payload}",
+    "Fresh timeline weakness from pup: {payload}",
+    "Pup served this like a confession with a grin: {payload}",
+    "Another curiosity spiral from pup ended at: {payload}",
+    "Pup found this and surrendered instantly: {payload}",
+    "Pup dropped this with full needy energy: {payload}",
+    "One peek became one public share from pup: {payload}",
+    "Pup brought this in and accepted the side-eye: {payload}",
+    "Another little craving report from pup: {payload}",
+    "Pup hit share before common sense could load: {payload}",
+    "Pup put this out there and stayed vulnerable: {payload}",
+    "Quick-share confession from pup landed here: {payload}",
+    "Pup made this room-certified information: {payload}",
+    "Another flirty little collapse from pup: {payload}",
+    "Pup found this and got loud about it: {payload}",
+    "Pup handed this over with zero poker face: {payload}",
+    "Mutt curiosity got the best of pup again: {payload}",
+    "Pup exposed this interest in broad daylight: {payload}",
+    "Another weak-but-happy share from pup: {payload}",
+    "Pup posted this and owned the consequences: {payload}",
+    "Pup chose this, then chose to broadcast it: {payload}",
+    "A fresh little obsession drop from pup: {payload}",
+    "Pup turned this urge into a public update: {payload}",
+    "Another blush-and-share maneuver by pup: {payload}",
+    "Pup brought this over like a hungry confession: {payload}",
+    "Pup found this and folded into honesty: {payload}",
+    "One reckless tap later, pup shared: {payload}",
+    "Pup made this everyone's timeline problem: {payload}",
+    "Another overexcited report from pup: {payload}",
+    "Pup shared this with visible face-heat: {payload}",
+    "Pup let temptation pick today's post: {payload}",
+    "Another shameless little reveal from pup: {payload}",
+    "Pup chose vulnerability and hit send on: {payload}",
+    "Pup found this and immediately got dramatic: {payload}",
+    "This was too loud to keep private, says pup: {payload}",
+    "Pup brought this in like a trembling offering: {payload}",
+    "Another weak-kneed recommendation from pup: {payload}",
+    "Pup posted this and waited for judgment: {payload}",
+    "Confession plus chaos, delivered by pup: {payload}",
+    "Pup made this craving a public note: {payload}",
 ]
 _DEVICE_SHARE_TEMPLATE_SETS = {
     "meaner": _DEVICE_SHARE_MEANER_LINES,
@@ -2935,6 +3195,30 @@ def _active_device_share_templates(db: sqlite3.Connection) -> tuple[str, list[st
     return "mixed", _DEVICE_SHARE_MIXED_LINES
 
 
+def _template_signature(template: str) -> str:
+    # Normalize label placeholders and spacing so semantically similar lines de-duplicate.
+    base = (template or "").strip().lower()
+    base = _DEVICE_SHARE_PUP_LABEL_REGEX.sub("pup", base)
+    base = re.sub(r"\s+", " ", base)
+    return base
+
+
+def _choose_device_share_template(templates: list[str]) -> str:
+    if not templates:
+        return "Pup shared this: {payload}"
+
+    recent = set(_DEVICE_SHARE_RECENT_TEMPLATE_SIGNATURES)
+    candidates = [
+        template
+        for template in templates
+        if _template_signature(template) not in recent
+    ]
+    pool = candidates if candidates else templates
+    chosen = random.choice(pool)
+    _DEVICE_SHARE_RECENT_TEMPLATE_SIGNATURES.append(_template_signature(chosen))
+    return chosen
+
+
 def _render_device_share_template(template: str) -> tuple[str, str]:
     label = random.choice(_DEVICE_SHARE_SUBJECT_LABELS)
 
@@ -3161,14 +3445,20 @@ def _sanitize_qwen_template(raw: str) -> Optional[str]:
     line = re.sub(r"\bthis\s+link\b", "this post", line, flags=re.IGNORECASE)
     lowered = line.lower().replace("{payload}", "")
 
-    has_self_ref = any(
+    tokens = re.findall(r"[a-z][a-z0-9_-]{1,30}", lowered)
+    has_label_ref = any(
         re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)
-        for term in _DEVICE_SHARE_SELF_REF_TERMS
+        for term in _DEVICE_SHARE_LABEL_TERMS
+    ) or any(
+        any(token.endswith(suffix) for suffix in _DEVICE_SHARE_LABEL_SUFFIXES)
+        for token in tokens
     )
     has_harsh_tone = any(term in lowered for term in _DEVICE_SHARE_HARSH_TERMS)
-    if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_self_ref:
+    if _DEVICE_SHARE_QWEN_REQUIRE_SELF_REF and not has_label_ref:
         return None
     if _DEVICE_SHARE_QWEN_REQUIRE_HARSH_TONE and not has_harsh_tone:
+        return None
+    if _DEVICE_SHARE_FIRST_PERSON_RE.search(lowered):
         return None
 
     return line
@@ -3272,9 +3562,11 @@ def _build_device_share_qwen_prompt(*, payload_text: str, selected_set: str, key
     payload_excerpt = re.sub(r"\s+", " ", payload_text).strip()[:220]
     keyword_hint = ", ".join(keywords[:3]) if keywords else ""
     prompt = (
-        "Write one brutal Discord caption in first person from the mutt's perspective. "
+        "Write one brutal Discord caption in third person about the mutt. "
         f"Tone set: {selected_set}. Make it harsh, degrading, and self-confessional. "
-        "Use one self-reference naturally (mutt, puppy, bitch, cunt, or pup-style wording). "
+        "Use one degrading label naturally; examples include mutt, pup, puppy, bitch, pisslut, cumbag, cumrag, kenneltrash, sloptoy, dog, toy, cunt, pet. "
+        "Examples are not exhaustive - creative labels are allowed. "
+        "Never use first-person words like I, me, my, mine. "
         f"Include token {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once and do not alter it. "
         "No hashtags, no emojis, no quotes, no URLs. "
         "Do not use slurs. Prefer concise output, but you may use up to one short paragraph."
@@ -3314,9 +3606,11 @@ async def _generate_local_qwen_share_template(
     )
 
     system_prompt = (
-        "You are a dumb mutt writing first-person self-degrading confession captions. "
+        "You are a dumb mutt caption writer using third-person voice only. "
         "Return exactly one caption block with harsh tone and content-specific wording. "
         "Use degrading language toward the mutt itself; profanity is allowed. "
+        "The caption must include one mutt-label term; creative labels are allowed (for example: kenneltrash, cumrag, sloptoy, submission toy). "
+        "Never use first-person words (I, me, my, mine). "
         f"Include {_DEVICE_SHARE_PROMPT_PLACEHOLDER} exactly once. "
         "No slurs. No URLs, no hashtags, no emojis, no quotes. Prefer short output, but allow a short paragraph."
     )
@@ -3639,7 +3933,7 @@ async def handler_device_share(
     generation_source_text = await _enrich_generation_source_text(generation_source_text, share_urls)
 
     selected_set, templates = _active_device_share_templates(db)
-    rendered_template, rendered_label = _render_device_share_template(random.choice(templates))
+    rendered_template, rendered_label = _render_device_share_template(_choose_device_share_template(templates))
     generation_mode = _effective_device_share_generation_mode(db)
     generation_path = "stock_template"
     fallback_reason: Optional[str] = None
