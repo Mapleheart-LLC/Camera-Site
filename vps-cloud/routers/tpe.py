@@ -97,6 +97,44 @@ _MQTT_COMMAND_TOPIC_SUFFIX_RE = re.compile(r"/\{device_id\}/commands/?$")
 _PAIRING_CODE_TTL_SECONDS = int(os.environ.get("TPE_PAIRING_CODE_TTL_SECONDS", "600"))
 _TPE_AUTO_PAIR_ENABLED = os.environ.get("TPE_AUTO_PAIR_ENABLED", "true")
 _TPE_AUTO_PAIR_KEY = os.environ.get("TPE_AUTO_PAIR_KEY", "")
+_DEFAULT_NOTIFICATION_COMMAND_POLICY = {
+    "enabled": True,
+    "dry_run": False,
+    "min_confidence": 0.82,
+    "allow_sources": ["notification"],
+    "package_allowlist": ["com.discord"],
+    "package_blocklist": [
+        "com.hound.controller",
+        "com.google.android.inputmethod.latin",
+        "com.samsung.android.honeyboard",
+    ],
+    "max_actuations_per_minute": 20,
+    "emergency_cooldown_seconds": 60,
+    "dedupe_window_ms": 20000,
+    "max_dedup_signatures": 256,
+    "buzz_level": 10,
+    "buzz_loop_multiplier": 2,
+    "buzz_max_queue_add": 10,
+    "buzz_gap_ms": 700,
+    "default_duration_ms": 500,
+    "min_duration_ms": 100,
+    "max_duration_ms": 20000,
+    "zap_default_strength": 20,
+    "zap_max_strength": 20,
+    "allow_buzz_without_hr_data": True,
+    "no_hr_buzz_level": 7,
+    "no_hr_max_duration_ms": 1200,
+    "app_rules": {
+        "com.discord": {
+            "allowed_commands": ["buzz", "zap"],
+            "min_confidence": 0.72,
+            "strength_scale": 1.0,
+            "max_duration_ms": 600000,
+            "max_loop_count": 25,
+            "max_zap_strength": 20,
+        }
+    },
+}
 
 # ---------------------------------------------------------------------------
 # MQTT dispatch
@@ -1126,16 +1164,16 @@ def tpe_get_notification_command_policy(
     ).fetchone()
     raw = (row["value"] if row and row["value"] is not None else "")
     if not str(raw).strip():
-        return {}
+        return _DEFAULT_NOTIFICATION_COMMAND_POLICY
 
     try:
         parsed = json.loads(str(raw))
     except Exception:
-        logger.warning("Invalid tpe_notification_command_policy_json; returning empty policy")
-        return {}
+        logger.warning("Invalid tpe_notification_command_policy_json; returning default policy")
+        return _DEFAULT_NOTIFICATION_COMMAND_POLICY
     if isinstance(parsed, dict):
         return parsed
-    return {}
+    return _DEFAULT_NOTIFICATION_COMMAND_POLICY
 
 
 # ===========================================================================
