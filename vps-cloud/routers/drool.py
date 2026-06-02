@@ -131,7 +131,7 @@ def _comment_count(item_id: int, db: sqlite3.Connection) -> int:
 
 
 def _weekly_whimper_id(db: sqlite3.Connection) -> Optional[int]:
-    """Return the id of the most-interacted item in the last 7 days."""
+    """Return the id of the most-interacted item posted in the last 7 days."""
     row = db.execute(
         """
         SELECT da.id,
@@ -148,6 +148,7 @@ def _weekly_whimper_id(db: sqlite3.Connection) -> Optional[int]:
             FROM drool_reactions
             GROUP BY drool_id
         ) r ON r.drool_id = da.id
+        WHERE da.timestamp >= datetime('now', '-7 days')
         ORDER BY score DESC, da.id DESC
         LIMIT 1
         """
