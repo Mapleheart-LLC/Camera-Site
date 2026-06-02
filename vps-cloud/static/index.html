@@ -1280,6 +1280,11 @@
           <div class="public-mini-value" id="pub-confessions">--</div>
           <div class="public-mini-sub">active count</div>
         </div>
+        <div class="public-status-mini" id="pub-piss-card" style="display:none">
+          <div class="public-mini-kicker" id="pub-piss-label">Piss Accidents</div>
+          <div class="public-mini-value" id="pub-piss">0</div>
+          <div class="public-mini-sub">public shame count</div>
+        </div>
       </div>
       <p class="public-status-note" id="pub-status-note"></p>
     </div>
@@ -1465,8 +1470,11 @@
       document.getElementById('pub-days-card')?.classList.remove('is-hidden');
       document.getElementById('pub-tasks').textContent = '--';
       document.getElementById('pub-confessions').textContent = '--';
+      document.getElementById('pub-piss').textContent = '0';
       document.getElementById('pub-tasks-card')?.classList.remove('is-active');
       document.getElementById('pub-confessions-card')?.classList.remove('is-active');
+      document.getElementById('pub-piss-card')?.classList.remove('is-active');
+      document.getElementById('pub-piss-card')?.style.setProperty('display', 'none');
       var daysControls = document.getElementById('pub-days-controls');
       if (daysControls) daysControls.style.display = 'none';
       document.getElementById('pub-status-note').textContent = 'yard board is being weird right now.';
@@ -1521,6 +1529,7 @@
         const hasGoal = goalDays > 0;
         const tasksCompleted = Number(data.tasks_completed ?? 0);
         const confessionsPosted = Number(data.confessions_posted ?? 0);
+        const pissCount = Math.max(0, Number(data.piss_count ?? 0));
         const tasksLabel = String(data.tasks_label || 'Tasks');
         const confessionsLabel = String(data.confessions_label || 'Confessions');
         var goalEl = document.getElementById('pub-days-locked-goal');
@@ -1528,15 +1537,21 @@
         var daysCard = document.getElementById('pub-days-card');
         var tasksCard = document.getElementById('pub-tasks-card');
         var confessionsCard = document.getElementById('pub-confessions-card');
+        var pissCard = document.getElementById('pub-piss-card');
         const daysActive = (Number(daysLocked ?? 0) > 0) || hasGoal;
         document.getElementById('pub-days-locked').textContent = goalMet ? 'Unlocked' : String(daysLocked ?? '--');
         if (daysCard) daysCard.classList.toggle('is-hidden', !daysActive);
         document.getElementById('pub-tasks').textContent = String(Math.max(0, tasksCompleted));
         document.getElementById('pub-confessions').textContent = String(Math.max(0, confessionsPosted));
+        document.getElementById('pub-piss').textContent = String(pissCount);
         document.getElementById('pub-tasks-label').textContent = tasksLabel;
         document.getElementById('pub-confessions-label').textContent = confessionsLabel;
         if (tasksCard) tasksCard.classList.toggle('is-active', tasksCompleted > 0);
         if (confessionsCard) confessionsCard.classList.toggle('is-active', confessionsPosted > 0);
+        if (pissCard) {
+          pissCard.classList.toggle('is-active', pissCount > 0);
+          pissCard.style.display = pissCount > 0 ? '' : 'none';
+        }
         if (goalEl) {
           goalEl.style.display = hasGoal ? '' : 'none';
           goalEl.textContent =
@@ -1561,7 +1576,7 @@
           document.getElementById('pub-status-note').textContent = '';
         }
 
-        if (!daysActive && tasksCompleted <= 0 && confessionsPosted <= 0) {
+        if (!daysActive && tasksCompleted <= 0 && confessionsPosted <= 0 && pissCount <= 0) {
           document.getElementById('pub-status-note').textContent = 'no counters lit up right now.';
         }
 

@@ -3298,6 +3298,7 @@ def get_public_status(request: Request, db: sqlite3.Connection = Depends(get_db)
 
     tasks_completed = max(0, _safe_int_setting(db, "public_tasks_completed", default=0))
     confessions_posted = max(0, _safe_int_setting(db, "public_confessions_posted", default=0))
+    piss_count = max(0, _safe_int_setting(db, "public_piss_count", default=0))
     edge_target_count = max(0, _safe_int_setting(db, "edge_target_count", default=0))
     edge_target_shock_at_peak = _safe_bool_setting(db, "edge_target_shock_at_peak", default=True)
     hr_edge_enabled = _safe_bool_setting(db, "hr_edge_enabled", default=True)
@@ -3415,6 +3416,7 @@ def get_public_status(request: Request, db: sqlite3.Connection = Depends(get_db)
         "tasks_label": tasks_label,
         "confessions_posted": confessions_posted,
         "confessions_label": confessions_label,
+        "piss_count": piss_count,
         "current_mode": current_mode,
         "public_booking_enabled": public_booking_enabled,
         "public_profile_enabled": public_profile_enabled,

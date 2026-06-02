@@ -1066,10 +1066,11 @@ async def tpe_webhook(
     db.commit()
 
     normalized_event = str(event or "").strip().lower()
-    if normalized_event in {"edge_recorded", "orgasm_recorded"}:
-        # Keep public counters in sync with app-side edge/orgasm quick buttons.
+    if normalized_event in {"edge_recorded", "orgasm_recorded", "piss_recorded"}:
+        # Keep public counters in sync with app-side quick counter buttons.
         edge_val = body.get("edge_count")
         orgasm_val = body.get("orgasm_count")
+        piss_val = body.get("piss_count")
         event_ts_ms = _safe_int(body.get("timestamp"), int(datetime.now(timezone.utc).timestamp() * 1000))
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         tasks_manual_set_at_ms = _setting_int(db, "public_tasks_manual_set_at_ms", 0)
@@ -1084,6 +1085,10 @@ async def tpe_webhook(
             parsed_orgasm = int(orgasm_val) if orgasm_val is not None else None
         except Exception:
             parsed_orgasm = None
+        try:
+            parsed_piss = int(piss_val) if piss_val is not None else None
+        except Exception:
+            parsed_piss = None
 
         if normalized_event == "edge_recorded":
             if tasks_manual_hold_until_ms > now_ms:
@@ -1103,7 +1108,7 @@ async def tpe_webhook(
             current = _setting_int(db, "public_tasks_completed", 0)
             next_val = parsed_edge if parsed_edge is not None else max(current + 1, 0)
             _set_setting(db, "public_tasks_completed", str(max(next_val, 0)))
-        else:
+        elif normalized_event == "orgasm_recorded":
             if confessions_manual_hold_until_ms > now_ms:
                 logger.info(
                     "Ignoring orgasm_recorded webhook during manual hold: now_ms=%s hold_until_ms=%s",
@@ -1121,6 +1126,10 @@ async def tpe_webhook(
             current = _setting_int(db, "public_confessions_posted", 0)
             next_val = parsed_orgasm if parsed_orgasm is not None else max(current + 1, 0)
             _set_setting(db, "public_confessions_posted", str(max(next_val, 0)))
+        else:
+            current = _setting_int(db, "public_piss_count", 0)
+            next_val = parsed_piss if parsed_piss is not None else max(current + 1, 0)
+            _set_setting(db, "public_piss_count", str(max(next_val, 0)))
 
         db.commit()
 
