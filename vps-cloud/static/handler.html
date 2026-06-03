@@ -1462,6 +1462,25 @@
                   <span class="cmd-result" id="res-cmd-tone"></span>
                 </div>
                 <div class="cmd-row">
+                  <span class="cmd-row-label">Rewrite Controls</span>
+                  <div class="cmd-inputs">
+                    <select id="cmd-redaction-enabled">
+                      <option value="true">Input redaction: on</option>
+                      <option value="false">Input redaction: off</option>
+                    </select>
+                    <select id="cmd-inline-autocorrect-enabled">
+                      <option value="true">Inline autocorrect: on</option>
+                      <option value="false">Inline autocorrect: off</option>
+                    </select>
+                    <select id="cmd-onscreen-replacement-enabled">
+                      <option value="true">On-screen replacement: on</option>
+                      <option value="false">On-screen replacement: off</option>
+                    </select>
+                  </div>
+                  <button class="btn-cmd" onclick="sendTextRewritePolicyFlags('res-cmd-rewrite-flags')">Send</button>
+                  <span class="cmd-result" id="res-cmd-rewrite-flags"></span>
+                </div>
+                <div class="cmd-row">
                   <span class="cmd-row-label">Restricted Vocabulary</span>
                   <div class="cmd-inputs">
                     <textarea id="cmd-vocab" placeholder="Restricted words (comma or new line)" style="min-height:40px"></textarea>
@@ -3563,6 +3582,17 @@
       } catch(e) {
         if (e.message !== '401' && res) res.textContent = '❌ Request failed.';
       }
+    }
+
+    async function sendTextRewritePolicyFlags(resId) {
+      var policy = {
+        enable_input_redaction: v('cmd-redaction-enabled') !== 'false',
+        enable_inline_autocorrect: v('cmd-inline-autocorrect-enabled') !== 'false',
+        enable_onscreen_replacement: v('cmd-onscreen-replacement-enabled') !== 'false',
+      };
+      return sendFcm('UPDATE_TEXT_REPLACEMENT_POLICY', {
+        policy: JSON.stringify(policy),
+      }, resId);
     }
 
     var toyShareScopeProfile = 'custom';
