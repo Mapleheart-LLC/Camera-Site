@@ -3006,6 +3006,7 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
         ORDER BY sort_order ASC, id ASC
         """
     ).fetchall()
+    link_count = len(rows)
 
     link_items_html = ""
     for row in rows:
@@ -3051,100 +3052,171 @@ def links_page(request: Request, db: sqlite3.Connection = Depends(get_db)):
   <style>
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
+        :root {{
+            --bg: #1a1a1a;
+            --panel: #242424;
+            --panel-2: #20161a;
+            --line: #3d2a2e;
+            --text: #f0e6e8;
+            --muted: #9e7e82;
+            --brand: #e8aeb7;
+        }}
+
     body {{
       font-family: 'Nunito', system-ui, sans-serif;
-      background: #1a1a1a;
-      color: #f0e6e8;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(232, 174, 183, .18) 0%, rgba(232, 174, 183, 0) 42%),
+                radial-gradient(circle at 88% 12%, rgba(122, 85, 92, .24) 0%, rgba(122, 85, 92, 0) 38%),
+                var(--bg);
+            color: var(--text);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2.5rem 1rem;
+            display: grid;
+            place-items: center;
+            padding: 1.2rem;
     }}
 
-    .container {{
+        .container {{
       width: 100%;
-      max-width: 480px;
+            max-width: 560px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: .9rem;
+            gap: .85rem;
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 1.25rem;
+            background: linear-gradient(180deg, rgba(36, 36, 36, .96) 0%, rgba(29, 22, 25, .96) 100%);
+            box-shadow: 0 20px 56px rgba(0, 0, 0, .42), 0 4px 20px rgba(232, 174, 183, .1);
+            backdrop-filter: blur(2px);
+        }}
+
+        .hero {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: .85rem .95rem;
+            background: linear-gradient(135deg, rgba(232, 174, 183, .09) 0%, rgba(232, 174, 183, .02) 100%);
     }}
 
     .site-name {{
-      font-size: 1.8rem;
+            font-size: 1.6rem;
       font-weight: 800;
-      color: #e8aeb7;
-      text-align: center;
+            color: var(--brand);
+            line-height: 1.1;
     }}
 
     .tagline {{
       font-size: .88rem;
-      color: #9e7e82;
-      text-align: center;
-      margin-top: -.25rem;
-      margin-bottom: .5rem;
+            color: var(--muted);
+            margin-top: .25rem;
+        }}
+
+        .meta-chip {{
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: .32rem .62rem;
+            background: rgba(232, 174, 183, .08);
+            color: var(--brand);
+            font-weight: 800;
+            font-size: .76rem;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }}
+
+        .links-wrap {{
+            display: grid;
+            gap: .62rem;
     }}
 
     .link-btn {{
-      display: block;
-      width: 100%;
-      padding: .85rem 1.25rem;
-      background: #242424;
-      border: 1px solid #3d2a2e;
-      border-radius: 14px;
-      color: #f0e6e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .55rem;
+            width: 100%;
+            padding: .88rem 1rem;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            color: var(--text);
       font-family: inherit;
-      font-size: 1rem;
+            font-size: .98rem;
       font-weight: 700;
       text-align: center;
       text-decoration: none;
-      transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
-      box-shadow: 0 2px 12px rgba(232,174,183,0.06);
+            transition: transform .12s, background .15s, border-color .15s, color .15s, box-shadow .15s;
+            box-shadow: 0 2px 12px rgba(232, 174, 183, .06);
     }}
     .link-btn:hover {{
-      background: #3d2028;
-      border-color: #e8aeb7;
-      color: #e8aeb7;
-      box-shadow: 0 4px 20px rgba(232,174,183,0.18);
+            transform: translateY(-1px);
+            background: #312126;
+            border-color: var(--brand);
+            color: var(--brand);
+            box-shadow: 0 8px 26px rgba(232, 174, 183, .2);
     }}
 
     .empty-msg {{
       font-size: .9rem;
-      color: #5a3a3e;
+            color: #b99ca1;
       text-align: center;
+            border: 1px dashed var(--line);
+            border-radius: 12px;
+            padding: .95rem;
+            background: rgba(255, 255, 255, .02);
     }}
 
     .shop-link {{
-      border-color: #6a3040;
-      background: #2a1520;
+            border-color: #6a3040;
+            background: var(--panel-2);
     }}
     .shop-link:hover {{
       background: #3d2028;
-      border-color: #e8aeb7;
-      color: #e8aeb7;
-      box-shadow: 0 4px 20px rgba(232,174,183,0.18);
+            border-color: var(--brand);
+            color: var(--brand);
+            box-shadow: 0 8px 26px rgba(232, 174, 183, .2);
     }}
 
     .page-footer {{
-      margin-top: 1.5rem;
+            margin-top: .35rem;
       font-size: .75rem;
-      color: #4a3234;
+            color: #6f5256;
       text-align: center;
     }}
     .page-footer a {{
-      color: #6a4a4e;
+            color: #b1878d;
       text-decoration: none;
     }}
-    .page-footer a:hover {{ color: #c49a9f; }}
+        .page-footer a:hover {{ color: #e6b0b9; }}
+
+        @media (max-width: 560px) {{
+            .container {{
+                padding: 1rem;
+                border-radius: 16px;
+            }}
+            .hero {{
+                flex-direction: column;
+                align-items: flex-start;
+            }}
+            .meta-chip {{
+                align-self: flex-start;
+            }}
+        }}
   </style>
 </head>
 <body>
   <div class="container" role="main">
-    <p class="site-name">🐾 mochii.live</p>
-    <p class="tagline">All the links in one place.</p>
-    {link_items_html}
+        <div class="hero">
+            <div>
+                <p class="site-name">🐾 mochii.live</p>
+                <p class="tagline">Puppy shortcuts, socials, and useful places in one den.</p>
+            </div>
+            <span class="meta-chip">{link_count} live link{'s' if link_count != 1 else ''}</span>
+        </div>
+        <div class="links-wrap">
+            {link_items_html}
+        </div>
     <p class="page-footer"><a href="{_html_escape(canonical)}">← Back to mochii.live</a></p>
   </div>
 </body>

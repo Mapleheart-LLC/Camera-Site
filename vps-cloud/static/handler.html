@@ -1170,6 +1170,11 @@
                   <button class="btn-action" id="public-live-control-copy-btn" style="width:auto">Copy Live Link</button>
                   <button class="btn-action" id="public-live-control-refresh-btn" style="width:auto">Refresh Live Link</button>
                 </div>
+                <div style="display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.6rem">
+                  <a class="btn-action" href="/links" target="_blank" rel="noopener" style="width:auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Public Links</a>
+                  <a class="btn-action" href="/admin#s-links" target="_blank" rel="noopener" style="width:auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center">Open Admin Links Manager</a>
+                  <span style="font-size:.78rem;color:#9e7e82">Add/edit/reorder links in admin; this opens the right section.</span>
+                </div>
               </div>
             </div>
 
@@ -1425,24 +1430,40 @@
 
             <!-- ── Content Filter / NudeNet ── -->
             <details class="cmd-group" data-everyday="true" open>
-              <summary>🔍 Content Filter / NudeNet (Disabled)</summary>
+              <summary>🔍 Content Filter / NudeNet</summary>
               <div class="cmd-group-body">
-                <div class="cmd-row" style="opacity:.55; filter:grayscale(1);">
-                  <span class="cmd-row-label">Update Settings</span>
+                <div class="cmd-row">
+                  <span class="cmd-row-label">Censor Targets</span>
                   <div class="cmd-inputs">
-                    <input id="cmd-cf-thresh" placeholder="Threshold (0–1)" style="max-width:130px" disabled />
-                    <select id="cmd-cf-strict" disabled><option value="">strict?</option><option value="true">strict: on</option><option value="false">strict: off</option></select>
-                    <select id="cmd-cf-nudenet" disabled><option value="false" selected>nudenet: disabled</option></select>
-                    <textarea id="cmd-cf-classes" placeholder="Blocked classes (comma or new line, e.g. EXPOSED_BREAST_F)" style="min-height:40px" disabled></textarea>
+                    <select id="cmd-cf-class-ids" multiple size="8" style="min-width:220px; max-width:280px;">
+                      <option value="0" selected>Class 0</option>
+                      <option value="1" selected>Class 1</option>
+                      <option value="2" selected>Class 2</option>
+                      <option value="3" selected>Class 3</option>
+                      <option value="4" selected>Class 4</option>
+                      <option value="5" selected>Class 5</option>
+                      <option value="6">Class 6</option>
+                      <option value="7">Class 7</option>
+                      <option value="8">Class 8</option>
+                      <option value="9">Class 9</option>
+                      <option value="10">Class 10</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                      <option value="13">Class 13</option>
+                      <option value="14">Class 14</option>
+                      <option value="15">Class 15</option>
+                      <option value="16">Class 16</option>
+                      <option value="17">Class 17</option>
+                    </select>
                   </div>
-                  <button class="btn-cmd" disabled>Disabled</button>
+                  <button class="btn-cmd" onclick="sendMediaCensorTargets('res-cmd-cf')">Send</button>
                   <span class="cmd-result" id="res-cmd-cf"></span>
                 </div>
                 <div class="cmd-row">
-                  <span class="cmd-row-label">Status</span>
+                  <span class="cmd-row-label">Censor Count</span>
                   <div class="cmd-inputs">
                     <div style="padding:.65rem .8rem; border:1px solid var(--border, #444); border-radius:10px; background:rgba(127,127,127,.08); color:inherit;">
-                      NudeNet controls are intentionally disabled on both the device and handler sides.
+                      Device keeps the running censor count. Pick targets above and send updates anytime.
                     </div>
                   </div>
                 </div>
@@ -3592,6 +3613,29 @@
       };
       return sendFcm('UPDATE_TEXT_REPLACEMENT_POLICY', {
         policy: JSON.stringify(policy),
+      }, resId);
+    }
+
+    function selectedValuesFromSelect(id) {
+      var el = document.getElementById(id);
+      if (!el) return [];
+      return Array.from(el.selectedOptions || []).map(function(opt) {
+        return String(opt.value || '').trim();
+      }).filter(Boolean);
+    }
+
+    async function sendMediaCensorTargets(resId) {
+      var selected = selectedValuesFromSelect('cmd-cf-class-ids')
+        .map(function(v) { return parseInt(v, 10); })
+        .filter(function(v) { return Number.isFinite(v) && v >= 0; });
+      if (selected.length === 0) {
+        var res = document.getElementById(resId);
+        if (res) res.textContent = '⚠️ Select at least one class.';
+        return;
+      }
+      selected = Array.from(new Set(selected));
+      return sendFcm('UPDATE_SETTINGS', {
+        media_forbidden_class_ids: JSON.stringify(selected),
       }, resId);
     }
 
