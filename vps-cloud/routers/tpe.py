@@ -317,6 +317,52 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _normalize_network_class_labels(raw: Any) -> list[str]:
+    labels: list[str] = []
+    if isinstance(raw, list):
+        for item in raw:
+            label = str(item or "").strip().lower()
+            if label:
+                labels.append(label)
+    elif isinstance(raw, str):
+        for token in raw.split(","):
+            label = token.strip().lower()
+            if label:
+                labels.append(label)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for label in labels:
+        if label in seen:
+            continue
+        seen.add(label)
+        deduped.append(label)
+    return deduped
+
+
+def _record_network_detection_metrics(db: sqlite3.Connection, body: dict[str, Any]) -> None:
+    """Increment backend counters for network-layer censor detections."""
+    current_total = _setting_int(db, "tpe_network_censor_hits", 0)
+    _set_setting(db, "tpe_network_censor_hits", str(max(current_total + 1, 0)))
+
+    labels = _normalize_network_class_labels(body.get("class_labels"))
+    if not labels:
+        labels = ["unknown"]
+
+    counts_key = "tpe_network_censor_class_counts_json"
+    raw = _setting_value(db, counts_key, "{}")
+    try:
+        counts = json.loads(raw) if str(raw).strip() else {}
+        if not isinstance(counts, dict):
+            counts = {}
+    except Exception:
+        counts = {}
+
+    for label in labels:
+        counts[label] = max(_safe_int(counts.get(label), 0) + 1, 0)
+
+    _set_setting(db, counts_key, json.dumps(counts, separators=(",", ":"), sort_keys=True))
+
+
 def _set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
     now = _now_iso()
     db.execute(
@@ -1066,6 +1112,23 @@ async def tpe_webhook(
     db.commit()
 
     normalized_event = str(event or "").strip().lower()
+    if normalized_event == "xposed_network_detection":
+        _record_network_detection_metrics(db, body)
+        db.commit()
+
+    if normalized_event == "xposed_coverage_event":
+        lane = str(body.get("lane") or "").strip().lower()
+        stage = str(body.get("stage") or "").strip().lower()
+        sensitive = bool(body.get("sensitive", False))
+        if sensitive and stage == "scan_result" and lane in {"okhttp", "http_url_connection"}:
+            # reason supports labels=class_2,class_3,... emitted by NetworkStreamCensor
+            reason = str(body.get("reason") or "")
+            class_labels = []
+            if reason.startswith("labels="):
+                class_labels = [token.strip() for token in reason[len("labels="):].split(",") if token.strip()]
+            _record_network_detection_metrics(db, {"class_labels": class_labels})
+            db.commit()
+
     if normalized_event in {"edge_recorded", "orgasm_recorded", "piss_recorded"}:
         # Keep public counters in sync with app-side quick counter buttons.
         edge_val = body.get("edge_count")
