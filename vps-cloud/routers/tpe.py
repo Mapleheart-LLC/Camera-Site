@@ -363,6 +363,36 @@ def _record_network_detection_metrics(db: sqlite3.Connection, body: dict[str, An
     _set_setting(db, counts_key, json.dumps(counts, separators=(",", ":"), sort_keys=True))
 
 
+def _record_mitm_pinning_metrics(db: sqlite3.Connection, body: dict[str, Any]) -> None:
+    """Increment counters for TLS pinning detections and policy outcomes."""
+    total = _setting_int(db, "tpe_mitm_pinning_events", 0)
+    _set_setting(db, "tpe_mitm_pinning_events", str(max(total + 1, 0)))
+
+    blocked = bool(body.get("blocked", False))
+    if blocked:
+        blocked_total = _setting_int(db, "tpe_mitm_pinning_blocked", 0)
+        _set_setting(db, "tpe_mitm_pinning_blocked", str(max(blocked_total + 1, 0)))
+    else:
+        bypass_total = _setting_int(db, "tpe_mitm_pinning_bypassed", 0)
+        _set_setting(db, "tpe_mitm_pinning_bypassed", str(max(bypass_total + 1, 0)))
+
+    domain = str(body.get("domain") or "").strip().lower()
+    if not domain:
+        domain = "unknown"
+
+    counts_key = "tpe_mitm_pinning_domain_counts_json"
+    raw = _setting_value(db, counts_key, "{}")
+    try:
+        counts = json.loads(raw) if str(raw).strip() else {}
+        if not isinstance(counts, dict):
+            counts = {}
+    except Exception:
+        counts = {}
+
+    counts[domain] = max(_safe_int(counts.get(domain), 0) + 1, 0)
+    _set_setting(db, counts_key, json.dumps(counts, separators=(",", ":"), sort_keys=True))
+
+
 def _set_setting(db: sqlite3.Connection, key: str, value: str) -> None:
     now = _now_iso()
     db.execute(
@@ -1114,6 +1144,10 @@ async def tpe_webhook(
     normalized_event = str(event or "").strip().lower()
     if normalized_event == "xposed_network_detection":
         _record_network_detection_metrics(db, body)
+        db.commit()
+
+    if normalized_event == "mitm_pinning_failure":
+        _record_mitm_pinning_metrics(db, body)
         db.commit()
 
     if normalized_event == "xposed_coverage_event":
